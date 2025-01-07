@@ -120,4 +120,33 @@ KOKKOS_INLINE_FUNCTION Real linear(const int& i, const int& j, const int& k,
     return interp;
 }
 
+/**
+ * Dumb linear interpolation: no special cases for boundaries.
+ * Takes indices i,j,k and a block size n1, n2, n3,
+ * as well as a flat array var.
+ * 
+ * TODO version(s) with View(s) for real device-side operation
+ */
+KOKKOS_INLINE_FUNCTION Real linear(const int& i, const int& j, const int& k,
+                                   const double del[4], const int& p,
+                                   const VariablePack<Real> &var)
+{
+    // Interpolate in 1D at a time to avoid reading zones we don't have
+    Real interp = var(p, k, j, i    ) * (1. - del[1]) +
+                  var(p, k, j, i + 1) * del[1];
+    if (var.GetDim(2) > 1) {
+        interp = (1. - del[2]) * interp +
+                 del[2]*(var(p, k, j + 1, i    ) * (1. - del[1]) +
+                         var(p, k, j + 1, i + 1) * del[1]);
+    }
+    if (var.GetDim(3) > 1) {
+        interp = (1. - del[3]) * interp +
+                 del[3]*(var(p, k + 1, j    , i    ) * (1. - del[1]) * (1. - del[2]) +
+                         var(p, k + 1, j    , i + 1) * del[1] * (1. - del[2]) +
+                         var(p, k + 1, j + 1, i    ) * (1. - del[1]) * del[2] +
+                         var(p, k + 1, j + 1, i + 1) * del[1] * del[2]);
+    }
+    return interp;
+}
+
 } // Interpolation

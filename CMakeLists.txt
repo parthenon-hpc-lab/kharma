@@ -63,4 +63,5 @@ include_directories(external/variant/include)
 include_directories(external/kokkos-kernels)
 
 # Finally, build KHARMA
-add_subdirectory(kharma)
+#add_subdirectory(kharma)
+add_subdirectory(iris)

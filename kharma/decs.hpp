@@ -68,7 +68,6 @@ namespace m = std;
 #include <parthenon_arrays.hpp>
 #include <parthenon_mpi.hpp>
 #include <globals.hpp>
-#include <bvals/bvals_interfaces.hpp>
 #include <mesh/domain.hpp>
 
 // KHARMA DEFINITIONS

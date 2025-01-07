@@ -348,5 +348,6 @@ fi
 
 if [[ "$ARGS" != *"dryrun"* ]]; then
   make -j$NPROC
-  cp kharma/kharma.* ..
+  #cp kharma/kharma.* ..
+  cp iris/iris.* ..
 fi

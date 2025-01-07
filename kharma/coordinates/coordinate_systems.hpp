@@ -351,8 +351,8 @@ class SphBLExtG {
 class NullTransform {
     public:
         static constexpr char name[] = "NullTransform";
-        static constexpr GReal startx[3] = {-1, -1, -1};
-        static constexpr GReal stopx[3] = {-1, -1, -1};
+        const GReal startx[3] = {-1, -1, -1};
+        const GReal stopx[3] = {-1, -1, -1};
         // Coordinate transformations
         // Any coordinate value protections (th < 0, th > pi, phi > 2pi) should be in the base system
         KOKKOS_INLINE_FUNCTION void coord_to_embed(const GReal Xnative[GR_DIM], GReal Xembed[GR_DIM]) const
@@ -377,8 +377,8 @@ class NullTransform {
 class SphNullTransform {
     public:
         static constexpr char name[] = "SphNullTransform";
-        static constexpr GReal startx[3] = {-1, 0., 0.};
-        static constexpr GReal stopx[3] = {-1, M_PI, 2*M_PI};
+        const GReal startx[3] = {-1, 0., 0.};
+        const GReal stopx[3] = {-1, M_PI, 2*M_PI};
         // Coordinate transformations
         // Any coordinate value protections (th < 0, th > pi, phi > 2pi) should be in the base system
         KOKKOS_INLINE_FUNCTION void coord_to_embed(const GReal Xnative[GR_DIM], GReal Xembed[GR_DIM]) const
@@ -407,8 +407,8 @@ class SphNullTransform {
 class ExponentialTransform {
     public:
         static constexpr char name[] = "ExponentialTransform";
-        static constexpr GReal startx[3] = {-1, 0., 0.};
-        static constexpr GReal stopx[3] = {-1, M_PI, 2*M_PI};
+        const GReal startx[3] = {-1, 0., 0.};
+        const GReal stopx[3] = {-1, M_PI, 2*M_PI};
 
         // Coordinate transformations
         KOKKOS_INLINE_FUNCTION void coord_to_embed(const GReal Xnative[GR_DIM], GReal Xembed[GR_DIM]) const
@@ -460,8 +460,8 @@ class ExponentialTransform {
 class SuperExponentialTransform {
     public:
         static constexpr char name[] = "SuperExponentialTransform";
-        static constexpr GReal startx[3] = {-1, 0., 0.};
-        static constexpr GReal stopx[3] = {-1, M_PI, 2*M_PI};
+        const GReal startx[3] = {-1, 0., 0.};
+        const GReal stopx[3] = {-1, M_PI, 2*M_PI};
 
         const GReal xe1br, xn1br;
         const double npow2, cpow2;
@@ -526,8 +526,8 @@ class SuperExponentialTransform {
 class ModifyTransform {
     public:
         static constexpr char name[] = "ModifyTransform";
-        static constexpr GReal startx[3] = {-1, 0., 0.};
-        static constexpr GReal stopx[3] = {-1, 1., 2*M_PI};
+        const GReal startx[3] = {-1, 0., 0.};
+        const GReal stopx[3] = {-1, 1., 2*M_PI};
 
         const GReal hslope;
 
@@ -586,8 +586,8 @@ class ModifyTransform {
 class FunkyTransform {
     public:
         static constexpr char name[] = "FunkyTransform";
-        static constexpr GReal startx[3] = {-1, 0., 0.};
-        static constexpr GReal stopx[3] = {-1, 1., 2*M_PI};
+        const GReal startx[3] = {-1, 0., 0.};
+        const GReal stopx[3] = {-1, 1., 2*M_PI};
 
         const GReal startx1;
         const GReal hslope, poly_xt, poly_alpha, mks_smooth;
@@ -673,8 +673,8 @@ class FunkyTransform {
 class WidepoleTransform {
     public:
         static constexpr char name[] = "WidepoleTransform";
-        static constexpr GReal startx[3] = {-1, 0., 0.};
-        static constexpr GReal stopx[3] = {-1, 1., 2*M_PI};
+        const GReal startx[3] = {-1, 0., 0.};
+        const GReal stopx[3] = {-1, 1., 2*M_PI};
 
         const GReal lin_frac, n2, n3;
         GReal smoothness;

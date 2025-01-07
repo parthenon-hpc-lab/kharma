@@ -256,19 +256,33 @@ class CoordinateEmbedding {
                 return 0.0;
             }
         }
+        KOKKOS_INLINE_FUNCTION GReal get_isco() const
+        {
+            if (mpark::holds_alternative<SphKSCoords>(base) ||
+                mpark::holds_alternative<SphBLCoords>(base) ||
+                mpark::holds_alternative<SphKSExtG>(base) ||
+                mpark::holds_alternative<SphBLExtG>(base)) {
+                const GReal a = get_a();
+                const GReal z1 = 1. + m::pow(1. - a * a, 1. / 3.) * (m::pow(1. + a, 1. / 3.) + m::pow(1. - a, 1. / 3.));
+                const GReal z2 = m::sqrt(3. * a * a + z1 * z1);
+                return 3. + z2 - copysign(m::sqrt((3. - z1) * (3. + z1 + 2. * z2)), a);
+            } else {
+                return 0.0;
+            }
+        }
         KOKKOS_INLINE_FUNCTION GReal get_a() const
         {
             return mpark::visit( [&](const auto& self) {
                 return self.a;
             }, base);
         }
-        GReal startx(int dir) const
+        KOKKOS_INLINE_FUNCTION GReal startx(int dir) const
         {
             return mpark::visit( [&](const auto& self) {
                 return self.startx[dir - 1];
             }, transform);
         }
-        GReal stopx(int dir) const
+        KOKKOS_INLINE_FUNCTION GReal stopx(int dir) const
         {
             return mpark::visit( [&](const auto& self) {
                 return self.stopx[dir - 1];
@@ -571,10 +585,28 @@ class CoordinateEmbedding {
             }
         }
 
+        KOKKOS_INLINE_FUNCTION void bl_vec_to_native(const Real Xnative[GR_DIM], const Real bl_fourv[GR_DIM], Real ucon_native[GR_DIM]) const
+        {
+            GReal Xembed[GR_DIM];
+            coord_to_embed(Xnative, Xembed);
+
+            // Then transform a BL 4-vector to KS (or not, if we're using BL base coords)
+            Real vcon_base[GR_DIM];
+            if (mpark::holds_alternative<SphKSCoords>(base)) {
+                mpark::get<SphKSCoords>(base).vec_from_bl(Xembed, bl_fourv, vcon_base);
+            } else if (mpark::holds_alternative<SphKSExtG>(base)) {
+                mpark::get<SphKSExtG>(base).vec_from_bl(Xembed, bl_fourv, vcon_base);
+            } else if (mpark::holds_alternative<SphBLCoords>(base) ||
+                       mpark::holds_alternative<SphBLExtG>(base)) {
+                DLOOP1 vcon_base[mu] = bl_fourv[mu];
+            }
+            // Finally, apply any transform to native coordinates
+            con_vec_to_native(Xnative, vcon_base, ucon_native);
+        }
         /**
-         * Takes a velocity in Boyer-Lindquist coordinates (optionally without time component) and converts it
+         * Takes a *velocity* in Boyer-Lindquist coordinates (re/calculates the time component) and converts it
          * to KS, and then to native coordinates.
-         * Not guaranteed to be fast.
+         * Not particularly efficient -- branches a lot, transforms vectors repeatedly, etc.
          */
         KOKKOS_INLINE_FUNCTION void bl_fourvel_to_native(const Real Xnative[GR_DIM], const Real ucon_bl[GR_DIM], Real ucon_native[GR_DIM]) const
         {
@@ -590,22 +622,11 @@ class CoordinateEmbedding {
                        mpark::holds_alternative<SphBLExtG>(base)) {
                 SphBLExtG(get_a()).gcov_embed(Xembed, gcov_bl);
             }
-
             Real ucon_bl_fourv[GR_DIM];
             DLOOP1 ucon_bl_fourv[mu] = ucon_bl[mu];
             set_ut(gcov_bl, ucon_bl_fourv);
 
-            // Then transform that 4-vector to KS (or not, if we're using BL base coords)
-            Real ucon_base[GR_DIM];
-            if (mpark::holds_alternative<SphKSCoords>(base)) {
-                mpark::get<SphKSCoords>(base).vec_from_bl(Xembed, ucon_bl_fourv, ucon_base);
-            } else if (mpark::holds_alternative<SphKSExtG>(base)) {
-                mpark::get<SphKSExtG>(base).vec_from_bl(Xembed, ucon_bl_fourv, ucon_base);
-            } else if (mpark::holds_alternative<SphBLCoords>(base) ||
-                       mpark::holds_alternative<SphBLExtG>(base)) {
-                DLOOP1 ucon_base[mu] = ucon_bl_fourv[mu];
-            }
-            // Finally, apply any transform to native coordinates
-            con_vec_to_native(Xnative, ucon_base, ucon_native);
+            // Then transform to KS, then to native coords
+            bl_vec_to_native(Xnative, ucon_bl_fourv, ucon_native);
         }
 };

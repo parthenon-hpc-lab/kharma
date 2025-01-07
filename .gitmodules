@@ -1,7 +1,6 @@
 [submodule "external/parthenon"]
 	path = external/parthenon
-	url = https://github.com/AFD-Illinois/parthenon.git
-	branch = kharma
+	url = https://github.com/parthenon-hpc-lab/parthenon.git
 [submodule "external/variant"]
 	path = external/variant
 	url = https://github.com/mpark/variant.git
