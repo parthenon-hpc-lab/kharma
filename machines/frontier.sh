@@ -17,8 +17,14 @@ then
       module load craype-accel-amd-gfx90a
       module load amd-mixed
     else
-      module load PrgEnv-amd
+      # This is what works for Philipp, and tentatively for me
+      module load PrgEnv-cray
+      module load cpe/23.12
       module load craype-accel-amd-gfx90a
+      module load rocm/5.7.1
+      module load cray-mpich
+      module load cce/17.0.0
+      export MPICH_MPIIO_HINTS="*:romio_cb_write=disable" 
     fi
 
     module load cray-hdf5-parallel
@@ -41,9 +47,16 @@ then
     MPI_EXTRA_ARGS="-c1 --gpus-per-node=8 --gpu-bind=closest"
     export MPICH_GPU_SUPPORT_ENABLED=1
     export FI_CXI_RX_MATCH_MODE=software
+    #export FI_MR_CACHE_MONITOR=kdreg2
+    export FI_MR_CACHE_MONITOR=disabled
 
-   # Old workaround, for non-GPU MPI only!
-   #export MPICH_SMP_SINGLE_COPY_MODE=NONE
+    export OMP_PROC_BIND=spread
+    export OMP_PLACES=threads
+    export OMP_NUM_THREADS=2
+    export KOKKOS_MAP_DEVICE_ID_BY=mpi_rank
+
+    # Old workaround, for non-GPU MPI only!
+    #export MPICH_SMP_SINGLE_COPY_MODE=NONE
   else
     # CPU Compile
     # TODO -c etc etc

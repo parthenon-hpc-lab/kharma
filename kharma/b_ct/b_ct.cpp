@@ -477,9 +477,10 @@ TaskStatus B_CT::DerefinePoles(MeshData<Real> *md)
 
     // Figure out indices
     int ng = Globals::nghost;
-    for (auto &pmb : pmesh->block_list) {
+    for (int iblock=0; iblock < md->NumBlocks(); iblock++) {
+        auto& rc = md->GetBlockData(iblock);
+        auto pmb = rc->GetBlockPointer();
         const auto& G = pmb->coords;
-        auto& rc = pmb->meshblock_data.Get();
         auto B_Uf = rc->PackVariables(std::vector<std::string>{"cons.fB"});
         auto B_avg = rc->PackVariables(std::vector<std::string>{"ismr.fB_avg"});
         for (int i = 0; i < BOUNDARY_NFACES; i++) {
@@ -492,6 +493,7 @@ TaskStatus B_CT::DerefinePoles(MeshData<Real> *md)
                 // indices
                 // TODO also get ranges in cells from the beginning rather than using j_p & calculating j_c
                 IndexRange3 bCC = KDomain::GetRange(rc, IndexDomain::interior, CC);
+                // Note these are invalid in X2! We use them only for X1/X3 directions
                 IndexRange3 bF1 = KDomain::GetRange(rc, domain, F1, ng, -ng);
                 IndexRange3 bF3 = KDomain::GetRange(rc, domain, F3, ng, -ng);
                 const int j_f = (binner) ? bCC.js : bCC.je + 1; // last physical face
