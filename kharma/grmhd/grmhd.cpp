@@ -317,30 +317,30 @@ Real EstimateTimestep(MeshData<Real> *md)
         const auto& cmax  = rc->PackVariables(std::vector<std::string>{"Flux.cmax"});
         const auto& cmin  = rc->PackVariables(std::vector<std::string>{"Flux.cmin"});
 
+        auto& boundaries = pmesh->packages.Get<KHARMAPackage>("Boundaries")->AllParams();
+        const bool excise_inner_x2 = boundaries.Get<bool>("excise_flux_inner_x2");
+        const bool excise_outer_x2 = boundaries.Get<bool>("excise_flux_outer_x2");
+
         double block_min_ndt = std::numeric_limits<double>::max();
         pmb->par_reduce("ndt_min", b.ks, b.ke, b.js, b.je, b.is, b.ie,
             KOKKOS_LAMBDA (const int k, const int j, const int i,
                         double &local_result) {
                 const auto& G = cmax.GetCoords();
+
                 double ismr_factor = 1.0;
                 double excision_factor = 1.0;
                 double courant_limit = 1.0;
                 if (ismr_poles && polar_inner_x2 && j < (b.js + ismr_nlevels)) {
                     ismr_factor = m::pow(2, ismr_nlevels - (j - b.js));
                     courant_limit = 0.5;
-                }
-                if (ismr_poles && polar_outer_x2 && j > (b.je - ismr_nlevels)) {
+                } else if (ismr_poles && polar_outer_x2 && j > (b.je - ismr_nlevels)) {
                     ismr_factor = m::pow(2, ismr_nlevels - (b.je - j));
                     courant_limit = 0.5;
                 }
-
                 if (excise_inner_x2 && polar_inner_x2 && j == b.js) {
                     excision_factor = 0.5;
-                    courant_limit = 0.5;
-                }
-                if (excise_outer_x2 && polar_outer_x2 && j == b.je) {
+                } else if (excise_outer_x2 && polar_outer_x2 && j == b.je) {
                     excision_factor = 0.5;
-                    courant_limit = 0.5;
                 }
 
                 double ndt_zone = courant_limit / (1 / (G.Dxc<1>(i) /  m::max(cmax(V1, k, j, i), cmin(V1, k, j, i))) +
@@ -676,7 +676,8 @@ void UpdateAveragedCtop(MeshData<Real> *md)
             // If we've modified values on the pole...
             if (params.Get<bool>("cancel_T3_" + bname) ||
                 params.Get<bool>("cancel_U3_" + bname) ||
-                b3_is_reconnected) {
+                b3_is_reconnected ||
+                params.Get<bool>("excise_flux_" + bname)) {
                 // ...and if this face of the block corresponds to a global boundary...
                 if (pmb->boundary_flag[bface] == BoundaryFlag::user) {
                     PackIndexMap prims_map, cons_map;

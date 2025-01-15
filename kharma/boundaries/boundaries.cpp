@@ -173,8 +173,7 @@ std::shared_ptr<KHARMAPackage> KBoundaries::Initialize(ParameterInput *pin, std:
         // Ensure fluxes through the zero-size face at the pole are zero
         bool zero_flux = pin->GetOrAddBoolean("boundaries", "zero_flux_" + bname, zero_polar_flux && bdir == X2DIR);
         params.Add("zero_flux_" + bname, zero_flux);
-
-        // Ensure fluxes through the zero-size face at the pole are zero
+        // OR allow them via faux-excision
         bool excise_flux = pin->GetOrAddBoolean("boundaries", "excise_flux_" + bname, excise_polar_flux && bdir == X2DIR);
         params.Add("excise_flux_" + bname, excise_flux);
 
@@ -196,8 +195,8 @@ std::shared_ptr<KHARMAPackage> KBoundaries::Initialize(ParameterInput *pin, std:
             bool reconnect_B3 = pin->GetOrAddBoolean("boundaries", "reconnect_B3_" + bname, false);
             params.Add("reconnect_B3_"+bname, reconnect_B3);
 
-            // Special EMF averaging.  Allows B slippage, e.g. around pole for transmitting conditions
-            // Useful for certain dirichlet conditions e.g. multizone
+            // Special EMF averaging.  Allows B3 to "slip" around the pole
+            // Also useful to allow coherent motion even with Dirichlet boundaries, for e.g. multizone
             bool average_EMF = pin->GetOrAddBoolean("boundaries", "average_EMF_" + bname, (btype == "transmitting"));
             params.Add("average_EMF_"+bname, average_EMF);
             // Otherwise, always zero EMFs to prevent B field escaping the domain in polar/dirichlet bounds
