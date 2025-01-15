@@ -1,25 +1,25 @@
-/* 
+/*
  *  File: electrons.cpp
- *  
+ *
  *  BSD 3-Clause License
- *  
+ *
  *  Copyright (c) 2020, AFD Group at UIUC
  *  All rights reserved.
- *  
+ *
  *  Redistribution and use in source and binary forms, with or without
  *  modification, are permitted provided that the following conditions are met:
- *  
+ *
  *  1. Redistributions of source code must retain the above copyright notice, this
  *     list of conditions and the following disclaimer.
- *  
+ *
  *  2. Redistributions in binary form must reproduce the above copyright notice,
  *     this list of conditions and the following disclaimer in the documentation
  *     and/or other materials provided with the distribution.
- *  
+ *
  *  3. Neither the name of the copyright holder nor the names of its
  *     contributors may be used to endorse or promote products derived from
  *     this software without specific prior written permission.
- *  
+ *
  *  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  *  AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  *  IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -198,6 +198,8 @@ std::shared_ptr<KHARMAPackage> Initialize(ParameterInput *pin, std::shared_ptr<P
 
     pkg->BlockUtoP = Electrons::BlockUtoP;
     pkg->BoundaryUtoP = Electrons::BlockUtoP;
+    // If we wanted to apply the domian boundaries to primitive Electrons variables
+    //pkg->DomainBoundaryPtoU = Electrons::BlockPtoU;
 
     return pkg;
 }
@@ -361,8 +363,8 @@ TaskStatus ApplyElectronHeating(MeshBlockData<Real> *rc_old, MeshBlockData<Real>
             // Heat different electron passives based on different dissipation fraction models
             // Expressions here closely adapted (read: stolen) from implementation in iharm3d
             // courtesy of Cesar Diaz, see https://github.com/AFD-Illinois/iharm3d
-            
-            // In all of these the electron entropy stored value is the entropy conserving solution 
+
+            // In all of these the electron entropy stored value is the entropy conserving solution
                                  // and then when updated it becomes the energy conserving solution
             if (m_p.K_CONSTANT >= 0) {
                 const Real fel = fel_const;
@@ -457,7 +459,7 @@ TaskStatus ApplyElectronHeating(MeshBlockData<Real> *rc_old, MeshBlockData<Real>
             const Real lx2=  pmb->packages.Get("GRMHD")->Param<Real>("lx2");
             const Real edot= pmb->packages.Get("GRMHD")->Param<Real>("drive_edot");
             GridScalar alfven_speed = rc->Get("alfven_speed").data;
-            
+
             int Nx1 = pmb->cellbounds.ncellsi(IndexDomain::interior);
             int Nx2 = pmb->cellbounds.ncellsj(IndexDomain::interior);
             Real *dv0 =  (Real*) malloc(sizeof(Real)*Nx1*Nx2);
@@ -492,9 +494,9 @@ TaskStatus ApplyElectronHeating(MeshBlockData<Real> *rc_old, MeshBlockData<Real>
                     dv0[i*Nx1+j] -= mean_velocity0;
                     dv1[i*Nx1+j] -= mean_velocity1;
                 }
-            } 
+            }
 
-            Real Bhalf = 0; Real A = 0; Real init_e = 0; 
+            Real Bhalf = 0; Real A = 0; Real init_e = 0;
             Kokkos::Sum<Real> Bhalf_reducer(Bhalf); Kokkos::Sum<Real> A_reducer(A); Kokkos::Sum<Real> init_e_reducer(init_e);
             pmb->par_reduce("forced_mhd_normal_kick_normalization_Bhalf", mykb.s, mykb.e, myjb.s, myjb.e, myib.s, myib.e,
                 KOKKOS_LAMBDA(const int k, const int j, const int i, Real &local_result) {
@@ -578,7 +580,7 @@ void ApplyFloors(MeshBlockData<Real> *mbd, IndexDomain domain)
                 } else {
                     ktot_max = floors.ktot_max;
                 }
-                
+
                 if (P(m_p.KTOT, k, j, i) > ktot_max) {
                     fflag(0, k, j, i) = Floors::FFlag::KTOT | (int) fflag(0, k, j, i);
                     P(m_p.KTOT, k, j, i) = ktot_max;

@@ -190,16 +190,12 @@ std::shared_ptr<KHARMAPackage> Initialize(ParameterInput *pin, std::shared_ptr<P
     // A KHARMAPackage also contains quite a few "callbacks," or functions called at
     // specific points in a step if the package is loaded.
     // Generally, see the headers for function descriptions.
-
-    //pkg->BlockUtoP // Taken care of by separate "Inverter" package since it's hard to do
-
-    // On physical boundaries, even if we've sync'd both, respect the application to primitive variables
-    pkg->DomainBoundaryPtoU = Flux::BlockPtoUMHD;
-
-    // AMR-related
     pkg->CheckRefinementBlock    = GRMHD::CheckRefinement;
     pkg->EstimateTimestepMesh    = GRMHD::EstimateTimestep;
     pkg->PostStepDiagnosticsMesh = GRMHD::PostStepDiagnostics;
+    // NOTE: PtoU and UtoP for the five fluid variables are taken care of by the "Inverter"
+    // package, which registers the relevant callbacks
+    // This is so that the whole package can be disabled when running implicitly or w/EMHD
 
     // List (vector) of HistoryOutputVars that will all be enrolled as output variables
     parthenon::HstVar_list hst_vars = {};
@@ -312,7 +308,8 @@ Real EstimateTimestep(MeshData<Real> *md)
     // TODO maybe split normal vs ISMR (/Excised pole/etc) timesteps? Make normal calculation mesh-wise?
     double min_ndt = std::numeric_limits<double>::max();
     for (auto &pmb : pmesh->block_list) {
-        auto rc = pmb->meshblock_data.Get().get();
+        auto rc = pmb->meshblock_data.Get(md->StageName()).get();
+        // We only need this block-wise to check boundary flags for ISMR, could special-case that
 
         const bool polar_inner_x2 = pmb->boundary_flag[BoundaryFace::inner_x2] == BoundaryFlag::user;
         const bool polar_outer_x2 = pmb->boundary_flag[BoundaryFace::outer_x2] == BoundaryFlag::user;
@@ -552,6 +549,7 @@ void CancelBoundaryU3(MeshBlockData<Real> *rc, IndexDomain domain, bool coarse)
                     }
                 );
             }
+            member.team_barrier();
 
             // Sum the first rank of U3
             Real U3_sum = 0.;
@@ -561,6 +559,7 @@ void CancelBoundaryU3(MeshBlockData<Real> *rc, IndexDomain domain, bool coarse)
                     local_result += isnan(P(m_p.U3, k, jf, i)) ? 0. : P(m_p.U3, k, jf, i);
                 }
             , sum_reducer);
+            member.team_barrier();
 
             // Subtract the average, floor, restore conserved vars, update ctop
             const Real U3_avg = U3_sum / (bi.ke - bi.ks + 1);
@@ -624,6 +623,7 @@ void CancelBoundaryT3(MeshBlockData<Real> *rc, IndexDomain domain, bool coarse)
                     }
                 );
             }
+            member.team_barrier();
 
             // Sum the first rank of the angular momentum T3
             Real T3_sum = 0.;
@@ -633,6 +633,7 @@ void CancelBoundaryT3(MeshBlockData<Real> *rc, IndexDomain domain, bool coarse)
                     local_result += isnan(U(m_u.U3, k, jf, i)) ? 0. : U(m_u.U3, k, jf, i);
                 }
             , sum_reducer);
+            member.team_barrier();
 
             // Calculate the average and subtract it
             const Real T3_avg = T3_sum / (bi.ke - bi.ks + 1);
@@ -658,7 +659,7 @@ void UpdateAveragedCtop(MeshData<Real> *md)
     auto pmesh = md->GetMeshPointer();
     auto& params = pmesh->packages.Get<KHARMAPackage>("Boundaries")->AllParams();
     for (auto &pmb : pmesh->block_list) {
-        auto &rc = pmb->meshblock_data.Get();
+        auto &rc = pmb->meshblock_data.Get(md->StageName());
         for (int i = 0; i < BOUNDARY_NFACES; i++) {
             BoundaryFace bface = (BoundaryFace)i;
             auto bname = KBoundaries::BoundaryName(bface);

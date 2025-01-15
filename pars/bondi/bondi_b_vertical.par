@@ -55,7 +55,9 @@ on = true
 # Transmitting boundaries, since there will be material at the pole
 inner_x2 = transmitting
 outer_x2 = transmitting
-excise_polar_flux = true
+# This might additionally help, but the option is unstable
+#excise_polar_flux = true
+
 # Allow in material from boundary
 check_inflow_outer_x1 = false
 

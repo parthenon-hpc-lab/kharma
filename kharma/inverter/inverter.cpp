@@ -1,25 +1,25 @@
-/* 
+/*
  *  File: inverter.cpp
- *  
+ *
  *  BSD 3-Clause License
- *  
+ *
  *  Copyright (c) 2020, AFD Group at UIUC
  *  All rights reserved.
- *  
+ *
  *  Redistribution and use in source and binary forms, with or without
  *  modification, are permitted provided that the following conditions are met:
- *  
+ *
  *  1. Redistributions of source code must retain the above copyright notice, this
  *     list of conditions and the following disclaimer.
- *  
+ *
  *  2. Redistributions in binary form must reproduce the above copyright notice,
  *     this list of conditions and the following disclaimer in the documentation
  *     and/or other materials provided with the distribution.
- *  
+ *
  *  3. Neither the name of the copyright holder nor the names of its
  *     contributors may be used to endorse or promote products derived from
  *     this software without specific prior written permission.
- *  
+ *
  *  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  *  AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  *  IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -36,6 +36,7 @@
 // inverter.hpp includes the template and instantiations in the correct order
 
 #include "domain.hpp"
+#include "flux.hpp"
 #include "reductions.hpp"
 
 int Inverter::CountPFlags(MeshData<Real> *md)
@@ -107,9 +108,17 @@ std::shared_ptr<KHARMAPackage> Inverter::Initialize(ParameterInput *pin, std::sh
     m = Metadata({Metadata::Real, Metadata::Cell, Metadata::Derived, Metadata::OneCopy, Metadata::Overridable});
     pkg->AddField("fflag", m);
 
-    // We exist basically to do this
-    pkg->BlockUtoP = Inverter::BlockUtoP;
-    pkg->BoundaryUtoP = Inverter::BlockUtoP;
+    // This package may be loaded even when evolving implicitly, e.g. for FOFC
+    // Only register our callbacks if they're needed for explicit evolution or a guess
+    if (!pin->GetBoolean("GRMHD", "implicit") || pin->GetBoolean("emhd", "ideal_guess")) {
+        // We exist basically to do this
+        pkg->BlockUtoP = Inverter::BlockUtoP;
+        // We want to run U->P on most boundaries when we're synchronizing conserved variables
+        pkg->BoundaryUtoP = Inverter::BlockUtoP;
+        // However, we apply domain boundaries to primitives.
+        // Registering this additional function conveys that to the callers in `Packages` and `Boundaries`
+        pkg->DomainBoundaryPtoU = Flux::BlockPtoUMHD;
+    }
 
     pkg->PostStepDiagnosticsMesh = Inverter::PostStepDiagnostics;
 
@@ -156,10 +165,10 @@ inline void BlockPerformInversion(MeshBlockData<Real> *rc, IndexDomain domain, b
     const auto& G = pmb->coords;
 
     // Get the primitives from our conserved versions
-    // Notice we recover variables for only the physical (interior or interior-ghost)
+    // Notice by default, we recover variables for only the physical (interior or interior-ghost)
     // zones!  These are the only ones which are filled at our point in the step
-    auto bounds = coarse ? pmb->c_cellbounds : pmb->cellbounds;
-    const IndexRange3 b = KDomain::GetPhysicalRange(rc);
+    const IndexRange3 b = (domain == IndexDomain::entire)
+                          ? KDomain::GetPhysicalRange(rc) : KDomain::GetRange(rc, domain, coarse);
     pmb->par_for("U_to_P", b.ks, b.ke, b.js, b.je, b.is, b.ie,
         KOKKOS_LAMBDA (const int &k, const int &j, const int &i) {
             const Floors::Prescription& myfloors = (inverter_floors.radius_dependent_floors

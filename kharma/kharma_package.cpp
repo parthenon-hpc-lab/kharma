@@ -1,25 +1,25 @@
-/* 
+/*
  *  File: kharma_package.cpp
- *  
+ *
  *  BSD 3-Clause License
- *  
+ *
  *  Copyright (c) 2020, AFD Group at UIUC
  *  All rights reserved.
- *  
+ *
  *  Redistribution and use in source and binary forms, with or without
  *  modification, are permitted provided that the following conditions are met:
- *  
+ *
  *  1. Redistributions of source code must retain the above copyright notice, this
  *     list of conditions and the following disclaimer.
- *  
+ *
  *  2. Redistributions in binary form must reproduce the above copyright notice,
  *     this list of conditions and the following disclaimer in the documentation
  *     and/or other materials provided with the distribution.
- *  
+ *
  *  3. Neither the name of the copyright holder nor the names of its
  *     contributors may be used to endorse or promote products derived from
  *     this software without specific prior written permission.
- *  
+ *
  *  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  *  AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  *  IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -128,24 +128,24 @@ TaskStatus Packages::BoundaryPtoUElseUtoP(MeshBlockData<Real> *rc, IndexDomain d
     auto pmb = rc->GetBlockPointer();
     auto kpackages = rc->GetBlockPointer()->packages.AllPackagesOfType<KHARMAPackage>();
     // Some downstream UtoP rely on GRMHD prims, some cons
-    if (kpackages.count("GRMHD")) {
-        KHARMAPackage *pkpackage = pmb->packages.Get<KHARMAPackage>("GRMHD");
+    if (kpackages.count("Inverter")) {
+        KHARMAPackage *pkpackage = pmb->packages.Get<KHARMAPackage>("Inverter");
         if (pkpackage->DomainBoundaryPtoU != nullptr) {
-            Flag("DomainBoundaryPtoU_GRMHD");
+            Flag("DomainBoundaryPtoU_Inverter");
             pkpackage->DomainBoundaryPtoU(rc, domain, coarse);
             EndFlag();
         } else if (pkpackage->BoundaryUtoP != nullptr) { // This won't be called
-            Flag("DomainBoundaryUtoP_GRMHD");
+            Flag("DomainBoundaryUtoP_Inverter");
             pkpackage->BoundaryUtoP(rc, domain, coarse);
             EndFlag();
         }
     }
     for (auto kpackage : kpackages) {
-        if (kpackage.second->DomainBoundaryPtoU != nullptr && kpackage.first != "GRMHD") {
+        if (kpackage.second->DomainBoundaryPtoU != nullptr && kpackage.first != "Inverter") {
             Flag("DomainBoundaryPtoU_"+kpackage.first);
             kpackage.second->DomainBoundaryPtoU(rc, domain, coarse);
             EndFlag();
-        } else if (kpackage.second->BoundaryUtoP != nullptr && kpackage.first != "GRMHD") {
+        } else if (kpackage.second->BoundaryUtoP != nullptr && kpackage.first != "Inverter") {
             Flag("DomainBoundaryUtoP_"+kpackage.first);
             kpackage.second->BoundaryUtoP(rc, domain, coarse);
             EndFlag();

@@ -1,25 +1,25 @@
-/* 
+/*
  *  File: b_flux_ct.cpp
- *  
+ *
  *  BSD 3-Clause License
- *  
+ *
  *  Copyright (c) 2020, AFD Group at UIUC
  *  All rights reserved.
- *  
+ *
  *  Redistribution and use in source and binary forms, with or without
  *  modification, are permitted provided that the following conditions are met:
- *  
+ *
  *  1. Redistributions of source code must retain the above copyright notice, this
  *     list of conditions and the following disclaimer.
- *  
+ *
  *  2. Redistributions in binary form must reproduce the above copyright notice,
  *     this list of conditions and the following disclaimer in the documentation
  *     and/or other materials provided with the distribution.
- *  
+ *
  *  3. Neither the name of the copyright holder nor the names of its
  *     contributors may be used to endorse or promote products derived from
  *     this software without specific prior written permission.
- *  
+ *
  *  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  *  AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  *  IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -410,7 +410,7 @@ void ZeroBoundaryFlux(MeshData<Real> *md, IndexDomain domain, bool coarse)
     // Compare this section with calculation of emf3 in FluxCT:
     // these changes ensure that boundary emfs emf3(i,js,k)=0, etc.
     for (auto &pmb : pmesh->block_list) {
-        auto& rc = pmb->meshblock_data.Get();
+        auto& rc = pmb->meshblock_data.Get(md->StageName());
         auto& B_F = rc->PackVariablesAndFluxes(std::vector<std::string>{"cons.B"});
 
         if (domain == IndexDomain::inner_x2 &&
@@ -495,7 +495,7 @@ void Bflux0(MeshData<Real> *md, IndexDomain domain, bool coarse)
     // Compare this section with calculation of emf3 in FluxCT:
     // these changes ensure that boundary emfs emf3(i,js,k)=0, etc.
     for (auto &pmb : pmesh->block_list) {
-        auto& rc = pmb->meshblock_data.Get();
+        auto& rc = pmb->meshblock_data.Get(md->StageName());
         auto& B_F = rc->PackVariablesAndFluxes(std::vector<std::string>{"cons.B"});
 
         // "Bflux0" prescription for keeping divB~=0 on zone corners of the interior & exterior X1 faces
@@ -555,7 +555,7 @@ IndexRange ValidDivBX1(MeshBlock *pmb)
 {
     // All user, physical (not MPI/periodic) boundary conditions in X1 will generate divB on corners
     // intersecting the interior & exterior faces. Don't report these zones, as we expect it.
-    const IndexRange ibl = pmb->meshblock_data.Get()->GetBoundsI(IndexDomain::interior);
+    const IndexRange ibl = pmb->meshblock_data.Get("base")->GetBoundsI(IndexDomain::interior);
     bool avoid_inner = (!pmb->packages.Get("B_FluxCT")->Param<bool>("fix_flux_inner_x1") &&
         pmb->boundary_flag[BoundaryFace::inner_x1] == BoundaryFlag::user);
     bool avoid_outer = (!pmb->packages.Get("B_FluxCT")->Param<bool>("fix_flux_outer_x1") &&
@@ -677,7 +677,7 @@ void CalcDivB(MeshData<Real> *md, std::string divb_field_name)
 }
 void FillOutput(MeshBlock *pmb, ParameterInput *pin)
 {
-    auto rc = pmb->meshblock_data.Get().get();
+    auto rc = pmb->meshblock_data.Get("base").get();
     const int ndim = pmb->pmy_mesh->ndim;
     if (ndim < 2) return;
 

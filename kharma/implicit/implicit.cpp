@@ -296,8 +296,10 @@ TaskStatus Implicit::Step(MeshData<Real> *md_full_step_init, MeshData<Real> *md_
 #endif
                 const auto& G = U_full_step_init_all.GetCoords(b);
 
-                // Solver performance diagnostics
+                // Solver performance diagnostics.
                 Real &solve_fail = solve_fail_all(b, 0, k, j, i);
+                // Reset (locally and in View) at first iteration!
+                if (iter == 1) solve_fail = SolverStatusR::converged;
 
                 // Perform the solve only if it hadn't failed in any of the previous iterations.
                 if (solve_fail != SolverStatusR::fail) {

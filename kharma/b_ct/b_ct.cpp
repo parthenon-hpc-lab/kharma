@@ -748,7 +748,8 @@ void B_CT::CalcDivB(MeshData<Real> *md, std::string divb_field_name)
 
 void B_CT::FillOutput(MeshBlock *pmb, ParameterInput *pin)
 {
-    auto rc = pmb->meshblock_data.Get();
+    // This is called after the step, use "base" container
+    auto rc = pmb->meshblock_data.Get("base");
     const int ndim = pmb->pmy_mesh->ndim;
     if (ndim < 2) return;
 
