@@ -786,7 +786,10 @@ TaskStatus KBoundaries::FixFlux(MeshData<Real> *md)
                         KOKKOS_LAMBDA(const int &v, const int &k, const int &j, const int &i) {
                             const int ki = ((k - ksp + Nk3p2) % Nk3p) + ksp;
                             Real avg = 0.;
-                            if (v == m_u.U2 || v == m_u.B2 || v == m_u.U3 || v == m_u.B3) {
+                            if (v == m_u.B1 || v == m_u.B2 || v == m_u.B3) {
+                                // Don't balance B, it's just zero
+                                return;
+                            } else if (v == m_u.U2 || v == m_u.U3) {
                                 // Flux direction reversed, but *coordinate also reverses*
                                 avg = (F.flux(bdir, v, k, j, i) + F.flux(bdir, v, ki, j, i)) / 2;
                                 F.flux(bdir, v, ki, j, i) = avg;
@@ -806,18 +809,20 @@ TaskStatus KBoundaries::FixFlux(MeshData<Real> *md)
                     const size_t var_size_in_bytes = parthenon::ScratchPad2D<Real>::shmem_size(nvar, n1);
                     const size_t recon_scratch_bytes = 2 * var_size_in_bytes;
 
-                    // Interpolate the last row to the outer half-cell (once, before below loop over dirs)
-                    // We won't be needing the cell-centered P again (right?)
-                    // This is a local update since j_cell != jn
-                    const int jn = (binner) ? j_cell + 1 : j_cell - 1;
-                    pmb->par_for(
-                        "excise_flux_" + bname, 0, nvar-1, b.ks, b.ke, b.is, b.ie,
-                        KOKKOS_LAMBDA(const int &ip, const int &k, const int &i) {
-                            P_all(ip, k, j_cell, i) = 0.75 * P_all(ip, k, j_cell, i) + 0.25 * P_all(ip, k, jn, i);
-                        }
-                    );
-
                     for (auto dir : OrthogonalDirs(bdir)) {
+                        // Interpolate the last row to the outer half-cell (once, before below loop over dirs)
+                        // We won't be needing the cell-centered P again (right?)
+                        // This is a local update since j_cell != jn
+                        const int jn = (binner) ? j_cell + 1 : j_cell - 1;
+                        pmb->par_for(
+                            "excise_flux_" + bname, 0, nvar-1, b.ks, b.ke, b.is, b.ie,
+                            KOKKOS_LAMBDA(const int &ip, const int &k, const int &i) {
+                                // Ul is just a scratch!  We need the half-cell values now but we will still
+                                // need the full-cell-centered prims later
+                                // TODO real temporary of plane-size only!!
+                                Ul_all(ip, k, j_cell, i) = 0.75 * P_all(ip, k, j_cell, i) + 0.25 * P_all(ip, k, jn, i);
+                            }
+                        );
 
                         // Reconstruct using the outer-half values
                         parthenon::par_for_outer(DEFAULT_OUTER_LOOP_PATTERN, "excise_flux_" + bname + "_recon", pmb0->exec_space,
@@ -826,25 +831,14 @@ TaskStatus KBoundaries::FixFlux(MeshData<Real> *md)
                                 ScratchPad2D<Real> Pl_s(member.team_scratch(scratch_level), nvar, n1);
                                 ScratchPad2D<Real> Pr_s(member.team_scratch(scratch_level), nvar, n1);
 
-                                // Interpolate linearly to outer half-zone but save centered value
-                                // TODO would need whole plane, not row.  Multi-D inner?
-                                // parthenon::par_for_inner(member, b.is, b.ie,
-                                //     [&](const int& i) {
-                                //         PLOOP {
-                                //             P_save(ip, i) = P_all(ip, k, j, i);
-                                //             P_all(ip, k, j, i) = 0.75 * P_save(ip, i) + 0.25 * P_all(ip, k, jn, i);
-                                //         }
-                                //     }
-                                // );
-                                // member.team_barrier();
-
                                 // Chosen to not require additional floors.  Could bump order and floor/fallback like in GetFlux
+                                // Remember Ul here is just the half-cell centered primitive vars
                                 if (dir == X1DIR) {
-                                    KReconstruction::ReconstructRow<KReconstruction::Type::linear_mc, X1DIR>(member, P_all, k, j, b.is, b.ie, Pl_s, Pr_s);
+                                    KReconstruction::ReconstructRow<KReconstruction::Type::linear_mc, X1DIR>(member, Ul_all, k, j, b.is, b.ie, Pl_s, Pr_s);
                                 } else if (dir == X2DIR) {
-                                    KReconstruction::ReconstructRow<KReconstruction::Type::linear_mc, X2DIR>(member, P_all, k, j, b.is, b.ie, Pl_s, Pr_s);
+                                    KReconstruction::ReconstructRow<KReconstruction::Type::linear_mc, X2DIR>(member, Ul_all, k, j, b.is, b.ie, Pl_s, Pr_s);
                                 } else if (dir == X3DIR) {
-                                    KReconstruction::ReconstructRow<KReconstruction::Type::linear_mc, X3DIR>(member, P_all, k, j, b.is, b.ie, Pl_s, Pr_s);
+                                    KReconstruction::ReconstructRow<KReconstruction::Type::linear_mc, X3DIR>(member, Ul_all, k, j, b.is, b.ie, Pl_s, Pr_s);
                                 }
                                 member.team_barrier();
 
@@ -852,7 +846,6 @@ TaskStatus KBoundaries::FixFlux(MeshData<Real> *md)
                                 parthenon::par_for_inner(member, b.is, b.ie,
                                     [&](const int& i) {
                                         PLOOP {
-                                            // P_all(ip, k, j, i) = P_save(ip, i);
                                             Pl_all(ip, k, j, i) = Pl_s(ip, i);
                                             Pr_all(ip, k, j, i) = Pr_s(ip, i);
                                         }

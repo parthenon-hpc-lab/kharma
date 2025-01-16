@@ -318,10 +318,6 @@ Real EstimateTimestep(MeshData<Real> *md)
         const auto& cmax  = rc->PackVariables(std::vector<std::string>{"Flux.cmax"});
         const auto& cmin  = rc->PackVariables(std::vector<std::string>{"Flux.cmin"});
 
-        auto& boundaries = pmesh->packages.Get<KHARMAPackage>("Boundaries")->AllParams();
-        const bool excise_inner_x2 = boundaries.Get<bool>("excise_flux_inner_x2");
-        const bool excise_outer_x2 = boundaries.Get<bool>("excise_flux_outer_x2");
-
         double block_min_ndt = std::numeric_limits<double>::max();
         pmb->par_reduce("ndt_min", b.ks, b.ke, b.js, b.je, b.is, b.ie,
             KOKKOS_LAMBDA (const int k, const int j, const int i,

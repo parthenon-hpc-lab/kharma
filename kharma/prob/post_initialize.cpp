@@ -66,7 +66,7 @@ void KHARMA::PostInitialize(ParameterInput *pin, Mesh *pmesh, bool is_restart)
     // If you need Dirichlet boundary conditions, the domain-edge *ghost* zones should also be initialized,
     // as they will be "frozen in" during this function and applied thereafter.
 
-    auto &md = pmesh->mesh_data.Get();
+    auto &md = pmesh->mesh_data.Get("base");
 
     auto& pkgs = pmesh->packages.AllPackages();
 

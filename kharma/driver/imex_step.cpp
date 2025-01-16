@@ -81,7 +81,7 @@ TaskCollection KHARMADriver::MakeImExTaskCollection(BlockList_t &blocks, int sta
     // TODO these can now be reduced by including the var lists/flags which actually need to be allocated
     // TODO except the Copy they can be run on step 1 only
     if (stage == 1) {
-        auto &base = pmesh->mesh_data.Get();
+        auto &base = pmesh->mesh_data.Get("base");
         // Fluxes
         pmesh->mesh_data.Add("dUdt");
         for (int i = 1; i < integrator->nstages; i++)
