@@ -1,25 +1,25 @@
-/* 
+/*
  *  File: b_cleanup.cpp
- *  
+ *
  *  BSD 3-Clause License
- *  
+ *
  *  Copyright (c) 2020, AFD Group at UIUC
  *  All rights reserved.
- *  
+ *
  *  Redistribution and use in source and binary forms, with or without
  *  modification, are permitted provided that the following conditions are met:
- *  
+ *
  *  1. Redistributions of source code must retain the above copyright notice, this
  *     list of conditions and the following disclaimer.
- *  
+ *
  *  2. Redistributions in binary form must reproduce the above copyright notice,
  *     this list of conditions and the following disclaimer in the documentation
  *     and/or other materials provided with the distribution.
- *  
+ *
  *  3. Neither the name of the copyright holder nor the names of its
  *     contributors may be used to endorse or promote products derived from
  *     this software without specific prior written permission.
- *  
+ *
  *  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  *  AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  *  IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -202,7 +202,7 @@ TaskStatus B_Cleanup::CleanupDivergence(std::shared_ptr<MeshData<Real>>& md)
     }
 
     // Calculate/print inital max divB exactly as we would during run
-    double divb_start; 
+    double divb_start;
     if (use_b_ct) {
         divb_start = B_CT::GlobalMaxDivB(md.get());
     } else {
@@ -274,7 +274,7 @@ TaskStatus B_Cleanup::CleanupDivergence(std::shared_ptr<MeshData<Real>>& md)
         // Synchronize to update cons.B's ghost zones
         KHARMADriver::SyncAllBounds(md);
         // Make sure prims.B reflects solution
-        B_CT::MeshUtoP(md.get(), IndexDomain::entire, false);
+        B_CT::MeshUtoP(md.get(), IndexDomain::entire);
         // Recalculate divB max for one last check
         divb_end = B_CT::GlobalMaxDivB(md.get());
     } else {
@@ -283,7 +283,7 @@ TaskStatus B_Cleanup::CleanupDivergence(std::shared_ptr<MeshData<Real>>& md)
         // Synchronize to update cons.B's ghost zones
         KHARMADriver::SyncAllBounds(md);
         // Make sure prims.B reflects solution
-        B_FluxCT::MeshUtoP(md.get(), IndexDomain::entire, false);
+        B_FluxCT::MeshUtoP(md.get(), IndexDomain::entire);
         // Recalculate divB max for one last check
         divb_end = B_FluxCT::GlobalMaxDivB(md.get());
     }

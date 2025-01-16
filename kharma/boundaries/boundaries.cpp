@@ -693,6 +693,10 @@ TaskStatus KBoundaries::FixFlux(MeshData<Real> *md)
                 if (pmb->boundary_flag[bface] == BoundaryFlag::user) {
                     if (bdir != 2) throw std::runtime_error("Excised polar fluxes only fully implemented in X2!");
 
+                    // Pack w/B to match indices with the `Flux.X` below
+                    // We won't *update* B field though
+                    auto &F = rc->PackVariablesAndFluxes({Metadata::WithFluxes}, cons_map);
+
                     // Going to need the primitive vars
                     PackIndexMap prims_map;
                     std::vector<MetadataFlag> prims_flags = {Metadata::GetUserFlag("Primitive"), Metadata::Cell};
@@ -763,7 +767,8 @@ TaskStatus KBoundaries::FixFlux(MeshData<Real> *md)
 
                             // Use LLF flux
                             PLOOP {
-                                F.flux(bdir, ip, k, j, i) = Flux::llf(Fl_all(ip, k, j, i), Fr_all(ip, k, j, i),
+                                if (ip != m_u.B1 && ip != m_u.B2 && ip != m_u.B3)
+                                    F.flux(bdir, ip, k, j, i) = Flux::llf(Fl_all(ip, k, j, i), Fr_all(ip, k, j, i),
                                                                     cmax(bdir-1, k, j, i), cmin(bdir-1, k, j, i),
                                                                     Ul_all(ip, k, j, i), Ur_all(ip, k, j, i));
                             }
@@ -886,7 +891,8 @@ TaskStatus KBoundaries::FixFlux(MeshData<Real> *md)
 
                                 // Use LLF flux
                                 PLOOP {
-                                    F.flux(dir, ip, k, j, i) = Flux::llf(Fl_all(ip, k, j, i), Fr_all(ip, k, j, i),
+                                    if (ip != m_u.B1 && ip != m_u.B2 && ip != m_u.B3)
+                                        F.flux(dir, ip, k, j, i) = Flux::llf(Fl_all(ip, k, j, i), Fr_all(ip, k, j, i),
                                                                         cmax(dir-1, k, j, i), cmin(dir-1, k, j, i),
                                                                         Ul_all(ip, k, j, i), Ur_all(ip, k, j, i)) * 0.5;
                                 }
@@ -937,7 +943,9 @@ void KBoundaries::AddSource(MeshData<Real> *md, MeshData<Real> *mdudt, IndexDoma
                         b.ks = b.ke = (binner) ? bi.ks : bi.ke;
                     }
 
-                    auto &dUdt = rc->PackVariables({Metadata::WithFluxes});
+                    // The magnetic field is probably defined at faces; even if it's defined in cells,
+                    // we shouldn't be monkeying with it.  We just do not adjust it here.
+                    auto &dUdt = rc->PackVariables({Metadata::GetUserFlag("HD"), Metadata::WithFluxes});
                     const auto& G = pmb->coords;
                     const Loci loc = (binner) ? Loci::outer_half : Loci::inner_half;
 

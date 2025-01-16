@@ -39,6 +39,7 @@
 // TODO eliminate when Parthenon gets reduction types
 #include "Kokkos_Core.hpp"
 
+#include "b_ct.hpp"
 #include "boundaries.hpp"
 #include "current.hpp"
 #include "floors.hpp"
@@ -256,6 +257,7 @@ Real EstimateTimestep(MeshData<Real> *md)
     const auto& grmhd_pars = pmesh->packages.Get("GRMHD")->AllParams();
 
     // If we have to recompute ctop anywhere, we do it now
+    // TODO only call if one of the reconnect_ or excised polar is enabled
     UpdateAveragedCtop(md);
 
     // Other things we might have to return (light-crossing, pre-set timestep, etc.)
@@ -656,6 +658,8 @@ void CancelBoundaryT3(MeshBlockData<Real> *rc, IndexDomain domain, bool coarse)
 void UpdateAveragedCtop(MeshData<Real> *md)
 {
     auto pmesh = md->GetMeshPointer();
+    if (pmesh->packages.AllPackages().count("B_CT"))
+        B_CT::MeshUtoP(md, IndexDomain::interior);
     auto& params = pmesh->packages.Get<KHARMAPackage>("Boundaries")->AllParams();
     for (auto &pmb : pmesh->block_list) {
         auto &rc = pmb->meshblock_data.Get(md->StageName());
