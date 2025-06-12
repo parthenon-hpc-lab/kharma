@@ -42,6 +42,7 @@
 #include "b_flux_ct.hpp"
 #include "electrons.hpp"
 #include "inverter.hpp"
+#include "ismr.hpp"
 #include "grmhd.hpp"
 #include "wind.hpp"
 // Other headers
@@ -55,6 +56,8 @@
 #include <interface/update.hpp>
 #include <amr_criteria/refinement_package.hpp>
 
+using FC = Metadata::FlagCollection;
+
 TaskCollection KHARMADriver::MakeImExTaskCollection(BlockList_t &blocks, int stage)
 {
     // Reminder that this list is created BEFORE any of the list contents are run!
@@ -65,7 +68,7 @@ TaskCollection KHARMADriver::MakeImExTaskCollection(BlockList_t &blocks, int sta
 
     // Which packages we've loaded affects which tasks we'll add to the list
     auto& pkgs         = blocks[0]->packages.AllPackages();
-    auto& flux_pkg   = pkgs.at("Flux")->AllParams();
+    auto& flux_pkg   = pkgs.at("Fluxes")->AllParams();
     const bool use_b_cleanup = pkgs.count("B_Cleanup");
     const bool use_b_ct = pkgs.count("B_CT");
     const bool use_electrons = pkgs.count("Electrons");
@@ -82,35 +85,43 @@ TaskCollection KHARMADriver::MakeImExTaskCollection(BlockList_t &blocks, int sta
     if (stage == 1) {
         auto &base = pmesh->mesh_data.Get();
         // Fluxes
-        pmesh->mesh_data.Add("dUdt");
+        pmesh->mesh_data.Add("dUdt", base);
         for (int i = 1; i < integrator->nstages; i++)
-            pmesh->mesh_data.Add(integrator->stage_name[i]);
-        // Preserve state for time derivatives if we need to output current
+            pmesh->mesh_data.Add(integrator->stage_name[i], base);
+
         if (use_jcon) {
-            pmesh->mesh_data.Add("preserve");
-            // Above only copies on allocate -- ensure we copy the MHD variables every step with a task
-            std::vector<MetadataFlag> vars_jcon_needs = {Metadata::GetUserFlag("MHD"), Metadata::GetUserFlag("Primitive")};
+            // Preserve state for time derivatives if we need to output current
+            // Pick out the variables we need, to allocate and copy less
+            static parthenon::Metadata::FlagVec preserve_flags;
+            static std::vector<std::string> preserve_vars;
+            if (preserve_vars.size() == 0) {
+                preserve_flags = {Metadata::GetUserFlag("MHD"), Metadata::GetUserFlag("Primitive")};
+                preserve_vars = KHARMA::GetVariableNames(&(pmesh->packages), FC(preserve_flags));
+            }
+            // Add the container once to avoid re-adding if we have lots of partitions
+            //pmesh->mesh_data.Add("preserve", base, preserve_vars);
+            // Ensure we copy the MHD variables every step with a task
             const int num_partitions = pmesh->DefaultNumPartitions();
             TaskRegion &copy_region = tc.AddRegion(num_partitions);
             for (int i = 0; i < num_partitions; i++) {
                 auto &tl = copy_region[i];
-                tl.AddTask(t_none, Copy<MeshData<Real>>, vars_jcon_needs,
-                            base.get(), pmesh->mesh_data.Get("preserve").get());
+                tl.AddTask(t_none, Copy<MeshData<Real>>, preserve_flags,
+                            base.get(), pmesh->mesh_data.Add("preserve", base, preserve_vars).get());
             }
         }
         // FOFC needs to determine whether the "real" U-divF will violate floors, and needs a safe place to do it.
         // We populate it later, with each *sub-step*'s initial state
         if (use_fofc) {
-            pmesh->mesh_data.Add("fofc_source");
-            pmesh->mesh_data.Add("fofc_guess");
+            pmesh->mesh_data.Add("fofc_source", base);
+            pmesh->mesh_data.Add("fofc_guess", base);
         }
         if (use_implicit) {
             // When solving, we need a temporary copy with any explicit updates,
             // but not overwriting the beginning- or mid-step values
-            pmesh->mesh_data.Add("solver");
+            pmesh->mesh_data.Add("solver", base);
             if (use_linesearch) {
                 // Need an additional state for linesearch
-                pmesh->mesh_data.Add("linesearch");
+                pmesh->mesh_data.Add("linesearch", base);
             }
         }
     }
@@ -120,7 +131,6 @@ TaskCollection KHARMADriver::MakeImExTaskCollection(BlockList_t &blocks, int sta
         // Build the universe of variables to let Parthenon see when exchanging boundaries.
         // This is built to exclude incidental variables like B field initialization stuff, EMFs, etc.
         // "Boundaries" packs in buffers e.g. Dirichlet boundaries
-        using FC = Metadata::FlagCollection;
         auto sync_flags = FC({Metadata::GetUserFlag("Primitive"), Metadata::Conserved,
                               Metadata::Face, Metadata::GetUserFlag("Boundaries")}, true);
         sync_vars = KHARMA::GetVariableNames(&(pmesh->packages), sync_flags);
@@ -178,7 +188,7 @@ TaskCollection KHARMADriver::MakeImExTaskCollection(BlockList_t &blocks, int sta
             auto t_emf = t_flux_bounds;
             if (use_b_ct) {
                 // Pull out a container of only EMF to synchronize
-                auto &md_emf_only = pmesh->mesh_data.AddShallow("EMF", std::vector<std::string>{"B_CT.emf"}); // TODO this gets weird if we partition
+                auto &md_emf_only = pmesh->mesh_data.AddShallow("EMF", md_sub_step_init, std::vector<std::string>{"B_CT.emf"}); // TODO this gets weird if we partition
                 auto t_emf_local = tl.AddTask(t_flux_bounds, B_CT::CalculateEMF, md_sub_step_init.get());
                 t_emf = KHARMADriver::AddBoundarySync(t_emf_local, tl, md_emf_only);
             }
@@ -314,6 +324,12 @@ TaskCollection KHARMADriver::MakeImExTaskCollection(BlockList_t &blocks, int sta
         auto t_ptou = tl.AddTask(t_heat_electrons, Flux::MeshPtoU, md_sub_step_final.get(), IndexDomain::entire, false);
 
         auto t_step_done = t_ptou;
+        if (pkgs.count("ISMR")) {
+            auto t_derefine_b = t_ptou;
+            if (pkgs.count("B_CT"))
+                t_derefine_b = tl.AddTask(t_ptou, B_CT::DerefinePoles, md_sub_step_final.get());
+            t_step_done = tl.AddTask(t_derefine_b, ISMR::DerefinePoles, md_sub_step_final.get());
+        }
 
         // Estimate next time step based on ctop
         if (stage == integrator->nstages) {

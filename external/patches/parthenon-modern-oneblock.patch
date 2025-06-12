@@ -1,0 +1,93 @@
+diff --git a/src/mesh/forest/block_ownership.cpp b/src/mesh/forest/block_ownership.cpp
+index 0bfaf266c..7c5719516 100644
+--- a/src/mesh/forest/block_ownership.cpp
++++ b/src/mesh/forest/block_ownership.cpp
+@@ -41,6 +41,7 @@ namespace parthenon {
+ block_ownership_t
+ DetermineOwnership(const LogicalLocation &main_block,
+                    const std::vector<forest::NeighborLocation> &allowed_neighbors,
++                   const std::array<bool, 3> self_border_block,
+                    const std::unordered_set<LogicalLocation> &newly_refined) {
+   block_ownership_t main_owns;
+ 
+@@ -63,6 +64,20 @@ DetermineOwnership(const LogicalLocation &main_block,
+     return a.morton() < b.morton();
+   };
+ 
++  // Does this block border itself over this face, and are we on the left side?
++  // Then Morton number would say we own the face/edge/corner, but we don't
++  // (the right side does).
++  auto self_border_left = [self_border_block](int ox1, int ox2, int ox3) {
++    // Can take care of each direction independently, corners follow
++    if ((self_border_block[0] && ox1 < 0) ||
++        (self_border_block[1] && ox2 < 0) ||
++        (self_border_block[2] && ox3 < 0)) {
++        return true;
++    } else {
++      return false;
++    }
++  };
++
+   for (int ox1 : {-1, 0, 1}) {
+     for (int ox2 : {-1, 0, 1}) {
+       for (int ox3 : {-1, 0, 1}) {
+@@ -72,6 +87,10 @@ DetermineOwnership(const LogicalLocation &main_block,
+               main_block.IsNeighborOfTE(n.origin_loc, {ox1, ox2, ox3})) {
+             main_owns(ox1, ox2, ox3) = false;
+             break;
++          } else if (main_block.level() == 0 && main_block == n.global_loc &&
++                     self_border_left(ox1, ox2, ox3)) {
++            main_owns(ox1, ox2, ox3) = false;
++            break;
+           }
+         }
+       }
+diff --git a/src/mesh/forest/block_ownership.hpp b/src/mesh/forest/block_ownership.hpp
+index 5e7f3f8f7..f8d5a180a 100644
+--- a/src/mesh/forest/block_ownership.hpp
++++ b/src/mesh/forest/block_ownership.hpp
+@@ -44,6 +44,7 @@ namespace parthenon {
+ block_ownership_t
+ DetermineOwnership(const LogicalLocation &main_block,
+                    const std::vector<forest::NeighborLocation> &allowed_neighbors,
++                   const std::array<bool, 3> self_border_block = {false, false, false},
+                    const std::unordered_set<LogicalLocation> &newly_refined = {});
+ 
+ // Given a topological element, ownership array of the sending block, and offset indices
+diff --git a/src/mesh/mesh-gmg.cpp b/src/mesh/mesh-gmg.cpp
+index 71784b7d5..9cfb54d6c 100644
+--- a/src/mesh/mesh-gmg.cpp
++++ b/src/mesh/mesh-gmg.cpp
+@@ -51,6 +51,22 @@ void Mesh::SetMeshBlockNeighbors(
+                     {ndim > 2 ? -1 : 0, ndim > 2 ? 1 : 0});
+   BufferID buffer_id(ndim, multilevel);
+ 
++  // If we're periodic with just 1 block in any direction,
++  // we must treat ownership specially
++  auto pmesh = block_list[0]->pmy_mesh;
++  auto block_size = pmesh->GetDefaultBlockSize();
++  std::array<bool, 3> self_border_block{
++    !pmesh->mesh_size.symmetry(X1DIR) &&
++    pmesh->mesh_size.nx(X1DIR) / block_size.nx(X1DIR) == 1 &&
++    pmesh->mesh_bcs[BoundaryFace::inner_x1] == BoundaryFlag::periodic,
++    !pmesh->mesh_size.symmetry(X2DIR) &&
++    pmesh->mesh_size.nx(X2DIR) / block_size.nx(X2DIR) == 1 &&
++    pmesh->mesh_bcs[BoundaryFace::inner_x2] == BoundaryFlag::periodic,
++    !pmesh->mesh_size.symmetry(X3DIR) &&
++    pmesh->mesh_size.nx(X3DIR) / block_size.nx(X3DIR) == 1 &&
++    pmesh->mesh_bcs[BoundaryFace::inner_x3] == BoundaryFlag::periodic,
++  };
++
+   for (auto &pmb : block_list) {
+     std::vector<NeighborBlock> all_neighbors;
+     const auto &loc = pmb->loc;
+@@ -79,7 +95,8 @@ void Mesh::SetMeshBlockNeighbors(
+       auto neighbor_neighbors = forest.FindNeighbors(nloc.global_loc, grid_id);
+ 
+       nb.ownership =
+-          DetermineOwnership(nloc.global_loc, neighbor_neighbors, newly_refined);
++          DetermineOwnership(nloc.global_loc, neighbor_neighbors,
++                             self_border_block, newly_refined);
+       nb.ownership.initialized = true;
+ 
+       // Set logical coordinate transformation from this block to the neighbor

@@ -358,7 +358,7 @@ TaskStatus ApplyElectronHeating(MeshBlockData<Real> *rc_old, MeshBlockData<Real>
             // The ion temperature is useful for a few models, cache it too.
             // The minimum values on Tpr & Tel here ensure that for un-initialized zones,
             // Tpr/Tel == Tel/Tpr == 1 != NaN.  This condition should not be hit after step 1
-            const Real Tpr = m::max((gamp - 1.) * P(m_p.UU, k, j, i) / P(m_p.RHO, k, j, i), SMALL);
+            const Real Tpr = m::max((gamp - 1.) * P(m_p.UU, k, j, i) / P(m_p.RHO, k, j, i), SMALL_NUM);
 
             // Heat different electron passives based on different dissipation fraction models
             // Expressions here closely adapted (read: stolen) from implementation in iharm3d
@@ -376,7 +376,7 @@ TaskStatus ApplyElectronHeating(MeshBlockData<Real> *rc_old, MeshBlockData<Real>
                 }
             }
             if (m_p.K_HOWES >= 0) {
-                const Real Tel = m::max(P(m_p.K_HOWES, k, j, i) * m::pow(P(m_p.RHO, k, j, i), game-1), SMALL);
+                const Real Tel = m::max(P(m_p.K_HOWES, k, j, i) * m::pow(P(m_p.RHO, k, j, i), game-1), SMALL_NUM);
 
                 const Real Trat = Tpr / Tel;
                 const Real pres = P(m_p.RHO, k, j, i) * Tpr; // Proton pressure
@@ -395,7 +395,7 @@ TaskStatus ApplyElectronHeating(MeshBlockData<Real> *rc_old, MeshBlockData<Real>
             }
             if (m_p.K_KAWAZURA >= 0) {
                 // Equation (2) in http://www.pnas.org/lookup/doi/10.1073/pnas.1812491116
-                const Real Tel = m::max(P(m_p.K_KAWAZURA, k, j, i) * m::pow(P(m_p.RHO, k, j, i), game-1), SMALL);
+                const Real Tel = m::max(P(m_p.K_KAWAZURA, k, j, i) * m::pow(P(m_p.RHO, k, j, i), game-1), SMALL_NUM);
 
                 const Real Trat = Tpr / Tel;
                 const Real pres = P(m_p.RHO, k, j, i) * Tpr; // Proton pressure
@@ -424,7 +424,7 @@ TaskStatus ApplyElectronHeating(MeshBlockData<Real> *rc_old, MeshBlockData<Real>
             }
             if (m_p.K_SHARMA >= 0) {
                 // Equation for \delta on  pg. 719 (Section 4) in https://iopscience.iop.org/article/10.1086/520800
-                const Real Tel = m::max(P(m_p.K_SHARMA, k, j, i) * m::pow(P(m_p.RHO, k, j, i), game-1), SMALL);
+                const Real Tel = m::max(P(m_p.K_SHARMA, k, j, i) * m::pow(P(m_p.RHO, k, j, i), game-1), SMALL_NUM);
 
                 const Real Trat_inv = Tel / Tpr; // Inverse of the temperature ratio in KAWAZURA
                 const Real QeQi = 0.33 * m::sqrt(Trat_inv);

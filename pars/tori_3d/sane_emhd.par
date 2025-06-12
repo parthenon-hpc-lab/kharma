@@ -98,12 +98,14 @@ flag_verbose       = 0
 
 <parthenon/output0>
 file_type = hdf5
+write_xdmf = false
 dt = 5.0
 single_precision_output = true
 variables = prims, jcon, fflag, pflag, solve_norm, solve_fail, eflag
 
 <parthenon/output1>
 file_type = rst
+write_xdmf = false
 dt        = 100.0
 
 <parthenon/output2>

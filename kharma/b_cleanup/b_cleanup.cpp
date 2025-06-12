@@ -52,8 +52,16 @@
 // Therefore we yell at load time rather than waiting for the first solve
 std::shared_ptr<KHARMAPackage> B_Cleanup::Initialize(ParameterInput *pin, std::shared_ptr<Packages_t>& packages)
 {throw std::runtime_error("KHARMA was compiled without global solvers!  Cannot clean B Field!");}
-// We still need a stub for CleanupDivergence() in order to compile, but it will never be called
-void B_Cleanup::CleanupDivergence(std::shared_ptr<MeshData<Real>>& md) {}
+// We still need some stubs to compile
+// TODO throw to ensure these aren't called if package isn't loaded?
+TaskStatus B_Cleanup::CleanupDivergence(std::shared_ptr<MeshData<Real>>& md)
+{
+    return TaskStatus::complete;
+}
+bool B_Cleanup::CleanupThisStep(Mesh* pmesh, int nstep)
+{
+    return false;
+}
 
 #else
 
@@ -221,7 +229,7 @@ TaskStatus B_Cleanup::CleanupDivergence(std::shared_ptr<MeshData<Real>>& md)
     // Add a solver container as a shallow copy on the default MeshData
     // msolve is just a sub-set of vars we need from md, making MPI syncs etc faster
     std::vector<std::string> names = KHARMA::GetVariableNames(&pmesh->packages, {Metadata::GetUserFlag("B_Cleanup"), Metadata::GetUserFlag("StartupOnly")});
-    auto &msolve = pmesh->mesh_data.AddShallow("solve", names);
+    auto &msolve = pmesh->mesh_data.AddShallow("solve", md, names);
 
     // Initialize the divB variable, which we'll be solving against.
     if (use_b_ct) {
@@ -256,9 +264,9 @@ TaskStatus B_Cleanup::CleanupDivergence(std::shared_ptr<MeshData<Real>>& md)
     // execute it to perform BiCGStab iteration
     TaskID t_none(0);
     TaskCollection tc;
-    auto tr = tc.AddRegion(1);
+    auto& tr = tc.AddRegion(1);
     auto t_solve_step = solver.CreateTaskList(t_none, 0, tr, msolve, msolve);
-    while (!tr.Execute());
+    tc.Execute();
     // Make sure solution's ghost zones are sync'd
     KHARMADriver::SyncAllBounds(msolve);
 

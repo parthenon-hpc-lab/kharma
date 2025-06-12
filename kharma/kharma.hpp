@@ -115,27 +115,6 @@ inline bool FieldIsOutput(ParameterInput *pin, std::string name)
  * it uses only the package list, and counts through each variable in each package.
  * Mostly useful for initialization.
  */
-inline int PackDimension(Packages_t* packages, Metadata::FlagCollection fc)
-{
-    // We want to exclude anything specific to startup processes e.g. B field cleanup,
-    // & not used elsewhere
-    if (packages->AllPackages().count("StartupOnly"))
-        fc = fc - Metadata::GetUserFlag("StartupOnly");
-
-    // Count dimensions (1 for scalars + vector lengths) of each package's variables
-    int nvar = 0;
-    for (auto pkg : packages->AllPackages()) {
-        nvar += pkg.second->GetPackDimension(fc);
-        // std::cout << pkg.first << " variables: " << pkg.second->GetPackDimension(fc) << std::endl;
-    }
-    return nvar;
-}
-
-/**
- * This fn calculates the size a VariablePack *would* be, without making one --
- * it uses only the package list, and counts through each variable in each package.
- * Mostly useful for initialization.
- */
 inline std::vector<std::string> GetVariableNames(Packages_t* packages, Metadata::FlagCollection fc)
 {
     // Count dimensions (1 for scalars + vector lengths) of each package's variables

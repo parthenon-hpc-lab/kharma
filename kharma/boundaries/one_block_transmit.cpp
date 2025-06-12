@@ -62,10 +62,6 @@ void KBoundaries::TransmitSetTE(MeshBlockData<Real> *rc, VariablePack<Real> &q, 
 {
     // We're sometimes called without any variables to sync (e.g. syncing flags, EMFs), just return
     if (q.GetDim(4) == 0) return;
-    // We're also sometimes called on coarse buffers with or without AMR.
-    // Use of transmitting polar conditions when coarse buffers matter (e.g., refinement
-    // boundary touching the pole) is UNSUPPORTED
-    if (coarse) return;
 
     // Pull boundary properties
     auto pmb = rc->GetBlockPointer();

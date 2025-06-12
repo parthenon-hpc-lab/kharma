@@ -53,7 +53,7 @@ TaskStatus Flux::MarkFOFC(MeshData<Real> *guess)
     auto fofcflag = guess->PackVariables(std::vector<std::string>{"fofcflag"});
 
     // Parameters
-    const auto& pars = pmb0->packages.Get("Flux")->AllParams();
+    const auto& pars = pmb0->packages.Get("Fluxes")->AllParams();
     const bool spherical = pmb0->coords.coords.is_spherical();
     const int polar_cells = pars.Get<int>("fofc_polar_cells");
     const GReal r_eh = pmb0->coords.coords.get_horizon();
@@ -149,7 +149,7 @@ TaskStatus Flux::FOFC(MeshData<Real> *md, MeshData<Real> *guess)
     const auto& Bf = md->PackVariables(std::vector<std::string>{"cons.fB"});
 
     // Parameters
-    const auto& pars = packages.Get("Flux")->AllParams();
+    const auto& pars = packages.Get("Fluxes")->AllParams();
     const Real gam = packages.Get("GRMHD")->Param<Real>("gamma");
     const bool use_global = pars.Get<bool>("fofc_use_glf");
     const EMHD::EMHD_parameters& emhd_params = EMHD::GetEMHDParameters(packages);

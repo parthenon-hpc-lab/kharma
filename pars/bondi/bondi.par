@@ -71,6 +71,7 @@ extra_checks = 1
 
 <parthenon/output0>
 file_type = hdf5
+write_xdmf = false
 dt = 5.0
 single_precision_output = true
 # Fields not present are silently ignored

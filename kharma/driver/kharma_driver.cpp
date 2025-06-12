@@ -190,9 +190,9 @@ TaskStatus KHARMADriver::SyncAllBounds(std::shared_ptr<MeshData<Real>> &md)
     MPIBarrier();
 
     TaskCollection tc;
-    auto tr = tc.AddRegion(1);
+    auto& tr = tc.AddRegion(1);
     AddBoundarySync(t_none, tr[0], md);
-    while (!tr.Execute());
+    tc.Execute();
 
     MPIBarrier();
 
@@ -205,7 +205,7 @@ TaskID KHARMADriver::AddFluxCalculations(TaskID& t_start, TaskList& tl, MeshData
     // Pull reconstruction option to simplify use. TODO shorten?
     auto pmb0  = md->GetBlockData(0)->GetBlockPointer();
     auto& pkgs = pmb0->packages.AllPackages();
-    const KReconstruction::Type& recon = pkgs.at("Flux")->Param<KReconstruction::Type>("recon");
+    const KReconstruction::Type& recon = pkgs.at("Fluxes")->Param<KReconstruction::Type>("recon");
 
     // Pre-calculate B field cell-center values
     auto t_start_fluxes = t_start;
@@ -298,8 +298,8 @@ TaskID KHARMADriver::AddFOFC(TaskID& t_start, TaskList& tl, MeshData<Real> *md,
     auto pmb0  = md->GetBlockData(0)->GetBlockPointer();
     auto& pkgs = pmb0->packages.AllPackages();
 
-    const Floors::Prescription fofc_floors       = pmb0->packages.Get("Flux")->Param<Floors::Prescription>("fofc_prescription");
-    const Floors::Prescription fofc_floors_inner = pmb0->packages.Get("Flux")->Param<Floors::Prescription>("fofc_prescription_inner");
+    const Floors::Prescription fofc_floors       = pmb0->packages.Get("Fluxes")->Param<Floors::Prescription>("fofc_prescription");
+    const Floors::Prescription fofc_floors_inner = pmb0->packages.Get("Fluxes")->Param<Floors::Prescription>("fofc_prescription_inner");
 
     // Populate guess source term with divergence of the existing fluxes
     // NOTE this does not include source terms!  Though, could call them here tbh
@@ -309,7 +309,7 @@ TaskID KHARMADriver::AddFOFC(TaskID& t_start, TaskList& tl, MeshData<Real> *md,
     // Could add everything here with Packages::AddSource but would be slower
     // also would need to deal with B_CT::AddSource == flux update, which we don't want/need
     auto t_guess_sources = t_guess_divergence;
-    if (pmb0->packages.Get("Flux")->Param<bool>("fofc_use_source_term")) {
+    if (pmb0->packages.Get("Fluxes")->Param<bool>("fofc_use_source_term")) {
         auto t_guess_sources = tl.AddTask(t_guess_divergence, Flux::AddGeoSourceTask, md, guess_src, IndexDomain::entire);
     }
     // Update the guess state with the guess source term, and our existing state
@@ -325,9 +325,10 @@ TaskID KHARMADriver::AddFOFC(TaskID& t_start, TaskList& tl, MeshData<Real> *md,
     auto t_mark_floors = tl.AddTask(t_guess_prims, Floors::DetermineGRMHDFloors, guess, IndexDomain::entire, fofc_floors, fofc_floors_inner);
     // Determine which cells are FOFC in our block
     auto t_mark_fofc = tl.AddTask(t_mark_floors, Flux::MarkFOFC, guess);
-    // Sync with neighbor blocks.  This seems to ameliorate an increasing divB on X1 boundaries in GR,
-    // but it should be able to be eliminated
-    auto &md_fofc = pmesh->mesh_data.AddShallow("FOFC", std::vector<std::string>{"fofcflag"}); // TODO this gets weird if we partition
+    // Sync the FOFC flag with neighbors
+    // TODO this shouldn't be necessary, eliminate ASAP
+    std::shared_ptr<MeshData<Real>> md_shr{md, [](MeshData<Real> *) {}/*No-Op Deleter*/};
+    auto &md_fofc = pmesh->mesh_data.AddShallow("FOFC", md_shr, std::vector<std::string>{"fofcflag"});
     auto t_sync_fofc = KHARMADriver::AddBoundarySync(t_mark_fofc, tl, md_fofc);
     // Finally, replace any fluxes bordering marked zones with donor-cell/LLF versions
     auto t_fofc = tl.AddTask(t_sync_fofc, Flux::FOFC, md, guess);

@@ -196,7 +196,7 @@ KOKKOS_INLINE_FUNCTION int apply_floors<InjectionFrame::drift>(FLOOR_ONE_ARGS)
     const Real rho   = P(m_p.RHO, k, j, i);
     const Real uu    = P(m_p.UU, k, j, i);
     const Real pg    = (gam - 1.) * uu;
-    const Real w_old = m::max(rho + uu + pg, SMALL);
+    const Real w_old = m::max(rho + uu + pg, SMALL_NUM);
 
     // Normal observer magnetic field
     Real Bcon[GR_DIM] = {0};
@@ -208,7 +208,7 @@ KOKKOS_INLINE_FUNCTION int apply_floors<InjectionFrame::drift>(FLOOR_ONE_ARGS)
         Bcon[3] = P(m_p.B3, k, j, i);
     }
     DLOOP2 Bcov[mu] += G.gcov(Loci::center, j, i, mu, nu) * Bcon[nu];
-    const Real Bsq   = m::max(dot(Bcon, Bcov), SMALL);
+    const Real Bsq   = m::max(dot(Bcon, Bcov), SMALL_NUM);
     const Real B_mag = m::sqrt(Bsq);
 
     // Get four-vectors again

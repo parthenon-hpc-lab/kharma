@@ -82,6 +82,11 @@ TaskStatus CalculateEMF(MeshData<Real> *md);
 TaskStatus AddSource(MeshData<Real> *md, MeshData<Real> *mdudt, IndexDomain domain);
 
 /**
+ * Derefine face-centered B at poles without introducing divergence
+ */
+TaskStatus DerefinePoles(MeshData<Real> *md);
+
+/**
  * Calculate maximum corner-centered divergence of magnetic field,
  * to check it is being preserved ~=0
  * Used as a Parthenon History function, so must take exactly the

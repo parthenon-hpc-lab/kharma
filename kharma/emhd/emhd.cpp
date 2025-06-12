@@ -109,7 +109,7 @@ std::shared_ptr<KHARMAPackage> Initialize(ParameterInput *pin, std::shared_ptr<P
     // Slope reconstruction on faces. Always linear: default to MC unless we're using VL everywhere
     // TODO NOT USED until we template AddSource
     if (pin->DoesParameterExist("emhd", "slope_recon") && pin->GetString("emhd", "slope_recon") == "linear_vl") {
-        //|| packages->Get("Flux")->Param<KReconstruction::Type>("recon") == KReconstruction::Type::linear_vl) {
+        //|| packages->Get("Fluxes")->Param<KReconstruction::Type>("recon") == KReconstruction::Type::linear_vl) {
         params.Add("slope_recon", KReconstruction::Type::linear_vl);
     } else {
         params.Add("slope_recon", KReconstruction::Type::linear_mc);
@@ -331,7 +331,7 @@ TaskStatus AddSource(MeshData<Real> *md, MeshData<Real> *mdudt, IndexDomain doma
             G.lower(ucon, ucov, k, j, i, Loci::center);
             DLOOP1 Temps(b, m_ucov + mu, k, j, i) = ucov[mu];
             // theta
-            Temps(b, m_theta, k, j, i) = m::max((gam - 1) * P(b)(m_p.UU, k, j, i) / P(b)(m_p.RHO, k, j, i), SMALL);
+            Temps(b, m_theta, k, j, i) = m::max((gam - 1) * P(b)(m_p.UU, k, j, i) / P(b)(m_p.RHO, k, j, i), SMALL_NUM);
         }
     );
 
@@ -347,7 +347,7 @@ TaskStatus AddSource(MeshData<Real> *md, MeshData<Real> *mdudt, IndexDomain doma
             // and the 4-vectors
             FourVectors D;
             GRMHD::calc_4vecs(G, P(b), m_p, k, j, i, Loci::center, D);
-            const double bsq = m::max(dot(D.bcon, D.bcov), SMALL);
+            const double bsq = m::max(dot(D.bcon, D.bcov), SMALL_NUM);
 
             // Compute gradient of ucov and Theta
             Real grad_ucov[GR_DIM][GR_DIM], grad_Theta[GR_DIM];

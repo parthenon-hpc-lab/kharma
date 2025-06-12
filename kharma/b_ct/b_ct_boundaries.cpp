@@ -139,21 +139,21 @@ void B_CT::AverageBoundaryEMF(MeshBlockData<Real> *rc, IndexDomain domain, const
                     int len;
                     if (inner_dir == X1DIR) {
                         len = bi.ie - bi.is;
-                        parthenon::par_reduce_inner(member, bi.is, bi.ie - 1,
+                        parthenon::par_reduce_inner(inner_loop_pattern_ttr_tag, member, bi.is, bi.ie - 1,
                             [&](const int& i, double& local_result) {
                                 local_result += emfpack(el, 0, kk, jj, i);
                             }
                         , sum_reducer);
                     } else if (inner_dir == X2DIR) {
                         len = bi.je - bi.js;
-                        parthenon::par_reduce_inner(member, bi.js, bi.je - 1,
+                        parthenon::par_reduce_inner(inner_loop_pattern_ttr_tag, member, bi.js, bi.je - 1,
                             [&](const int& j, double& local_result) {
                                 local_result += emfpack(el, 0, kk, j, ii);
                             }
                         , sum_reducer);
                     } else {
                         len = bi.ke - bi.ks;
-                        parthenon::par_reduce_inner(member, bi.ks, bi.ke - 1,
+                        parthenon::par_reduce_inner(inner_loop_pattern_ttr_tag, member, bi.ks, bi.ke - 1,
                             [&](const int& k, double& local_result) {
                                 local_result += emfpack(el, 0, k, jj, ii);
                             }
@@ -312,7 +312,7 @@ void B_CT::ReconnectBoundaryB3(MeshBlockData<Real> *rc, IndexDomain domain, cons
             // Sum the first rank of B3
             double B3_sum = 0.;
             Kokkos::Sum<double> sum_reducer(B3_sum);
-            parthenon::par_reduce_inner(member, bi.ks, bi.ke - 1,
+            parthenon::par_reduce_inner(inner_loop_pattern_ttr_tag, member, bi.ks, bi.ke - 1,
                 [&](const int& k, double& local_result) {
                     local_result += fpack(F3, v, k, jf, i);
                 }

@@ -75,7 +75,7 @@ KOKKOS_INLINE_FUNCTION int apply_instability_limits(const GRCoordinates& G, cons
 
     FourVectors D;
     GRMHD::calc_4vecs(G, P, m_p, k, j, i, Loci::center, D);
-    Real bsq = m::max(dot(D.bcon, D.bcov), SMALL);
+    Real bsq = m::max(dot(D.bcon, D.bcov), SMALL_NUM);
 
     Real tau, chi_e, nu_e;
     EMHD::set_parameters(G, P, m_p, emhd_params, gam, k, j, i, tau, chi_e, nu_e);
@@ -102,7 +102,7 @@ KOKKOS_INLINE_FUNCTION int apply_instability_limits(const GRCoordinates& G, cons
 
     if (m_p.DP >= 0) {
 
-        Real dP_comp_ratio = m::max(pg - 2./3. * dP, SMALL) / m::max(pg + 1./3. * dP, SMALL);
+        Real dP_comp_ratio = m::max(pg - 2./3. * dP, SMALL_NUM) / m::max(pg + 1./3. * dP, SMALL_NUM);
         Real dP_plus       = m::min(1.07 * 0.5 * bsq * dP_comp_ratio, 1.49 * pg);
         Real dP_minus      = m::max(-1.07 * bsq, -2.99 * pg);
 

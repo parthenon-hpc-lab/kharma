@@ -36,6 +36,7 @@
 
 #include "b_cd.hpp"
 #include "b_cleanup.hpp"
+#include "b_cleanup_gmg.hpp"
 #include "b_ct.hpp"
 #include "b_flux_ct.hpp"
 #include "blob.hpp"
@@ -155,7 +156,7 @@ void KHARMA::PostInitialize(ParameterInput *pin, Mesh *pmesh, bool is_restart)
     // Clean the B field, generally for resizing/restarting
     // We call this function any time the package is loaded:
     // if we decided to load it in kharma.cpp, we need to clean.
-    if (pkgs.count("B_Cleanup")) {
+    if (pkgs.count("B_Cleanup") || pkgs.count("B_CleanupGMG")) {
         if (pin->GetOrAddBoolean("b_cleanup", "output_before_cleanup", false)) {
             auto tm = SimTime(0., 0., 0, 0, 0, 0, 0.);
             auto pouts = std::make_unique<Outputs>(pmesh, pin, &tm);
@@ -163,7 +164,10 @@ void KHARMA::PostInitialize(ParameterInput *pin, Mesh *pmesh, bool is_restart)
         }
 
         // Cleanup is applied to conserved variables
-        B_Cleanup::CleanupDivergence(md);
+        if (pkgs.count("B_Cleanup"))
+            B_Cleanup::CleanupDivergence(md);
+        else if (pkgs.count("B_CleanupGMG"))
+            B_CleanupGMG::CleanupDivergence(md);
 
         if (pin->GetOrAddBoolean("b_cleanup", "output_after_cleanup", false)) {
             auto tm = SimTime(0., 0., 0, 0, 0, 0, 0.);

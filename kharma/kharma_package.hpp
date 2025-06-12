@@ -167,7 +167,7 @@ TaskStatus MeshApplyFloors(MeshData<Real> *md, IndexDomain domain);
 
 // These are already Parthenon global callbacks -- see their documentation
 // I define them here so I can pass them on to packages
-void UserWorkBeforeOutput(MeshBlock *pmb, ParameterInput *pin);
+void UserWorkBeforeOutput(MeshBlock *pmb, ParameterInput *pin, const SimTime& unused);
 void PreStepWork(Mesh *pmesh, ParameterInput *pin, const SimTime &tm);
 void PostStepWork(Mesh *pmesh, ParameterInput *pin, const SimTime &tm);
 void PostStepDiagnostics(Mesh *pmesh, ParameterInput *pin, const SimTime &tm);

@@ -65,7 +65,7 @@ class KHARMADriver : public MultiStageDriver {
         void PreExecute() override { timer_main.reset(); }
 
         // Also override the timestep calculation, so we can start moving options etc out of GRMHD package
-        void SetGlobalTimeStep();
+        void SetGlobalTimeStep() override;
 
         // And the PostExecute, so we can add a package callback here
         void PostExecute(DriverStatus status) override;

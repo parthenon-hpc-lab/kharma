@@ -95,8 +95,8 @@ class SphMinkowskiCoords {
         static constexpr GReal a = 0.0;
         KOKKOS_INLINE_FUNCTION void gcov_embed(const GReal Xembed[GR_DIM], Real gcov[GR_DIM][GR_DIM]) const
         {
-            const GReal r = m::max(Xembed[1], SMALL);
-            const GReal th = excise(excise(Xembed[2], 0.0, SMALL), M_PI, SMALL);
+            const GReal r = m::max(Xembed[1], SMALL_NUM);
+            const GReal th = excise(excise(Xembed[2], 0.0, SMALL_NUM), M_PI, SMALL_NUM);
             const GReal sth = m::sin(th);
 
             gzero2(gcov);
@@ -122,7 +122,7 @@ class SphKSCoords {
         KOKKOS_INLINE_FUNCTION void gcov_embed(const GReal Xembed[GR_DIM], Real gcov[GR_DIM][GR_DIM]) const
         {
             const GReal r = Xembed[1];
-            const GReal th = excise(excise(Xembed[2], 0.0, SMALL), M_PI, SMALL);
+            const GReal th = excise(excise(Xembed[2], 0.0, SMALL_NUM), M_PI, SMALL_NUM);
 
             const GReal cth = m::cos(th);
             const GReal sth = m::sin(th);
@@ -196,7 +196,7 @@ class SphKSExtG {
         KOKKOS_INLINE_FUNCTION void gcov_embed(const GReal Xembed[GR_DIM], Real gcov[GR_DIM][GR_DIM]) const
         {
             const GReal r = Xembed[1];
-            const GReal th = excise(excise(Xembed[2], 0.0, SMALL), M_PI, SMALL);
+            const GReal th = excise(excise(Xembed[2], 0.0, SMALL_NUM), M_PI, SMALL_NUM);
 
             const GReal cth = m::cos(th);
             const GReal sth = m::sin(th);
@@ -277,7 +277,7 @@ class SphBLCoords {
         KOKKOS_INLINE_FUNCTION void gcov_embed(const GReal Xembed[GR_DIM], Real gcov[GR_DIM][GR_DIM]) const
         {
             const GReal r = Xembed[1];
-            const GReal th = excise(excise(Xembed[2], 0.0, SMALL), M_PI, SMALL);
+            const GReal th = excise(excise(Xembed[2], 0.0, SMALL_NUM), M_PI, SMALL_NUM);
             const GReal cth = m::cos(th), sth = m::sin(th);
 
             const GReal sin2 = sth*sth;
@@ -317,7 +317,7 @@ class SphBLExtG {
         KOKKOS_INLINE_FUNCTION void gcov_embed(const GReal Xembed[GR_DIM], Real gcov[GR_DIM][GR_DIM]) const
         {
             const GReal r = Xembed[1];
-            const GReal th = excise(excise(Xembed[2], 0.0, SMALL), M_PI, SMALL);
+            const GReal th = excise(excise(Xembed[2], 0.0, SMALL_NUM), M_PI, SMALL_NUM);
             const GReal cth = m::cos(th), sth = m::sin(th);
 
             const GReal sin2 = sth*sth;
@@ -416,7 +416,7 @@ class ExponentialTransform {
             Xembed[0] = Xnative[0];
             Xembed[1] = m::exp(Xnative[1]);
 #if LEGACY_TH
-            Xembed[2] = excise(excise(Xnative[2], 0.0, SMALL), M_PI, SMALL);
+            Xembed[2] = excise(excise(Xnative[2], 0.0, SMALL_NUM), M_PI, SMALL_NUM);
 #else
             Xembed[2] = Xnative[2];
 #endif
@@ -477,7 +477,7 @@ class SuperExponentialTransform {
             const GReal super_dist = Xnative[1] - xn1br;
             Xembed[1] = m::exp(Xnative[1] + (super_dist > 0) * cpow2 * m::pow(super_dist, npow2));
 #if LEGACY_TH
-            Xembed[2] = excise(excise(Xnative[2], 0.0, SMALL), M_PI, SMALL);
+            Xembed[2] = excise(excise(Xnative[2], 0.0, SMALL_NUM), M_PI, SMALL_NUM);
 #else
             Xembed[2] = Xnative[2];
 #endif
@@ -541,7 +541,7 @@ class ModifyTransform {
             Xembed[1] = m::exp(Xnative[1]);
 #if LEGACY_TH
             const GReal th = M_PI*Xnative[2] + ((1. - hslope)/2.)*m::sin(2.*M_PI*Xnative[2]);
-            Xembed[2] = excise(excise(th, 0.0, SMALL), M_PI, SMALL);
+            Xembed[2] = excise(excise(th, 0.0, SMALL_NUM), M_PI, SMALL_NUM);
 #else
             Xembed[2] = M_PI*Xnative[2] + ((1. - hslope)/2.)*m::sin(2.*M_PI*Xnative[2]);
 #endif
@@ -610,7 +610,7 @@ class FunkyTransform {
             const GReal thJ = poly_norm * y * (1. + m::pow(y/poly_xt,poly_alpha) / (poly_alpha + 1.)) + 0.5 * M_PI;
 #if LEGACY_TH
             const GReal th = thG + m::exp(mks_smooth * (startx1 - Xnative[1])) * (thJ - thG);
-            Xembed[2] = excise(excise(th, 0.0, SMALL), M_PI, SMALL);
+            Xembed[2] = excise(excise(th, 0.0, SMALL_NUM), M_PI, SMALL_NUM);
 #else
             Xembed[2] = thG + m::exp(mks_smooth * (startx1 - Xnative[1])) * (thJ - thG);
 #endif
@@ -705,7 +705,7 @@ class WidepoleTransform {
             GReal th;
             //th = M_PI / 2. * (1. + 2. * lin_frac * (Xnative[2] - 0.5) + (1. - lin_frac) * exp((Xnative[2] - 1.) / smoothness) - (1. - lin_frac) * exp(-Xnative[2] / smoothness));
             th = M_PI / 2. * (1. + 2. * lin_frac * (Xnative[2] - 0.5) + (1. - lin_frac) * (tanh((Xnative[2] - 1.) / smoothness) + 1.) - (1. - lin_frac) * (tanh(-Xnative[2] / smoothness) + 1.));
-            Xembed[2] = excise(excise(th, 0.0, SMALL), M_PI, SMALL);
+            Xembed[2] = excise(excise(th, 0.0, SMALL_NUM), M_PI, SMALL_NUM);
             Xembed[3] = Xnative[3];
         }
         KOKKOS_INLINE_FUNCTION void coord_to_native(const GReal Xembed[GR_DIM], GReal Xnative[GR_DIM]) const

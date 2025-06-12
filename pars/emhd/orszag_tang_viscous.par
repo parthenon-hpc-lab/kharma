@@ -47,6 +47,7 @@ extra_checks = 0
 
 <parthenon/output0>
 file_type = hdf5
+write_xdmf = false
 dt = 1.0
 single_precision_output = true
 variables = prims, jcon

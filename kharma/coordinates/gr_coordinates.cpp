@@ -221,7 +221,7 @@ void init_GRCoordinates(GRCoordinates& G) {
                         G.coord(0, j + (lam == X2DIR), i + (lam == X1DIR), loc, Xfp);
                         double gdetfm = gdet_local(loc, j, i);
                         double gdetfp = gdet_local(loc, j + (lam == X2DIR), i + (lam == X1DIR));
-                        GReal target = (gdetfp - gdetfm) / (Xfp[lam] - Xfm[lam] + SMALL);
+                        GReal target = (gdetfp - gdetfm) / (Xfp[lam] - Xfm[lam] + SMALL_NUM);
 
                         // Then sum the coefficients and record nonzero ones for modification
                         GReal test_sum = 0;

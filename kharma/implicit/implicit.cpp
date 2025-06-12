@@ -1,25 +1,25 @@
-/* 
+/*
  *  File: implicit.cpp
- *  
+ *
  *  BSD 3-Clause License
- *  
+ *
  *  Copyright (c) 2020, AFD Group at UIUC
  *  All rights reserved.
- *  
+ *
  *  Redistribution and use in source and binary forms, with or without
  *  modification, are permitted provided that the following conditions are met:
- *  
+ *
  *  1. Redistributions of source code must retain the above copyright notice, this
  *     list of conditions and the following disclaimer.
- *  
+ *
  *  2. Redistributions in binary form must reproduce the above copyright notice,
  *     this list of conditions and the following disclaimer in the documentation
  *     and/or other materials provided with the distribution.
- *  
+ *
  *  3. Neither the name of the copyright holder nor the names of its
  *     contributors may be used to endorse or promote products derived from
  *     this software without specific prior written permission.
- *  
+ *
  *  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  *  AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  *  IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -119,8 +119,9 @@ std::shared_ptr<KHARMAPackage> Implicit::Initialize(ParameterInput *pin, std::sh
     params.Add("linesearch_lambda", linesearch_lambda);
 
     // Allocate the Jacobian and step so we can split the solver kernel
-    int nvars_implicit = KHARMA::PackDimension(packages.get(), Metadata::GetUserFlag("Implicit"));
-    int nvars_explicit = KHARMA::PackDimension(packages.get(), Metadata::GetUserFlag("Explicit"));
+    auto resolved = StateDescriptor::CreateResolvedStateDescriptor(*packages);
+    int nvars_implicit = resolved->GetPackDimension(Metadata::GetUserFlag("Implicit"));
+    int nvars_explicit = resolved->GetPackDimension(Metadata::GetUserFlag("Explicit"));
     std::vector<int> s_vars_implicit({nvars_implicit});
     std::vector<int> s_jac_implicit({nvars_implicit, nvars_implicit});
     std::vector<int> s_vars_all({nvars_implicit+nvars_explicit});
@@ -186,7 +187,7 @@ TaskStatus Implicit::Step(MeshData<Real> *md_full_step_init, MeshData<Real> *md_
 
     // Misc other constants for inside the kernel
     const bool am_rank0 = MPIRank0();
-    const Real tiny(SMALL), alpha(1.0);
+    const Real tiny(SMALL_NUM), alpha(1.0);
 
     // We need two sets of emhd_params because we need the relaxation scale
     // at the same state in the implicit source terms
@@ -205,7 +206,7 @@ TaskStatus Implicit::Step(MeshData<Real> *md_full_step_init, MeshData<Real> *md_
     // The implicit variables need to be first, so we know how to iterate over just them to fill
     // just the residual & Jacobian we care about, which makes the solve faster.
     auto& mbd_full_step_init  = md_full_step_init->GetBlockData(0); // MeshBlockData object, more member functions
-    
+
     auto ordered_prims = GetOrderedNames(mbd_full_step_init.get(), Metadata::GetUserFlag("Primitive"));
     auto ordered_cons  = GetOrderedNames(mbd_full_step_init.get(), Metadata::Conserved);
     //std::cerr << "Ordered prims:"; for(auto prim: ordered_prims) std::cerr << " " << prim; std::cerr << std::endl;
@@ -319,7 +320,7 @@ TaskStatus Implicit::Step(MeshData<Real> *md_full_step_init, MeshData<Real> *md_
 
                     // Jacobian calculation
                     // Requires calculating the residual anyway, so we grab it here
-                    calc_jacobian(G, P_solver_all(b), P_full_step_init_all(b), U_full_step_init_all(b), P_sub_step_init_all(b), 
+                    calc_jacobian(G, P_solver_all(b), P_full_step_init_all(b), U_full_step_init_all(b), P_sub_step_init_all(b),
                                 flux_src_all(b), dU_implicit_all(b), m_p, m_u, emhd_params_solver, emhd_params_sub_step_init,
                                 nvar, nfvar, k, j, i, delta, gam, dt,
                                 jacobian_all(b), residual_all(b));
@@ -377,7 +378,7 @@ TaskStatus Implicit::Step(MeshData<Real> *md_full_step_init, MeshData<Real> *md_
                                 KokkosBatched::SerialApplyQ<KokkosBatched::Side::Left, KokkosBatched::Trans::Transpose,
                                                             KokkosBatched::Algo::ApplyQ::Unblocked>
                                 ::invoke(jacobian, trans, delta_prim, work);
-                                KokkosBatched::SerialTrsv<KokkosBatched::Uplo::Upper, KokkosBatched::Trans::NoTranspose, 
+                                KokkosBatched::SerialTrsv<KokkosBatched::Uplo::Upper, KokkosBatched::Trans::NoTranspose,
                                                         KokkosBatched::Diag::NonUnit, KokkosBatched::Algo::Trsv::Unblocked>
                                 ::invoke(alpha, jacobian, delta_prim);
                                 // Linear solve by QR decomposition
@@ -395,7 +396,7 @@ TaskStatus Implicit::Step(MeshData<Real> *md_full_step_init, MeshData<Real> *md_
 
                             if (solve_fail_all(b, 0, k, j, i) != SolverStatusR::fail) {
                                 KokkosBatched::SerialLU<KokkosBatched::Algo::LU::Unblocked>::invoke(jacobian, tiny);
-                                KokkosBatched::SerialTrsv<KokkosBatched::Uplo::Upper, KokkosBatched::Trans::NoTranspose, 
+                                KokkosBatched::SerialTrsv<KokkosBatched::Uplo::Upper, KokkosBatched::Trans::NoTranspose,
                                                         KokkosBatched::Diag::NonUnit, KokkosBatched::Algo::Trsv::Unblocked>
                                 ::invoke(alpha, jacobian, delta_prim);
                             }
@@ -473,7 +474,7 @@ TaskStatus Implicit::Step(MeshData<Real> *md_full_step_init, MeshData<Real> *md_
 
                         // Compute solve_norm of the residual (loss function)
                         calc_residual(G, P_linesearch_all(b), P_full_step_init_all(b), U_full_step_init_all(b),
-                                    P_sub_step_init_all(b), flux_src_all(b), dU_implicit_all(b), 
+                                    P_sub_step_init_all(b), flux_src_all(b), dU_implicit_all(b),
                                     m_p, m_u, emhd_params_linesearch, emhd_params_solver, nfvar,
                                     k, j, i, gam, dt, residual_all(b));
 
@@ -483,13 +484,13 @@ TaskStatus Implicit::Step(MeshData<Real> *md_full_step_init, MeshData<Real> *md_
                         Real f1             = 0.5 * solve_norm;
 
                         // Compute new step length
-                        int condition   = f1 > (f0 * (1. - linesearch_eps * lambda) + SMALL);
+                        int condition   = f1 > (f0 * (1. - linesearch_eps * lambda) + SMALL_NUM);
                         Real denom      = (f1 - f0 - (fprime0 * lambda)) * condition + (1 - condition);
                         Real lambda_new = -fprime0 * lambda * lambda / denom * 0.5;
                         lambda          = lambda * (1 - condition) + (condition * lambda_new);
 
                         // Check if new solution has converged within required tolerance
-                        if (condition == 0) break;                           
+                        if (condition == 0) break;
                     }
                 }
 

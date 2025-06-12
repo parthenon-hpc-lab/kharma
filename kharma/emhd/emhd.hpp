@@ -200,8 +200,8 @@ KOKKOS_INLINE_FUNCTION void set_parameters(const GRCoordinates& G, const Real& r
     } else if (emhd_params.type == ClosureType::kappa_eta){
         // Set tau = const, chi = kappa / rho, nu = eta / rho
         tau = emhd_params.tau;
-        chi_e = emhd_params.kappa / m::max(rho, SMALL);
-        nu_e = emhd_params.eta / m::max(rho, SMALL);
+        chi_e = emhd_params.kappa / m::max(rho, SMALL_NUM);
+        nu_e = emhd_params.eta / m::max(rho, SMALL_NUM);
 
     } else if (emhd_params.type == ClosureType::torus) {
         GReal Xembed[GR_DIM];
@@ -216,7 +216,7 @@ KOKKOS_INLINE_FUNCTION void set_parameters(const GRCoordinates& G, const Real& r
         const Real Theta = pg / rho;
         // Compute local sound speed, ensure it is defined and >0
         // Passing NaN disables an upper bound (TODO should we have one?)
-        const Real cs2 = clip(gam * pg / (rho + (gam * u)), SMALL, 0./0.);
+        const Real cs2 = clip(gam * pg / (rho + (gam * u)), SMALL_NUM, 0./0.);
 
         constexpr Real lambda = 0.01;
 
@@ -238,13 +238,13 @@ KOKKOS_INLINE_FUNCTION void set_parameters(const GRCoordinates& G, const Real& r
             const Real dP = (emhd_params.higher_order_terms)
                         ? dPtilde * sqrt(rho * emhd_params.viscosity_alpha * cs2 * Theta)
                         : dPtilde;
-            const Real dP_comp_ratio = m::max(pg - 2./3. * dP, SMALL) /
-                                       m::max(pg + 1./3. * dP, SMALL);
+            const Real dP_comp_ratio = m::max(pg - 2./3. * dP, SMALL_NUM) /
+                                       m::max(pg + 1./3. * dP, SMALL_NUM);
             const Real dP_max = (dP > 0.)
                               ? m::min(0.5 * bsq * dP_comp_ratio, 1.49 * pg / 1.07)
                               : m::max(-bsq, -2.99 * pg / 1.07);
 
-            const Real dP_ratio = m::abs(dP) / (m::abs(dP_max) + SMALL);
+            const Real dP_ratio = m::abs(dP) / (m::abs(dP_max) + SMALL_NUM);
             const Real inv_exp_g = m::exp((1. - dP_ratio) / lambda);
             const Real f_fmin    = inv_exp_g / (inv_exp_g + 1.) + 1.e-5;
 
@@ -265,7 +265,7 @@ KOKKOS_INLINE_FUNCTION void set_parameters(const GRCoordinates& G, const Local& 
 {
     FourVectors Dtmp;
     GRMHD::calc_4vecs(G, P, m_p, j, i, Loci::center, Dtmp);
-    double bsq = m::max(dot(Dtmp.bcon, Dtmp.bcov), SMALL);
+    double bsq = m::max(dot(Dtmp.bcon, Dtmp.bcov), SMALL_NUM);
     Real qtilde = (m_p.Q >= 0) ? P(m_p.Q) : 0.;
     Real dPtilde = (m_p.DP >= 0) ? P(m_p.DP) : 0.;
     set_parameters(G, P(m_p.RHO), P(m_p.UU), qtilde, dPtilde,
@@ -279,7 +279,7 @@ KOKKOS_INLINE_FUNCTION void set_parameters(const GRCoordinates& G, const Variabl
 {
     FourVectors Dtmp;
     GRMHD::calc_4vecs(G, P, m_p, k, j, i, Loci::center, Dtmp);
-    double bsq = m::max(dot(Dtmp.bcon, Dtmp.bcov), SMALL);
+    double bsq = m::max(dot(Dtmp.bcon, Dtmp.bcov), SMALL_NUM);
     Real qtilde = (m_p.Q >= 0) ? P(m_p.Q, k, j, i) : 0.;
     Real dPtilde = (m_p.DP >= 0) ? P(m_p.DP, k, j, i) : 0.;
     set_parameters(G, P(m_p.RHO, k, j, i), P(m_p.UU, k, j, i), qtilde, dPtilde,
@@ -298,7 +298,7 @@ KOKKOS_INLINE_FUNCTION void calc_tensor(const Real& rho, const Real& u, const Re
                                         const FourVectors& D, const int& dir,
                                         Real emhd[GR_DIM])
 {
-    const Real bsq  = m::max(dot(D.bcon, D.bcov), SMALL);
+    const Real bsq  = m::max(dot(D.bcon, D.bcov), SMALL_NUM);
     const Real b_mag = m::sqrt(bsq);
     const Real eta  = pgas + rho + u + bsq;
     const Real ptot = pgas + 0.5 * bsq;

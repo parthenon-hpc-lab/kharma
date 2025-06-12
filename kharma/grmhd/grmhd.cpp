@@ -293,6 +293,12 @@ Real EstimateTimestep(MeshData<Real> *md)
     // Actually compute the timestep if we have to
     const IndexRange3 b = KDomain::GetRange(md, IndexDomain::interior);
 
+    // Added by Hyerin (03/07/24)
+    // Internal SMR adds a factor to dx3 at poles based on larger cell width
+    // TODO distinguish polar from other ISMR if more modes are added
+    const bool ismr_poles = pmesh->packages.AllPackages().count("ISMR");
+    const uint ismr_nlevels = (ismr_poles) ? pmesh->packages.Get("ISMR")->Param<uint>("nlevels") : 0;
+
     // TODO version preserving location, with switch to keep this fast one
     // TODO maybe split normal, ISMR timesteps? Excised pole/recalculated ctop too?
     double min_ndt = std::numeric_limits<double>::max();
@@ -359,7 +365,7 @@ Real EstimateRadiativeTimestep(MeshData<Real> *md)
                       typename Kokkos::MinMax<Real>::value_type& lminmax) {
             const auto& G = dummy.GetCoords(b);
 
-            double light_phase_speed = SMALL;
+            double light_phase_speed = SMALL_NUM;
             double dt_light_local = 0.;
 
             if (phase_speed) {
@@ -380,7 +386,7 @@ Real EstimateRadiativeTimestep(MeshData<Real> *md)
 
                         local_phase_speed[mu] = m::max(cplus,cminus);
                     } else {
-                        local_phase_speed[mu] = SMALL;
+                        local_phase_speed[mu] = SMALL_NUM;
                     }
                 }
                 dt_light_local = 1./(G.Dxc<1>(0)/local_phase_speed[1]) +
@@ -524,7 +530,7 @@ void CancelBoundaryU3(MeshBlockData<Real> *rc, IndexDomain domain, bool coarse)
             // Sum the first rank of U3
             Real U3_sum = 0.;
             Kokkos::Sum<Real> sum_reducer(U3_sum);
-            parthenon::par_reduce_inner(member, bi.ks, bi.ke,
+            parthenon::par_reduce_inner(inner_loop_pattern_ttr_tag, member, bi.ks, bi.ke,
                 [&](const int& k, Real& local_result) {
                     local_result += isnan(P(m_p.U3, k, jf, i)) ? 0. : P(m_p.U3, k, jf, i);
                 }
@@ -598,7 +604,7 @@ void CancelBoundaryT3(MeshBlockData<Real> *rc, IndexDomain domain, bool coarse)
             // Sum the first rank of the angular momentum T3
             Real T3_sum = 0.;
             Kokkos::Sum<Real> sum_reducer(T3_sum);
-            parthenon::par_reduce_inner(member, bi.ks, bi.ke,
+            parthenon::par_reduce_inner(inner_loop_pattern_ttr_tag, member, bi.ks, bi.ke,
                 [&](const int& k, Real& local_result) {
                     local_result += isnan(U(m_u.U3, k, jf, i)) ? 0. : U(m_u.U3, k, jf, i);
                 }

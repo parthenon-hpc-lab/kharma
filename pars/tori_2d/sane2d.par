@@ -66,6 +66,7 @@ bsq_over_rho_max = 100
 
 <parthenon/output0>
 file_type = hdf5
+write_xdmf = false
 dt = 10.0
 single_precision_output = true
 # Fields beginning with a specifier here will be included (e.g., all prims.XXX)
@@ -75,6 +76,7 @@ variables = prims, jcon, pflag, fflag
 
 <parthenon/output1>
 file_type = rst
+write_xdmf = false
 dt = 100.0
 
 <parthenon/output2>
@@ -87,6 +89,7 @@ variables = all_reductions
 # a bunch of other contexts.
 <parthenon/output3>
 file_type = hdf5
+write_xdmf = false
 analysis_output = true
 dt = 1e20
 single_precision_output = false

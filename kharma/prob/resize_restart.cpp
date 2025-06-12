@@ -294,9 +294,8 @@ TaskStatus ReadIharmRestart(std::shared_ptr<MeshBlockData<Real>>& rc, ParameterI
     // as well as local file locations (locations in a cache we read to host memory, prefixed "m")
 
     // Size/domain of the MeshBlock we're reading *to*.
-    // Note that we only fill the block's physical zones --
-    // PostInitialize will take care of ghosts with MPI syncs and calls to the domain boundary conditions
-    IndexDomain domain = IndexDomain::interior;
+    // Note that we fill all zones, now that we might be interpolating to faces without syncing primitive B
+    IndexDomain domain = IndexDomain::entire;
     const IndexRange ib = pmb->cellbounds.GetBoundsI(domain);
     const IndexRange jb = pmb->cellbounds.GetBoundsJ(domain);
     const IndexRange kb = pmb->cellbounds.GetBoundsK(domain);
@@ -320,15 +319,15 @@ TaskStatus ReadIharmRestart(std::shared_ptr<MeshBlockData<Real>>& rc, ParameterI
         Interpolation::Xtoijk_nearest(X, startx, dx, gie, gje, gke);
     } else {
         // Linear interpolation case: we need ghost zones
-        // Global location of first zone of our new grid
+        // Global leftmost corner of our grid block
         double tmp[GR_DIM], X[GR_DIM];
-        G.coord(kb.s, jb.s, ib.s, Loci::center, X);
+        G.coord(kb.s, jb.s, ib.s, Loci::corner, X);
         // Global file coordinate corresponding to that location
         // Note this will be the *left* side already, so we'll never read below this.
-        // The values gis,gjs,gks can/will be -1 sometimes
+        // The values gis,gjs,gks can/will be <0 sometimes
         Interpolation::Xtoijk(X, startx, dx, gis, gjs, gks, tmp);
-        // Same for the end
-        G.coord(kb.e, jb.e, ib.e, Loci::center, X);
+        // Global rightmost corner, same deal
+        G.coord(kb.e+1, jb.e+1, ib.e+1, Loci::corner, X);
         Interpolation::Xtoijk(X, startx, dx, gie, gje, gke, tmp);
         // Include one extra zone in each direction, for right side of linear interp
         gke += 1; gje += 1; gie += 1;
@@ -343,8 +342,8 @@ TaskStatus ReadIharmRestart(std::shared_ptr<MeshBlockData<Real>>& rc, ParameterI
                          fstop[1] - fstart[1] + 1,
                          fstop[2] - fstart[2] + 1,
                          fstop[3] - fstart[3] + 1};
-    // If we overran an index on the left, we need to leave a blank row (i.e., start at 1 == true) to reflect this
-    hsize_t mstart[4] = {0, (gks < 0), (gjs < 0), (gis < 0)};
+    // If we overran an index on the left, we need to leave blank rows, potentially filled w/periodic vals
+    hsize_t mstart[4] = {0, (gks < 0) ? -gks : 0, (gjs < 0) ? -gjs : 0, (gis < 0) ? -gis : 0};
     // Total memory size is never truncated
     // This calculation produces XxYx2 arrays for 2D sims w/linear interp but that's fine
     hsize_t nmk = gke-gks+1, nmj = gje-gjs+1, nmi = gie-gis+1;
@@ -371,48 +370,54 @@ TaskStatus ReadIharmRestart(std::shared_ptr<MeshBlockData<Real>>& rc, ParameterI
 #define RESET_COUNTS DLOOP1 {fstart_tmp[mu] = fstart[mu]; fcount_tmp[mu] = fcount[mu]; mstart_tmp[mu] = mstart[mu];}
     if (gks < 0 && pmb->boundary_flag[BoundaryFace::inner_x3] == BoundaryFlag::periodic) {
         RESET_COUNTS
-        // same X1/X2, but take only the globally LAST rank in X3
-        fstart_tmp[1] = n3tot-1;
-        fcount_tmp[1] = 1;
-        // Read it to the FIRST rank of our array
+        // same X1/X2, but take only the globally LAST ranks in X3
+        int nrank = 0 - gks;
+        fstart_tmp[1] = n3tot - nrank;
+        fcount_tmp[1] = nrank;
+        // Read it to the FIRST ranks of our array
         mstart_tmp[1] = 0;
         hdf5_read_array(ptmp, "p", 4, fdims, fstart_tmp, fcount_tmp, mdims, mstart_tmp, H5T_IEEE_F64LE);
     }
     if (gke > n3tot-1 && pmb->boundary_flag[BoundaryFace::outer_x3] == BoundaryFlag::periodic) {
         RESET_COUNTS
-        // same X1/X2, but take only the globally FIRST rank in X3
+        // same X1/X2, but take only the globally FIRST ranks in X3
+        int nrank = gke - (n3tot-1);
         fstart_tmp[1] = 0;
-        fcount_tmp[1] = 1;
-        // Read it to the LAST rank of our array
-        mstart_tmp[1] = mdims[1]-1;
+        fcount_tmp[1] = nrank;
+        // Read it to the LAST ranks of our array
+        mstart_tmp[1] = mdims[1] - nrank;
         hdf5_read_array(ptmp, "p", 4, fdims, fstart_tmp, fcount_tmp, mdims, mstart_tmp, H5T_IEEE_F64LE);
     }
     if (gjs < 0 && pmb->boundary_flag[BoundaryFace::inner_x2] == BoundaryFlag::periodic) {
         RESET_COUNTS
-        fstart_tmp[2] = n2tot-1;
-        fcount_tmp[2] = 1;
+        int nrank = 0 - gjs;
+        fstart_tmp[2] = n2tot - nrank;
+        fcount_tmp[2] = nrank;
         mstart_tmp[2] = 0;
         hdf5_read_array(ptmp, "p", 4, fdims, fstart_tmp, fcount_tmp, mdims, mstart_tmp, H5T_IEEE_F64LE);
     }
     if (gje > n2tot-1 && pmb->boundary_flag[BoundaryFace::outer_x2] == BoundaryFlag::periodic) {
         RESET_COUNTS
+        int nrank = gje - (n2tot-1);
         fstart_tmp[2] = 0;
-        fcount_tmp[2] = 1;
-        mstart_tmp[2] = mdims[2]-1;
+        fcount_tmp[2] = nrank;
+        mstart_tmp[2] = mdims[2] - nrank;
         hdf5_read_array(ptmp, "p", 4, fdims, fstart_tmp, fcount_tmp, mdims, mstart_tmp, H5T_IEEE_F64LE);
     }
     if (gis < 0 && pmb->boundary_flag[BoundaryFace::inner_x1] == BoundaryFlag::periodic) {
         RESET_COUNTS
-        fstart_tmp[3] = n1tot-1;
-        fcount_tmp[3] = 1;
+        int nrank = 0 - gis;
+        fstart_tmp[3] = n1tot - nrank;
+        fcount_tmp[3] = nrank;
         mstart_tmp[3] = 0;
         hdf5_read_array(ptmp, "p", 4, fdims, fstart_tmp, fcount_tmp, mdims, mstart_tmp, H5T_IEEE_F64LE);
     }
     if (gie > n1tot-1 && pmb->boundary_flag[BoundaryFace::outer_x1] == BoundaryFlag::periodic) {
         RESET_COUNTS
+        int nrank = gie - (n1tot-1);
         fstart_tmp[3] = 0;
-        fcount_tmp[3] = 1;
-        mstart_tmp[3] = mdims[3]-1;
+        fcount_tmp[3] = nrank;
+        mstart_tmp[3] = mdims[3] - nrank;
         hdf5_read_array(ptmp, "p", 4, fdims, fstart_tmp, fcount_tmp, mdims, mstart_tmp, H5T_IEEE_F64LE);
     }
 
@@ -464,11 +469,11 @@ TaskStatus ReadIharmRestart(std::shared_ptr<MeshBlockData<Real>>& rc, ParameterI
             // Get global indices
             Interpolation::Xtoijk(X, startx, dx, gi, gj, gk, del);
             // Make any corrections due to global boundaries
-            // Currently just repeats the last zone, equivalent to falling back to nearest-neighbor
+            // Currently just repeats the last zone: everywhere beyond last zone center has center's value
             if (repeat_x1i && gi < 0) { gi = 0; del[1] = 0; }
-            if (repeat_x1o && gi > n1tot-2) { gi = n1tot - 2; del[1] = 1; }
+            if (repeat_x1o && gi >= n1tot-1) { gi = n1tot - 1; del[1] = 0; }
             if (repeat_x2i && gj < 0) { gj = 0; del[2] = 0; }
-            if (repeat_x2o && gj > n2tot-2) { gj = n2tot - 2; del[2] = 1; }
+            if (repeat_x2o && gj >= n2tot-1) { gj = n2tot - 1; del[2] = 0; }
             // Calculate indices inside our cached block
             int mk = gk - gks, mj = gj - gjs, mi = gi - gis;
             // Interpolate the value at this location from the cached grid

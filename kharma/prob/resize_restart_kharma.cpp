@@ -38,6 +38,8 @@
 #include "hdf5_utils.h"
 #include "types.hpp"
 
+#include <outputs/restart_hdf5.hpp>
+
 #include <sys/stat.h>
 #include <ctype.h>
 
@@ -48,12 +50,12 @@ void ReadFillFile(int i, ParameterInput *pin) {
     auto fname_fill = pin->GetOrAddString("resize_restart", "fname_fill", "none");
 
     if (!(fname_fill == "none")) {
-        auto restartReader = std::make_unique<RestartReader>(fname_fill.c_str());
+        auto restartReader = std::make_unique<RestartReaderHDF5>(fname_fill.c_str());
 
         // Load input stream
         std::unique_ptr<ParameterInput> fpinput;
         fpinput = std::make_unique<ParameterInput>();
-        auto inputString = restartReader->GetAttr<std::string>("Input", "File");
+        auto inputString = restartReader->GetInputString();
         std::istringstream is(inputString);
         fpinput->LoadFromStream(is);
 
@@ -75,12 +77,12 @@ void ReadKharmaRestartHeader(std::string fname, ParameterInput *pin)
 
     // Read input from restart file 
     // (from external/parthenon/src/parthenon_manager.cpp)
-    auto restartReader = std::make_unique<RestartReader>(fname.c_str());
+    auto restartReader = std::make_unique<RestartReaderHDF5>(fname.c_str());
 
     // Load input stream
     std::unique_ptr<ParameterInput> fpinput;
     fpinput = std::make_unique<ParameterInput>();
-    auto inputString = restartReader->GetAttr<std::string>("Input", "File");
+    auto inputString = restartReader->GetInputString();
     std::istringstream is(inputString);
     fpinput->LoadFromStream(is);
 

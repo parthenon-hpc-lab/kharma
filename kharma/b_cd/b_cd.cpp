@@ -254,10 +254,10 @@ void FillOutput(MeshBlock *pmb, ParameterInput *pin)
     const int ndim = pmb->pmy_mesh->ndim;
     if (ndim < 2) return;
 
-    GridVector F1, F2, F3;
-    F1 = rc->Get("cons.B").flux[X1DIR];
-    F2 = rc->Get("cons.B").flux[X2DIR];
-    if (ndim > 2) F3 = rc->Get("cons.B").flux[X3DIR];
+    // GridVector F1, F2, F3;
+    // F1 = rc->Get("cons.B").flux[X1DIR];
+    // F2 = rc->Get("cons.B").flux[X2DIR];
+    // if (ndim > 2) F3 = rc->Get("cons.B").flux[X3DIR];
     auto& divB = rc->Get("divB").data;
 
     const IndexRange ib = rc->GetBoundsI(IndexDomain::interior);
@@ -272,11 +272,11 @@ void FillOutput(MeshBlock *pmb, ParameterInput *pin)
 
     pmb->par_for("B_field_bsqmax", kl.s, kl.e, jl.s, jl.e, il.s, il.e,
         KOKKOS_LAMBDA (const int &k, const int &j, const int &i) {
-            double divb_local = ((F1(V1, k, j, i+1) - F1(V1, k, j, i)) / G.Dxc<1>(i) +
-                                 (F2(V2, k, j+1, i) - F2(V2, k, j, i)) / G.Dxc<2>(j));
-            if (ndim > 2) divb_local += (F3(V3, k+1, j, i) - F3(V3, k, j, i)) / G.Dxc<3>(k);
+            // double divb_local = ((F1(V1, k, j, i+1) - F1(V1, k, j, i)) / G.Dxc<1>(i) +
+            //                      (F2(V2, k, j+1, i) - F2(V2, k, j, i)) / G.Dxc<2>(j));
+            // if (ndim > 2) divb_local += (F3(V3, k+1, j, i) - F3(V3, k, j, i)) / G.Dxc<3>(k);
 
-            divB(k, j, i) = divb_local;
+            divB(k, j, i) = 0.;
         }
     );
 }

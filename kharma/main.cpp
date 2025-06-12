@@ -1,25 +1,25 @@
-/* 
+/*
  *  File: main.cpp
- *  
+ *
  *  BSD 3-Clause License
- *  
+ *
  *  Copyright (c) 2020, AFD Group at UIUC
  *  All rights reserved.
- *  
+ *
  *  Redistribution and use in source and binary forms, with or without
  *  modification, are permitted provided that the following conditions are met:
- *  
+ *
  *  1. Redistributions of source code must retain the above copyright notice, this
  *     list of conditions and the following disclaimer.
- *  
+ *
  *  2. Redistributions in binary form must reproduce the above copyright notice,
  *     this list of conditions and the following disclaimer in the documentation
  *     and/or other materials provided with the distribution.
- *  
+ *
  *  3. Neither the name of the copyright holder nor the names of its
  *     contributors may be used to endorse or promote products derived from
  *     this software without specific prior written permission.
- *  
+ *
  *  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  *  AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  *  IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -88,7 +88,7 @@ using namespace parthenon;
 /**
  * Main function for KHARMA.  Parses parameters, prints basics,
  * constructs the `Mesh`, calls the Driver.
- * 
+ *
  * Most physics functionality is in the `KHARMADriver` class, over
  * in the `driver/` folder.
  */
@@ -108,13 +108,12 @@ int main(int argc, char *argv[])
     // Registering KHARMA's boundary functions here doesn't mean they will *always* run:
     // periodic & internal boundary conditions are handled by Parthenon.
     // KHARMA sets what will run in boundaries.cpp
-    pman.app_input->boundary_conditions[parthenon::BoundaryFace::inner_x1] = KBoundaries::ApplyBoundaryTemplate<IndexDomain::inner_x1>;
-    pman.app_input->boundary_conditions[parthenon::BoundaryFace::outer_x1] = KBoundaries::ApplyBoundaryTemplate<IndexDomain::outer_x1>;
-    pman.app_input->boundary_conditions[parthenon::BoundaryFace::inner_x2] = KBoundaries::ApplyBoundaryTemplate<IndexDomain::inner_x2>;
-    pman.app_input->boundary_conditions[parthenon::BoundaryFace::outer_x2] = KBoundaries::ApplyBoundaryTemplate<IndexDomain::outer_x2>;
-    pman.app_input->boundary_conditions[parthenon::BoundaryFace::inner_x3] = KBoundaries::ApplyBoundaryTemplate<IndexDomain::inner_x3>;
-    pman.app_input->boundary_conditions[parthenon::BoundaryFace::outer_x3] = KBoundaries::ApplyBoundaryTemplate<IndexDomain::outer_x3>;
-
+    pman.app_input->RegisterBoundaryCondition(parthenon::BoundaryFace::inner_x1, "user", KBoundaries::ApplyBoundaryTemplate<IndexDomain::inner_x1>);
+    pman.app_input->RegisterBoundaryCondition(parthenon::BoundaryFace::outer_x1, "user", KBoundaries::ApplyBoundaryTemplate<IndexDomain::outer_x1>);
+    pman.app_input->RegisterBoundaryCondition(parthenon::BoundaryFace::inner_x2, "user", KBoundaries::ApplyBoundaryTemplate<IndexDomain::inner_x2>);
+    pman.app_input->RegisterBoundaryCondition(parthenon::BoundaryFace::outer_x2, "user", KBoundaries::ApplyBoundaryTemplate<IndexDomain::outer_x2>);
+    pman.app_input->RegisterBoundaryCondition(parthenon::BoundaryFace::inner_x3, "user", KBoundaries::ApplyBoundaryTemplate<IndexDomain::inner_x3>);
+    pman.app_input->RegisterBoundaryCondition(parthenon::BoundaryFace::outer_x3, "user", KBoundaries::ApplyBoundaryTemplate<IndexDomain::outer_x3>);
     // Initialize Parthenon for MPI (also Kokkos, parses command line, etc.)
     Flag("ParthenonInit");
     auto manager_status = pman.ParthenonInitEnv(argc, argv);

@@ -6,14 +6,24 @@
 problem_id = resize_restart
 
 <parthenon/mesh>
+multigrid = true
+refinement = static
+numlevel = 2
 nx1 = 288
-nx2 = 128
-nx3 = 128
+nx2 = 96
+nx3 = 1
 
 <parthenon/meshblock>
-nx1 = 288
-nx2 = 128
-nx3 = 64
+nx1 = 144
+nx2 = 32
+nx3 = 1
+
+<parthenon/static_refinement0>
+x1min = 0.0
+x1max = 0.49
+x2min = 0.49
+x2max = 0.51
+level = 1
 
 <coordinates>
 base = spherical_ks
@@ -38,12 +48,14 @@ use_dt = false
 skip_b_cleanup = false
 
 <b_cleanup>
-# Disable exiting on rel tolerance
-rel_tolerance = 1.e-20
-# This tolerance is quite small, increase if no convergence
-abs_tolerance = 1.e-9
-check_interval = 20
-max_iterations = 10000
+solver = BiCGSTAB
+flux_correct = true
+tolerance = 1.e-9
+precondition = true
+print_per_step = true
+smoother = SRJ2
+do_FAS = true
+max_coarsenings = 5
 
 <floors>
 rho_min_geom = 1e-6
@@ -60,16 +72,11 @@ extra_checks = 1
 <parthenon/output0>
 file_type = hdf5
 write_xdmf = false
-dt = 5.0
-single_precision_output = true
+dt = 0.0001
+single_precision_output = false
 variables = prims, divB, jcon, fflag, pflag
 
 <parthenon/output1>
 file_type = rst
 write_xdmf = false
 dt = 100.0
-
-<parthenon/output2>
-file_type = hst
-dt = 0.1
-variables = all_reductions

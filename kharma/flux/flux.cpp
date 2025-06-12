@@ -52,7 +52,7 @@ int Flux::CountFOFCFlags(MeshData<Real> *md)
 std::shared_ptr<KHARMAPackage> Flux::Initialize(ParameterInput *pin, std::shared_ptr<Packages_t>& packages)
 {
     Flag("Initializing Flux");
-    auto pkg = std::make_shared<KHARMAPackage>("Flux");
+    auto pkg = std::make_shared<KHARMAPackage>("Fluxes");
     Params &params = pkg->AllParams();
 
     // Don't even error on this. Use LLF unless the user is very clear otherwise.
@@ -150,7 +150,7 @@ std::shared_ptr<KHARMAPackage> Flux::Initialize(ParameterInput *pin, std::shared
 
     // We can't just use GetVariables or something since there's no mesh yet.
     // That's what this function is for.
-    int nvar = KHARMA::PackDimension(packages.get(), Metadata::WithFluxes);
+    int nvar = StateDescriptor::CreateResolvedStateDescriptor(*packages)->GetPackDimension(Metadata::WithFluxes);
     std::vector<int> s_flux({nvar});
     if (packages->Get("Globals")->Param<int>("verbose") > 2)
         std::cout << "Allocating fluxes for " << nvar << " variables" << std::endl;
@@ -463,7 +463,7 @@ TaskStatus Flux::PostStepDiagnostics(const SimTime& tm, MeshData<Real> *md)
     const auto& globals = pmesh->packages.Get("Globals")->AllParams();
     const int extra_checks = globals.Get<int>("extra_checks");
     const int flag_verbose = globals.Get<int>("flag_verbose");
-    const auto& flux_pars = pmesh->packages.Get("Flux")->AllParams();
+    const auto& flux_pars = pmesh->packages.Get("Fluxes")->AllParams();
     const bool use_fofc = flux_pars.Get<bool>("use_fofc");
 
     // Debugging/diagnostic info about FOFC hits

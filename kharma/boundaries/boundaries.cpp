@@ -103,11 +103,12 @@ std::shared_ptr<KHARMAPackage> KBoundaries::Initialize(ParameterInput *pin, std:
     FC ghost_vars = FC({Metadata::FillGhost, Metadata::Conserved})
                 + FC({Metadata::FillGhost, Metadata::GetUserFlag("Primitive")})
                 - FC({Metadata::GetUserFlag("StartupOnly")});
-    int nvar = KHARMA::PackDimension(packages.get(), ghost_vars);
+    auto res_state = StateDescriptor::CreateResolvedStateDescriptor(*packages);
+    int nvar = res_state->GetPackDimension(ghost_vars);
     // Face-centered fields: some duplicate stuff, leaving it separate for now
     FC ghost_vars_f = FC({Metadata::FillGhost, Metadata::Face})
                 - FC({Metadata::GetUserFlag("StartupOnly")});
-    int nvar_f = 3 * m::max(KHARMA::PackDimension(packages.get(), ghost_vars_f), 1);
+    int nvar_f = 3 * m::max(res_state->GetPackDimension(ghost_vars_f), 1);
 
     // TODO encapsulate this
     Metadata m_x1, m_x2, m_x3, m_x1_f, m_x2_f, m_x3_f;
@@ -516,7 +517,7 @@ void KBoundaries::ApplyBoundary(std::shared_ptr<MeshBlockData<Real>> &rc, IndexD
                                     : bounds.GetBoundsK(IndexDomain::interior));
         const int ref = binner ? range.s : range.e;
         pmb->par_for_bndry(
-            "outflow_EMHD", IndexRange{0,EMHDg.GetDim(4)-1}, domain, CC, coarse,
+            "outflow_EMHD", IndexRange{0,EMHDg.GetDim(4)-1}, domain, CC, coarse, false,
             KOKKOS_LAMBDA (const int &v, const int &k, const int &j, const int &i) {
                 EMHDg(v, k, j, i) = EMHDg(v, (bdir == 3) ? ref : k, (bdir == 2) ? ref : j, (bdir == 1) ? ref : i);
             }
@@ -601,7 +602,7 @@ void KBoundaries::CheckInflow(std::shared_ptr<MeshBlockData<Real>> &rc, IndexDom
     // Inflow check
     // Iterate over all boundary domain zones w/p=0
     pmb->par_for_bndry(
-        "check_inflow", IndexRange{0, 0}, domain, CC, coarse,
+        "check_inflow", IndexRange{0, 0}, domain, CC, coarse, false,
         KOKKOS_LAMBDA(const int &p, const int &k, const int &j, const int &i) {
             KBoundaries::check_inflow(G, P, domain, m_p.U1, k, j, i);
         }

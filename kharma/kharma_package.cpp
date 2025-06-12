@@ -232,7 +232,7 @@ TaskStatus Packages::MeshApplyFloors(MeshData<Real> *md, IndexDomain domain)
 
 // GENERAL CALLBACKS
 // TODO this will need to be mesh'd too
-void Packages::UserWorkBeforeOutput(MeshBlock *pmb, ParameterInput *pin)
+void Packages::UserWorkBeforeOutput(MeshBlock *pmb, ParameterInput *pin, const SimTime& unused)
 {
     Flag("UserWorkBeforeOutput");
     auto kpackages = pmb->packages.AllPackagesOfType<KHARMAPackage>();

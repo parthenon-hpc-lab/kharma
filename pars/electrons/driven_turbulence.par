@@ -1,5 +1,5 @@
 # Driven turbulence electron heating
-# Perturb 2D state 
+# Perturb 2D state
 
 <parthenon/job>
 problem_id = driven_turbulence
@@ -67,6 +67,7 @@ extra_checks = 1
 
 <parthenon/output0>
 file_type = hdf5
+write_xdmf = false
 dt = 5.0
 single_precision_output = true
 variables = prims, grf_normalized, alfven_speed, ctop, fflag, pflag

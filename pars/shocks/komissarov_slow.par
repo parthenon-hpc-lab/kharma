@@ -62,6 +62,7 @@ disable_floors = true
 
 <parthenon/output0>
 file_type = hdf5
+write_xdmf = false
 # This is to output only the final state
 dt = 100.
 single_precision_output = true

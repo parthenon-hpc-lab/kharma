@@ -1,6 +1,6 @@
 # Komissarov cylindrical explosion with magnetic field
 # see Komissarov (1999), section 7.3
-# Uses donor-cell reconstruction for stability and simplicity, 
+# Uses donor-cell reconstruction for stability and simplicity,
 # good for looking at code behavior in bad situations.
 # Compare to AthenaK algorithm/GRMHD blast wave test
 
@@ -74,6 +74,7 @@ extra_checks = 2
 
 <parthenon/output0>
 file_type = hdf5
+write_xdmf = false
 dt = 0.1
 single_precision_output = true
 variables = prims, cons.fB, fflag, pflag
