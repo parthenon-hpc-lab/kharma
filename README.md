@@ -3,7 +3,7 @@ KHARMA is an implementation of the HARM scheme for gerneral relativistic magneto
 
 KHARMA is capable of closely matching other HARM implementations, e.g. [iharm3d](https://github.com/AFD-Illinois/iharm3d). However, it also updates the scheme to support static and adaptive mesh refinement, new methods for primitive variable recovery, new boundary conditions, and new stability features for running difficult simulations at high resolutions reliably.
 
-There is a bunch of documentation on the [wiki](https://github.com/AFD-Illinois/kharma/wiki).  If you have a basic question, it might be answered there!
+There is a bunch of documentation on the [wiki](https://github.com/AFD-Illinois/kharma/wiki).  If you have a basic question, it might be answered there!  There is also a Slack workspace for users of KHARMA and the associated imaging and analysis codes -- message or email @bprather on GitHub for the link.
 
 ## Prerequisites
 KHARMA requires that the system have a C++17-compliant compiler, MPI, and parallel HDF5.  All other dependencies are included as submodules, and can be checked out with `git` by running

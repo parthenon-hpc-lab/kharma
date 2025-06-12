@@ -11,15 +11,15 @@ problem_id = torus
 archive_parameters = timestamp
 
 <parthenon/mesh>
-nx1 = 288
-nx2 = 128
-nx3 = 128
+nx1 = 128
+nx2 = 64
+nx3 = 64
 
 <parthenon/meshblock>
-nx1 = 144
+nx1 = 128
 nx2 = 64
 # Cannot break up phi with transmitting boundaries
-nx3 = 128
+nx3 = 64
 
 <coordinates>
 base = spherical_ks
@@ -54,7 +54,9 @@ gamma = 1.666667
 
 <flux>
 type = llf
-reconstruction = weno5
+# WENO5 Adaptive Order "At Home" --
+# WENO5Z with fallback to linear recon in difficult regions
+reconstruction = weno5_linear
 
 <driver>
 type = kharma
@@ -69,6 +71,10 @@ outer_x2 = transmitting
 # This reduces the polar "wake," but shrinks the timestep,
 # and has caused instabilities. YMMV.
 #excise_polar_flux = true
+# Reconnect phi component of B at the pole, as if it were one zone
+# Dramatically reduces instabilities
+reconnect_B3_inner_x2 = true
+reconnect_B3_outer_x2 = true
 
 <floors>
 frame        = drift

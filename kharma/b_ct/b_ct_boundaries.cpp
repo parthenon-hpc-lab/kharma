@@ -35,8 +35,10 @@
 
 #include "decs.hpp"
 #include "domain.hpp"
+#include "floors.hpp"
 #include "grmhd.hpp"
 #include "grmhd_functions.hpp"
+#include "inverter.hpp"
 #include "kharma.hpp"
 
 void B_CT::ZeroBoundaryEMF(MeshBlockData<Real> *rc, IndexDomain domain, const VariablePack<Real> &emfpack, bool coarse)
@@ -285,11 +287,20 @@ void B_CT::ReconnectBoundaryB3(MeshBlockData<Real> *rc, IndexDomain domain, cons
     const int bdir = KBoundaries::BoundaryDirection(bface);
     const auto bname = KBoundaries::BoundaryName(bface);
 
+    // Pull cell-centered values, as we need to update fluid primitives
     // TODO standardize on passing Packs or Datas...
-    auto B_U = rc->PackVariables(std::vector<std::string>{"cons.B"});
-    auto B_P = rc->PackVariables(std::vector<std::string>{"prims.B"});
+    PackIndexMap prims_map, cons_map;
+    auto P = rc->PackVariables({Metadata::GetUserFlag("Primitive"), Metadata::Cell}, prims_map);
+    auto U = rc->PackVariables(std::vector<MetadataFlag>{Metadata::Conserved, Metadata::Cell}, cons_map);
+    const VarMap m_u(cons_map, true), m_p(prims_map, false);
 
     const auto& G = pmb->coords;
+
+    const Real gam = pmb->packages.Get("GRMHD")->Param<Real>("gamma");
+
+    const Floors::Prescription floors = pmb->packages.Get("Floors")->Param<Floors::Prescription>("prescription");
+    // Don't be fooled, this function does *not* support/preserve EMHD values
+    const EMHD::EMHD_parameters& emhd_params = EMHD::GetEMHDParameters(pmb->packages);
 
     // Subtract the average B3 as "reconnection"
     IndexRange3 b = KDomain::GetRange(rc, domain, F3, coarse);
@@ -318,12 +329,22 @@ void B_CT::ReconnectBoundaryB3(MeshBlockData<Real> *rc, IndexDomain domain, cons
             );
             member.team_barrier();
 
-            // Update cell-centered conserved & primitive B3. Not worth a separate BlockUtoP call
-            parthenon::par_for_inner(member, b.ks, b.ke-1,
+            // Update cell-centered conserved & primitive B, and cell primitive fluid variables, in the zones we touched
+            parthenon::par_for_inner(member, b.ks, b.ke-1, // iterate over all *cells* k
                 [&](const int& k) {
-                    B_P(V3, k, jf, i) =  (fpack(F3, 0, k, jf, i) / G.gdet(Loci::face3, jf, i)
+                    P(m_p.B3, k, jf, i) =  (fpack(F3, 0, k, jf, i) / G.gdet(Loci::face3, jf, i)
                                         + fpack(F3, 0, k + 1, jf, i) / G.gdet(Loci::face3, jf, i)) / 2;
-                    B_U(V3, k, jf, i) = B_P(V3, k, jf, i) * G.gdet(Loci::center, jf, i);
+                    U(m_u.B3, k, jf, i) = P(m_p.B3, k, jf, i) * G.gdet(Loci::center, jf, i);
+
+                    // Recover primitive GRMHD variables from our modified U
+                    Inverter::u_to_p<Inverter::Type::kastaun>(G, U, m_u, gam, k, jf, i, P, m_p, Loci::center,
+                                                              floors, 8, 1e-8);
+                    // Floor them
+                    int fflag = Floors::apply_geo_floors(G, P, m_p, gam, k, jf, i, floors, floors, Loci::center);
+                    // Recalculate U on anything we floored
+                    if (fflag)
+                        GRMHD::p_to_u(G, P, m_p, gam, k, jf, i, U, m_u, Loci::center);
+
                 }
             );
         }

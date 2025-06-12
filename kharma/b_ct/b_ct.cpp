@@ -1,25 +1,25 @@
-/* 
+/*
  *  File: b_ct.cpp
- *  
+ *
  *  BSD 3-Clause License
- *  
+ *
  *  Copyright (c) 2020, AFD Group at UIUC
  *  All rights reserved.
- *  
+ *
  *  Redistribution and use in source and binary forms, with or without
  *  modification, are permitted provided that the following conditions are met:
- *  
+ *
  *  1. Redistributions of source code must retain the above copyright notice, this
  *     list of conditions and the following disclaimer.
- *  
+ *
  *  2. Redistributions in binary form must reproduce the above copyright notice,
  *     this list of conditions and the following disclaimer in the documentation
  *     and/or other materials provided with the distribution.
- *  
+ *
  *  3. Neither the name of the copyright holder nor the names of its
  *     contributors may be used to endorse or promote products derived from
  *     this software without specific prior written permission.
- *  
+ *
  *  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  *  AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  *  IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -168,7 +168,17 @@ TaskStatus B_CT::BlockUtoP(MeshBlockData<Real> *rc, IndexDomain domain, bool coa
     // Return if we're not syncing U & P at all (e.g. edges)
     if (B_Uf.GetDim(4) == 0) return TaskStatus::complete;
 
-    const IndexRange3 bc = KDomain::GetRange(rc, domain, coarse);
+    // We need one cell inside of the domain, since it will be updated by the domain-face field
+    // this oversteps "interior" by a zone
+    IndexRange3 bct;
+    if (domain == IndexDomain::interior || domain == IndexDomain::entire) {
+        bct = KDomain::GetRange(rc, domain, coarse);
+    } else {
+        const BoundaryFace bface = KBoundaries::BoundaryFaceOf(domain);
+        const bool binner = KBoundaries::BoundaryIsInner(bface);
+        bct = KDomain::GetRange(rc, domain, (binner) ? 0 : -1, (binner) ? 1 : 0, coarse);
+    }
+    const IndexRange3 bc = bct;
 
     // Average the primitive vals to zone centers
     pmb->par_for("UtoP_B_center", bc.ks, bc.ke, bc.js, bc.je, bc.is, bc.ie,
@@ -582,7 +592,8 @@ void B_CT::CalcDivB(MeshData<Real> *md, std::string divb_field_name)
 
 void B_CT::FillOutput(MeshBlock *pmb, ParameterInput *pin)
 {
-    auto rc = pmb->meshblock_data.Get();
+    // This is called after the step, use "base" container
+    auto rc = pmb->meshblock_data.Get("base");
     const int ndim = pmb->pmy_mesh->ndim;
     if (ndim < 2) return;
 

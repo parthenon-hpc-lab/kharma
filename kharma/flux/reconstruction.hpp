@@ -79,9 +79,9 @@ KOKKOS_FORCEINLINE_FUNCTION double Median(double a, double b, double c)
 template<Type recon_type>
 KOKKOS_FORCEINLINE_FUNCTION void reconstruct(RECONSTRUCT_ONE_ARGS) {}
 
+// TODO better defaults?  As-is, forgetting to implement these causes problems!
 template<Type recon_type>
 KOKKOS_FORCEINLINE_FUNCTION void reconstruct_left(RECONSTRUCT_ONE_LEFT_ARGS) {}
-
 template<Type recon_type>
 KOKKOS_FORCEINLINE_FUNCTION void reconstruct_right(RECONSTRUCT_ONE_RIGHT_ARGS) {}
 
@@ -260,7 +260,7 @@ KOKKOS_FORCEINLINE_FUNCTION void reconstruct<Type::weno5_linear>(RECONSTRUCT_ONE
     Real dq = x4 - x3;
     dq = mc(x3 - x2, dq, 2.0);
 
-    const Real alpha_lin = 2.0 * alpha_r * alpha_l / (alpha_r + alpha_l);
+    const Real alpha_lin = clip(2.0 * alpha_r * alpha_l / (alpha_r + alpha_l), 0.0, 1.0);
     rout = alpha_lin * rout + (1.0 - alpha_lin) * (x3 + 0.5 * dq);
     lout = alpha_lin * lout + (1.0 - alpha_lin) * (x3 - 0.5 * dq);
 }
@@ -492,6 +492,18 @@ KOKKOS_FORCEINLINE_FUNCTION void reconstruct<Type::ppmx>(const Real &q_im2, cons
       qlv = q_i - 2.0*qc;
     }
   }
+}
+template<>
+KOKKOS_FORCEINLINE_FUNCTION void reconstruct_left<Type::ppmx>(RECONSTRUCT_ONE_LEFT_ARGS)
+{
+    Real null;
+    reconstruct<Type::ppmx>(x1, x2, x3, x4, x5, lout, null);
+}
+template<>
+KOKKOS_FORCEINLINE_FUNCTION void reconstruct_right<Type::ppmx>(RECONSTRUCT_ONE_RIGHT_ARGS)
+{
+    Real null;
+    reconstruct<Type::ppmx>(x1, x2, x3, x4, x5, null, rout);
 }
 
 

@@ -53,6 +53,7 @@ integrator = rk2
 dt_min = 0.0001
 
 <GRMHD>
+# Courant number, where limit of 2o scheme is 1.0 regardless of dimensionality
 cfl = 0.9
 gamma = 1.333333
 # Whether to evolve these variables with an
@@ -63,7 +64,7 @@ implicit = false
 # Local Lax-Friedrichs fluxes
 # `hlle` selects Harten, Lax, van Leer & Einfeldt
 # No production problems use HLLE as it has failure modes
-# we do not test for.
+# we do not catch in the code.
 type = llf
 # Lots of reconstruction options, see the wiki
 reconstruction = weno5

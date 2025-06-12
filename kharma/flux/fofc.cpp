@@ -55,9 +55,11 @@ TaskStatus Flux::MarkFOFC(MeshData<Real> *guess)
     // Parameters
     const auto& pars = pmb0->packages.Get("Flux")->AllParams();
     const bool spherical = pmb0->coords.coords.is_spherical();
-    const GReal r_eh = pmb0->coords.coords.get_horizon();
     const int polar_cells = pars.Get<int>("fofc_polar_cells");
-    const GReal eh_buffer = pars.Get<GReal>("fofc_eh_buffer");
+    const GReal r_eh = pmb0->coords.coords.get_horizon();
+    const GReal fofc_radius = pars.Get<bool>("fofc_use_eh_buffer") ?
+                                r_eh + pars.Get<GReal>("fofc_eh_buffer") :
+                                0.;
 
     // Pre-mark cells which will need fluxes reduced.
     // This avoids a race condition marking them multiple times when iterating faces,
@@ -70,7 +72,7 @@ TaskStatus Flux::MarkFOFC(MeshData<Real> *guess)
             // if cell failed to invert or would call floors...
             // TODO preserve cause in the fofcflag
             if (static_cast<int>(fflag(b, 0, k, j, i)) || //Inverter::failed(pflag(b, 0, k, j, i)) ||
-                (spherical && G.r(k, j, i) < r_eh + eh_buffer)) {
+                (spherical && G.r(k, j, i) < fofc_radius)) {
                 fofcflag(b, 0, k, j, i) = 1;
             } else {
                 fofcflag(b, 0, k, j, i) = 0;
@@ -167,7 +169,7 @@ TaskStatus Flux::FOFC(MeshData<Real> *md, MeshData<Real> *guess)
                 int kk = (dir == 3) ? k - 1 : k;
                 int jj = (dir == 2) ? j - 1 : j;
                 int ii = (dir == 1) ? i - 1 : i;
-                // If either bordering cell is marked, and always inside the EH
+                // If either bordering cell is marked
                 if (static_cast<int>(fofcflag(b, 0, k, j, i)) ||
                     static_cast<int>(fofcflag(b, 0, kk, jj, ii))) { // TODO allow customizing
 

@@ -191,8 +191,14 @@ std::shared_ptr<KHARMAPackage> Flux::Initialize(ParameterInput *pin, std::shared
 
         int fofc_polar_cells = pin->GetOrAddInteger("fofc", "polar_cells", 0);
         params.Add("fofc_polar_cells", fofc_polar_cells);
-        const GReal eh_buffer = pin->GetOrAddReal("fofc", "eh_buffer", 0.1);
-        params.Add("fofc_eh_buffer", eh_buffer);
+        // Usually we use LLF everywhere and this fallback is optional.
+        // If we use HLLE outside EH, we need to fall back to LLF/donor-cell inside.
+        const bool use_eh_buffer = pin->GetOrAddReal("fofc", "use_eh_buffer", (flux != "llf"));
+        params.Add("fofc_use_eh_buffer", use_eh_buffer);
+        if (use_eh_buffer) {
+            const GReal eh_buffer = pin->GetOrAddReal("fofc", "eh_buffer", 0.1);
+            params.Add("fofc_eh_buffer", eh_buffer);
+        }
 
         if (packages->AllPackages().count("B_CT")) {
             // Use consistent B for FOFC (see above)

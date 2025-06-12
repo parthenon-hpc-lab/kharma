@@ -1,6 +1,6 @@
 #!/bin/bash
 # Admin stuff
-#SBATCH -A t24_bh_rmhd_g
+#SBATCH -A w25_bh_images_g
 #SBATCH -J KHARMA
 #SBATCH -t 12:00:00
 #SBATCH -N 1
