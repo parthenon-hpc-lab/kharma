@@ -1,25 +1,25 @@
-/* 
+/*
  *  File: invert_template.hpp
- *  
+ *
  *  BSD 3-Clause License
- *  
+ *
  *  Copyright (c) 2020, AFD Group at UIUC
  *  All rights reserved.
- *  
+ *
  *  Redistribution and use in source and binary forms, with or without
  *  modification, are permitted provided that the following conditions are met:
- *  
+ *
  *  1. Redistributions of source code must retain the above copyright notice, this
  *     list of conditions and the following disclaimer.
- *  
+ *
  *  2. Redistributions in binary form must reproduce the above copyright notice,
  *     this list of conditions and the following disclaimer in the documentation
  *     and/or other materials provided with the distribution.
- *  
+ *
  *  3. Neither the name of the copyright holder nor the names of its
  *     contributors may be used to endorse or promote products derived from
  *     this software without specific prior written permission.
- *  
+ *
  *  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  *  AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  *  IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -50,7 +50,7 @@ enum class Type{none=0, onedw, kastaun};
 
 // Denote inversion failures (pflags)
 // This enum should grow to cover any inversion algorithm
-enum class Status{success=0, neg_input, max_iter, bad_ut, bad_gamma, neg_rho, neg_u, neg_rhou};
+enum class Status{success=0, neg_input, max_iter, bad_ut, bad_gamma, neg_rho, neg_u, neg_rhou, floor, bad_velocity};
 
 static const std::map<int, std::string> status_names = {
     {(int) Status::neg_input, "Negative input"},
@@ -59,7 +59,9 @@ static const std::map<int, std::string> status_names = {
     {(int) Status::bad_gamma, "Gamma invalid"},
     {(int) Status::neg_rho, "Negative rho"},
     {(int) Status::neg_u, "Negative U"},
-    {(int) Status::neg_rhou, "Negative rho & U"}
+    {(int) Status::neg_rhou, "Negative rho & U"},
+    {(int) Status::floor, "Floor during inversion"},
+    {(int) Status::bad_velocity, "No velocity solution"}
 };
 
 template <typename T>
@@ -79,13 +81,13 @@ KOKKOS_INLINE_FUNCTION bool valid(T status_flag)
 /**
  * Recover local primitive variables, with a one-dimensional Newton-Raphson iterative solver.
  * Iteration starts from the current primitive values, and otherwse may *fail to converge*
- * 
+ *
  * Returns a code indicating whether the solver converged (success), failed (max_iter), or
  * indicating that the converged solution was unphysical (bad_ut, neg_rhou, neg_rho, neg_u)
- * 
+ *
  * On error, will not write replacement values, leaving the previous step's values in place
  * These are fixed later, in FixUtoP
- * 
+ *
  * This is the function template: implementations are filled in in their own headers.
  * Be VERY CAREFUL to define any specializations by including those headers,
  * BEFORE you instantiate the template.
@@ -94,6 +96,5 @@ template<Type inverter>
 KOKKOS_INLINE_FUNCTION int u_to_p(const GRCoordinates& G, const VariablePack<Real>& U, const VarMap& m_u,
                                               const Real& gam, const int& k, const int& j, const int& i,
                                               const VariablePack<Real>& P, const VarMap& m_p,
-                                              const Loci& loc, const Floors::Prescription& floors,
-                                              const int& max_iterations, const Real& tol);
+                                              const Loci& loc, const int& max_iterations, const Real& tol);
 } // namespace Inverter

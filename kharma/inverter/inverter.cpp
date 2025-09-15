@@ -36,6 +36,7 @@
 // inverter.hpp includes the template and instantiations in the correct order
 
 #include "domain.hpp"
+#include "floors_functions.hpp"
 #include "flux.hpp"
 #include "reductions.hpp"
 
@@ -84,13 +85,19 @@ std::shared_ptr<KHARMAPackage> Inverter::Initialize(ParameterInput *pin, std::sh
     }
 
     // Fixup options
+    // Whether to apply Normal frame floors right after the inversion
+    bool apply_floors_with_inversion = pin->GetOrAddBoolean("inverter", "apply_floors_with_inversion", use_kastaun);
+    params.Add("apply_floors_with_inversion", apply_floors_with_inversion);
+    // Tolerance in the momenta before a zone is considered failed and the unsolvable velocity zeroed out
+    Real bad_vel_tolerance = pin->GetOrAddReal("inverter", "bad_vel_tolerance", 1e-8);
+    params.Add("bad_vel_tolerance", bad_vel_tolerance);
+
+    // Fix by averaging neighboring cells.  Enabled by default for 1Dw, but Kastaun failures are more dire
     bool fix_average_neighbors = pin->GetOrAddBoolean("inverter", "fix_average_neighbors", !use_kastaun);
     params.Add("fix_average_neighbors", fix_average_neighbors);
-    // Fix by replacing with floors, uvec=0. Usually a fallback for no neighbors,
-    // but also used if Kastaun hits max_iter
+    // Fix by replacing with floors, uvec=0. Backstop for states which are just impossible to use
     bool fix_atmosphere = pin->GetOrAddBoolean("inverter", "fix_atmosphere", true);
     params.Add("fix_atmosphere", fix_atmosphere);
-    // TODO add version attempting to recover from entropy, stuff like that
 
     // Flag denoting UtoP inversion failures
     // Needs boundary sync if the fixup code will use neighbors, and if
@@ -144,7 +151,7 @@ inline void BlockPerformInversion(MeshBlockData<Real> *rc, IndexDomain domain, b
 
     PackIndexMap prims_map, cons_map;
     auto U = GRMHD::PackMHDCons(rc, cons_map);
-    auto P = GRMHD::PackHDPrims(rc, prims_map);
+    auto P = GRMHD::PackMHDPrims(rc, prims_map);
     const VarMap m_u(cons_map, true), m_p(prims_map, false);
 
     auto fflag = rc->PackVariables(std::vector<std::string>{"fflag"});
@@ -158,9 +165,18 @@ inline void BlockPerformInversion(MeshBlockData<Real> *rc, IndexDomain domain, b
     auto &pars = pmb->packages.Get("Inverter")->AllParams();
     const Real err_tol = pars.Get<Real>("err_tol");
     const int iter_max = pars.Get<int>("iter_max");
+    const bool apply_floors_with_inversion = pars.Get<bool>("apply_floors_with_inversion");
+    const Real bad_vel_tolerance = pars.Get<bool>("bad_vel_tolerance");
     const Floors::Prescription inverter_floors       = pars.Get<Floors::Prescription>("inverter_prescription");
     const Floors::Prescription inverter_floors_inner = pars.Get<Floors::Prescription>("inverter_prescription_inner");
     const bool radius_dependent_floors = inverter_floors.radius_dependent_floors;
+
+    // If we set the floors package to use normal frame w/Kastaun inverter, *or*
+    // if we disabled the floors package, go ahead and apply all floors in this function
+    const bool normal_frame_floors = (pmb->packages.AllPackages().count("Floors")) ?
+                                        pmb->packages.Get("Floors")->Param<Floors::InjectionFrame>("frame") ==
+                                            Floors::InjectionFrame::normal_kastaun :
+                                        true;
 
     const auto& G = pmb->coords;
 
@@ -171,21 +187,53 @@ inline void BlockPerformInversion(MeshBlockData<Real> *rc, IndexDomain domain, b
                           ? KDomain::GetPhysicalRange(rc) : KDomain::GetRange(rc, domain, coarse);
     pmb->par_for("U_to_P", b.ks, b.ke, b.js, b.je, b.is, b.ie,
         KOKKOS_LAMBDA (const int &k, const int &j, const int &i) {
-            const Floors::Prescription& myfloors = (inverter_floors.radius_dependent_floors
-                                            && G.coords.is_spherical()
-                                            && G.r(k, j, i) < inverter_floors.floors_switch_r) ?
-                                            inverter_floors_inner : inverter_floors;
             int pflagl = Inverter::u_to_p<inverter>(G, U, m_u, gam, k, j, i, P, m_p, Loci::center,
-                                                    myfloors, iter_max, err_tol);
-            pflag(0, k, j, i) = pflagl % Floors::FFlag::MINIMUM;
-            int fflagl = (pflagl / Floors::FFlag::MINIMUM) * Floors::FFlag::MINIMUM;
-            fflag(0, k, j, i) = fflagl;
-            // Generally after inversion we manipulate P and call this ourselves
-            // Enable this if that doesn't stay true
-            // if (fflagl) {
-            //     // If we applied a floor during recovery, update the cons
-            //     GRMHD::p_to_u(G, P, m_p, gam, k, j, i, U, m_u);
-            // }
+                                                    iter_max, err_tol);
+
+            // Apply floors immediately, attempting to correct bad inversions
+            if (apply_floors_with_inversion) {
+                Real rhoflr_max, uflr_max;
+                int fflagl = 0; // Could read fflag here to preserve prior floors but there better not be any
+                if (normal_frame_floors) {
+                    fflagl |= Floors::determine_floors(G, P, m_p, gam, k, j, i, inverter_floors, inverter_floors_inner,
+                        rhoflr_max, uflr_max);
+                } else {
+                    // Bare minimum floors for numerics, before applying the rest in user-selected frame
+                    rhoflr_max = inverter_floors.rho_min_const;
+                    uflr_max = inverter_floors.u_min_const;
+                    if (P(m_p.RHO, k, j, i) < rhoflr_max) fflagl |= Floors::FFlag::GEOM_RHO;
+                    if (P(m_p.UU, k, j, i) < uflr_max) fflagl |= Floors::FFlag::GEOM_U;
+                }
+                if (fflagl) {
+                    // Apply floors to P -- this calls inversion again
+                    pflagl = Floors::apply_floors<Floors::InjectionFrame::normal_kastaun>(G, P, m_p, gam, k, j, i,
+                            rhoflr_max, uflr_max, U, m_u);
+                    apply_ceilings(G, P, m_p, gam, k, j, i, inverter_floors, inverter_floors_inner, U, m_u);
+                }
+
+                // If we didn't conserve momentum, kill the velocity
+                // It's just going to be the ceiling for no reason and mess everything up
+                const Real rho = P(m_p.RHO, k, j, i);
+                const Real u = P(m_p.UU, k, j, i);
+                const Real uvec[NVEC] = {P(m_p.U1, k, j, i), P(m_p.U2, k, j, i), P(m_p.U3, k, j, i)};
+                const Real B_P[NVEC] = {P(m_p.B1, k, j, i), P(m_p.B2, k, j, i), P(m_p.B3, k, j, i)};
+                Real rho_ut = 0., T[GR_DIM] = {0.};
+                GRMHD::p_to_u_mhd(G, rho, u, uvec, B_P, gam, k, j, i, rho_ut, T);
+                const Real& tol = bad_vel_tolerance;
+                if ((std::abs((T[1] - U(m_u.U1, k, j, i)) / U(m_u.U1, k, j, i)) > tol) ||
+                    (std::abs((T[2] - U(m_u.U2, k, j, i)) / U(m_u.U2, k, j, i)) > tol) ||
+                    (std::abs((T[3] - U(m_u.U3, k, j, i)) / U(m_u.U3, k, j, i)) > tol)) {
+                    P(m_p.U1, k, j, i) = 0.;
+                    P(m_p.U2, k, j, i) = 0.;
+                    P(m_p.U3, k, j, i) = 0.;
+                    fflagl |= Floors::FFlag::GAMMA;
+                }
+
+                fflag(0, k, j, i) = fflagl;
+            }
+
+            // If we're applying floors, record the *post-floor* flag since we only care if that failed
+            pflag(0, k, j, i) = pflagl;
         }
     );
 }

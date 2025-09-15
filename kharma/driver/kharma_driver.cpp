@@ -1,26 +1,26 @@
 
-/* 
+/*
  *  File: kharma_driver.cpp
- *  
+ *
  *  BSD 3-Clause License
- *  
+ *
  *  Copyright (c) 2020, AFD Group at UIUC
  *  All rights reserved.
- *  
+ *
  *  Redistribution and use in source and binary forms, with or without
  *  modification, are permitted provided that the following conditions are met:
- *  
+ *
  *  1. Redistributions of source code must retain the above copyright notice, this
  *     list of conditions and the following disclaimer.
- *  
+ *
  *  2. Redistributions in binary form must reproduce the above copyright notice,
  *     this list of conditions and the following disclaimer in the documentation
  *     and/or other materials provided with the distribution.
- *  
+ *
  *  3. Neither the name of the copyright holder nor the names of its
  *     contributors may be used to endorse or promote products derived from
  *     this software without specific prior written permission.
- *  
+ *
  *  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  *  AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  *  IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -85,8 +85,8 @@ std::shared_ptr<KHARMAPackage> KHARMADriver::Initialize(ParameterInput *pin, std
     // Add a flag if we wish to use ideal variables explicitly evolved as guess for implicit update.
     // GRIM uses the fluid state of the previous (sub-)step.
     // The logic here is that the non-ideal variables do not significantly contribute to the
-    // stress-energy tensor. We can explicitly update the ideal MHD variables and hope that this 
-    // takes us to a region in the parameter space of state variables that 
+    // stress-energy tensor. We can explicitly update the ideal MHD variables and hope that this
+    // takes us to a region in the parameter space of state variables that
     // is close to the true solution. The corrections obtained from the implicit update would then
     // be small corrections.
     Metadata::AddUserFlag("IdealGuess");
@@ -187,14 +187,14 @@ TaskStatus KHARMADriver::SyncAllBounds(std::shared_ptr<MeshData<Real>> &md)
     Flag("SyncAllBounds");
     TaskID t_none(0);
 
-    //MPIBarrier();
+    MPIBarrier();
 
     TaskCollection tc;
     auto tr = tc.AddRegion(1);
     AddBoundarySync(t_none, tr[0], md);
     while (!tr.Execute());
 
-    //MPIBarrier();
+    MPIBarrier();
 
     EndFlag();
     return TaskStatus::complete;

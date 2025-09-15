@@ -34,6 +34,8 @@
 #pragma once
 
 #include "floors.hpp"
+// For template specializations since inverter needs floors too
+#include "kastaun.hpp"
 #include "onedw.hpp"
 
 /**
@@ -256,36 +258,62 @@ KOKKOS_INLINE_FUNCTION int apply_floors<InjectionFrame::drift>(FLOOR_ONE_ARGS)
     return 0;
 }
 
+// There's a way to avoid code duplication here, but it imposes more template madness
+// on everyone else by templating floors *again*, and we don't need the convex set
 template<>
-KOKKOS_INLINE_FUNCTION int apply_floors<InjectionFrame::normal>(FLOOR_ONE_ARGS)
+KOKKOS_INLINE_FUNCTION int apply_floors<InjectionFrame::normal_onedw>(FLOOR_ONE_ARGS)
 {
     // Add the material in the normal observer frame.
     // 1. Calculate how much material we're adding.
-    // This is an estimate, as it's what we'd have to do in fluid frame
+    // By using the existing velocities for the rho*u^0 and T^0_0 contributions,
+    // We produce a guaranteed overestimate (since NOF floors will slow the material,
+    // reducing the Lorentz factor)
     const Real rho_add    = m::max(0., rhoflr_max - P(m_p.RHO, k, j, i));
     const Real u_add      = m::max(0., uflr_max - P(m_p.UU, k, j, i));
-    const Real uvec[NVEC] = {0}, B[NVEC] = {0};
+    const Real uvec[NVEC] = {P(m_p.U1, k, j, i), P(m_p.U2, k, j, i), P(m_p.U3, k, j, i)};
+    const Real B[NVEC] = {0.};
 
     // 2. Calculate the increase in conserved mass/energy corresponding to the new material.
     Real rho_ut, T[GR_DIM];
     GRMHD::p_to_u_mhd(G, rho_add, u_add, uvec, B, gam, k, j, i, rho_ut, T, Loci::center);
 
     // 3. Add new conserved mass/energy to the current "conserved" state.
-    // Also add to the local primitives as a guess
+    U(m_u.RHO, k, j, i) += rho_ut;
+    U(m_u.UU, k, j, i)  += T[0];
+    // Also add to the local primitives to produce a better guess
     P(m_p.RHO, k, j, i) += rho_add;
     P(m_p.UU, k, j, i)  += u_add;
-    // Add any velocity here
-    U(m_u.RHO, k, j, i) += rho_ut;
-    U(m_u.UU, k, j, i)  += T[0]; // Note that m_u.U1 != m_u.UU + 1 necessarily
-    U(m_u.U1, k, j, i)  += T[1];
-    U(m_u.U2, k, j, i)  += T[2];
-    U(m_u.U3, k, j, i)  += T[3];
-    
+
     // Recover primitive variables from conserved versions
-    // Kastaun would need real vals here...
-    const Floors::Prescription floor_tmp = {0}; 
     return Inverter::u_to_p<Inverter::Type::onedw>(G, U, m_u, gam, k, j, i, P, m_p, Loci::center,
-                                                     floor_tmp, 8, 1e-8);
+                                                    8, 1e-8);
+}
+
+template<>
+KOKKOS_INLINE_FUNCTION int apply_floors<InjectionFrame::normal_kastaun>(FLOOR_ONE_ARGS)
+{
+    // Add the material in the normal observer frame.
+    // 1. Calculate how much material we're adding.
+    // By using the existing velocities for the rho*u^0 and T^0_0 contributions,
+    // We produce a guaranteed overestimate (since NOF floors will slow the material,
+    // reducing the Lorentz factor)
+    const Real rho_add    = m::max(0., rhoflr_max - P(m_p.RHO, k, j, i));
+    const Real u_add      = m::max(0., uflr_max - P(m_p.UU, k, j, i));
+    const Real uvec[NVEC] = {P(m_p.U1, k, j, i), P(m_p.U2, k, j, i), P(m_p.U3, k, j, i)};
+    const Real B[NVEC] = {0.};
+
+    // 2. Calculate the increase in conserved mass/energy corresponding to the new material.
+    Real rho_ut, T[GR_DIM];
+    GRMHD::p_to_u_mhd(G, rho_add, u_add, uvec, B, gam, k, j, i, rho_ut, T, Loci::center);
+
+    // 3. Add new conserved mass/energy to the current "conserved" state.
+    // (no need to modify the guess for Kastaun, esp once we sync mu)
+    U(m_u.RHO, k, j, i) += rho_ut;
+    U(m_u.UU, k, j, i)  += T[0];
+
+    // Recover new primitive variables.  Use Kastaun with safe parameters so we don't fail often
+    return Inverter::u_to_p<Inverter::Type::kastaun>(G, U, m_u, gam, k, j, i, P, m_p, Loci::center,
+                                                     25, 1e-12);
 }
 
 /**

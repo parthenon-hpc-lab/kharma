@@ -151,8 +151,8 @@ TaskStatus ISMR::DerefinePoles(MeshData<Real> *md)
                         const int j_c = j + ((binner) ? 0 : -1); // cell center
                         // The usual inverter is not EMHD-aware, so it's going to dump all of T into the
                         // ideal GRMHD fluid variables
-                        Inverter::u_to_p<Inverter::Type::kastaun>(G, vars_utop, m_u, gam, k, j_c, i, P, m_p, Loci::center,
-                                            floors, 8, 1e-8);
+                        Inverter::u_to_p<Inverter::Type::kastaun>(G, vars_utop, m_u, gam, k, j_c, i, P, m_p,
+                                                                  Loci::center, 8, 1e-8);
                         // Consistent with that, we zero out the EMHD extra variables.  This switches theories to
                         // evolving ideal GRMHD in ISMR region, but conserves the components of T themselves
                         if (m_u.Q >= 0) vars_utop(m_u.Q, k, j_c, i) = 0.;

@@ -90,7 +90,7 @@ static const std::map<int, std::string> flag_names = {
 };
 }
 
-enum class InjectionFrame{fluid=0, normal, mixed_fluid_normal, mixed_normal_drift, drift};
+enum class InjectionFrame{fluid=0, normal_onedw, normal_kastaun, mixed_fluid_normal, mixed_normal_drift, drift};
 
 /**
  * Struct to hold floor values without cumbersome dictionary/string logistics.

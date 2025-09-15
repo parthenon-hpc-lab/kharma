@@ -67,6 +67,7 @@ std::shared_ptr<KHARMAPackage> Reductions::Initialize(ParameterInput *pin, std::
 
     // Reductions sometimes need global elements of the simulation we don't otherwise keep
     params.Add("domain_r_in", (GReal) pin->GetReal("coordinates", "r_in"));
+    params.Add("domain_r_eh", (GReal) pin->GetReal("coordinates", "r_eh"));
 
     return pkg;
 }

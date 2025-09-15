@@ -125,15 +125,13 @@ std::shared_ptr<KHARMAPackage> Flux::Initialize(ParameterInput *pin, std::shared
         throw std::runtime_error("Not enough ghost zones for specified reconstruction!");
     }
 
-    // Floors package *has* been initialized if it's going to be
-    // Apply floors for high-order reconstructions
-    bool default_recon_floors = packages->AllPackages().count("Floors") &&
-                                (recon == "weno5" || recon == "weno5_linear" || recon == "mp5");
-    bool reconstruction_floors = pin->GetOrAddBoolean("flux", "reconstruction_floors", default_recon_floors);
-    params.Add("reconstruction_floors", reconstruction_floors);
-
-    bool reconstruction_fallback = pin->GetOrAddBoolean("flux", "reconstruction_fallback", false);
+    // Fallback to TVD reconstruction when these algorithms reconstruct something outside the floors
+    bool default_recon_fallback = (recon == "weno5" || recon == "weno5_linear" || recon == "mp5");
+    bool reconstruction_fallback = pin->GetOrAddBoolean("flux", "reconstruction_fallback", default_recon_fallback);
     params.Add("reconstruction_fallback", reconstruction_fallback);
+    // Alternatively just apply the geometric floors in fluid frame like a heathen
+    bool reconstruction_floors = pin->GetOrAddBoolean("flux", "reconstruction_floors", false);
+    params.Add("reconstruction_floors", reconstruction_floors);
 
     // When calculating the fluxes, replace perpendicular fields (e.g. B2 at F2) with
     // the value already present at the face
@@ -182,6 +180,8 @@ std::shared_ptr<KHARMAPackage> Flux::Initialize(ParameterInput *pin, std::shared
     params.Add("use_fofc", use_fofc);
 
     if (use_fofc) {
+        // TODO check floors are enabled!  We can't do fofc without them
+
         // FOFC-specific options
         bool use_glf = pin->GetOrAddBoolean("fofc", "use_glf", false);
         params.Add("fofc_use_glf", use_glf);
@@ -191,8 +191,14 @@ std::shared_ptr<KHARMAPackage> Flux::Initialize(ParameterInput *pin, std::shared
 
         int fofc_polar_cells = pin->GetOrAddInteger("fofc", "polar_cells", 0);
         params.Add("fofc_polar_cells", fofc_polar_cells);
-        const GReal eh_buffer = pin->GetOrAddReal("fofc", "eh_buffer", 0.1);
-        params.Add("fofc_eh_buffer", eh_buffer);
+        // Usually we use LLF everywhere and this fallback is optional.
+        // If we use HLLE outside EH, we need to fall back to LLF/donor-cell inside.
+        const bool use_eh_buffer = pin->GetOrAddBoolean("fofc", "use_eh_buffer", (flux != "llf"));
+        params.Add("fofc_use_eh_buffer", use_eh_buffer);
+        if (use_eh_buffer) {
+            const GReal eh_buffer = pin->GetOrAddReal("fofc", "eh_buffer", 0.1);
+            params.Add("fofc_eh_buffer", eh_buffer);
+        }
 
         if (packages->AllPackages().count("B_CT")) {
             // Use consistent B for FOFC (see above)
@@ -445,8 +451,8 @@ void Flux::AddGeoSource(MeshData<Real> *md, MeshData<Real> *mdudt, IndexDomain d
 
 TaskStatus Flux::CheckCtop(MeshData<Real> *md)
 {
-    Reductions::DomainReduction<Reductions::Var::nan_ctop, int>(md, UserHistoryOperation::sum, 0);
-    Reductions::DomainReduction<Reductions::Var::zero_ctop, int>(md, UserHistoryOperation::sum, 1);
+    Reductions::DomainReduction<Reductions::Var::nan_ctop, UserHistoryOperation::sum, int>(md, 0);
+    Reductions::DomainReduction<Reductions::Var::zero_ctop, UserHistoryOperation::sum, int>(md, 1);
     return TaskStatus::complete;
 }
 
