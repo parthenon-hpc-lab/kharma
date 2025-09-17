@@ -89,12 +89,18 @@ std::shared_ptr<KHARMAPackage> Inverter::Initialize(ParameterInput *pin, std::sh
     bool apply_floors_with_inversion = pin->GetOrAddBoolean("inverter", "apply_floors_with_inversion", use_kastaun);
     params.Add("apply_floors_with_inversion", apply_floors_with_inversion);
     // Tolerance in the momenta before a zone is considered failed and the unsolvable velocity zeroed out
-    Real bad_vel_tolerance = pin->GetOrAddReal("inverter", "bad_vel_tolerance", 1e-8);
-    params.Add("bad_vel_tolerance", bad_vel_tolerance);
+    // Can't be set individually right now, set == 100*solver_tol
+    // Real bad_vel_tolerance = pin->GetOrAddReal("inverter", "bad_vel_tolerance", 1e-8);
+    // params.Add("bad_vel_tolerance", bad_vel_tolerance);
 
     // Fix by averaging neighboring cells.  Enabled by default for 1Dw, but Kastaun failures are more dire
     bool fix_average_neighbors = pin->GetOrAddBoolean("inverter", "fix_average_neighbors", !use_kastaun);
     params.Add("fix_average_neighbors", fix_average_neighbors);
+    // Fix by zeroing the velocity, for particularly nasty zones.  Applied immediately rather than in fixup
+    // Generally you don't want this -- if you're eliminating velocity and therefore momentum, better to
+    // eliminate inertia too by setting floor density/temp
+    bool fix_zero_velocity = pin->GetOrAddBoolean("inverter", "fix_zero_velocity", false);
+    params.Add("fix_zero_velocity", fix_zero_velocity);
     // Fix by replacing with floors, uvec=0. Backstop for states which are just impossible to use
     bool fix_atmosphere = pin->GetOrAddBoolean("inverter", "fix_atmosphere", true);
     params.Add("fix_atmosphere", fix_atmosphere);
@@ -166,10 +172,10 @@ inline void BlockPerformInversion(MeshBlockData<Real> *rc, IndexDomain domain, b
     const Real err_tol = pars.Get<Real>("err_tol");
     const int iter_max = pars.Get<int>("iter_max");
     const bool apply_floors_with_inversion = pars.Get<bool>("apply_floors_with_inversion");
-    const Real bad_vel_tolerance = pars.Get<bool>("bad_vel_tolerance");
+    //const Real bad_vel_tolerance = pars.Get<Real>("bad_vel_tolerance");
+    const bool fix_zero_velocity = pars.Get<bool>("fix_zero_velocity");
     const Floors::Prescription inverter_floors       = pars.Get<Floors::Prescription>("inverter_prescription");
     const Floors::Prescription inverter_floors_inner = pars.Get<Floors::Prescription>("inverter_prescription_inner");
-    const bool radius_dependent_floors = inverter_floors.radius_dependent_floors;
 
     // If we set the floors package to use normal frame w/Kastaun inverter, *or*
     // if we disabled the floors package, go ahead and apply all floors in this function
@@ -188,7 +194,7 @@ inline void BlockPerformInversion(MeshBlockData<Real> *rc, IndexDomain domain, b
     pmb->par_for("U_to_P", b.ks, b.ke, b.js, b.je, b.is, b.ie,
         KOKKOS_LAMBDA (const int &k, const int &j, const int &i) {
             int pflagl = Inverter::u_to_p<inverter>(G, U, m_u, gam, k, j, i, P, m_p, Loci::center,
-                                                    iter_max, err_tol);
+                                                    iter_max, err_tol, false);
 
             // Apply floors immediately, attempting to correct bad inversions
             if (apply_floors_with_inversion) {
@@ -211,22 +217,19 @@ inline void BlockPerformInversion(MeshBlockData<Real> *rc, IndexDomain domain, b
                     apply_ceilings(G, P, m_p, gam, k, j, i, inverter_floors, inverter_floors_inner, U, m_u);
                 }
 
-                // If we didn't conserve momentum, kill the velocity
-                // It's just going to be the ceiling for no reason and mess everything up
-                const Real rho = P(m_p.RHO, k, j, i);
-                const Real u = P(m_p.UU, k, j, i);
-                const Real uvec[NVEC] = {P(m_p.U1, k, j, i), P(m_p.U2, k, j, i), P(m_p.U3, k, j, i)};
-                const Real B_P[NVEC] = {P(m_p.B1, k, j, i), P(m_p.B2, k, j, i), P(m_p.B3, k, j, i)};
-                Real rho_ut = 0., T[GR_DIM] = {0.};
-                GRMHD::p_to_u_mhd(G, rho, u, uvec, B_P, gam, k, j, i, rho_ut, T);
-                const Real& tol = bad_vel_tolerance;
-                if ((std::abs((T[1] - U(m_u.U1, k, j, i)) / U(m_u.U1, k, j, i)) > tol) ||
-                    (std::abs((T[2] - U(m_u.U2, k, j, i)) / U(m_u.U2, k, j, i)) > tol) ||
-                    (std::abs((T[3] - U(m_u.U3, k, j, i)) / U(m_u.U3, k, j, i)) > tol)) {
+                // If we recovered the velocity, mark we used the gamma ceiling
+                // TODO real fflag for this
+                if (pflagl == static_cast<int>(Inverter::Status::floor)) {
+                    fflagl |= Floors::FFlag::GAMMA;
+                    pflagl = static_cast<int>(Inverter::Status::success);
+                // If we failed to recover the velocity, optionally zero it here
+                // otherwise it will just get set to atmosphere later
+                } else if (fix_zero_velocity &&
+                           pflagl == static_cast<int>(Inverter::Status::bad_velocity)) {
                     P(m_p.U1, k, j, i) = 0.;
                     P(m_p.U2, k, j, i) = 0.;
                     P(m_p.U3, k, j, i) = 0.;
-                    fflagl |= Floors::FFlag::GAMMA;
+                    pflagl = static_cast<int>(Inverter::Status::success);
                 }
 
                 fflag(0, k, j, i) = fflagl;

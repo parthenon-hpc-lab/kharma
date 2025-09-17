@@ -69,6 +69,11 @@ std::shared_ptr<KHARMAPackage> KBoundaries::Initialize(ParameterInput *pin, std:
     params.Add("excise_polar_flux", excise_polar_flux);
     if (excise_polar_flux) { // These options are *completely* incompatible
         pin->SetBoolean("boundaries", "zero_polar_flux", false);
+        // TODO check whether the user set these false and yell if they did
+        pin->SetBoolean("boundaries", "reconnect_B3_inner_x2", true);
+        pin->SetBoolean("boundaries", "reconnect_B3_outer_x2", true);
+        pin->SetBoolean("boundaries", "cancel_T3_inner_x2", true);
+        pin->SetBoolean("boundaries", "cancel_T3_outer_x2", true);
     }
     // Otherwise, those fluxes should be zero
     bool zero_polar_flux = pin->GetOrAddBoolean("boundaries", "zero_polar_flux", spherical);

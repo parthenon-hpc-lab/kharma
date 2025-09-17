@@ -168,7 +168,8 @@ template <>
 KOKKOS_INLINE_FUNCTION int u_to_p<Type::kastaun>(const GRCoordinates& G, const VariablePack<Real>& U, const VarMap& m_u,
                                               const Real& gam, const int& k, const int& j, const int& i,
                                               const VariablePack<Real>& P, const VarMap& m_p,
-                                              const Loci& loc, const int& max_iterations, const Real& tol)
+                                              const Loci& loc, const int& max_iterations, const Real& tol,
+                                              const bool recover_velocity)
 {
     // Shouldn't need this, KHARMA should die on NaN
     // But it's here for debugging
@@ -231,6 +232,7 @@ KOKKOS_INLINE_FUNCTION int u_to_p<Type::kastaun>(const GRCoordinates& G, const V
     Real rbsq = 0.0;
     Real bdotr = 0.0;
     Real bu[] = {0.0, 0.0, 0.0};
+    // If the magnetic field is being evolved at all...
     if (m_u.B1 >= 0) {
         const Real sD = 1.0 / m::sqrt(D);
         // b^i
@@ -328,27 +330,86 @@ KOKKOS_INLINE_FUNCTION int u_to_p<Type::kastaun>(const GRCoordinates& G, const V
     }
     // TODO keep track iterations actually used
 
-    // Now unwrap everything into primitive vars...
-    const Real mu = z;
-    const Real x = res.x_mu(mu);
-    const Real rbarsq = res.rbarsq_mu(mu, x);
-    const Real vsq = res.vhatsq_mu(mu, rbarsq);
-    const Real iW = res.iWhat_mu(vsq);
-    const Real W = 1.0 / iW;
-    const Real qbar = res.qbar_mu(mu, x);
-    // These values should be as *raw* as possible, whether or not they respect the floors
-    // (or even physics).  We will add material and try again if they're bad
-    P(m_p.RHO, k, j, i) = std::max(res.rhohat_mu(iW), 0.);
-    P(m_p.UU, k, j, i) = std::max(res.ehat_mu(mu, qbar, rbarsq, vsq, W) * P(m_p.RHO, k, j, i), 0.);
-    SPACELOOP(ii) P(m_p.U1 + ii, k, j, i) = std::max(W * mu * x, 0.) * (rcon[ii] + mu * bdotr * bu[ii]);
+    // If we should try to recover velocity, do it in this function to re-use the residual object
+    if (!recover_velocity) {
+        // Just unwrap everything into primitive vars as-is
+        const Real mu = z;
+        const Real x = res.x_mu(mu);
+        const Real rbarsq = res.rbarsq_mu(mu, x);
+        const Real vsq = res.vhatsq_mu(mu, rbarsq);
+        const Real iW = res.iWhat_mu(vsq);
+        const Real W = 1.0 / iW;
+        const Real qbar = res.qbar_mu(mu, x);
+        // These values should be as *raw* as possible, whether or not they respect the floors
+        // (or even physics).  We will add material and try again if they're bad
+        P(m_p.RHO, k, j, i) = std::max(res.rhohat_mu(iW), 0.);
+        P(m_p.UU, k, j, i) = std::max(res.ehat_mu(mu, qbar, rbarsq, vsq, W) * P(m_p.RHO, k, j, i), 0.);
+        SPACELOOP(ii) P(m_p.U1 + ii, k, j, i) = std::max(W * mu * x, 0.) * (rcon[ii] + mu * bdotr * bu[ii]);
 
-    // Check if convergence is established within max_iterations
-    // Leave the primitive vars
-    if (iter < max_iterations) {
-        return static_cast<int>(Status::success);
+        // Fix if convergence is not established within max_iterations (should be *extremely* rare)
+        return (iter < max_iterations) ? static_cast<int>(Status::success) : static_cast<int>(Status::max_iter);
     } else {
-        // TODO will need to record these
-        return static_cast<int>(Status::max_iter);
+        // If we didn't conserve momentum within a loose tolerance based on the solver tol...
+        const Real rho = P(m_p.RHO, k, j, i);
+        const Real u = P(m_p.UU, k, j, i);
+        const Real uvec[NVEC] = {P(m_p.U1, k, j, i), P(m_p.U2, k, j, i), P(m_p.U3, k, j, i)};
+        const Real B_P[NVEC] = {P(m_p.B1, k, j, i), P(m_p.B2, k, j, i), P(m_p.B3, k, j, i)};
+        Real rho_ut = 0., T[GR_DIM] = {0.};
+        GRMHD::p_to_u_mhd(G, rho, u, uvec, B_P, gam, k, j, i, rho_ut, T);
+        const Real bad_vel_tolerance = 200 * tol;
+        if ((std::abs((T[1] - U(m_u.U1, k, j, i)) / U(m_u.U1, k, j, i)) > bad_vel_tolerance) ||
+            (std::abs((T[2] - U(m_u.U2, k, j, i)) / U(m_u.U2, k, j, i)) > bad_vel_tolerance) ||
+            (std::abs((T[3] - U(m_u.U3, k, j, i)) / U(m_u.U3, k, j, i)) > bad_vel_tolerance)) {
+
+            // ...then solve so function ehat(mu) Kastaun matches our floored value,
+            // and use that to reset the velocities.
+            // This prioritizes the new thermal energy in the total T^0_0,
+            // but dumps any extra back into the velocities to be less disruptive.
+            // TODO either set this on better theory or redo the algebra and condense it
+            const Real e_actual = P(m_p.UU, k, j, i) / P(m_p.RHO, k, j, i);
+            auto f = [&] (Real mu) {
+                Real x = res.x_mu(mu);
+                Real rbarsq = res.rbarsq_mu(mu, x);
+                Real vsq = res.vhatsq_mu(mu, rbarsq);
+                Real W = 1. / res.iWhat_mu(vsq);
+                Real qbar = res.qbar_mu(mu, x);
+                return (W * (qbar - mu * rbarsq) + vsq * W * W /
+                            (1.0 + W))
+                        - e_actual;
+            };
+
+            // Rootfind for mu that would have produced our floored e
+            bool e_solve_failed = false;
+            Real mu = z, mum = 0., mup = 1.;
+            if (f(mum) * f(mup) > 0.) {
+                e_solve_failed = true;
+            } else {
+                while (1) {
+                    Real muc = (mum + mup) / 2.;
+                    Real resv = m::abs(f(muc));
+                    if (resv < 1e-8 || m::abs((mup - mum) / 2) < 1e-10) {
+                        mu = muc;
+                        e_solve_failed = (resv > 1e-8);
+                        break;
+                    }
+                    // Same sign as left side -> center now left side
+                    if (f(muc) * f(mum) > 0.)
+                        mum = muc;
+                    else
+                        mup = muc;
+                }
+            }
+
+            // Reset only velocities with new mu
+            const Real x = res.x_mu(mu);
+            const Real rbarsq = res.rbarsq_mu(mu, x);
+            const Real vsq = res.vhatsq_mu(mu, rbarsq);
+            const Real iW = res.iWhat_mu(vsq);
+            const Real W = 1.0 / iW;
+            SPACELOOP(ii) P(m_p.U1 + ii, k, j, i) = std::max(W * mu * x, 0.) * (rcon[ii] + mu * bdotr * bu[ii]);
+            return (e_solve_failed) ? static_cast<int>(Status::bad_velocity) : static_cast<int>(Status::floor);
+        }
+        return static_cast<int>(Status::success);
     }
 }
 

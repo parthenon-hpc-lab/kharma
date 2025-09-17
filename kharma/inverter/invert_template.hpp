@@ -50,7 +50,8 @@ enum class Type{none=0, onedw, kastaun};
 
 // Denote inversion failures (pflags)
 // This enum should grow to cover any inversion algorithm
-enum class Status{success=0, neg_input, max_iter, bad_ut, bad_gamma, neg_rho, neg_u, neg_rhou, floor, bad_velocity};
+enum class Status{success=0, neg_input, max_iter, bad_ut, bad_gamma,
+                  neg_rho, neg_u, neg_rhou, floor, bad_velocity};
 
 static const std::map<int, std::string> status_names = {
     {(int) Status::neg_input, "Negative input"},
@@ -92,9 +93,11 @@ KOKKOS_INLINE_FUNCTION bool valid(T status_flag)
  * Be VERY CAREFUL to define any specializations by including those headers,
  * BEFORE you instantiate the template.
  */
+ // TODO macro the arguments. Also can we set recover_velocity default false?
 template<Type inverter>
 KOKKOS_INLINE_FUNCTION int u_to_p(const GRCoordinates& G, const VariablePack<Real>& U, const VarMap& m_u,
                                               const Real& gam, const int& k, const int& j, const int& i,
                                               const VariablePack<Real>& P, const VarMap& m_p,
-                                              const Loci& loc, const int& max_iterations, const Real& tol);
+                                              const Loci& loc, const int& max_iterations, const Real& tol,
+                                              const bool recover_velocity);
 } // namespace Inverter
