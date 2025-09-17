@@ -69,9 +69,6 @@ TaskStatus ApplyFloorsInFrame(MeshData<Real> *md, IndexDomain domain)
     const Floors::Prescription floors = pmb0->packages.Get("Floors")->Param<Floors::Prescription>("prescription");
     const Floors::Prescription floors_inner = pmb0->packages.Get("Floors")->Param<Floors::Prescription>("prescription_inner");
 
-    // Determine floors
-    DetermineGRMHDFloors(md, domain, floors, floors_inner);
-
     const IndexRange3 b = KDomain::GetRange(md, domain);
     const IndexRange block = IndexRange{0, P.GetDim(5) - 1};
     pmb0->par_for("apply_floors", block.s, block.e, b.ks, b.ke, b.js, b.je, b.is, b.ie,
@@ -85,13 +82,13 @@ TaskStatus ApplyFloorsInFrame(MeshData<Real> *md, IndexDomain domain)
                     if (G.r(k, j, i) > switch_r) {
                         pflag_l = apply_floors<InjectionFrame::fluid>(G, P(b), m_p, gam, k, j, i,
                                             floor_vals(b, rhofi, k, j, i), floor_vals(b, ufi, k, j, i),
-                                            floors, U(b), m_u);
+                                            U(b), m_u);
                     } else {
                         // TODO should mixed frames respect Kastaun vs 1Dw?
                         // Since no prior simulations use mixed frames thus requiring back-compat, I said no
                         pflag_l = apply_floors<InjectionFrame::normal_kastaun>(G, P(b), m_p, gam, k, j, i,
                                             floor_vals(b, rhofi, k, j, i), floor_vals(b, ufi, k, j, i),
-                                            floors, U(b), m_u);
+                                            U(b), m_u);
                     }
                 } else if (frame == InjectionFrame::mixed_normal_drift) {
                     FourVectors Dtmp;
@@ -101,16 +98,16 @@ TaskStatus ApplyFloorsInFrame(MeshData<Real> *md, IndexDomain domain)
                     if (mag_switch < switch_beta) {
                         pflag_l = apply_floors<InjectionFrame::drift>(G, P(b), m_p, gam, k, j, i,
                                             floor_vals(b, rhofi, k, j, i), floor_vals(b, ufi, k, j, i),
-                                            floors, U(b), m_u);
+                                            U(b), m_u);
                     } else {
                         pflag_l = apply_floors<InjectionFrame::normal_kastaun>(G, P(b), m_p, gam, k, j, i,
                                             floor_vals(b, rhofi, k, j, i), floor_vals(b, ufi, k, j, i),
-                                            floors, U(b), m_u);
+                                            U(b), m_u);
                     }
                 } else {
                     pflag_l = apply_floors<frame>(G, P(b), m_p, gam, k, j, i,
                                         floor_vals(b, rhofi, k, j, i), floor_vals(b, ufi, k, j, i),
-                                        floors, U(b), m_u);
+                                        U(b), m_u);
                 }
 
                 // Record the pflag if nonzero, that is, if *either* the initial inversion or

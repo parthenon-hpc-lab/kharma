@@ -1,25 +1,25 @@
-/* 
+/*
  *  File: types.hpp
- *  
+ *
  *  BSD 3-Clause License
- *  
+ *
  *  Copyright (c) 2020, AFD Group at UIUC
  *  All rights reserved.
- *  
+ *
  *  Redistribution and use in source and binary forms, with or without
  *  modification, are permitted provided that the following conditions are met:
- *  
+ *
  *  1. Redistributions of source code must retain the above copyright notice, this
  *     list of conditions and the following disclaimer.
- *  
+ *
  *  2. Redistributions in binary form must reproduce the above copyright notice,
  *     this list of conditions and the following disclaimer in the documentation
  *     and/or other materials provided with the distribution.
- *  
+ *
  *  3. Neither the name of the copyright holder nor the names of its
  *     contributors may be used to endorse or promote products derived from
  *     this software without specific prior written permission.
- *  
+ *
  *  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  *  AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  *  IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -47,7 +47,7 @@ using parthenon::MeshBlockData;
 
 /**
  * Types, macros, and convenience functions
- * 
+ *
  * Anything potentially useful throughout KHARMA, but specific to it
  * (general copy/pastes from StackOverflow go in kharma_utils.hpp)
  */
@@ -77,6 +77,11 @@ inline TE FaceOf(const T& dir) {
     return (dir == X1DIR) ? F1 : ((dir == X2DIR) ? F2 : F3);
 }
 template<typename T>
+inline std::vector<TE> OrthogonalFaces(const T& dir) {
+    return (dir == X1DIR) ? std::vector<TE>{F2, F3} :
+        ((dir == X2DIR) ? std::vector<TE>{F1, F3} : std::vector<TE>{F1, F2});
+}
+template<typename T>
 inline TE EdgeOf(const T& dir) {
     return (dir == X1DIR) ? E1 : ((dir == X2DIR) ? E2 : E3);
 }
@@ -84,6 +89,12 @@ template<typename T>
 inline std::vector<TE> OrthogonalEdges(const T& dir) {
     return (dir == X1DIR) ? std::vector<TE>{E2, E3} :
         ((dir == X2DIR) ? std::vector<TE>{E1, E3} : std::vector<TE>{E1, E2});
+}
+template<typename T>
+inline std::vector<CoordinateDirection> OrthogonalDirs(const T& dir) {
+    return (dir == X1DIR) ? std::vector<CoordinateDirection>{X2DIR, X3DIR} :
+        ((dir == X2DIR) ? std::vector<CoordinateDirection>{X1DIR, X3DIR} :
+                          std::vector<CoordinateDirection>{X1DIR, X2DIR});
 }
 
 // Struct for derived 4-vectors at a point, usually calculated and needed together
@@ -239,7 +250,7 @@ inline void OutputNow(Mesh *pmesh, std::string name)
 /**
  * Functions for "tracing" execution by printing strings at each entry/exit.
  * Normally, they profile the code, but they can print a nested execution trace.
- * 
+ *
  * Don't laugh at my dumb mutex, it works.
  */
 #if TRACE

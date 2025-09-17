@@ -376,7 +376,7 @@ TaskStatus B_CT::CalculateEMF(MeshData<Real> *md)
             );
         } else if (scheme == "gs05_c" || scheme == "sg07") {
             auto& rho = md->PackVariablesAndFluxes(std::vector<std::string>{"cons.rho"});
-            pmb0->par_for("B_CT_emf_GS05_c", block.s, block.e, b1.ks, b1.ke, b1.js, b1.je, b1.is, b1.ie,
+            pmb0->par_for("B_CT_emf_SG07", block.s, block.e, b1.ks, b1.ke, b1.js, b1.je, b1.is, b1.ie,
                 KOKKOS_LAMBDA (const int &bl, const int &k, const int &j, const int &i) {
                     // Following adapted closely from AthenaK, including clever use of the mass flux for the
                     // sign of the contact mode.

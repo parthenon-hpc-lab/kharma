@@ -106,6 +106,10 @@ std::shared_ptr<KHARMAPackage> Floors::Initialize(ParameterInput *pin, std::shar
     else
         params.Add("prescription_inner", MakePrescriptionInner(pin, MakePrescription(pin)), "floors");
 
+    // Sometimes we want the floors package, but don't want to apply anything, for tests
+    bool disable_call = pin->GetOrAddBoolean("floors", "disable_call", false);
+    params.Add("disable_call", disable_call);
+
     // These preserve floor values between the "mark" pass and the actual floor application
     // We need them even if floors are disabled, to apply initial values based on some prescription
     // as a part of problem setup
@@ -120,9 +124,14 @@ std::shared_ptr<KHARMAPackage> Floors::Initialize(ParameterInput *pin, std::shar
     m = Metadata({Metadata::Real, Metadata::Cell, Metadata::Derived, Metadata::OneCopy, Metadata::Overridable});
     pkg->AddField("pflag", m);
 
-    // TODO(BSP) THIS IS THE ONLY MeshApplyFloors.  Any others will NOT BE CALLED.
-    // Use BlockApplyFloors in your packages or fix Packages::MeshApplyFloors
-    pkg->MeshApplyFloors = Floors::ApplyGRMHDFloors;
+    // Don't actually call the usual floor function if we're using normal frame w/Kastaun,
+    // floors will be applied during the inversion call.
+    // Also allow manually disabling the call, for testing
+    if (!disable_call && frame != InjectionFrame::normal_kastaun) {
+        // TODO(BSP) THIS IS THE ONLY MeshApplyFloors.  Any others will NOT BE CALLED.
+        // Use BlockApplyFloors in your packages or fix Packages::MeshApplyFloors
+        pkg->MeshApplyFloors = Floors::ApplyGRMHDFloors;
+    }
     pkg->PostStepDiagnosticsMesh = Floors::PostStepDiagnostics;
 
     // List (vector) of HistoryOutputVars that will all be enrolled as output variables
@@ -187,7 +196,7 @@ TaskStatus Floors::ApplyInitialFloors(ParameterInput *pin, MeshBlockData<Real> *
             // Initial floors, so the radius-dependence of floors don't matter that much. 
             int fflag = determine_floors(G, P, m_p, gam, k, j, i, floors, floors, rhoflr_max, uflr_max);
             if (fflag) {
-                apply_floors<InjectionFrame::fluid>(G, P, m_p, gam, k, j, i, rhoflr_max, uflr_max, floors, U, m_u);
+                apply_floors<InjectionFrame::fluid>(G, P, m_p, gam, k, j, i, rhoflr_max, uflr_max, U, m_u);
                 apply_ceilings(G, P, m_p, gam, k, j, i, floors, floors, U, m_u);
                 // P->U for any modified zones
                 Flux::p_to_u_mhd(G, P, m_p, emhd_params, gam, k, j, i, U, m_u, Loci::center);
@@ -223,6 +232,7 @@ TaskStatus Floors::DetermineGRMHDFloors(MeshData<Real> *md, IndexDomain domain,
     pmb0->par_for("determine_floors", block.s, block.e, b.ks, b.ke, b.js, b.je, b.is, b.ie,
         KOKKOS_LAMBDA (const int &b, const int &k, const int &j, const int &i) {
             const auto& G = P.GetCoords(b);
+            // The inverter might have set some floor flags, so we add to that non-destructively
             fflag(b, 0, k, j, i) = static_cast<int>(fflag(b, 0, k, j, i)) |
                                     determine_floors(G, P(b), m_p, gam, k, j, i, floors, floors_inner,
                                                      floor_vals(b, rhofi, k, j, i), floor_vals(b, ufi, k, j, i));
@@ -239,6 +249,12 @@ TaskStatus Floors::ApplyGRMHDFloors(MeshData<Real> *md, IndexDomain domain)
 {
     auto pmesh = md->GetMeshPointer();
     const auto& pars = pmesh->packages.Get("Floors")->AllParams();
+
+    // Determine floors
+    const Floors::Prescription floors = pars.Get<Floors::Prescription>("prescription");
+    const Floors::Prescription floors_inner = pars.Get<Floors::Prescription>("prescription_inner");
+    DetermineGRMHDFloors(md, domain, floors, floors_inner);
+
     if (pars.Get<InjectionFrame>("frame") == InjectionFrame::normal_kastaun) {
         return ApplyFloorsInFrame<InjectionFrame::normal_kastaun>(md, domain);
     } else if (pars.Get<InjectionFrame>("frame") == InjectionFrame::normal_onedw) {

@@ -180,6 +180,8 @@ std::shared_ptr<KHARMAPackage> Flux::Initialize(ParameterInput *pin, std::shared
     params.Add("use_fofc", use_fofc);
 
     if (use_fofc) {
+        // TODO check floors are enabled!  We can't do fofc without them
+
         // FOFC-specific options
         bool use_glf = pin->GetOrAddBoolean("fofc", "use_glf", false);
         params.Add("fofc_use_glf", use_glf);

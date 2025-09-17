@@ -69,6 +69,11 @@ std::shared_ptr<KHARMAPackage> KBoundaries::Initialize(ParameterInput *pin, std:
     params.Add("excise_polar_flux", excise_polar_flux);
     if (excise_polar_flux) { // These options are *completely* incompatible
         pin->SetBoolean("boundaries", "zero_polar_flux", false);
+        // TODO check whether the user set these false and yell if they did
+        pin->SetBoolean("boundaries", "reconnect_B3_inner_x2", true);
+        pin->SetBoolean("boundaries", "reconnect_B3_outer_x2", true);
+        pin->SetBoolean("boundaries", "cancel_T3_inner_x2", true);
+        pin->SetBoolean("boundaries", "cancel_T3_outer_x2", true);
     }
     // Otherwise, those fluxes should be zero
     bool zero_polar_flux = pin->GetOrAddBoolean("boundaries", "zero_polar_flux", spherical);
@@ -173,8 +178,7 @@ std::shared_ptr<KHARMAPackage> KBoundaries::Initialize(ParameterInput *pin, std:
         // Ensure fluxes through the zero-size face at the pole are zero
         bool zero_flux = pin->GetOrAddBoolean("boundaries", "zero_flux_" + bname, zero_polar_flux && bdir == X2DIR);
         params.Add("zero_flux_" + bname, zero_flux);
-
-        // Ensure fluxes through the zero-size face at the pole are zero
+        // OR allow them via faux-excision
         bool excise_flux = pin->GetOrAddBoolean("boundaries", "excise_flux_" + bname, excise_polar_flux && bdir == X2DIR);
         params.Add("excise_flux_" + bname, excise_flux);
 
@@ -196,8 +200,8 @@ std::shared_ptr<KHARMAPackage> KBoundaries::Initialize(ParameterInput *pin, std:
             bool reconnect_B3 = pin->GetOrAddBoolean("boundaries", "reconnect_B3_" + bname, false);
             params.Add("reconnect_B3_"+bname, reconnect_B3);
 
-            // Special EMF averaging.  Allows B slippage, e.g. around pole for transmitting conditions
-            // Useful for certain dirichlet conditions e.g. multizone
+            // Special EMF averaging.  Allows B3 to "slip" around the pole
+            // Also useful to allow coherent motion even with Dirichlet boundaries, for e.g. multizone
             bool average_EMF = pin->GetOrAddBoolean("boundaries", "average_EMF_" + bname, (btype == "transmitting"));
             params.Add("average_EMF_"+bname, average_EMF);
             // Otherwise, always zero EMFs to prevent B field escaping the domain in polar/dirichlet bounds
@@ -704,6 +708,10 @@ TaskStatus KBoundaries::FixFlux(MeshData<Real> *md)
                 if (pmb->boundary_flag[bface] == BoundaryFlag::user) {
                     if (bdir != 2) throw std::runtime_error("Excised polar fluxes only fully implemented in X2!");
 
+                    // Pack w/B to match indices with the `Flux.X` below
+                    // We won't *update* B field though
+                    auto &F = rc->PackVariablesAndFluxes({Metadata::WithFluxes}, cons_map);
+
                     // Going to need the primitive vars
                     PackIndexMap prims_map;
                     std::vector<MetadataFlag> prims_flags = {Metadata::GetUserFlag("Primitive"), Metadata::Cell};
@@ -718,7 +726,7 @@ TaskStatus KBoundaries::FixFlux(MeshData<Real> *md)
                     const auto& Ur_all = rc->PackVariables(std::vector<std::string>{"Flux.Ur"});
                     const auto& Fl_all = rc->PackVariables(std::vector<std::string>{"Flux.Fl"});
                     const auto& Fr_all = rc->PackVariables(std::vector<std::string>{"Flux.Fr"});
-                    // I assume we should update cmax/cmin. Else we should use the old ones, so
+                    // We recalculate sound speeds when we update fluxes
                     const auto& cmax  = rc->PackVariables(std::vector<std::string>{"Flux.cmax"});
                     const auto& cmin  = rc->PackVariables(std::vector<std::string>{"Flux.cmin"});
 
@@ -731,51 +739,8 @@ TaskStatus KBoundaries::FixFlux(MeshData<Real> *md)
                     const Loci loc = (binner) ? Loci::outer_half : Loci::inner_half;
 
                     const IndexRange3 bi = KDomain::GetRange(rc, IndexDomain::interior, CC);
-                    // Cell center of our two which is actually on grid
+                    // Cell center of our two which is a physical zone
                     const int j_cell = (binner) ? b.js : b.js - 1;
-
-                    // Replace existing X3 fluxes in last row with true half-cell versions
-                    const int dir = X3DIR;
-                    pmb->par_for(
-                        "excise_flux_" + bname, b.ks, b.ke, j_cell, j_cell, b.is, b.ie,
-                        KOKKOS_LAMBDA(const int &k, const int &j, const int &i) {
-                            // Leftover Pl/Pr from X3DIR flux calculation!
-                            const int jn = (binner) ? j+1 : j-1;
-                            PLOOP Pl_all(ip, k, j, i) = 0.75 * Pl_all(ip, k, j, i) + 0.25 * Pl_all(ip, k, jn, i);
-                            PLOOP Pr_all(ip, k, j, i) = 0.75 * Pr_all(ip, k, j, i) + 0.25 * Pr_all(ip, k, jn, i);
-
-                            FourVectors Dtmp;
-                            // Left
-                            GRMHD::calc_4vecs(G, Pl_all, m_p, k, j, i, loc, Dtmp);
-                            Flux::prim_to_flux(G, Pl_all, m_p, Dtmp, emhd_params, gam, k, j, i, 0, Ul_all, m_u, loc);
-                            Flux::prim_to_flux(G, Pl_all, m_p, Dtmp, emhd_params, gam, k, j, i, dir, Fl_all, m_u, loc);
-                            // Magnetosonic speeds
-                            Real cmaxL, cminL;
-                            Flux::vchar_global(G, Pl_all, m_p, Dtmp, gam, emhd_params, k, j, i, loc, dir, cmaxL, cminL);
-                            // Record speeds
-                            cmax(dir-1, k, j, i) = m::max(0., cmaxL);
-                            cmin(dir-1, k, j, i) = m::min(0., cminL);
-
-                            // Right
-                            GRMHD::calc_4vecs(G, Pr_all, m_p, k, j, i, loc, Dtmp);
-                            Flux::prim_to_flux(G, Pr_all, m_p, Dtmp, emhd_params, gam, k, j, i, 0, Ur_all, m_u, loc);
-                            Flux::prim_to_flux(G, Pr_all, m_p, Dtmp, emhd_params, gam, k, j, i, dir, Fr_all, m_u, loc);
-                            // Magnetosonic speeds
-                            Real cmaxR, cminR;
-                            Flux::vchar_global(G, Pr_all, m_p, Dtmp, gam, emhd_params, k, j, i, loc, dir, cmaxR, cminR);
-
-                            // Reset cmax/cmin based on our flux
-                            cmax(dir-1, k, j, i) =  m::max(cmax(dir-1, k, j, i), cmaxR);
-                            cmin(dir-1, k, j, i) = -m::min(cmin(dir-1, k, j, i), cminR);
-
-                            // Use LLF flux
-                            PLOOP {
-                                F.flux(dir, ip, k, j, i) = Flux::llf(Fl_all(ip, k, j, i), Fr_all(ip, k, j, i),
-                                                                    cmax(dir-1, k, j, i), cmin(dir-1, k, j, i),
-                                                                    Ul_all(ip, k, j, i), Ur_all(ip, k, j, i)) * 0.5;
-                            }
-                        }
-                    );
 
                     // Replace fluxes through the pole (would be zero) with fluxes through
                     // the middle of the cell. Should be general, remember this has 1-zone halo!
@@ -788,8 +753,10 @@ TaskStatus KBoundaries::FixFlux(MeshData<Real> *md)
                             int ii = (bdir == 1) ? i - 1 : i;
 
                             // "Reconstruct" at cell midplanes: equivalent to donor-cell
-                            PLOOP Pl_all(ip, k, j, i) = P_all(ip, kk, jj, ii);
-                            PLOOP Pr_all(ip, k, j, i) = P_all(ip, k, j, i);
+                            PLOOP {
+                                Pl_all(ip, k, j, i) = P_all(ip, kk, jj, ii);
+                                Pr_all(ip, k, j, i) = P_all(ip, k, j, i);
+                            }
 
                             FourVectors Dtmp;
                             // Left
@@ -817,21 +784,11 @@ TaskStatus KBoundaries::FixFlux(MeshData<Real> *md)
 
                             // Use LLF flux
                             PLOOP {
-                                F.flux(bdir, ip, k, j, i) = Flux::llf(Fl_all(ip, k, j, i), Fr_all(ip, k, j, i),
+                                if (ip != m_u.B1 && ip != m_u.B2 && ip != m_u.B3)
+                                    F.flux(bdir, ip, k, j, i) = Flux::llf(Fl_all(ip, k, j, i), Fr_all(ip, k, j, i),
                                                                     cmax(bdir-1, k, j, i), cmin(bdir-1, k, j, i),
                                                                     Ul_all(ip, k, j, i), Ur_all(ip, k, j, i));
-                                // Reduce the X1 flux in a semi-consistent way
-                                const int jc = (binner) ? j_cell + 1 : j_cell;
-                                F.flux(X1DIR, ip, k, j_cell, i) *= 0.5
-                                    * (G.gdet(Loci::face1, j_cell, i) + G.gdet(Loci::corner, jc, i)) / 2 / G.gdet(Loci::face1, j_cell, i);
-                                // This is also a decent guess, but less accurate than recalculating as above
-                                // F.flux(X3DIR, ip, k, j_cell, i) *= 0.5
-                                //     * G.gdet(loc, j_cell, i) / G.gdet(Loci::center, j_cell, i);
                             }
-
-                            // Account for the half-size in the timestep later
-                            cmax(bdir-1, k, j, i) *= 2;
-                            cmin(bdir-1, k, j, i) *= 2;
                         }
                     );
                     // Then average to make absolutely sure fluxes match
@@ -846,7 +803,10 @@ TaskStatus KBoundaries::FixFlux(MeshData<Real> *md)
                         KOKKOS_LAMBDA(const int &v, const int &k, const int &j, const int &i) {
                             const int ki = ((k - ksp + Nk3p2) % Nk3p) + ksp;
                             Real avg = 0.;
-                            if (v == m_u.U2 || v == m_u.B2 || v == m_u.U3 || v == m_u.B3) {
+                            if (v == m_u.B1 || v == m_u.B2 || v == m_u.B3) {
+                                // Don't balance B, it's just zero
+                                return;
+                            } else if (v == m_u.U2 || v == m_u.U3) {
                                 // Flux direction reversed, but *coordinate also reverses*
                                 avg = (F.flux(bdir, v, k, j, i) + F.flux(bdir, v, ki, j, i)) / 2;
                                 F.flux(bdir, v, ki, j, i) = avg;
@@ -858,9 +818,99 @@ TaskStatus KBoundaries::FixFlux(MeshData<Real> *md)
                             F.flux(bdir, v, k, j, i)  = avg;
                         }
                     );
+
+                    // Now, interpolate primitive variables to the outer half-cell, and
+                    // compute fluxes through the half-faces normally
+                    const int n1 = pmb0->cellbounds.ncellsi(IndexDomain::entire);
+                    const int scratch_level = 1; // 0 is actual scratch (tiny); 1 is HBM
+                    const size_t var_size_in_bytes = parthenon::ScratchPad2D<Real>::shmem_size(nvar, n1);
+                    const size_t recon_scratch_bytes = 2 * var_size_in_bytes;
+
+                    for (auto dir : OrthogonalDirs(bdir)) {
+                        // Interpolate the last row to the outer half-cell (once, before below loop over dirs)
+                        // We won't be needing the cell-centered P again (right?)
+                        // This is a local update since j_cell != jn
+                        const int jn = (binner) ? j_cell + 1 : j_cell - 1;
+                        pmb->par_for(
+                            "excise_flux_" + bname, 0, nvar-1, b.ks, b.ke, b.is, b.ie,
+                            KOKKOS_LAMBDA(const int &ip, const int &k, const int &i) {
+                                // Ul is just a scratch!  We need the half-cell values now but we will still
+                                // need the full-cell-centered prims later
+                                // TODO real temporary of plane-size only!!
+                                Ul_all(ip, k, j_cell, i) = 0.75 * P_all(ip, k, j_cell, i) + 0.25 * P_all(ip, k, jn, i);
+                            }
+                        );
+
+                        // Reconstruct using the outer-half values
+                        parthenon::par_for_outer(DEFAULT_OUTER_LOOP_PATTERN, "excise_flux_" + bname + "_recon", pmb0->exec_space,
+                            recon_scratch_bytes, scratch_level, b.ks, b.ke, j_cell, j_cell,
+                            KOKKOS_LAMBDA(parthenon::team_mbr_t member, const int& k, const int& j) {
+                                ScratchPad2D<Real> Pl_s(member.team_scratch(scratch_level), nvar, n1);
+                                ScratchPad2D<Real> Pr_s(member.team_scratch(scratch_level), nvar, n1);
+
+                                // Chosen to not require additional floors.  Could bump order and floor/fallback like in GetFlux
+                                // Remember Ul here is just the half-cell centered primitive vars
+                                if (dir == X1DIR) {
+                                    KReconstruction::ReconstructRow<KReconstruction::Type::linear_mc, X1DIR>(member, Ul_all, k, j, b.is, b.ie, Pl_s, Pr_s);
+                                } else if (dir == X2DIR) {
+                                    KReconstruction::ReconstructRow<KReconstruction::Type::linear_mc, X2DIR>(member, Ul_all, k, j, b.is, b.ie, Pl_s, Pr_s);
+                                } else if (dir == X3DIR) {
+                                    KReconstruction::ReconstructRow<KReconstruction::Type::linear_mc, X3DIR>(member, Ul_all, k, j, b.is, b.ie, Pl_s, Pr_s);
+                                }
+                                member.team_barrier();
+
+                                // Assign local temporaries back to global arrays for the next kernel
+                                parthenon::par_for_inner(member, b.is, b.ie,
+                                    [&](const int& i) {
+                                        PLOOP {
+                                            Pl_all(ip, k, j, i) = Pl_s(ip, i);
+                                            Pr_all(ip, k, j, i) = Pr_s(ip, i);
+                                        }
+                                    }
+                                );
+                            }
+                        );
+
+                        // Compute new fluxes
+                        pmb->par_for(
+                            "excise_flux_" + bname, b.ks, b.ke, j_cell, j_cell, b.is, b.ie,
+                            KOKKOS_LAMBDA(const int &k, const int &j, const int &i) {
+                                FourVectors Dtmp;
+                                // Left
+                                GRMHD::calc_4vecs(G, Pl_all, m_p, k, j, i, loc, Dtmp);
+                                Flux::prim_to_flux(G, Pl_all, m_p, Dtmp, emhd_params, gam, k, j, i, 0, Ul_all, m_u, loc);
+                                Flux::prim_to_flux(G, Pl_all, m_p, Dtmp, emhd_params, gam, k, j, i, dir, Fl_all, m_u, loc);
+                                // Magnetosonic speeds
+                                Real cmaxL, cminL;
+                                Flux::vchar_global(G, Pl_all, m_p, Dtmp, gam, emhd_params, k, j, i, loc, dir, cmaxL, cminL);
+                                // Record speeds
+                                cmax(dir-1, k, j, i) = m::max(0., cmaxL);
+                                cmin(dir-1, k, j, i) = m::min(0., cminL);
+
+                                // Right
+                                GRMHD::calc_4vecs(G, Pr_all, m_p, k, j, i, loc, Dtmp);
+                                Flux::prim_to_flux(G, Pr_all, m_p, Dtmp, emhd_params, gam, k, j, i, 0, Ur_all, m_u, loc);
+                                Flux::prim_to_flux(G, Pr_all, m_p, Dtmp, emhd_params, gam, k, j, i, dir, Fr_all, m_u, loc);
+                                // Magnetosonic speeds
+                                Real cmaxR, cminR;
+                                Flux::vchar_global(G, Pr_all, m_p, Dtmp, gam, emhd_params, k, j, i, loc, dir, cmaxR, cminR);
+
+                                // Reset cmax/cmin based on our flux
+                                cmax(dir-1, k, j, i) =  m::max(cmax(dir-1, k, j, i), cmaxR);
+                                cmin(dir-1, k, j, i) = -m::min(cmin(dir-1, k, j, i), cminR);
+
+                                // Use LLF flux
+                                PLOOP {
+                                    if (ip != m_u.B1 && ip != m_u.B2 && ip != m_u.B3)
+                                        F.flux(dir, ip, k, j, i) = Flux::llf(Fl_all(ip, k, j, i), Fr_all(ip, k, j, i),
+                                                                        cmax(dir-1, k, j, i), cmin(dir-1, k, j, i),
+                                                                        Ul_all(ip, k, j, i), Ur_all(ip, k, j, i)) * 0.5;
+                                }
+                            }
+                        );
+                    }
                 }
             }
-
         }
     }
 
@@ -903,7 +953,9 @@ void KBoundaries::AddSource(MeshData<Real> *md, MeshData<Real> *mdudt, IndexDoma
                         b.ks = b.ke = (binner) ? bi.ks : bi.ke;
                     }
 
-                    auto &dUdt = rc->PackVariables({Metadata::WithFluxes});
+                    // The magnetic field is probably defined at faces; even if it's defined in cells,
+                    // we shouldn't be monkeying with it.  We just do not adjust it here.
+                    auto &dUdt = rc->PackVariables({Metadata::GetUserFlag("HD"), Metadata::WithFluxes});
                     const auto& G = pmb->coords;
                     const Loci loc = (binner) ? Loci::outer_half : Loci::inner_half;
 
