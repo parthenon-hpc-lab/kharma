@@ -1,0 +1,59 @@
+# Polarized comparison GRMHD image problem
+# Ambitius but whatever
+
+<parthenon/job>
+problem_id = pol_comp
+
+<geodesics>
+max_nstep = 10000
+recalculate_paths = true
+
+<model>
+type = file
+# Currently no-op as must load with -r
+file = torus.out0.02000.phdf
+polarized = true
+
+MBH = 6.2e9
+dsource = 16.9e6
+M_unit = 6e24
+
+# Maximum radius which emits
+rmax_geo = 100
+
+<eDF>
+type = rhigh
+R_high = 1
+R_low = 40
+
+<camera>
+# In r_g
+r = 1e4
+# In degrees
+theta = 163
+phi = 0.0
+# Micro-arcseconds
+fovx_dsource = 160
+fovx_dsource = 160
+# 230 GHz
+frequency = 230.e9
+
+nx = 160
+ny = 160
+
+<debug>
+verbose = 1
+
+<parthenon/output0>
+file_type = hdf5
+write_xdmf = false
+single_precision_output = true
+variables = camera
+#swarms = rays
+#swarm_variables = i, j, k
+
+# Disable the usual restart output
+<parthenon/output1>
+file_type = hdf5
+write_xdmf = false
+variables = none

@@ -115,7 +115,10 @@ void KHARMA::PostInitialize(ParameterInput *pin, Mesh *pmesh, bool is_restart)
         // We only record the conserved magnetic field in KHARMA restarts,
         // but we record primitive field in iharm3d restarts
         bool iharm3d_restart = prob_name == "resize_restart";
-        if (!iharm3d_restart) {
+        // but sometimes in a pinch we want to restart from .phdf files, which are like iharm3d restarts
+        bool prims_only_restart = pin->GetBoolean("b_field", "restart_from_prims");
+        if (!(iharm3d_restart  || prims_only_restart)) {
+            std::cout << "Restoring B field from conserved values" << std::endl;
             if (pkgs.count("B_FluxCT")) {
                 B_FluxCT::MeshUtoP(md.get(), IndexDomain::entire);
             } else if (pkgs.count("B_CT")) {
@@ -125,6 +128,7 @@ void KHARMA::PostInitialize(ParameterInput *pin, Mesh *pmesh, bool is_restart)
                 EMHD::MeshUtoP(md.get(), IndexDomain::entire);
             }
         } else {
+            std::cout << "Restoring B field from primitive values" << std::endl;
             if (pkgs.count("B_FluxCT")) {
                 B_FluxCT::MeshPtoU(md.get(), IndexDomain::entire);
             } else if (pkgs.count("B_CT")) {

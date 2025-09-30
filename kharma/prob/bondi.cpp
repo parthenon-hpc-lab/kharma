@@ -49,14 +49,8 @@ void AddBondiParameters(ParameterInput *pin, Packages_t &packages)
     // By default, stay away from the outer BL coordinate singularity
     const Real a = pin->GetReal("coordinates", "a");
     const Real rin_bondi_default = 1 + m::sqrt(1 - a*a) + 0.1;
-    // Prefer parameter bondi/r_in_bondi vs bondi/r_shell
-    Real rin_bondi_tmp;
-    if (pin->DoesParameterExist("bondi", "r_in_bondi")) {
-        rin_bondi_tmp = pin->GetReal("bondi", "r_in_bondi");
-    } else {
-        rin_bondi_tmp = pin->GetOrAddReal("bondi", "r_shell", rin_bondi_default);
-    }
-    const Real rin_bondi = rin_bondi_tmp;
+    const Real rin_bondi = pin->GetOrAddReal("bondi", "r_in_bondi", rin_bondi_default);
+    const Real bondi_clear_angle = pin->GetOrAddReal("bondi", "bondi_clear_angle", 0.);
 
     const bool fill_interior = pin->GetOrAddBoolean("bondi", "fill_interior", false);
     const bool diffinit = pin->GetOrAddBoolean("bondi", "diffinit", false); // uses r^-1 density initialization instead
@@ -69,6 +63,8 @@ void AddBondiParameters(ParameterInput *pin, Packages_t &packages)
         packages.Get("GRMHD")->AddParam<Real>("rs", rs);
     if(! packages.Get("GRMHD")->AllParams().hasKey("rin_bondi"))
         packages.Get("GRMHD")->AddParam<Real>("rin_bondi", rin_bondi);
+    if(! packages.Get("GRMHD")->AllParams().hasKey("bondi_clear_angle"))
+        packages.Get("GRMHD")->AddParam<Real>("bondi_clear_angle", bondi_clear_angle);
     if(! packages.Get("GRMHD")->AllParams().hasKey("fill_interior_bondi"))
         packages.Get("GRMHD")->AddParam<Real>("fill_interior_bondi", fill_interior);
     if(! packages.Get("GRMHD")->AllParams().hasKey("diffinit_bondi"))
@@ -154,6 +150,7 @@ TaskStatus SetBondiImpl(std::shared_ptr<MeshBlockData<Real>>& rc, IndexDomain do
     const Real ur_frac = pmb->packages.Get("GRMHD")->Param<Real>("ur_frac");
     const Real uphi = pmb->packages.Get("GRMHD")->Param<Real>("uphi");
     const Real rin_bondi = pmb->packages.Get("GRMHD")->Param<Real>("rin_bondi");
+    const Real bondi_clear_angle = pmb->packages.Get("GRMHD")->Param<Real>("bondi_clear_angle");
     const bool fill_interior = pmb->packages.Get("GRMHD")->Param<Real>("fill_interior_bondi");
     const bool diffinit = pmb->packages.Get("GRMHD")->Param<Real>("diffinit_bondi");
 
@@ -173,7 +170,7 @@ TaskStatus SetBondiImpl(std::shared_ptr<MeshBlockData<Real>>& rc, IndexDomain do
 
             Real rho, u;
             Real u_prim[NVEC];
-            get_prim_bondi(G, diffinit, rs, mdot, gam, ur_frac, uphi, rin_bondi, fill_interior, rho, u, u_prim, k, j, i);
+            get_prim_bondi(G, diffinit, rs, mdot, gam, ur_frac, uphi, rin_bondi, bondi_clear_angle, fill_interior, rho, u, u_prim, k, j, i);
 
             // Note that NaN guards, including these, are ignored (!) under -ffast-math flag.
             // Thus we stay away from initializing at EH where this could happen

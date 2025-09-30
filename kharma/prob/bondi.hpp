@@ -145,7 +145,8 @@ KOKKOS_INLINE_FUNCTION void get_bondi_soln(const Real &r, const Real &rs, const 
 }
 
 KOKKOS_INLINE_FUNCTION void get_prim_bondi(const GRCoordinates& G, const bool diffinit, const Real &rs, const Real &mdot, const Real &gam,
-                                            const Real ur_frac, const Real uphi, const Real rin_bondi, const bool fill_interior, Real &rho, Real &u, Real u_prim[NVEC], 
+                                            const Real ur_frac, const Real uphi, const Real rin_bondi, const Real bondi_clear_angle,
+                                            const bool fill_interior, Real &rho, Real &u, Real u_prim[NVEC], 
                                             const int& k, const int& j, const int& i)
 {
     // Get primitive values initialized
@@ -153,14 +154,22 @@ KOKKOS_INLINE_FUNCTION void get_prim_bondi(const GRCoordinates& G, const bool di
     G.coord(k, j, i, Loci::center, Xnative);
     G.coord_embed(k, j, i, Loci::center, Xembed);
     GReal r = Xembed[1];
+    GReal th = Xembed[2];
 
-    // Either fill the interior region with the innermost analytically computed value,
-    // or let it be filled with floor values later
-    if (r < rin_bondi) {
+    // Allow cutting out areas by angle or radius to be replaced by floors
+    if ((th < bondi_clear_angle) || (th > M_PI - bondi_clear_angle)) {
+        rho = 0.;
+        u = 0.;
+        u_prim[0] = 0.;
+        u_prim[1] = 0.;
+        u_prim[2] = 0.;
+        return;
+    } else if (r < rin_bondi) {
+        // Optionally fill the interior region with the innermost analytically computed value
         if (fill_interior) {
             // just match at the rin_bondi value
             r = rin_bondi;
-            // TODO(BSP) could also do values at inf, restore that?
+            // TODO(BSP) previous impl could also do values at inf, restore that?
         } else {
             rho = 0.;
             u = 0.;

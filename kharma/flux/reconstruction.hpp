@@ -629,28 +629,22 @@ KOKKOS_FORCEINLINE_FUNCTION void ReconstructRow(parthenon::team_mbr_t& member, c
 }
 
 // Reconstruct with ismr:
-// Linear X3 & X1 reconstruction near X2 boundaries, but otherwise call through
+// Linear X3 reconstruction near X2 boundaries, but otherwise call through
 // TODO higher-order with spacing of the coarse cells? Would need new ReconstructXN+no DC/VL support
 template <Type recon_type, int dir>
 KOKKOS_INLINE_FUNCTION void ReconstructRowIsmr(parthenon::team_mbr_t& member, const VariablePack<Real> &P,
                                         const int& k, const int& j, const int& is_l, const int& ie_l, const int& ng_plus_nlevels,
                                         ScratchPad2D<Real> ql, ScratchPad2D<Real> qr)
 {
-    if constexpr (dir == X1DIR) {
-        if (j < ng_plus_nlevels || j > P.GetDim(2) - 1 - ng_plus_nlevels) {
-            KReconstruction::ReconstructX1<Type::linear_mc>(member, k, j, is_l, ie_l, P, ql, qr);
-        } else {
-            KReconstruction::ReconstructRow<recon_type, dir>(member, P, k, j, is_l, ie_l, ql, qr);
-        }
-    } else if constexpr (dir == X2DIR) {
-        ReconstructRow<recon_type, dir>(member, P, k, j, is_l, ie_l, ql, qr);
-    } else {
+    if constexpr (dir == X3DIR) {
         if (j < ng_plus_nlevels || j > P.GetDim(2) - 1 - ng_plus_nlevels) {
             KReconstruction::ReconstructX3l<Type::linear_mc>(member, k - 1, j, is_l, ie_l, P, ql);
             KReconstruction::ReconstructX3r<Type::linear_mc>(member, k, j, is_l, ie_l, P, qr);
         } else {
             ReconstructRow<recon_type, dir>(member, P, k, j, is_l, ie_l, ql, qr);
         }
+    } else {
+        ReconstructRow<recon_type, dir>(member, P, k, j, is_l, ie_l, ql, qr);
     }
 }
 

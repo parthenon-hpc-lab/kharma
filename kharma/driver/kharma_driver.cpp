@@ -378,7 +378,9 @@ TaskID KHARMADriver::AddStateUpdate(TaskID& t_start, TaskList& tl, MeshData<Real
     auto t_copy_prims = t_update;
     auto pmb0  = md_full_step_init->GetBlockData(0)->GetBlockPointer();
     auto& pkgs = pmb0->packages.AllPackages();
-    if (!pkgs.at("GRMHD")->Param<bool>("implicit")) {
+    // If we're explicitly evolving, UtoP needs a guess (except Kastaun inverter)
+    if (!pkgs.at("GRMHD")->Param<bool>("implicit") &&
+        pkgs.at("Inverter")->Param<Inverter::Type>("inverter_type") != Inverter::Type::kastaun) {
         t_copy_prims = tl.AddTask(t_start, Copy<MeshData<Real>>,
                                     std::vector<MetadataFlag>({Metadata::GetUserFlag("HD"), Metadata::GetUserFlag("Primitive")}),
                                     md_sub_step_init, md_update);

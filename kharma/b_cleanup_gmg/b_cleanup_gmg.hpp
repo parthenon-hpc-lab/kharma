@@ -1,25 +1,25 @@
 /*
  *  File: b_cleanup_gmg.hpp
- *  
+ *
  *  BSD 3-Clause License
- *  
+ *
  *  Copyright (c) 2020, AFD Group at UIUC
  *  All rights reserved.
- *  
+ *
  *  Redistribution and use in source and binary forms, with or without
  *  modification, are permitted provided that the following conditions are met:
- *  
+ *
  *  1. Redistributions of source code must retain the above copyright notice, this
  *     list of conditions and the following disclaimer.
- *  
+ *
  *  2. Redistributions in binary form must reproduce the above copyright notice,
  *     this list of conditions and the following disclaimer in the documentation
  *     and/or other materials provided with the distribution.
- *  
+ *
  *  3. Neither the name of the copyright holder nor the names of its
  *     contributors may be used to endorse or promote products derived from
  *     this software without specific prior written permission.
- *  
+ *
  *  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  *  AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  *  IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -35,15 +35,14 @@
 
 #include <memory>
 
+#include <bvals/boundary_conditions_generic.hpp>
 #include <parthenon/parthenon.hpp>
-#include <solvers/bicgstab_solver.hpp>
-#include <solvers/mg_solver.hpp>
-#include <solvers/solver_utils.hpp>
 
 #include "grmhd_functions.hpp"
 #include "types.hpp"
 
 using namespace parthenon;
+using parthenon::BoundaryFunction::BCSide;
 
 #define VARIABLE(ns, varname)                                                            \
   struct varname : public parthenon::variable_names::base_t<false> {                     \
@@ -64,6 +63,36 @@ namespace B_CleanupGMG {
 VARIABLE(b_clean_gmg, p);
 VARIABLE(b_clean_gmg, rhs);
 
+// Build type that selects only variables within our namespace. Internal solver
+// variables have the namespace of input variables prepended, so they will also be
+// selected by this type.
+struct any_bclean : public parthenon::variable_names::base_t<true> {
+  template <class... Ts>
+  KOKKOS_INLINE_FUNCTION any_bclean(Ts &&...args)
+      : base_t<true>(std::forward<Ts>(args)...) {}
+  static std::string name() { return "b_clean_gmg[.].*"; }
+};
+
+// Pointwise Dirichet boundaries adapted for GMG, if we need those
+template <CoordinateDirection DIR, BCSide SIDE>
+auto GetBCDirichlet() {
+  return [](std::shared_ptr<MeshBlockData<Real>> &rc, bool coarse) -> void {
+    using namespace parthenon;
+    using namespace parthenon::BoundaryFunction;
+    GenericBC<DIR, SIDE, BCType::FixedFace, any_bclean>(rc, coarse, 0.0);
+  };
+}
+
+// Pointwise Dirichet boundaries adapted for GMG, if we need those
+template <CoordinateDirection DIR, BCSide SIDE>
+auto GetBCReflecting() {
+  return [](std::shared_ptr<MeshBlockData<Real>> &rc, bool coarse) -> void {
+    using namespace parthenon;
+    using namespace parthenon::BoundaryFunction;
+    GenericBC<DIR, SIDE, BCType::Reflect, any_bclean>(rc, coarse);
+  };
+}
+
 /**
  * Declare fields, initialize parameters
  */
@@ -80,8 +109,9 @@ TaskStatus CleanupDivergence(std::shared_ptr<MeshData<Real>>& md);
 TaskStatus ApplyPFace(MeshData<Real> *msolve, MeshData<Real> *md);
 
 /**
- * Internal function to set up the task list for the solver
+ * Function to make this solver's task collection.
+ * TODO try adding to e.g. kharma_step task list
  */
-TaskCollection MakeSolverTaskCollection(std::shared_ptr<MeshData<Real>> &md);
+TaskCollection MakeSolverTaskCollection(Mesh* pmesh);
 
 } // namespace B_CleanupGMG

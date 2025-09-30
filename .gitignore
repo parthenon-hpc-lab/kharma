@@ -31,6 +31,8 @@ shock_soln_*.txt
 .cproject
 .ptp-sync
 .vscode/
+.cache/
+*~
 
 # C++ excludes
 # Build directory

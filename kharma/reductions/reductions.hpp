@@ -57,43 +57,45 @@ std::shared_ptr<KHARMAPackage> Initialize(ParameterInput *pin, std::shared_ptr<P
  * This should be used for all 2D shell sums not around the EH:
  * Just set equal min/max, 2D slices are detected
  */
-template<Var var, typename T>
-T DomainReduction(MeshData<Real> *md, UserHistoryOperation op, const GReal startx[3], const GReal stopx[3], int channel=-1);
-template<Var var, typename T>
-T DomainReduction(MeshData<Real> *md, UserHistoryOperation op, int channel=-1) {
-    const GReal startx[3] = {std::numeric_limits<GReal>::min(), std::numeric_limits<GReal>::min(), std::numeric_limits<GReal>::min()};
-    const GReal stopx[3] = {std::numeric_limits<GReal>::max(), std::numeric_limits<GReal>::max(), std::numeric_limits<GReal>::max()};
-    return DomainReduction<var, T>(md, op, startx, stopx, channel);
+template<Var var, UserHistoryOperation op, typename T>
+T DomainReduction(MeshData<Real> *md, const GReal startx[3], const GReal stopx[3], int channel=-1);
+// Defaults -- use numeric limits to set some indices unrestricted
+static constexpr Real real_max = std::numeric_limits<GReal>::max();
+template<Var var, UserHistoryOperation op, typename T>
+T DomainReduction(MeshData<Real> *md, int channel=-1) {
+    const GReal startx[3] = {-real_max, -real_max, -real_max};
+    const GReal stopx[3] = {real_max, real_max, real_max};
+    return DomainReduction<var, op, T>(md, startx, stopx, channel);
 }
-template<Var var, typename T>
-T ShellReduction(MeshData<Real> *md, UserHistoryOperation op, GReal r, int channel=-1) {
-    const GReal startx[3] = {r, std::numeric_limits<GReal>::min(), std::numeric_limits<GReal>::min()};
-    const GReal stopx[3] = {r, std::numeric_limits<GReal>::max(), std::numeric_limits<GReal>::max()};
-    return DomainReduction<var, T>(md, op, startx, stopx, channel);
+template<Var var, UserHistoryOperation op, typename T>
+T ShellReduction(MeshData<Real> *md, GReal r, int channel=-1) {
+    const GReal startx[3] = {r, -real_max, -real_max};
+    const GReal stopx[3] = {r, real_max, real_max};
+    return DomainReduction<var, op, T>(md, startx, stopx, channel);
 }
 
 // Parthenon doesn't allow taking options, so we define some common reductions
 template<Var var>
 Real SumAt0(MeshData<Real> *md)
 {
-    const GReal r_in = md->GetMeshPointer()->packages.Get("Reductions")->Param<GReal>("domain_r_in");
-    return Reductions::ShellReduction<var, Real>(md, UserHistoryOperation::sum, r_in);
+    return Reductions::ShellReduction<var, UserHistoryOperation::sum, Real>(md,
+        md->GetMeshPointer()->packages.Get("Reductions")->Param<GReal>("domain_r_in"));
 }
 template<Var var>
 Real SumAtEH(MeshData<Real> *md)
 {
-    const GReal r_eh = md->GetMeshPointer()->block_list[0]->coords.coords.get_horizon();
-    return Reductions::ShellReduction<var, Real>(md, UserHistoryOperation::sum, r_eh);
+    return Reductions::ShellReduction<var, UserHistoryOperation::sum, Real>(md,
+        md->GetMeshPointer()->packages.Get("Reductions")->Param<GReal>("domain_r_eh"));
 }
 template<Var var>
 Real SumAt5M(MeshData<Real> *md)
 {
-    return Reductions::ShellReduction<var, Real>(md, UserHistoryOperation::sum, 5.);
+    return Reductions::ShellReduction<var, UserHistoryOperation::sum, Real>(md, 5.);
 }
 template<Var var>
 Real Total(MeshData<Real> *md)
 {
-    return Reductions::DomainReduction<var, Real>(md, UserHistoryOperation::sum);
+    return Reductions::DomainReduction<var, UserHistoryOperation::sum, Real>(md);
 }
 
 /**

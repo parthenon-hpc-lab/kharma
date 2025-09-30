@@ -147,7 +147,7 @@ int main(int argc, char *argv[])
     auto pin = pman.pinput.get(); // All parameters in the input file or command line
     // Modify input parameters as we need. Needs to know if Parthenon set parameters
     // from our restart file, or whether we need to read them from a file here
-    KHARMA::FixParameters(pin, pman.IsRestart());
+    KHARMA::FixParameters(pin, Globals::is_restart);
     // InitPackagesEtc calls ProcessPackages, then constructs the Mesh
     pman.ParthenonInitPackagesAndMesh();
     // Now pull out the mesh and app_input as well for below
@@ -201,7 +201,7 @@ int main(int argc, char *argv[])
     // MeshBlocks to be initialized already.
     // TODO(BSP) split to package hooks
     auto prob = pin->GetString("parthenon/job", "problem_id");
-    bool is_restart = (prob == "resize_restart") || pman.IsRestart();
+    bool is_restart = (prob == "resize_restart") || Globals::is_restart;
     if(MPIRank0() && verbose > 0) {
         if (is_restart) {
             std::cout << "Running post-restart tasks..." << std::endl;

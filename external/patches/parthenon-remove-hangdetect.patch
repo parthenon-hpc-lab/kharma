@@ -1,0 +1,15 @@
+diff --git a/src/utils/communication_buffer.hpp b/src/utils/communication_buffer.hpp
+index edfc04f1..b2c44091 100644
+--- a/src/utils/communication_buffer.hpp
++++ b/src/utils/communication_buffer.hpp
+@@ -327,8 +327,8 @@ bool CommBuffer<T>::TryReceive() noexcept {
+       *comm_type_ == BuffCommType::sparse_receiver) {
+ #ifdef MPI_PARALLEL
+     (*nrecv_tries_)++;
+-    PARTHENON_REQUIRE(*nrecv_tries_ < 1e8,
+-                      "MPI probably hanging after 1e8 receive tries.");
++    //PARTHENON_REQUIRE(*nrecv_tries_ < 1e8,
++    //                  "MPI probably hanging after 1e8 receive tries.");
+ 
+     TryStartReceive();
+ 

@@ -25,4 +25,4 @@ int BiCGStabCounter::global_num_bicgstab_solvers = 0;
 } // namespace solvers
 } // namespace parthenon
 
-#endif
+#endif // DISABLE_CLEANUP

@@ -158,6 +158,7 @@ export CC="$C_NATIVE"
 # Outer: SIMDFOR_LOOP;MANUAL1D_LOOP;MDRANGE_LOOP;TPTTR_LOOP;TPTVR_LOOP;TPTTRTVR_LOOP
 # Inner: SIMDFOR_INNER_LOOP;TVR_INNER_LOOP
 if [[ "$ARGS" == *"sycl"* ]]; then
+  # TODO CXXFLAGS add -Wno-dynamic-class-memaccess
   OUTER_LAYOUT="MANUAL1D_LOOP"
   INNER_LAYOUT="TVR_INNER_LOOP"
   ENABLE_OPENMP="ON"
@@ -178,6 +179,7 @@ elif [[ "$ARGS" == *"cuda"* ]]; then
     echo "Dry-running the nvcc wrapper with $CXXFLAGS"
   fi
   export NVCC_WRAPPER_DEFAULT_COMPILER="$CXX_NATIVE"
+  # TODO set Kokkos CUDA options here instead of CMakeLists to avoid warnings
   OUTER_LAYOUT="MANUAL1D_LOOP"
   INNER_LAYOUT="TVR_INNER_LOOP"
   ENABLE_OPENMP="ON"
@@ -301,19 +303,13 @@ if [[ "$ARGS" == *"clean"* ]]; then
   cd -
 
   # HIP requires device-capable variant functions
-  if [[ "$ARGS" == *"hip"* ]]; then
+  if [[ "$ARGS" == *"hip"* || "$ARGS" == *"sycl"* ]]; then
     cd external/variant
     if [[ $(( $(git --version | cut -d '.' -f 2) > 35 )) == "1" ]]; then
       git apply --quiet ../patches/variant-hip.patch
     else
       git apply ../patches/variant-hip.patch
     fi
-    cd -
-
-    # HIP also prefers new Kokkos.
-    # TODO work something out if on HIP machines w/o internet
-    cd external/parthenon
-    git submodule update --remote external/Kokkos
     cd -
   fi
 

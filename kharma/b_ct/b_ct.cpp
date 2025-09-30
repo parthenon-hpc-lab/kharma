@@ -73,6 +73,10 @@ std::shared_ptr<KHARMAPackage> B_CT::Initialize(ParameterInput *pin, std::shared
     if (lazy_prolongation && pin->GetString("parthenon/mesh", "refinement") == "adaptive")
         throw std::runtime_error("Cannot use non-divergence-preserving prolongation in AMR!");
 
+    // TODO don't set this unless we're reconnecting at boundaries (can't just check, we load Boundaries pkg later)
+    int reconnection_outer_buffer = pin->GetOrAddInteger("b_field", "reconnection_outer_buffer", 10);
+    params.Add("reconnection_outer_buffer", reconnection_outer_buffer);
+
     // FIELDS
 
     // Flags for B fields on faces.
@@ -94,6 +98,13 @@ std::shared_ptr<KHARMAPackage> B_CT::Initialize(ParameterInput *pin, std::shared
                                             Metadata::GetUserFlag("MHD"), Metadata::GetUserFlag("Explicit"), Metadata::Vector};
     std::vector<MetadataFlag> flags_cons = {Metadata::Real, Metadata::Cell, Metadata::Derived, Metadata::Conserved, Metadata::WithFluxes,
                                             Metadata::GetUserFlag("MHD"), Metadata::GetUserFlag("Explicit"), Metadata::Vector};
+
+    // KHARMA now (vaguely) supports restarting from dump (.phdf) files.
+    // To do so we need to read cell-centered primitive B and interpolate to faces, as we do with iharm3d restart files
+    if (pin->GetOrAddBoolean("b_field", "restart_from_prims", false)) {
+        flags_prim.push_back(Metadata::Restart);
+    }
+
     std::vector<int> s_vector({NVEC});
     m = Metadata(flags_prim, s_vector);
     pkg->AddField("prims.B", m);
@@ -110,12 +121,6 @@ std::shared_ptr<KHARMAPackage> B_CT::Initialize(ParameterInput *pin, std::shared
         m = Metadata(flags_emf_c, s_vector);
         pkg->AddField("B_CT.cemf", m);
     }
-
-    // INTERNAL SMR
-    // Hyerin (04/04/24) averaged B fields needed for ismr
-    // ISMR cache: not evolved, immediately copied to fluid state after averaging
-    m = Metadata({Metadata::Real, Metadata::Face, Metadata::Derived, Metadata::OneCopy});
-    pkg->AddField("ismr.fB_avg", m);
 
     // CALLBACKS
 
@@ -384,7 +389,7 @@ TaskStatus B_CT::CalculateEMF(MeshData<Real> *md)
             );
         } else if (scheme == "gs05_c" || scheme == "sg07") {
             auto& rho = md->PackVariablesAndFluxes(std::vector<std::string>{"cons.rho"});
-            pmb0->par_for("B_CT_emf_GS05_c", block.s, block.e, b1.ks, b1.ke, b1.js, b1.je, b1.is, b1.ie,
+            pmb0->par_for("B_CT_emf_SG07", block.s, block.e, b1.ks, b1.ke, b1.js, b1.je, b1.is, b1.ie,
                 KOKKOS_LAMBDA (const int &bl, const int &k, const int &j, const int &i) {
                     // Following adapted closely from AthenaK, including clever use of the mass flux for the
                     // sign of the contact mode.
@@ -502,9 +507,10 @@ TaskStatus B_CT::DerefinePoles(MeshData<Real> *md)
 
     // Figure out indices
     int ng = Globals::nghost;
-    for (auto &pmb : pmesh->block_list) {
+    for (int iblock=0; iblock < md->NumBlocks(); iblock++) {
+        auto& rc = md->GetBlockData(iblock);
+        auto pmb = rc->GetBlockPointer();
         const auto& G = pmb->coords;
-        auto& rc = pmb->meshblock_data.Get();
         auto B_Uf = rc->PackVariables(std::vector<std::string>{"cons.fB"});
         auto B_avg = rc->PackVariables(std::vector<std::string>{"ismr.fB_avg"});
         for (int i = 0; i < BOUNDARY_NFACES; i++) {
@@ -517,14 +523,19 @@ TaskStatus B_CT::DerefinePoles(MeshData<Real> *md)
                 // indices
                 // TODO also get ranges in cells from the beginning rather than using j_p & calculating j_c
                 IndexRange3 bCC = KDomain::GetRange(rc, IndexDomain::interior, CC);
+                // Note these are invalid in X2! We use them only for X1/X3 directions
                 IndexRange3 bF1 = KDomain::GetRange(rc, domain, F1, ng, -ng);
-                IndexRange3 bF2 = KDomain::GetRange(rc, domain, F2, (binner) ? 0 : -1, (binner) ? 1 : 0, false);
                 IndexRange3 bF3 = KDomain::GetRange(rc, domain, F3, ng, -ng);
-                const int j_f = (binner) ? bF2.je : bF2.js; // last physical face
+                const int j_f = (binner) ? bCC.js : bCC.je + 1; // last physical face
                 const int jps = (binner) ? j_f + (nlevels - 1) : j_f - (nlevels - 1); // start of the lowest level of derefinement
                 const IndexRange j_p = IndexRange{(binner) ? j_f : jps, (binner) ? jps : j_f};  // Range of x2 to be de-refined
                 const int offset = (binner) ? 1 : -1; // offset to read the physical face values
                 const int point_out = offset; // if F2 B field at j_f + offset face is positive when pointing out of the cell, +1.
+
+                // Should we allow flux through the pole?
+                auto &bpars = pmesh->packages.Get("Boundaries")->AllParams();
+                const bool allow_flux = binner ? bpars.Get<bool>("excise_flux_inner_x2"):
+                                                 bpars.Get<bool>("excise_flux_outer_x2");
 
                 // F1 average
                 pmb->par_for("B_CT_derefine_poles_avg_F1", bCC.ks, bCC.ke, j_p.s, j_p.e, bF1.is, bF1.ie,
@@ -552,7 +563,7 @@ TaskStatus B_CT::DerefinePoles(MeshData<Real> *md)
                         // starting k-index of the coarse cell
                         const int k_start = k - k_fine;
 
-                        if (j == j_f) {
+                        if (!allow_flux && j == j_f) {
                             // The fine cells have 0 fluxes through the physical-ghost boundaries.
                             B_avg(F2, 0, k, j, i) = 0.;
                         } else { // average the fine cells

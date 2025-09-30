@@ -80,7 +80,9 @@ KOKKOS_INLINE_FUNCTION void XtoindexGIZMO(const GReal XG[GR_DIM],
     // interpolation (11/14/2022) TODO: write a case where indices hit the boundaries of the data file
     del = (XG[1]-rarr(i))/(rarr(i+1)-rarr(i));
 
+#ifndef KOKKOS_ENABLE_SYCL
     if (m::abs(dx2_min/m::pow(XG[1],2))>1.e-8) printf("XtoindexGizmo: dx2 pretty large = %g at r= %g \n",dx2_min, XG[1]);
+#endif
 }
 /**
  * Get the GIZMO output values at a particular zone

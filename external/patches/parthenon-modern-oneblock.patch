@@ -55,10 +55,10 @@ index 5e7f3f8f7..f8d5a180a 100644
  
  // Given a topological element, ownership array of the sending block, and offset indices
 diff --git a/src/mesh/mesh-gmg.cpp b/src/mesh/mesh-gmg.cpp
-index 71784b7d5..9cfb54d6c 100644
+index 4d14a61dc..ea8ac77ea 100644
 --- a/src/mesh/mesh-gmg.cpp
 +++ b/src/mesh/mesh-gmg.cpp
-@@ -51,6 +51,22 @@ void Mesh::SetMeshBlockNeighbors(
+@@ -53,13 +53,29 @@ void Mesh::SetMeshBlockNeighbors(
                      {ndim > 2 ? -1 : 0, ndim > 2 ? 1 : 0});
    BufferID buffer_id(ndim, multilevel);
  
@@ -81,7 +81,15 @@ index 71784b7d5..9cfb54d6c 100644
    for (auto &pmb : block_list) {
      std::vector<NeighborBlock> all_neighbors;
      const auto &loc = pmb->loc;
-@@ -79,7 +95,8 @@ void Mesh::SetMeshBlockNeighbors(
+     auto neighbors = forest.FindNeighbors(loc, grid_id);
+ 
+     // Set this blocks ownership
+-    pmb->ownership = DetermineOwnership(loc, neighbors, newly_refined);
++    pmb->ownership = DetermineOwnership(loc, neighbors, self_border_block, newly_refined);
+ 
+     // Build NeighborBlocks for unique neighbors
+     for (const auto &nloc : neighbors) {
+@@ -84,7 +100,8 @@ void Mesh::SetMeshBlockNeighbors(
        auto neighbor_neighbors = forest.FindNeighbors(nloc.global_loc, grid_id);
  
        nb.ownership =

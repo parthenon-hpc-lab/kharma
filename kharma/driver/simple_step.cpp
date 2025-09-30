@@ -44,6 +44,7 @@ TaskCollection KHARMADriver::MakeSimpleTaskCollection(BlockList_t &blocks, int s
     auto& flux_pkg = pkgs.at("Fluxes")->AllParams();
     auto& inverter_pkg = pkgs.at("Inverter")->AllParams();
     PARTHENON_REQUIRE(!pkgs.count("B_CT"), "Face-centered B not compatible with simple driver!");
+    // TODO require we're not using B_Cleanup as transport too
     PARTHENON_REQUIRE(!pkgs.count("Electrons"), "Electrons not compatible with simple driver!");
     PARTHENON_REQUIRE(!flux_pkg.Get<bool>("use_fofc"), "Flux corrections not compatible with simple driver!");
     PARTHENON_REQUIRE(inverter_pkg.Get<Inverter::Type>("inverter_type") == Inverter::Type::kastaun,
@@ -89,6 +90,7 @@ TaskCollection KHARMADriver::MakeSimpleTaskCollection(BlockList_t &blocks, int s
     auto t_fluxes = KHARMADriver::AddFluxCalculations(t_none, tl, md_sub_step_init.get());
 
 <<<<<<< HEAD
+<<<<<<< HEAD
     // Big synchronous region: get & apply fluxes to advance the fluid state
     // num_partitions is nearly always 1
     const int num_partitions = pmesh->DefaultNumPartitions();
@@ -108,17 +110,26 @@ TaskCollection KHARMADriver::MakeSimpleTaskCollection(BlockList_t &blocks, int s
     // Any package modifications to the fluxes, e.g. from Flux-CT
     auto t_fix_flux = tl.AddTask(t_fluxes, Packages::FixFlux, md_sub_step_init.get());
 >>>>>>> parthenon-bump
+=======
+    // Any package modifications to the fluxes, e.g. from Flux-CT
+    auto t_fix_flux = tl.AddTask(t_fluxes, Packages::FixFlux, md_sub_step_init.get());
+>>>>>>> parthenon-bump
 
     // Apply the fluxes to calculate a change in cell-centered values "md_flux_src"
     auto t_flux_div = tl.AddTask(t_fix_flux, FluxDivergence, md_sub_step_init.get(), md_flux_src.get(),
                                 std::vector<MetadataFlag>{Metadata::Independent, Metadata::Cell, Metadata::WithFluxes}, 0);
 
 <<<<<<< HEAD
+<<<<<<< HEAD
         // Any package modifications to the fluxes.  e.g.:
         // 1. CT calculations for B field transport
         // 2. Zero fluxes through poles
         // etc
         auto t_fix_flux = tl.AddTask(t_fluxes, Packages::FixFlux, md_sub_step_init.get());
+=======
+    // Add any package source terms: geometric \Gamma * T, wind, damping, etc etc
+    auto t_sources = tl.AddTask(t_flux_div, Packages::AddSource, md_sub_step_init.get(), md_flux_src.get(), IndexDomain::interior);
+>>>>>>> parthenon-bump
 =======
     // Add any package source terms: geometric \Gamma * T, wind, damping, etc etc
     auto t_sources = tl.AddTask(t_flux_div, Packages::AddSource, md_sub_step_init.get(), md_flux_src.get(), IndexDomain::interior);

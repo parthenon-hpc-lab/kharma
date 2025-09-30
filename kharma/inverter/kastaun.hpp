@@ -62,7 +62,7 @@
 #include "invert_template.hpp"
 
 #include "coordinate_utils.hpp"
-#include "floors_functions.hpp"
+//#include "floors_functions.hpp"
 #include "grmhd_functions.hpp"
 #include "kharma_utils.hpp"
 
@@ -75,22 +75,16 @@
 namespace Inverter {
 
 /**
- * Residual class from Phoebus, allowing caching of:
- * 1. Function arguments other than solution var "mu"
- * 2. Floors/ceilings and tracking of floor hits
- * Also handles translating mu->primitive variables
+ * Residual class from Phoebus.
+ * Caches function arguments which won't change during solve
  */
 class KastaunResidual {
     public:
         KOKKOS_FUNCTION
         KastaunResidual(const Real &D, const Real &q, const Real &bsq, const Real &bsq_rpsq,
-                const Real &rsq, const Real &rbsq, const Real &v0sq, const Real &gam,
-                const Real &rho_floor, const Real &e_floor,
-                const Real &gamma_max, const Real &e_max)
+                const Real &rsq, const Real &rbsq, const Real &v0sq, const Real &gam)
             : D_(D), q_(q), bsq_(bsq), bsq_rpsq_(bsq_rpsq),
-            rsq_(rsq), rbsq_(rbsq), v0sq_(v0sq), gam_(gam),
-            rho_floor_(rho_floor), e_floor_(e_floor),
-            gamma_max_(gamma_max), e_max_(e_max) {}
+            rsq_(rsq), rbsq_(rbsq), v0sq_(v0sq), gam_(gam) {}
 
         KOKKOS_FORCEINLINE_FUNCTION
         Real x_mu(const Real mu)
@@ -108,14 +102,7 @@ class KastaunResidual {
         }
         KOKKOS_FORCEINLINE_FUNCTION
         Real vhatsq_mu(const Real mu, const Real rbarsq) {
-            const Real vsq_trial = mu * mu * rbarsq;
-            if (vsq_trial > v0sq_) {
-                used_gamma_max_ = true;
-                return v0sq_;
-            } else {
-                used_gamma_max_ = false;
-                return vsq_trial;
-            }
+            return std::min(mu * mu * rbarsq, v0sq_);
         }
         KOKKOS_FORCEINLINE_FUNCTION
         Real iWhat_mu(const Real vhatsq)
@@ -124,33 +111,13 @@ class KastaunResidual {
         }
         KOKKOS_FORCEINLINE_FUNCTION
         Real rhohat_mu(const Real iWhat) {
-            const Real rho_trial = D_ * iWhat;
-            if (rho_trial <= rho_floor_) {
-                used_density_floor_ = true;
-                return rho_floor_;
-            } else {
-                used_density_floor_ = false;
-                return rho_trial;
-            }
+            return D_ * iWhat;
         }
         KOKKOS_FORCEINLINE_FUNCTION
         Real ehat_mu(const Real mu, const Real qbar, const Real rbarsq, const Real vhatsq,
                     const Real What)
         {
-            const Real ehat_trial =
-                    What * (qbar - mu * rbarsq) + vhatsq * What * What / (1.0 + What);
-            // Note this floor is approximate, since we haven't landed on a density
-            used_energy_floor_ = false;
-            used_energy_max_ = false;
-            if (ehat_trial <= e_floor_) {
-                used_energy_floor_ = true;
-                return e_floor_;
-            } else if (ehat_trial > e_max_) {
-                used_energy_max_ = true;
-                return e_max_;
-            } else {
-                return ehat_trial;
-            }
+            return What * (qbar - mu * rbarsq) + vhatsq * What * What / (1.0 + What);
         }
 
         // Evaluate residual at a value of mu.
@@ -163,8 +130,8 @@ class KastaunResidual {
             const Real vhatsq = vhatsq_mu(mu, rbarsq);
             const Real iWhat = iWhat_mu(vhatsq);
             const Real What = 1.0 / iWhat;
-            const Real rhohat = rhohat_mu(iWhat);
-            const Real ehat = ehat_mu(mu, qbar, rbarsq, vhatsq, What);
+            const Real rhohat = std::max(rhohat_mu(iWhat), 0.);
+            const Real ehat = std::max(ehat_mu(mu, qbar, rbarsq, vhatsq, What), 0.);
             // TODO this is ideal-only
             const Real Phat = ehat * rhohat * (gam_ - 1.0);
             const Real ahat = Phat / (rhohat * (1.0 + ehat));
@@ -186,21 +153,8 @@ class KastaunResidual {
             return mu * std::sqrt(1.0 + rbarsq) - 1.0;
         }
 
-        // Query floors
-        // TODO fold into single int w/FFlag?  That's what we return anyway
-        KOKKOS_INLINE_FUNCTION
-        bool used_density_floor() const { return used_density_floor_; }
-        KOKKOS_INLINE_FUNCTION
-        bool used_energy_floor() const { return used_energy_floor_; }
-        KOKKOS_INLINE_FUNCTION
-        bool used_energy_max() const { return used_energy_max_; }
-        KOKKOS_INLINE_FUNCTION
-        bool used_gamma_max() const { return used_gamma_max_; }
-
     private:
         const Real D_, q_, bsq_, bsq_rpsq_, rsq_, rbsq_, v0sq_, gam_;
-        const Real rho_floor_, e_floor_, gamma_max_, e_max_;
-        bool used_density_floor_, used_energy_floor_, used_energy_max_, used_gamma_max_;
 };
 
 /**
@@ -214,17 +168,18 @@ template <>
 KOKKOS_INLINE_FUNCTION int u_to_p<Type::kastaun>(const GRCoordinates& G, const VariablePack<Real>& U, const VarMap& m_u,
                                               const Real& gam, const int& k, const int& j, const int& i,
                                               const VariablePack<Real>& P, const VarMap& m_p,
-                                              const Loci& loc, const Floors::Prescription& floors,
-                                              const int& max_iterations, const Real& tol)
+                                              const Loci& loc, const int& max_iterations, const Real& tol,
+                                              const bool recover_velocity)
 {
     // Shouldn't need this, KHARMA should die on NaN
     // But it's here for debugging
     // int num_nans = std::isnan(U(m_u.RHO, k, j, i)) + std::isnan(U(m_u.U1, k, j, i)) + std::isnan(U(m_u.UU, k, j, i));
     // if (num_nans > 0) return static_cast<int>(Status::neg_input);
 
-    // Conserved particle number rho*u0 > 0.  Just floor instead of yelling?
-    if (U(m_u.RHO, k, j, i) <= 0.) {
-        return static_cast<int>(Status::neg_input);
+    // Ensure conserved particle number rho*u0 >= 0
+    // TODO will need to add this to the tally separately if we enable accounting
+    if (U(m_u.RHO, k, j, i) < 1e-20) {
+        U(m_u.RHO, k, j, i) = 1e-20;
     }
 
     // Transform GRMHD variables for the SRMHD Kastaun solver
@@ -277,6 +232,7 @@ KOKKOS_INLINE_FUNCTION int u_to_p<Type::kastaun>(const GRCoordinates& G, const V
     Real rbsq = 0.0;
     Real bdotr = 0.0;
     Real bu[] = {0.0, 0.0, 0.0};
+    // If the magnetic field is being evolved at all...
     if (m_u.B1 >= 0) {
         const Real sD = 1.0 / m::sqrt(D);
         // b^i
@@ -292,13 +248,10 @@ KOKKOS_INLINE_FUNCTION int u_to_p<Type::kastaun>(const GRCoordinates& G, const V
     }
     //const Real zsq = rsq / h0sq_; // h0sq_ normalization set to 1 in Phoebus
     const Real zsq = rsq;
-    const Real v0sq = std::min(zsq / (1.0 + zsq), 1.0 - 1.0 / SQR(floors.gamma_max));
+    const Real v0sq = std::min(zsq / (1.0 + zsq), 1.0 - 1.0 / SQR(51.));
 
     // residual object. Caches most arguments/floors so calls are single-argument
-    // TODO second arg is technically floor on specific energy, should be split...
-    KastaunResidual res(D, q, bsq, bsq_rpsq, rsq, rbsq, v0sq, gam,
-                        floors.rho_min_const, floors.u_min_const,
-                        floors.gamma_max, floors.u_over_rho_max);
+    KastaunResidual res(D, q, bsq, bsq_rpsq, rsq, rbsq, v0sq, gam);
 
     // SOLVE
     // TODO(BSP) better or faster solver?  (Optionally) skip bracketing?
@@ -375,124 +328,89 @@ KOKKOS_INLINE_FUNCTION int u_to_p<Type::kastaun>(const GRCoordinates& G, const V
             fp = f;
         }
     }
-    // TODO keep track of max iter
+    // TODO keep track iterations actually used
 
-    // check if convergence is established within max_iterations.  If not, return
-    // failure without replacing prims, for consistency w/1Dw solver.
-    // We generally replace failed zones with neighbors or atmosphere later, at user option
-    if (iter == max_iterations) {
-        return static_cast<int>(Status::max_iter);
-    }
+    // If we should try to recover velocity, do it in this function to re-use the residual object
+    if (!recover_velocity) {
+        // Just unwrap everything into primitive vars as-is
+        const Real mu = z;
+        const Real x = res.x_mu(mu);
+        const Real rbarsq = res.rbarsq_mu(mu, x);
+        const Real vsq = res.vhatsq_mu(mu, rbarsq);
+        const Real iW = res.iWhat_mu(vsq);
+        const Real W = 1.0 / iW;
+        const Real qbar = res.qbar_mu(mu, x);
+        // These values should be as *raw* as possible, whether or not they respect the floors
+        // (or even physics).  We will add material and try again if they're bad
+        P(m_p.RHO, k, j, i) = std::max(res.rhohat_mu(iW), 0.);
+        P(m_p.UU, k, j, i) = std::max(res.ehat_mu(mu, qbar, rbarsq, vsq, W) * P(m_p.RHO, k, j, i), 0.);
+        SPACELOOP(ii) P(m_p.U1 + ii, k, j, i) = std::max(W * mu * x, 0.) * (rcon[ii] + mu * bdotr * bu[ii]);
 
-    int fflag = 0;
-    // Now unwrap everything into primitive vars...
-    Real mu = z;
-    Real x = res.x_mu(mu);
-    Real rbarsq = res.rbarsq_mu(mu, x);
-    Real vsq = res.vhatsq_mu(mu, rbarsq);
-    Real iW = res.iWhat_mu(vsq);
-    Real W = 1.0 / iW;
-    P(m_p.RHO, k, j, i) = res.rhohat_mu(iW);
+        // Fix if convergence is not established within max_iterations (should be *extremely* rare)
+        return (iter < max_iterations) ? static_cast<int>(Status::success) : static_cast<int>(Status::max_iter);
+    } else {
+        // If we didn't conserve momentum within a loose tolerance based on the solver tol...
+        const Real rho = P(m_p.RHO, k, j, i);
+        const Real u = P(m_p.UU, k, j, i);
+        const Real uvec[NVEC] = {P(m_p.U1, k, j, i), P(m_p.U2, k, j, i), P(m_p.U3, k, j, i)};
+        const Real B_P[NVEC] = {P(m_p.B1, k, j, i), P(m_p.B2, k, j, i), P(m_p.B3, k, j, i)};
+        Real rho_ut = 0., T[GR_DIM] = {0.};
+        GRMHD::p_to_u_mhd(G, rho, u, uvec, B_P, gam, k, j, i, rho_ut, T);
+        const Real bad_vel_tolerance = 200 * tol;
+        if ((std::abs((T[1] - U(m_u.U1, k, j, i)) / U(m_u.U1, k, j, i)) > bad_vel_tolerance) ||
+            (std::abs((T[2] - U(m_u.U2, k, j, i)) / U(m_u.U2, k, j, i)) > bad_vel_tolerance) ||
+            (std::abs((T[3] - U(m_u.U3, k, j, i)) / U(m_u.U3, k, j, i)) > bad_vel_tolerance)) {
 
-    // Correct mu if we used rho floor
-    if (res.used_density_floor()) {
-        // Mark the flag
-        fflag |= Floors::FFlag::INVERTER_RHO;
-        // New W determined from rho
-        W = D / P(m_p.RHO, k, j, i);
-        iW = 1.0 / W;
-        vsq = 1.0 - SQR(iW);
-        // Analytic solution for x, mu given new W
-        double A = rsq - rbsq / bsq;
-        double B = rbsq / bsq;
-        double C = vsq * bsq;
-        double coeff = -A*A + 3*A*B + 3*A*C;
-        double coeff3 = coeff * coeff * coeff;
-        double coeff_2 = -2*A*A*A - 18*A*A*B + 9*A*A*C;
-        double det = m::sqrt(4 * coeff3 + SQR(coeff_2));
-        double cbrt_det = m::cbrt(coeff_2 + det);
-        x = m::cbrt(2) * coeff / (3 * A * cbrt_det)
-        - cbrt_det / (3 * A * m::cbrt(2)) + 1/3;
-        mu = (1./x - 1) / bsq;
-        rbarsq = res.rbarsq_mu(mu, x);
-    }
+            // ...then solve so function ehat(mu) Kastaun matches our floored value,
+            // and use that to reset the velocities.
+            // This prioritizes the new thermal energy in the total T^0_0,
+            // but dumps any extra back into the velocities to be less disruptive.
+            // TODO either set this on better theory or redo the algebra and condense it
+            const Real e_actual = P(m_p.UU, k, j, i) / P(m_p.RHO, k, j, i);
+            auto f = [&] (Real mu) {
+                Real x = res.x_mu(mu);
+                Real rbarsq = res.rbarsq_mu(mu, x);
+                Real vsq = res.vhatsq_mu(mu, rbarsq);
+                Real W = 1. / res.iWhat_mu(vsq);
+                Real qbar = res.qbar_mu(mu, x);
+                return (W * (qbar - mu * rbarsq) + vsq * W * W /
+                            (1.0 + W))
+                        - e_actual;
+            };
 
-    const Real qbar = res.qbar_mu(mu, x);
-    // Use the floored density in energy calc, we corrected mu for it
-    P(m_p.UU, k, j, i) = res.ehat_mu(mu, qbar, rbarsq, vsq, W) * P(m_p.RHO, k, j, i);
-    // We applied this floor to the ratio u/rho, but not the value u
-    if(P(m_p.UU, k, j, i) < floors.u_min_const) {
-        fflag |= Floors::FFlag::INVERTER_U;
-        P(m_p.UU, k, j, i) = floors.u_min_const;
-    }
-
-    // Try to correct mu if we used the e floor
-    bool ret_momentum_failure = false;
-    if (res.used_energy_floor() || (fflag & Floors::FFlag::INVERTER_U)) {
-        // Record flag
-        fflag |= Floors::FFlag::INVERTER_U;
-
-        // Function e(mu) - e_actual so we can rootfind
-        auto f = [&] (Real mu) {
-            Real x = res.x_mu(mu);
-            Real rbarsq = res.rbarsq_mu(mu, x);
-            Real vsq = res.vhatsq_mu(mu, rbarsq);
-            Real W = 1. / res.iWhat_mu(vsq);
-            Real qbar = res.qbar_mu(mu, x);
-            return (W * (qbar - mu * rbarsq) + vsq * W * W /
-                        (1.0 + W)) * P(m_p.RHO, k, j, i)
-                    - P(m_p.UU, k, j, i);
-        };
-        // Rootfind for mu that would have produced our floored e
-        Real mum = 0., mup = 1.;
-        if (f(mum) * f(mup) > 0.) {
-            mu = 0.;
-            x = 0.;
-            W = 0.;
-            ret_momentum_failure = true;
-        } else {
-            while (1) {
-                Real muc = (mum + mup) / 2.;
-                Real resv = m::abs(f(muc));
-                if (resv < 1e-8 || m::abs((mup - mum) / 2) < 1e-10) {
-                    mu = muc;
-                    if (resv < 1e-8) {
-                        // If we're solved set the solution
-                        x = res.x_mu(mu);
-                        rbarsq = res.rbarsq_mu(mu, x);
-                        vsq = res.vhatsq_mu(mu, rbarsq);
-                        iW = res.iWhat_mu(vsq);
-                        W = 1. / iW;
-                    } else {
-                        // Else defaults
-                        x = 0.;
-                        W = 0.;
-                        // Mark momentum failure
-                        ret_momentum_failure = true;
+            // Rootfind for mu that would have produced our floored e
+            bool e_solve_failed = false;
+            Real mu = z, mum = 0., mup = 1.;
+            if (f(mum) * f(mup) > 0.) {
+                e_solve_failed = true;
+            } else {
+                while (1) {
+                    Real muc = (mum + mup) / 2.;
+                    Real resv = m::abs(f(muc));
+                    if (resv < 1e-8 || m::abs((mup - mum) / 2) < 1e-10) {
+                        mu = muc;
+                        e_solve_failed = (resv > 1e-8);
+                        break;
                     }
-                    // printf("Solution mu %g x %g rsq %g rbsq %g rbarsq %g vsq %g W %g\n",
-                    //         mu, x, rsq, rbsq, rbarsq, vsq, W);
-                    // SPACELOOP(ii)
-                    //     printf("New U%d: %g\n", ii, W * mu * x * (rcon[ii] + mu * bdotr * bu[ii]));
-                    break;
+                    // Same sign as left side -> center now left side
+                    if (f(muc) * f(mum) > 0.)
+                        mum = muc;
+                    else
+                        mup = muc;
                 }
-                // Same sign as left side -> center now left side
-                if (f(muc) * f(mum) > 0.)
-                    mum = muc;
-                else
-                    mup = muc;
             }
+
+            // Reset only velocities with new mu
+            const Real x = res.x_mu(mu);
+            const Real rbarsq = res.rbarsq_mu(mu, x);
+            const Real vsq = res.vhatsq_mu(mu, rbarsq);
+            const Real iW = res.iWhat_mu(vsq);
+            const Real W = 1.0 / iW;
+            SPACELOOP(ii) P(m_p.U1 + ii, k, j, i) = std::max(W * mu * x, 0.) * (rcon[ii] + mu * bdotr * bu[ii]);
+            return (e_solve_failed) ? static_cast<int>(Status::bad_velocity) : static_cast<int>(Status::floor);
         }
+        return static_cast<int>(Status::success);
     }
-
-    // Set velocity with corrected values from rho+e floors
-    SPACELOOP(ii) P(m_p.U1 + ii, k, j, i) = W * mu * x * (rcon[ii] + mu * bdotr * bu[ii]);
-
-    // Record other flags
-    if (res.used_gamma_max())     fflag |= Floors::FFlag::INVERTER_GAMMA;
-    if (res.used_energy_max())    fflag |= Floors::FFlag::INVERTER_U_MAX;
-
-    return fflag + ((ret_momentum_failure) ? static_cast<int>(Status::bad_velocity) : 0);
 }
 
 }
