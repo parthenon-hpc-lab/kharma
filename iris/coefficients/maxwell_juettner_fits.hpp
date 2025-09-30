@@ -97,7 +97,7 @@ KOKKOS_INLINE_FUNCTION double maxwell_juettner_leung_I(const FitParams &params)
     const double &B = params.magnetic_field;
     const double &theta = params.observer_angle;
 
-    const double K2 = m::max(gsl_sf_bessel_Kn(2,1./Thetae), SMALL);
+    const double K2 = m::max(gsl_sf_bessel_Kn(2,1./Thetae), SMALL_NUM);
 
     const double nuc = EE*B/(2.*M_PI*ME*CL);
     const double nus = (2./9.)*nuc*Thetae*Thetae*sin(theta);

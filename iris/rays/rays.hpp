@@ -71,23 +71,23 @@ KOKKOS_INLINE_FUNCTION double stepsize(const CoordinateEmbedding &coords,
     if (coords.is_spherical()) {
         double r = coords.X1_to_embed(X[1]);
         double deh = fmin(fabs(r - coords.get_horizon()), 0.1);
-        double dlx1 = eps * (10*deh) / (fabs(Kcon[1]) + SMALL*SMALL);
+        double dlx1 = eps * (10*deh) / (fabs(Kcon[1]) + SMALL_NUM*SMALL_NUM);
 
         // Make the step cautious near the pole, improving accuracy of Stokes U
         double cut = 0.02;
         double lx2 = coords.stopx(2) - coords.startx(2);
         double dpole = fmin(fabs(X[2] / lx2), fabs((coords.stopx(2) - X[2]) / lx2));
         double d2fac = (dpole < cut) ? dpole/3 : fmin(cut/3 + (dpole-cut)*10., 1);
-        double dlx2 = eps * d2fac / (fabs(Kcon[2]) + SMALL*SMALL);
+        double dlx2 = eps * d2fac / (fabs(Kcon[2]) + SMALL_NUM*SMALL_NUM);
 
-        double dlx3 = eps / (fabs(Kcon[3]) + SMALL*SMALL);
+        double dlx3 = eps / (fabs(Kcon[3]) + SMALL_NUM*SMALL_NUM);
 
         if (STEP_STRICT_MIN) {
             return fmin(fmin(dlx1, dlx2), dlx3);
         } else {
-            double idlx1 = 1./(fabs(dlx1) + SMALL*SMALL) ;
-            double idlx2 = 1./(fabs(dlx2) + SMALL*SMALL) ;
-            double idlx3 = 1./(fabs(dlx3) + SMALL*SMALL) ;
+            double idlx1 = 1./(fabs(dlx1) + SMALL_NUM*SMALL_NUM) ;
+            double idlx2 = 1./(fabs(dlx2) + SMALL_NUM*SMALL_NUM) ;
+            double idlx3 = 1./(fabs(dlx3) + SMALL_NUM*SMALL_NUM) ;
 
             return 1. / (idlx1 + idlx2 + idlx3) ;
         }

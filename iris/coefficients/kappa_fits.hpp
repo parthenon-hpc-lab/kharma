@@ -1,9 +1,8 @@
-#include "kappa.h"
 
-#include <stdio.h>
-#include <stdlib.h>
+#include "decs.hpp"
 
-#define SMALL 1e-40
+// #include <stdio.h>
+// #include <stdlib.h>
 
 // TODO ADD THESE INTERPOLATIONS TO BELOW
   // else if(params->distribution == params->KAPPA_DIST)
@@ -168,7 +167,7 @@ double kappa_I(FitParams * params)
 		             * tgamma(params->kappa/4.-1./3.) 
 		 * tgamma(params->kappa/4.-1./3.) 
 		             * tgamma(params->kappa/4.-1./3.) 
-                 * tgamma(params->kappa/4.+4./3.) + SMALL;
+                 * tgamma(params->kappa/4.+4./3.) + SMALL_NUM;
 
   double x = 3. * pow(params->kappa, -3./2.);
 
@@ -215,7 +214,7 @@ double kappa_Q(FitParams * params)
   double Nhigh = -(pow(4./5., 2)+params->kappa/50.) * (1./4.) 
                  * pow(3., (params->kappa-1.)/2.) * (params->kappa-2.) 
                  * (params->kappa-1.) * tgamma(params->kappa/4.-1./3.)
-                 * tgamma(params->kappa/4.+4./3.) + SMALL;
+                 * tgamma(params->kappa/4.+4./3.) + SMALL_NUM;
  
   double x = (37./10.)*pow(params->kappa, -8./5.);
 
@@ -269,11 +268,11 @@ double kappa_V(FitParams * params)
                  * pow(X_k, -1./2.) * (1./4.) * pow(3., (params->kappa-1.)/2.) 
                  * (params->kappa-2.) * (params->kappa-1.) 
                  * tgamma(params->kappa/4.-1./3.) 
-                 * tgamma(params->kappa/4.+4./3.) + SMALL;
+                 * tgamma(params->kappa/4.+4./3.) + SMALL_NUM;
 
   double x = 3.*pow(params->kappa, -3./2.);
 
-  double ans = (Nhigh < SMALL*SMALL) ? 0:
+  double ans = (Nhigh < SMALL_NUM*SMALL_NUM) ? 0:
                prefactor * Nlow * pow(X_k, 1./3.)
                * pow(1.+pow(X_k, x * (3.*params->kappa-4.)/6.)
                * pow(Nlow/Nhigh, x), -1./x);
@@ -341,7 +340,7 @@ double kappa_I_abs(FitParams * params)
                  / pow(params->kappa_width * params->kappa, 5.) 
                  * (2 * tgamma(2. + params->kappa/2.)
                  / (2.+params->kappa)-1.) 
-                 * (pow(3./params->kappa, 19./4.) + 3./5.) + SMALL;;
+                 * (pow(3./params->kappa, 19./4.) + 3./5.) + SMALL_NUM;;
 
   double x = pow(-7./4. + 8. * params->kappa/5., -43./50.);
 
@@ -401,7 +400,7 @@ double kappa_Q_abs(FitParams * params)
                  * (params->kappa-1.) * params->kappa 
                  / pow(params->kappa_width * params->kappa, 5.) 
                  * (2 * tgamma(2. + params->kappa/2.)
-                 / (2. + params->kappa)-1.) + SMALL;
+                 / (2. + params->kappa)-1.) + SMALL_NUM;
 
   double x = (7./5.) * pow(params->kappa, -23./20.);
 
@@ -469,7 +468,7 @@ double kappa_V_abs(FitParams * params)
                  * (params->kappa-2.) * (params->kappa-1.) * params->kappa 
                  / pow(params->kappa_width*params->kappa, 5.)
                  * (2 * tgamma(2. + params->kappa/2.)
-                 / (2. + params->kappa) - 1.) + SMALL;
+                 / (2. + params->kappa) - 1.) + SMALL_NUM;
 
   double x = (61./50.)*pow(params->kappa, -142./125.)+7./1000.;
 
@@ -656,7 +655,7 @@ double kappa35_rho_V(FitParams * params)
 		      * nu_c * cos(params->observer_angle))
 	             /(ME * CL * pow(params->nu, 2.));
 	
-  double bessel_term = (gsl_sf_bessel_Kn(0, 1./params->kappa_width)) / (gsl_sf_bessel_Kn(2, 1./params->kappa_width) + SMALL);
+  double bessel_term = (gsl_sf_bessel_Kn(0, 1./params->kappa_width)) / (gsl_sf_bessel_Kn(2, 1./params->kappa_width) + SMALL_NUM);
 	
   double w_term = (pow(params->kappa_width, 2.) + (2. * params->kappa_width) + 1.) 
 		 / (((25./8.) * pow(params->kappa_width, 2.)) + (4. * params->kappa_width) + 1.);
@@ -670,7 +669,7 @@ double kappa35_rho_V(FitParams * params)
     fprintf(stderr, "\nNaN in kappa rot. X_k, prefactor, bessel_term, w_term, g_X, ans: %g %g %g %g %g %g\n",
                     X_k, prefactor, bessel_term, w_term, g_X, ans);
     fprintf(stderr, "kappa, kappa_width, num, denom: %g %g %g %g", params->kappa, params->kappa_width,
-                    gsl_sf_bessel_Kn(0, 1./params->kappa_width), gsl_sf_bessel_Kn(2, 1./params->kappa_width) + SMALL);
+                    gsl_sf_bessel_Kn(0, 1./params->kappa_width), gsl_sf_bessel_Kn(2, 1./params->kappa_width) + SMALL_NUM);
  }
 #endif
 
@@ -692,7 +691,7 @@ double kappa4_rho_V(FitParams * params)
 		      * nu_c * cos(params->observer_angle))
 	             /(ME * CL * pow(params->nu, 2.));
 	
-  double bessel_term = (gsl_sf_bessel_Kn(0, 1./params->kappa_width)) / (gsl_sf_bessel_Kn(2, 1./params->kappa_width) + SMALL);
+  double bessel_term = (gsl_sf_bessel_Kn(0, 1./params->kappa_width)) / (gsl_sf_bessel_Kn(2, 1./params->kappa_width) + SMALL_NUM);
 	
   double w_term = (pow(params->kappa_width, 2.) + (54. * params->kappa_width) + 50.) 
 		 / (((30./11.) * pow(params->kappa_width, 2.)) + (134. * params->kappa_width) + 50.);
@@ -706,7 +705,7 @@ double kappa4_rho_V(FitParams * params)
     fprintf(stderr, "\nNaN in kappa rot. X_k, prefactor, bessel_term, w_term, g_X, ans: %g %g %g %g %g %g\n",
                     X_k, prefactor, bessel_term, w_term, g_X, ans);
     fprintf(stderr, "kappa, kappa_width, num, denom: %g %g %g %g", params->kappa, params->kappa_width,
-                    gsl_sf_bessel_Kn(0, 1./params->kappa_width), gsl_sf_bessel_Kn(2, 1./params->kappa_width) + SMALL);
+                    gsl_sf_bessel_Kn(0, 1./params->kappa_width), gsl_sf_bessel_Kn(2, 1./params->kappa_width) + SMALL_NUM);
  }
 #endif
 
@@ -728,7 +727,7 @@ double kappa45_rho_V(FitParams * params)
 		      * nu_c * cos(params->observer_angle))
 	             /(ME * CL * pow(params->nu, 2.));
 	
-  double bessel_term = (gsl_sf_bessel_Kn(0, 1./params->kappa_width)) / (gsl_sf_bessel_Kn(2, 1./params->kappa_width) + SMALL);
+  double bessel_term = (gsl_sf_bessel_Kn(0, 1./params->kappa_width)) / (gsl_sf_bessel_Kn(2, 1./params->kappa_width) + SMALL_NUM);
 	
   double w_term = (pow(params->kappa_width, 2.) + (43. * params->kappa_width) + 38.) 
 		 / (((7./3.) * pow(params->kappa_width, 2.)) + ((185./2.) * params->kappa_width) + 38.);
@@ -742,7 +741,7 @@ double kappa45_rho_V(FitParams * params)
     fprintf(stderr, "\nNaN in kappa rot. X_k, prefactor, bessel_term, w_term, g_X, ans: %g %g %g %g %g %g\n",
                     X_k, prefactor, bessel_term, w_term, g_X, ans);
     fprintf(stderr, "kappa, kappa_width, num, denom: %g %g %g %g", params->kappa, params->kappa_width,
-                    gsl_sf_bessel_Kn(0, 1./params->kappa_width), gsl_sf_bessel_Kn(2, 1./params->kappa_width) + SMALL);
+                    gsl_sf_bessel_Kn(0, 1./params->kappa_width), gsl_sf_bessel_Kn(2, 1./params->kappa_width) + SMALL_NUM);
  }
 #endif
 
@@ -764,7 +763,7 @@ double kappa5_rho_V(FitParams * params)
 		      * nu_c * cos(params->observer_angle))
 	             /(ME * CL * pow(params->nu, 2.));
 	
-  double bessel_term = (gsl_sf_bessel_Kn(0, 1./params->kappa_width)) / (gsl_sf_bessel_Kn(2, 1./params->kappa_width) + SMALL);
+  double bessel_term = (gsl_sf_bessel_Kn(0, 1./params->kappa_width)) / (gsl_sf_bessel_Kn(2, 1./params->kappa_width) + SMALL_NUM);
 	
   double w_term = ((params->kappa_width) + (13./14.)) 
 		 / ((2. * params->kappa_width) + (13./14.));
@@ -778,7 +777,7 @@ double kappa5_rho_V(FitParams * params)
     fprintf(stderr, "\nNaN in kappa rot. X_k, prefactor, bessel_term, w_term, g_X, ans: %g %g %g %g %g %g\n",
                     X_k, prefactor, bessel_term, w_term, g_X, ans);
     fprintf(stderr, "kappa, kappa_width, num, denom: %g %g %g %g", params->kappa, params->kappa_width,
-                    gsl_sf_bessel_Kn(0, 1./params->kappa_width), gsl_sf_bessel_Kn(2, 1./params->kappa_width) + SMALL);
+                    gsl_sf_bessel_Kn(0, 1./params->kappa_width), gsl_sf_bessel_Kn(2, 1./params->kappa_width) + SMALL_NUM);
  }
 #endif
 

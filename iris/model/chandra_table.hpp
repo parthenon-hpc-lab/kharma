@@ -38,14 +38,14 @@
 
 KOKKOS_INLINE_FUNCTION double get_weight(const double *xx, double x, int *jlo)
 {
-    //Get the value _before_ x in the table
+    // Get the value _before_ x in the table
     while (xx[*jlo] < x) {
         ++*jlo;
     }
     --*jlo;
 
     // Return weight for table values jlo, jlo+1
-    return (x - xx[*jlo]) / m::max(xx[*jlo + 1] - xx[*jlo], SMALL);
+    return (x - xx[*jlo]) / m::max(xx[*jlo + 1] - xx[*jlo], SMALL_NUM);
 }
 
 KOKKOS_INLINE_FUNCTION void interp_chandra(double mu, double *i, double *del)

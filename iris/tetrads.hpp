@@ -76,7 +76,7 @@ KOKKOS_INLINE_FUNCTION void set_Econ_from_trial(const double trial[GR_DIM], cons
     double norm = 0.;
     VLOOP norm += fabs(trial[v+1]);
 
-    if (norm <= SMALL) // bad trial vector; default to defdir
+    if (norm <= SMALL_NUM) // bad trial vector; default to defdir
         DLOOP1 Econ[mu] = (mu == defdir);
     else
         DLOOP1 Econ[mu] = trial[mu];
