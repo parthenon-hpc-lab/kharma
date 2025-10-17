@@ -11,7 +11,7 @@ variables:
   OMPI_ALLOW_RUN_AS_ROOT_CONFIRM: 1
   GIT_SUBMODULE_STRATEGY: recursive
   MAMBA_ROOT_PREFIX: /mamba
-  MAMBA_URL: https://micro.mamba.pm/api/micromamba/linux-64/latest
+  MAMBA_URL: https://micro.mamba.pm/api/micromamba/linux-aarch64/latest
 
 ### DEFAULT TEST BEHAVIOR ###
 default:
