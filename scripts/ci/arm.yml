@@ -54,7 +54,7 @@ build:
     - dnf -y groupinstall "Development Tools"
     - dnf -y install hostname environment-modules cmake mpich-devel fftw-devel
     - source /etc/profile
-    - module load mpi/mpich-x86_64
+    - module load mpi
     - curl -Ls $MAMBA_URL | tar -xvj bin/micromamba
   script:
     - ./make.sh clean hdf5
