@@ -46,7 +46,7 @@ stages:
 build:
   stage: build
   variables:
-    NPROC: 12
+    NPROC: 8
     HOST_ARCH: ARMV81
     C_NATIVE: gcc
     CXX_NATIVE: g++
