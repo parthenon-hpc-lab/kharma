@@ -19,5 +19,9 @@ trigger_cpu:
     include: scripts/ci/cpu.yml
     strategy: depend
 
+trigger_arm:
+  trigger:
+    include: scripts/ci/arm.yml
+
 # TODO trigger_cpu w/intel or similar container
 # TODO build containers here
