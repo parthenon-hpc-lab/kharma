@@ -1,5 +1,5 @@
 # KHARMA
-KHARMA is an implementation of the HARM scheme for gerneral relativistic magnetohydrodynamics (GRMHD) in C++.  It is based on the Parthenon AMR framework, using Kokkos for parallelism and GPU support.  It is composed of modular "packages," which in theory make it easy to add or swap components representing different algorithmic components or physics processes.
+KHARMA is an implementation of the HARM scheme for general relativistic magnetohydrodynamics (GRMHD) in C++.  It is based on the Parthenon AMR framework, using Kokkos for parallelism and GPU support.  It is composed of modular "packages," which in theory make it easy to add or swap components representing different algorithmic components or physics processes.
 
 KHARMA is capable of closely matching other HARM implementations, e.g. [iharm3d](https://github.com/AFD-Illinois/iharm3d). However, it also updates the scheme to support static and adaptive mesh refinement, new methods for primitive variable recovery, new boundary conditions, and new stability features for running difficult simulations at high resolutions reliably.
 

@@ -25,12 +25,15 @@ log_*.txt
 bondi_analytic_*.txt
 atmosphere_soln_*.txt
 shock_soln_*.txt
+parthinput.*
 
 # Editor documents
 .project
 .cproject
 .ptp-sync
 .vscode/
+.cache/
+*~
 
 # C++ excludes
 # Build directory

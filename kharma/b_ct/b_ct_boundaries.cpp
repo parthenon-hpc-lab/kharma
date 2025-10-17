@@ -36,6 +36,7 @@
 #include "decs.hpp"
 #include "domain.hpp"
 #include "floors.hpp"
+#include "floors_functions.hpp"
 #include "grmhd.hpp"
 #include "grmhd_functions.hpp"
 #include "inverter.hpp"
@@ -298,6 +299,8 @@ void B_CT::ReconnectBoundaryB3(MeshBlockData<Real> *rc, IndexDomain domain, cons
 
     const Real gam = pmb->packages.Get("GRMHD")->Param<Real>("gamma");
 
+    const int reconnection_outer_buffer = pmb->packages.Get("B_CT")->Param<int>("reconnection_outer_buffer");
+
     const Floors::Prescription floors = pmb->packages.Get("Floors")->Param<Floors::Prescription>("prescription");
     // Don't be fooled, this function does *not* support/preserve EMHD values
     const EMHD::EMHD_parameters& emhd_params = EMHD::GetEMHDParameters(pmb->packages);
@@ -307,7 +310,7 @@ void B_CT::ReconnectBoundaryB3(MeshBlockData<Real> *rc, IndexDomain domain, cons
     IndexRange3 bi = KDomain::GetRange(rc, IndexDomain::interior, F3, coarse);
     const int jf = (binner) ? bi.js : bi.je; // j index of last zone next to pole
     parthenon::par_for_outer(DEFAULT_OUTER_LOOP_PATTERN, "reduce_B3_" + bname, pmb->exec_space,
-        0, 1, 0, fpack.GetDim(4)-1, b.is, b.ie,
+        0, 1, 0, fpack.GetDim(4)-1, b.is, b.ie - reconnection_outer_buffer,
         KOKKOS_LAMBDA(parthenon::team_mbr_t member, const int &v, const int& i) {
             // Sum the first rank of B3
             double B3_sum = 0.;
@@ -338,8 +341,9 @@ void B_CT::ReconnectBoundaryB3(MeshBlockData<Real> *rc, IndexDomain domain, cons
 
                     // Recover primitive GRMHD variables from our modified U
                     Inverter::u_to_p<Inverter::Type::kastaun>(G, U, m_u, gam, k, jf, i, P, m_p, Loci::center,
-                                                              floors, 8, 1e-8);
+                                                              25, 1e-12, false);
                     // Floor them
+                    // TODO THIS IS IN FLUID FRAME
                     int fflag = Floors::apply_geo_floors(G, P, m_p, gam, k, jf, i, floors, floors, Loci::center);
                     // Recalculate U on anything we floored
                     if (fflag)

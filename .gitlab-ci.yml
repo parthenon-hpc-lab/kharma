@@ -6,10 +6,6 @@ default:
       - tests/*/*.png
       - tests/*/*.txt
 
-trigger_darwin:
-  trigger:
-    include: scripts/ci/darwin.yml
-
 trigger_nvhpc:
   trigger:
     include: scripts/ci/nvhpc.yml

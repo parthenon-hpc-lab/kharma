@@ -1,7 +1,6 @@
 # The Magnetically Arrested Disk (MAD) accretion flow
 # This is a normal large-disk (20/41 r_g) MAD with gamma=5/3,
-# like the "Illinois v5" simulation library.
-# Very low floors now that we have good recovery
+# tilted by 45 degrees with transmitting polar boundaries
 
 <parthenon/job>
 problem_id = torus
@@ -15,15 +14,19 @@ nx3 = 64
 <parthenon/meshblock>
 nx1 = 128
 nx2 = 64
-# Many boundaries options are incompatible with multiple phi blocks
+# Cannot break up phi with transmitting boundaries
 nx3 = 64
 
 <coordinates>
 base = spherical_ks
-transform = fmks
+transform = mks
 r_out = 1000
 a = 0.9375
 hslope = 0.3
+
+<ismr>
+on = true
+nlevels = 3
 
 <parthenon/time>
 tlim = 60000.0
@@ -32,6 +35,8 @@ nlim = -1
 <torus>
 rin = 20.0
 rmax = 41.0
+# Tilt in degrees, rotates initial torus CC about +y
+tilt = 45.
 
 <perturbation>
 u_jitter = 0.04
@@ -58,8 +63,15 @@ type = kharma
 two_sync = false
 
 <boundaries>
-inner_x2 = reflecting
-outer_x2 = reflecting
+inner_x2 = transmitting
+outer_x2 = transmitting
+# This reduces the polar "wake," but shrinks the timestep,
+# and has caused instabilities. YMMV.
+excise_polar_flux = true
+# Reconnect phi component of B at the pole, as if it were one zone
+# Dramatically reduces instabilities
+reconnect_B3_inner_x2 = true
+reconnect_B3_outer_x2 = true
 
 <floors>
 # Minimal floors, applied in the default Normal Observer frame

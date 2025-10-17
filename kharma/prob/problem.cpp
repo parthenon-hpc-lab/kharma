@@ -154,12 +154,14 @@ void KHARMA::ProblemGenerator(MeshBlock *pmb, ParameterInput *pin)
     // If needed, they are applied within the problem-specific call.
     // See InitializeFMTorus in fm_torus.cpp for the details for torus problems.
 
-    // Note we no longer call PtoU here either, as GRMHD variables' PtoU requires
-    // the magnetic field, which is added in PostInitialize, after all blocks
-    // are filled with other variables (it can be related to density averages which
-    // require correct ghost zones)
-    // If the B field will depend on the conserved variables (for some reason?)
-    // they must be computed by the particular problem.
+    // This is a temporary PtoU call.  It will underestimate T^0_0 for magnetized
+    // problems, since the magnetic field is not yet initialized.
+    // However, the polar mitigations expect P,U in a consistent state,
+    // so we have to give them something.
+    // Problems with Dirichlet boundaries should just initialize the whole grid,
+    // and the boundaries will be "frozen in" here (and re-frozen if B is added later)
+    Flux::BlockPtoU(rc.get(), IndexDomain::entire);
+    KBoundaries::FreezeDirichletBlock(rc.get());
 
     EndFlag();
 }

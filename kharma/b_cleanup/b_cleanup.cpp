@@ -1,25 +1,25 @@
-/* 
+/*
  *  File: b_cleanup.cpp
- *  
+ *
  *  BSD 3-Clause License
- *  
+ *
  *  Copyright (c) 2020, AFD Group at UIUC
  *  All rights reserved.
- *  
+ *
  *  Redistribution and use in source and binary forms, with or without
  *  modification, are permitted provided that the following conditions are met:
- *  
+ *
  *  1. Redistributions of source code must retain the above copyright notice, this
  *     list of conditions and the following disclaimer.
- *  
+ *
  *  2. Redistributions in binary form must reproduce the above copyright notice,
  *     this list of conditions and the following disclaimer in the documentation
  *     and/or other materials provided with the distribution.
- *  
+ *
  *  3. Neither the name of the copyright holder nor the names of its
  *     contributors may be used to endorse or promote products derived from
  *     this software without specific prior written permission.
- *  
+ *
  *  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  *  AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  *  IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -202,7 +202,7 @@ TaskStatus B_Cleanup::CleanupDivergence(std::shared_ptr<MeshData<Real>>& md)
     }
 
     // Calculate/print inital max divB exactly as we would during run
-    double divb_start; 
+    double divb_start;
     if (use_b_ct) {
         divb_start = B_CT::GlobalMaxDivB(md.get());
     } else {
@@ -274,7 +274,7 @@ TaskStatus B_Cleanup::CleanupDivergence(std::shared_ptr<MeshData<Real>>& md)
         // Synchronize to update cons.B's ghost zones
         KHARMADriver::SyncAllBounds(md);
         // Make sure prims.B reflects solution
-        B_CT::MeshUtoP(md.get(), IndexDomain::entire, false);
+        B_CT::MeshUtoP(md.get(), IndexDomain::entire);
         // Recalculate divB max for one last check
         divb_end = B_CT::GlobalMaxDivB(md.get());
     } else {
@@ -283,7 +283,7 @@ TaskStatus B_Cleanup::CleanupDivergence(std::shared_ptr<MeshData<Real>>& md)
         // Synchronize to update cons.B's ghost zones
         KHARMADriver::SyncAllBounds(md);
         // Make sure prims.B reflects solution
-        B_FluxCT::MeshUtoP(md.get(), IndexDomain::entire, false);
+        B_FluxCT::MeshUtoP(md.get(), IndexDomain::entire);
         // Recalculate divB max for one last check
         divb_end = B_FluxCT::GlobalMaxDivB(md.get());
     }
@@ -390,7 +390,7 @@ TaskStatus B_Cleanup::CornerLaplacian(MeshData<Real>* md, const std::string& p_v
             auto rc = md->GetBlockData(i);
             auto pmb = rc->GetBlockPointer();
             auto dB_block = rc->PackVariables(std::vector<std::string>{"dB"});
-            if (pmb->boundary_flag[BoundaryFace::inner_x2] == BoundaryFlag::user) {
+            if (KBoundaries::IsPhysicalBoundary(pmb, BoundaryFace::inner_x2)) {
                 pmb->par_for("dB_boundary", kb_l.s, kb_l.e, ib_l.s, ib_l.e,
                     KOKKOS_LAMBDA (const int &k, const int &i) {
                         dB_block(V1, k, jb.s-1, i) = dB_block(V1, k, jb.s, i);
@@ -399,7 +399,7 @@ TaskStatus B_Cleanup::CornerLaplacian(MeshData<Real>* md, const std::string& p_v
                     }
                 );
             }
-            if (pmb->boundary_flag[BoundaryFace::outer_x2] == BoundaryFlag::user) {
+            if (KBoundaries::IsPhysicalBoundary(pmb, BoundaryFace::outer_x2)) {
                 pmb->par_for("dB_boundary", kb_l.s, kb_l.e, ib_l.s, ib_l.e,
                     KOKKOS_LAMBDA (const int &k, const int &i) {
                         dB_block(V1, k, jb.e+1, i) = dB_block(V1, k, jb.e, i);
@@ -474,14 +474,14 @@ TaskStatus B_Cleanup::CenterLaplacian(MeshData<Real>* md, const std::string& p_v
             auto pmb = rc->GetBlockPointer();
             auto dB_block = rc->PackVariables(std::vector<std::string>{"dB"});
             const IndexRange3 bi2 = KDomain::GetRange(md, IndexDomain::interior, F2);
-            if (pmb->boundary_flag[BoundaryFace::inner_x2] == BoundaryFlag::user) {
+            if (KBoundaries::IsPhysicalBoundary(pmb, BoundaryFace::inner_x2)) {
                 pmb->par_for("dB_boundary", b2.ks, b2.ke, bi2.js, bi2.js, b2.is, b2.ie,
                     KOKKOS_LAMBDA (const int &k, const int &j, const int &i) {
                         dB_block(F2, 0, k, j, i) = 0.;
                     }
                 );
             }
-            if (pmb->boundary_flag[BoundaryFace::outer_x2] == BoundaryFlag::user) {
+            if (KBoundaries::IsPhysicalBoundary(pmb, BoundaryFace::outer_x2)) {
                 pmb->par_for("dB_boundary", b2.ks, b2.ke, bi2.je, bi2.je, b2.is, b2.ie,
                     KOKKOS_LAMBDA (const int &k, const int &j, const int &i) {
                         dB_block(F2, 0, k, j, i) = 0.;
@@ -512,7 +512,7 @@ TaskStatus B_Cleanup::CenterLaplacian(MeshData<Real>* md, const std::string& p_v
             auto pmb = rc->GetBlockPointer();
             auto lap_block = rc->PackVariables(std::vector<std::string>{lap_var});
             const IndexRange3 bic = KDomain::GetRange(md, IndexDomain::interior);
-            if (pmb->boundary_flag[BoundaryFace::inner_x1] == BoundaryFlag::user) {
+            if (KBoundaries::IsPhysicalBoundary(pmb, BoundaryFace::inner_x1)) {
                 pmb->par_for("lap_boundary", bc.ks, bc.ke, bc.js, bc.je, bc.is, bic.is,
                     KOKKOS_LAMBDA (const int &k, const int &j, const int &i) {
                         lap_block(0, k, j, i) = 0.;
@@ -527,7 +527,7 @@ TaskStatus B_Cleanup::CenterLaplacian(MeshData<Real>* md, const std::string& p_v
             auto pmb = rc->GetBlockPointer();
             auto lap_block = rc->PackVariables(std::vector<std::string>{lap_var});
             const IndexRange3 bic = KDomain::GetRange(md, IndexDomain::interior);
-            if (pmb->boundary_flag[BoundaryFace::outer_x1] == BoundaryFlag::user) {
+            if (KBoundaries::IsPhysicalBoundary(pmb, BoundaryFace::outer_x1)) {
                 pmb->par_for("lap_boundary", bc.ks, bc.ke, bc.js, bc.je, bic.ie, bc.ie,
                     KOKKOS_LAMBDA (const int &k, const int &j, const int &i) {
                         lap_block(0, k, j, i) = 0.;

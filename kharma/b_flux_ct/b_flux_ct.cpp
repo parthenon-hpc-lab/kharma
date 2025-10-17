@@ -112,6 +112,12 @@ std::shared_ptr<KHARMAPackage> Initialize(ParameterInput *pin, std::shared_ptr<P
     std::vector<MetadataFlag> flags_cons = {Metadata::Real, Metadata::Independent, Metadata::Restart, Metadata::FillGhost, Metadata::WithFluxes, Metadata::Conserved,
                                             Metadata::Cell, Metadata::GetUserFlag("MHD"), areWeImplicit, Metadata::Vector};
 
+    // KHARMA now (vaguely) supports restarting from dump (.phdf) files.
+    // To do so we need to read cell-centered primitive B and interpolate to faces, as we do with iharm3d restart files
+    if (pin->GetOrAddBoolean("b_field", "restart_from_prims", false)) {
+        flags_prim.push_back(Metadata::Restart);
+    }
+
     auto m = Metadata(flags_prim, s_vector);
     pkg->AddField("prims.B", m);
     m = Metadata(flags_cons, s_vector);
@@ -414,7 +420,7 @@ void ZeroBoundaryFlux(MeshData<Real> *md, IndexDomain domain, bool coarse)
         auto& B_F = rc->PackVariablesAndFluxes(std::vector<std::string>{"cons.B"});
 
         if (domain == IndexDomain::inner_x2 &&
-            pmb->boundary_flag[BoundaryFace::inner_x2] == BoundaryFlag::user) {
+            KBoundaries::IsPhysicalBoundary(pmb, BoundaryFace::inner_x2)) {
             pmb->par_for("fix_flux_b_l", kbs.s, kbs.e, jbf.s, jbf.s, ibs.s, ibs.e,
                 KOKKOS_LAMBDA (const int &k, const int &j, const int &i) {
                     B_F.flux(X2DIR, V1, k, j, i) = 0.;
@@ -426,7 +432,7 @@ void ZeroBoundaryFlux(MeshData<Real> *md, IndexDomain domain, bool coarse)
         }
 
         if (domain == IndexDomain::outer_x2 &&
-            pmb->boundary_flag[BoundaryFace::outer_x2] == BoundaryFlag::user) {
+            KBoundaries::IsPhysicalBoundary(pmb, BoundaryFace::outer_x2)) {
             pmb->par_for("fix_flux_b_r", kbs.s, kbs.e, jbf.e, jbf.e, ibs.s, ibs.e,
                 KOKKOS_LAMBDA (const int &k, const int &j, const int &i) {
                     B_F.flux(X2DIR, V1, k, j, i) = 0.;
@@ -444,7 +450,7 @@ void ZeroBoundaryFlux(MeshData<Real> *md, IndexDomain domain, bool coarse)
         // 2. However, B2 and B3 are normal outflow conditions -- despite the fluxes here, the outflow
         //    conditions will set them equal to the last zone.
         if (domain == IndexDomain::inner_x1 &&
-            pmb->boundary_flag[BoundaryFace::inner_x1] == BoundaryFlag::user) {
+            KBoundaries::IsPhysicalBoundary(pmb, BoundaryFace::inner_x1)) {
             pmb->par_for("fix_flux_b_in_old", kbs.s, kbs.e, jbs.s, jbs.e, ibf.s, ibf.s,
                 KOKKOS_LAMBDA (const int &k, const int &j, const int &i) {
                     B_F.flux(X1DIR, V2, k, j, i) = 0.;
@@ -456,7 +462,7 @@ void ZeroBoundaryFlux(MeshData<Real> *md, IndexDomain domain, bool coarse)
         }
 
         if (domain == IndexDomain::outer_x1 &&
-            pmb->boundary_flag[BoundaryFace::outer_x1] == BoundaryFlag::user) {
+            KBoundaries::IsPhysicalBoundary(pmb, BoundaryFace::outer_x1)) {
             pmb->par_for("fix_flux_b_out_old", kbs.s, kbs.e, jbs.s, jbs.e, ibf.e, ibf.e,
                 KOKKOS_LAMBDA (const int &k, const int &j, const int &i) {
                     B_F.flux(X1DIR, V2, k, j, i) = 0.;
@@ -503,7 +509,7 @@ void Bflux0(MeshData<Real> *md, IndexDomain domain, bool coarse)
         // Allows nonzero flux across X1 boundary but still keeps divB=0 (turns out effectively to have 0 flux)
         // Usable only for Dirichlet conditions
         if (domain == IndexDomain::inner_x1 &&
-            pmb->boundary_flag[BoundaryFace::inner_x1] == BoundaryFlag::user)
+            KBoundaries::IsPhysicalBoundary(pmb, BoundaryFace::inner_x1))
         {
             pmb->par_for("fix_flux_b_in", kbs.s, kbs.e, jbs.s, jbs.e, ibf.s, ibf.s, // Hyerin (12/28/22) for 1st & 2nd prescription
                 KOKKOS_LAMBDA (const int &k, const int &j, const int &i) {
@@ -515,7 +521,7 @@ void Bflux0(MeshData<Real> *md, IndexDomain domain, bool coarse)
 
         }
         if (domain == IndexDomain::inner_x2 &&
-            pmb->boundary_flag[BoundaryFace::inner_x2] == BoundaryFlag::user)
+            KBoundaries::IsPhysicalBoundary(pmb, BoundaryFace::inner_x2))
         {
             pmb->par_for("fix_flux_b_in", kbs.s, kbs.e, jbf.s, jbf.s, ibs.s, ibs.e,
                 KOKKOS_LAMBDA (const int &k, const int &j, const int &i) {
@@ -528,7 +534,7 @@ void Bflux0(MeshData<Real> *md, IndexDomain domain, bool coarse)
 
         // OUTER
         if (domain == IndexDomain::outer_x1 &&
-            pmb->boundary_flag[BoundaryFace::outer_x1] == BoundaryFlag::user)
+            KBoundaries::IsPhysicalBoundary(pmb, BoundaryFace::outer_x1))
         {
             pmb->par_for("fix_flux_b_out", kbs.s, kbs.e, jbs.s, jbs.e, ibf.e, ibf.e, // Hyerin (12/28/22) for 1st & 2nd prescription
                 KOKKOS_LAMBDA (const int &k, const int &j, const int &i) {
@@ -539,7 +545,7 @@ void Bflux0(MeshData<Real> *md, IndexDomain domain, bool coarse)
             );
         }
         if (domain == IndexDomain::outer_x2 &&
-            pmb->boundary_flag[BoundaryFace::outer_x2] == BoundaryFlag::user)
+            KBoundaries::IsPhysicalBoundary(pmb, BoundaryFace::outer_x2))
         {
             pmb->par_for("fix_flux_b_out", kbs.s, kbs.e, jbf.e, jbf.e, ibs.s, ibs.e,
                 KOKKOS_LAMBDA (const int &k, const int &j, const int &i) {
@@ -557,9 +563,9 @@ IndexRange ValidDivBX1(MeshBlock *pmb)
     // intersecting the interior & exterior faces. Don't report these zones, as we expect it.
     const IndexRange ibl = pmb->meshblock_data.Get("base")->GetBoundsI(IndexDomain::interior);
     bool avoid_inner = (!pmb->packages.Get("B_FluxCT")->Param<bool>("fix_flux_inner_x1") &&
-        pmb->boundary_flag[BoundaryFace::inner_x1] == BoundaryFlag::user);
+        KBoundaries::IsPhysicalBoundary(pmb, BoundaryFace::inner_x1));
     bool avoid_outer = (!pmb->packages.Get("B_FluxCT")->Param<bool>("fix_flux_outer_x1") &&
-        pmb->boundary_flag[BoundaryFace::outer_x1] == BoundaryFlag::user);
+        KBoundaries::IsPhysicalBoundary(pmb, BoundaryFace::outer_x1));
     return IndexRange{ibl.s + (avoid_inner), ibl.e + (!avoid_outer)};
 }
 

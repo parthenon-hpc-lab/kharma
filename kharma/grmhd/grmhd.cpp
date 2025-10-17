@@ -39,9 +39,11 @@
 // TODO eliminate when Parthenon gets reduction types
 #include "Kokkos_Core.hpp"
 
+#include "b_ct.hpp"
 #include "boundaries.hpp"
 #include "current.hpp"
 #include "floors.hpp"
+#include "floors_functions.hpp"
 #include "flux.hpp"
 #include "gr_coordinates.hpp"
 #include "grmhd_functions.hpp"
@@ -256,6 +258,7 @@ Real EstimateTimestep(MeshData<Real> *md)
     const auto& grmhd_pars = pmesh->packages.Get("GRMHD")->AllParams();
 
     // If we have to recompute ctop anywhere, we do it now
+    // TODO only call if one of the reconnect_ or excised polar is enabled
     UpdateAveragedCtop(md);
 
     // Other things we might have to return (light-crossing, pre-set timestep, etc.)
@@ -293,17 +296,27 @@ Real EstimateTimestep(MeshData<Real> *md)
     // Actually compute the timestep if we have to
     const IndexRange3 b = KDomain::GetRange(md, IndexDomain::interior);
 
+    // Added by Hyerin (03/07/24)
+    // Internal SMR adds a factor to dx3 at poles based on larger cell width
+    // TODO distinguish polar from other ISMR if more modes are added
+    const bool ismr_poles = pmesh->packages.AllPackages().count("ISMR");
+    const uint ismr_nlevels = (ismr_poles) ? pmesh->packages.Get("ISMR")->Param<uint>("nlevels") : 0;
+
     // TODO version preserving location, with switch to keep this fast one
-    // TODO maybe split normal, ISMR timesteps? Excised pole/recalculated ctop too?
+    // TODO maybe split normal vs ISMR (/Excised pole/etc) timesteps? Make normal calculation mesh-wise?
     double min_ndt = std::numeric_limits<double>::max();
     for (auto &pmb : pmesh->block_list) {
         auto rc = pmb->meshblock_data.Get(md->StageName()).get();
         // We only need this block-wise to check boundary flags for ISMR, could special-case that
-        const bool polar_inner_x2 = pmb->boundary_flag[BoundaryFace::inner_x2] == BoundaryFlag::user;
-        const bool polar_outer_x2 = pmb->boundary_flag[BoundaryFace::outer_x2] == BoundaryFlag::user;
+        const bool is_inner_x2 = KBoundaries::IsPhysicalBoundary(pmb, BoundaryFace::inner_x2);
+        const bool is_outer_x2 = KBoundaries::IsPhysicalBoundary(pmb, BoundaryFace::outer_x2);
 
         const auto& cmax  = rc->PackVariables(std::vector<std::string>{"Flux.cmax"});
         const auto& cmin  = rc->PackVariables(std::vector<std::string>{"Flux.cmin"});
+
+        auto& boundaries = pmesh->packages.Get<KHARMAPackage>("Boundaries")->AllParams();
+        const bool excise_inner_x2 = boundaries.Get<bool>("excise_flux_inner_x2");
+        const bool excise_outer_x2 = boundaries.Get<bool>("excise_flux_outer_x2");
 
         double block_min_ndt = 0.;
         pmb->par_reduce("ndt_min", b.ks, b.ke, b.js, b.je, b.is, b.ie,
@@ -311,10 +324,25 @@ Real EstimateTimestep(MeshData<Real> *md)
                         double &local_result) {
                 const auto& G = cmax.GetCoords();
                 int ismr_factor = 1;
+                double excise_factor = 1.0;
                 double courant_limit = 1.0;
+                if (ismr_poles && is_inner_x2 && j < (b.js + ismr_nlevels)) {
+                    ismr_factor = m::pow(2, ismr_nlevels - (j - b.js));
+                    courant_limit = 0.5;
+                }
+                if (ismr_poles && is_outer_x2 && j > (b.je - ismr_nlevels)) {
+                    ismr_factor = m::pow(2, ismr_nlevels - (b.je - j));
+                    courant_limit = 0.5;
+                }
+
+                if (excise_inner_x2 && is_inner_x2 && j == b.js) {
+                    excise_factor = 0.5;
+                } else if (excise_outer_x2 && is_outer_x2 && j == b.je) {
+                    excise_factor = 0.5;
+                }
 
                 double ndt_zone = courant_limit / (1 / (G.Dxc<1>(i) /  m::max(cmax(V1, k, j, i), cmin(V1, k, j, i))) +
-                                    1 / (G.Dxc<2>(j) /  m::max(cmax(V2, k, j, i), cmin(V2, k, j, i))) +
+                                    1 / (G.Dxc<2>(j) * excise_factor /  m::max(cmax(V2, k, j, i), cmin(V2, k, j, i))) +
                                     1 / (G.Dxc<3>(k) * ismr_factor /  m::max(cmax(V3, k, j, i), cmin(V3, k, j, i))));
 
                 if (!m::isnan(ndt_zone) && (ndt_zone < local_result)) {
@@ -453,9 +481,9 @@ TaskStatus PostStepDiagnostics(const SimTime& tm, MeshData<Real> *md)
         // Not sure when I'd do the check to hide latency, it's a step-end sort of deal
         // Just as well it's behind extra_checks 2
         // This may happen while ch0-1 are in flight from floors, but ch2-4 are now reusable
-        Reductions::DomainReduction<Reductions::Var::neg_rho, int>(md, UserHistoryOperation::sum, 2);
-        Reductions::DomainReduction<Reductions::Var::neg_u, int>(md, UserHistoryOperation::sum, 3);
-        Reductions::DomainReduction<Reductions::Var::neg_rhout, int>(md, UserHistoryOperation::sum, 4);
+        Reductions::DomainReduction<Reductions::Var::neg_rho, UserHistoryOperation::sum, int>(md, 2);
+        Reductions::DomainReduction<Reductions::Var::neg_u, UserHistoryOperation::sum, int>(md, 3);
+        Reductions::DomainReduction<Reductions::Var::neg_rhout, UserHistoryOperation::sum, int>(md, 4);
         int nless_rho = Reductions::Check<int>(md, 2);
         int nless_u = Reductions::Check<int>(md, 3);
         int nless_rhout = Reductions::Check<int>(md, 4);
@@ -515,7 +543,7 @@ void CancelBoundaryU3(MeshBlockData<Real> *rc, IndexDomain domain, bool coarse)
                 parthenon::par_for_inner(member, bi.ks, bi.ke,
                     [&](const int& k) {
                     Inverter::u_to_p<Inverter::Type::kastaun>(G, U, m_u, gam, k, jf, i, P, m_p, Loci::center,
-                                                                floors, 8, 1e-8);
+                                                              25, 1e-12, false);
                     }
                 );
             }
@@ -612,7 +640,7 @@ void CancelBoundaryT3(MeshBlockData<Real> *rc, IndexDomain domain, bool coarse)
                     U(m_u.U3, k, jf, i) -= T3_avg;
                     // Recover primitive GRMHD variables from our modified U
                     Inverter::u_to_p<Inverter::Type::kastaun>(G, U, m_u, gam, k, jf, i, P, m_p, Loci::center,
-                                                              floors, 8, 1e-8);
+                                                              25, 1e-12, false);
                     // Floor them
                     int fflag = Floors::apply_geo_floors(G, P, m_p, gam, k, jf, i, floors, floors, Loci::center);
                     // Recalculate U on anything we floored
@@ -627,6 +655,8 @@ void CancelBoundaryT3(MeshBlockData<Real> *rc, IndexDomain domain, bool coarse)
 void UpdateAveragedCtop(MeshData<Real> *md)
 {
     auto pmesh = md->GetMeshPointer();
+    if (pmesh->packages.AllPackages().count("B_CT"))
+        B_CT::MeshUtoP(md, IndexDomain::interior);
     auto& params = pmesh->packages.Get<KHARMAPackage>("Boundaries")->AllParams();
     for (auto &pmb : pmesh->block_list) {
         auto &rc = pmb->meshblock_data.Get(md->StageName());
@@ -646,9 +676,10 @@ void UpdateAveragedCtop(MeshData<Real> *md)
             // If we've modified values on the pole...
             if (params.Get<bool>("cancel_T3_" + bname) ||
                 params.Get<bool>("cancel_U3_" + bname) ||
-                b3_is_reconnected) {
+                b3_is_reconnected ||
+                params.Get<bool>("excise_flux_" + bname)) {
                 // ...and if this face of the block corresponds to a global boundary...
-                if (pmb->boundary_flag[bface] == BoundaryFlag::user) {
+                if (KBoundaries::IsPhysicalBoundary(pmb, bface)) {
                     PackIndexMap prims_map, cons_map;
                     auto P = rc->PackVariables({Metadata::GetUserFlag("Primitive"), Metadata::Cell}, prims_map);
                     const VarMap m_p(prims_map, false);
@@ -684,16 +715,8 @@ void UpdateAveragedCtop(MeshData<Real> *md)
                             Flux::vchar_global(G, P, m_p, Dtmp, gam, emhd_params, k, jf, i, Loci::center, X3DIR,
                                         cmax(V3, k, jf, i), cmin_minus);
                             cmin(V3, k, jf, i) = -cmin_minus;
-                            if (half_cells) {
-                                cmin(bdir-1, k, jf, i) *= 0.5;
-                                cmax(bdir-1, k, jf, i) *= 0.5;
-                            }
                         }
                     );
-
-                    if (params.Get<bool>("excise_flux_" + bname)) {
-
-                    }
                 }
             }
         }

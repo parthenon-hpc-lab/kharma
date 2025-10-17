@@ -34,6 +34,7 @@
 
 #include "dirichlet.hpp"
 
+#include "boundary_types.hpp"
 #include "domain.hpp"
 #include "types.hpp"
 
@@ -117,9 +118,12 @@ void KBoundaries::FreezeDirichlet(std::shared_ptr<MeshData<Real>> &md)
             for (int i=0; i < md->NumBlocks(); i++) {
                 auto rc = md->GetBlockData(i).get();
                 auto pmb = rc->GetBlockPointer();
-                auto domain = BoundaryDomain(bface);
-                // Set whatever is in that domain as the Dirichlet bound
-                SetDomainDirichlet(rc, domain, false);
+                // ...if the face is not internal
+                if (KBoundaries::IsPhysicalBoundary(pmb, bface)) {
+                    auto domain = BoundaryDomain(bface);
+                    // Set whatever is in that domain as the Dirichlet bound
+                    SetDomainDirichlet(rc, domain, false);
+                }
             }
         }
     }
@@ -131,8 +135,9 @@ void KBoundaries::FreezeDirichletBlock(MeshBlockData<Real> *rc)
         BoundaryFace bface = (BoundaryFace) i;
         auto bname = BoundaryName(bface);
         auto pmb = rc->GetBlockPointer();
-        // ...if this boundary is dirichlet...
-        if (pmb->packages.Get("Boundaries")->Param<std::string>(bname) == "dirichlet") {
+        // ...if this boundary is dirichlet and physical...
+        if (pmb->packages.Get("Boundaries")->Param<std::string>(bname) == "dirichlet" &&
+            KBoundaries::IsPhysicalBoundary(pmb, bface)) {
             //std::cout << "Freezing dirichlet " << bname << " on block." << std::endl;
             auto domain = BoundaryDomain(bface);
             // Set whatever is in that domain as the Dirichlet bound

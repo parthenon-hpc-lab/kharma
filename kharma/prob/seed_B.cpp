@@ -67,15 +67,15 @@ inline T MPIReduce_once(T f, MPI_Op O)
 // Shorter names for the reductions we use here
 Real MaxBsq(MeshData<Real> *md)
 {
-    return Reductions::DomainReduction<Reductions::Var::bsq, Real>(md, UserHistoryOperation::max);
+    return Reductions::DomainReduction<Reductions::Var::bsq, UserHistoryOperation::max, Real>(md);
 }
 Real MaxPressure(MeshData<Real> *md)
 {
-    return Reductions::DomainReduction<Reductions::Var::gas_pressure, Real>(md, UserHistoryOperation::max);
+    return Reductions::DomainReduction<Reductions::Var::gas_pressure, UserHistoryOperation::max, Real>(md);
 }
 Real MinBeta(MeshData<Real> *md)
 {
-    return Reductions::DomainReduction<Reductions::Var::beta, Real>(md, UserHistoryOperation::min);
+    return Reductions::DomainReduction<Reductions::Var::beta, UserHistoryOperation::min, Real>(md);
 }
 
 

@@ -397,11 +397,32 @@ int hdf5_read_array(void *data, const char *name, size_t rank,
 
   if(DEBUG) {
     fprintf(stderr,"Reading arr %s:\n", path);
-    fprintf(stderr,"Total file size: %llu %llu %llu %llu\n", fdims[0], fdims[1], fdims[2], fdims[3]);
-    fprintf(stderr,"File start: %llu %llu %llu %llu\n", fstart[0], fstart[1], fstart[2], fstart[3]);
-    fprintf(stderr,"File read size: %llu %llu %llu %llu\n", fcount[0], fcount[1], fcount[2], fcount[3]);
-    fprintf(stderr,"Total memory size: %llu %llu %llu %llu\n", mdims[0], mdims[1], mdims[2], mdims[3]);
-    fprintf(stderr,"Memory start: %llu %llu %llu %llu\n\n", mstart[0], mstart[1], mstart[2], mstart[3]);
+    // Prevent compiler complaining when hsize_t changes on different platforms
+    fprintf(stderr,"Total file size: %llu %llu %llu %llu\n",
+        static_cast<unsigned long long>(fdims[0]),
+        static_cast<unsigned long long>(fdims[1]),
+        static_cast<unsigned long long>(fdims[2]),
+        static_cast<unsigned long long>(fdims[3]));
+    fprintf(stderr,"File start: %llu %llu %llu %llu\n", 
+        static_cast<unsigned long long>(fstart[0]),
+        static_cast<unsigned long long>(fstart[1]),
+        static_cast<unsigned long long>(fstart[2]),
+        static_cast<unsigned long long>(fstart[3]));
+    fprintf(stderr,"File read size: %llu %llu %llu %llu\n",
+        static_cast<unsigned long long>(fcount[0]),
+        static_cast<unsigned long long>(fcount[1]),
+        static_cast<unsigned long long>(fcount[2]),
+        static_cast<unsigned long long>(fcount[3]));
+    fprintf(stderr,"Total memory size: %llu %llu %llu %llu\n",
+        static_cast<unsigned long long>(mdims[0]),
+        static_cast<unsigned long long>(mdims[1]),
+        static_cast<unsigned long long>(mdims[2]),
+        static_cast<unsigned long long>(mdims[3]));
+    fprintf(stderr,"Memory start: %llu %llu %llu %llu\n\n",
+        static_cast<unsigned long long>(mstart[0]),
+        static_cast<unsigned long long>(mstart[1]),
+        static_cast<unsigned long long>(mstart[2]),
+        static_cast<unsigned long long>(mstart[3]));
   }
 
   hid_t dset_id = H5Dopen(file_id, path, H5P_DEFAULT);

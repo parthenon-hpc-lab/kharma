@@ -39,10 +39,6 @@
 TaskCollection KHARMADriver::MakeSimpleTaskCollection(BlockList_t &blocks, int stage)
 {
     // This is probably incompatible with everything
-
-    // TODO check for incompatibilities at some point:
-    // At least implicit, jcon output, various electrons tests, etc.
-
     TaskCollection tc;
     TaskID t_none(0);
 
@@ -50,14 +46,19 @@ TaskCollection KHARMADriver::MakeSimpleTaskCollection(BlockList_t &blocks, int s
     auto& pkgs         = blocks[0]->packages.AllPackages();
     auto& flux_pkg   = pkgs.at("Flux")->AllParams();
 
+    if (pkgs.count("B_Cleanup") || pkgs.count("B_CT") ||
+        pkgs.count("Electrons") || flux_pkg.Get<bool>("use_fofc") ||
+        pkgs.count("Implicit") || pkgs.count("Current") ||
+        pkgs.count("EMHD") || pkgs.count("ISMR") || pmesh->multilevel)
+        throw std::runtime_error("Simple driver cannot be used with any advanced features! Use KHARMA or ImEx driver instead!");
+
     // Allocate the fluid states ("containers") we need for each block
-    for (auto& pmb : blocks) {
-        auto &base = pmb->meshblock_data.Get("base");
-        if (stage == 1) {
-            pmb->meshblock_data.Add("dUdt", base);
-            for (int i = 1; i < integrator->nstages; i++)
-                pmb->meshblock_data.Add(integrator->stage_name[i], base);
-        }
+    if (stage == 1) {
+        auto &base = pmesh->mesh_data.Get("base");
+        // Fluxes
+        pmesh->mesh_data.Add("dUdt");
+        for (int i = 1; i < integrator->nstages; i++)
+            pmesh->mesh_data.Add(integrator->stage_name[i]);
     }
 
 
@@ -65,9 +66,9 @@ TaskCollection KHARMADriver::MakeSimpleTaskCollection(BlockList_t &blocks, int s
     // Big synchronous region: get & apply fluxes to advance the fluid state
     // num_partitions is nearly always 1
     const int num_partitions = pmesh->DefaultNumPartitions();
-    TaskRegion &single_tasklist_per_pack_region = tc.AddRegion(num_partitions);
+    TaskRegion &flux_region = tc.AddRegion(num_partitions);
     for (int i = 0; i < num_partitions; i++) {
-        auto &tl = single_tasklist_per_pack_region[i];
+        auto &tl = flux_region[i];
         // Container names:
         // '_full_step_init' refers to the fluid state at the start of the full time step (Si in iharm3d)
         // '_sub_step_init' refers to the fluid state at the start of the sub step (Ss in iharm3d)
@@ -77,6 +78,9 @@ TaskCollection KHARMADriver::MakeSimpleTaskCollection(BlockList_t &blocks, int s
         auto &md_sub_step_init  = pmesh->mesh_data.GetOrAdd(integrator->stage_name[stage - 1], i);
         auto &md_sub_step_final = pmesh->mesh_data.GetOrAdd(integrator->stage_name[stage], i);
         auto &md_flux_src       = pmesh->mesh_data.GetOrAdd("dUdt", i);
+
+        auto t_start_recv_bound = tl.AddTask(t_none, parthenon::StartReceiveBoundBufs<parthenon::BoundaryType::any>, md_sub_step_final);
+
 
         // Calculate the flux of each variable through each face
         // This reconstructs the primitives (P) at faces and uses them to calculate fluxes
@@ -96,30 +100,14 @@ TaskCollection KHARMADriver::MakeSimpleTaskCollection(BlockList_t &blocks, int s
         // Add any source terms: geometric \Gamma * T, wind, damping, etc etc
         auto t_sources = tl.AddTask(t_flux_div, Packages::AddSource, md_sub_step_init.get(), md_flux_src.get(), IndexDomain::interior);
 
-        // Perform the update using the source term
-        // Add any proportion of the step start required by the integrator (e.g., RK2)
-        auto t_avg_data = tl.AddTask(t_sources, Update::WeightedSumData<std::vector<MetadataFlag>, MeshData<Real>>,
-                                    std::vector<MetadataFlag>({Metadata::Independent}),
-                                    md_sub_step_init.get(), md_full_step_init.get(),
-                                    integrator->gam0[stage-1], integrator->gam1[stage-1],
-                                    md_sub_step_final.get());
-        // apply du/dt to the result
-        auto t_update = tl.AddTask(t_sources, Update::WeightedSumData<std::vector<MetadataFlag>, MeshData<Real>>,
-                                    std::vector<MetadataFlag>({Metadata::Independent}),
-                                    md_sub_step_final.get(), md_flux_src.get(),
-                                    1.0, integrator->beta[stage-1] * integrator->dt,
-                                    md_sub_step_final.get());
-
-        // UtoP needs a guess in order to converge, so we copy in md_sub_step_init
-        auto t_copy_prims = t_update;
-        if (integrator->nstages > 1) {
-            t_copy_prims = tl.AddTask(t_none, Copy<MeshData<Real>>, std::vector<MetadataFlag>({Metadata::GetUserFlag("HD"), Metadata::GetUserFlag("Primitive")}),
-                                                md_sub_step_init.get(), md_sub_step_final.get());
-        }
-
+        // Update explicit state with the explicit fluxes/sources
+        auto t_update = KHARMADriver::AddStateUpdate(t_sources, tl, md_full_step_init.get(), md_sub_step_init.get(),
+                                                     md_flux_src.get(), md_sub_step_final.get(),
+                                                     std::vector<MetadataFlag>{Metadata::GetUserFlag("Explicit"), Metadata::Independent},
+                                                     false, stage);
 
         // Make sure the primitive values are updated.
-        auto t_UtoP = tl.AddTask(t_copy_prims, Packages::MeshUtoP, md_sub_step_final.get(), IndexDomain::interior, false);
+        auto t_UtoP = tl.AddTask(t_update, Packages::MeshUtoP, md_sub_step_final.get(), IndexDomain::entire, false);
 
         // Apply any floors
         auto t_floors = tl.AddTask(t_UtoP, Packages::MeshApplyFloors, md_sub_step_final.get(), IndexDomain::interior);

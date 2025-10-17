@@ -266,7 +266,9 @@ TaskStatus ReadIharmRestart(std::shared_ptr<MeshBlockData<Real>>& rc, ParameterI
                 pin->GetInteger("parthenon/mesh", "nx1"),
                 pin->GetInteger("parthenon/mesh", "nx2"),
                 pin->GetInteger("parthenon/mesh", "nx3"),
-                n1tot, n2tot, n3tot);
+                static_cast<unsigned long long>(n1tot),
+                static_cast<unsigned long long>(n2tot),
+                static_cast<unsigned long long>(n3tot));
         }
 
         if (!close_to(pin->GetReal("parthenon/mesh", "x1min"), startx[1]) ||

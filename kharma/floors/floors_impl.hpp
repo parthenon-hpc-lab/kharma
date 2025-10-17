@@ -69,9 +69,6 @@ TaskStatus ApplyFloorsInFrame(MeshData<Real> *md, IndexDomain domain)
     const Floors::Prescription floors = pmb0->packages.Get("Floors")->Param<Floors::Prescription>("prescription");
     const Floors::Prescription floors_inner = pmb0->packages.Get("Floors")->Param<Floors::Prescription>("prescription_inner");
 
-    // Determine floors
-    DetermineGRMHDFloors(md, domain, floors, floors_inner);
-
     const IndexRange3 b = KDomain::GetRange(md, domain);
     const IndexRange block = IndexRange{0, P.GetDim(5) - 1};
     pmb0->par_for("apply_floors", block.s, block.e, b.ks, b.ke, b.js, b.je, b.is, b.ie,
@@ -87,7 +84,9 @@ TaskStatus ApplyFloorsInFrame(MeshData<Real> *md, IndexDomain domain)
                                             floor_vals(b, rhofi, k, j, i), floor_vals(b, ufi, k, j, i),
                                             U(b), m_u);
                     } else {
-                        pflag_l = apply_floors<InjectionFrame::normal>(G, P(b), m_p, gam, k, j, i,
+                        // TODO should mixed frames respect Kastaun vs 1Dw?
+                        // Since no prior simulations use mixed frames thus requiring back-compat, I said no
+                        pflag_l = apply_floors<InjectionFrame::normal_kastaun>(G, P(b), m_p, gam, k, j, i,
                                             floor_vals(b, rhofi, k, j, i), floor_vals(b, ufi, k, j, i),
                                             U(b), m_u);
                     }
@@ -101,7 +100,7 @@ TaskStatus ApplyFloorsInFrame(MeshData<Real> *md, IndexDomain domain)
                                             floor_vals(b, rhofi, k, j, i), floor_vals(b, ufi, k, j, i),
                                             U(b), m_u);
                     } else {
-                        pflag_l = apply_floors<InjectionFrame::normal>(G, P(b), m_p, gam, k, j, i,
+                        pflag_l = apply_floors<InjectionFrame::normal_kastaun>(G, P(b), m_p, gam, k, j, i,
                                             floor_vals(b, rhofi, k, j, i), floor_vals(b, ufi, k, j, i),
                                             U(b), m_u);
                     }

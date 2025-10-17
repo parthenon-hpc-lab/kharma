@@ -50,6 +50,7 @@ build:
     HOST_ARCH: HSW
     C_NATIVE: gcc
     CXX_NATIVE: g++
+    CXXFLAGS: -flto=auto
   before_script:
     - dnf -y groupinstall "Development Tools"
     - dnf -y install hostname environment-modules cmake mpich-devel fftw-devel

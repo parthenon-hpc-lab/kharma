@@ -65,10 +65,15 @@ std::shared_ptr<KHARMAPackage> Floors::Initialize(ParameterInput *pin, std::shar
     // TODO(BSP) automate/standardize parsing enums like this: classes w/tables like the flags?
     std::vector<std::string> allowed_floor_frames = {"normal", "fluid", "mixed",
                                                      "mixed_fluid_normal", "mixed_normal_drift", "drift"};
-    std::string frame_s = pin->GetOrAddString("floors", "frame", "drift", allowed_floor_frames);
+    std::string frame_s = pin->GetOrAddString("floors", "frame", "normal", allowed_floor_frames);
     InjectionFrame frame;
     if (frame_s == "normal") {
-        frame = InjectionFrame::normal;
+        if (pin->GetOrAddString("inverter", "type", "kastaun") == "onedw") {
+            frame = InjectionFrame::normal_onedw;
+        } else {
+            // Use Kastaun unless we specified onedw inverter
+            frame = InjectionFrame::normal_kastaun;
+        }
     } else if (frame_s == "fluid") {
         frame = InjectionFrame::fluid;
     } else if (frame_s == "mixed" || frame_s == "mixed_fluid_normal") {
@@ -101,6 +106,10 @@ std::shared_ptr<KHARMAPackage> Floors::Initialize(ParameterInput *pin, std::shar
     else
         params.Add("prescription_inner", MakePrescriptionInner(pin, MakePrescription(pin)), "floors");
 
+    // Sometimes we want the floors package, but don't want to apply anything, for tests
+    bool disable_call = pin->GetOrAddBoolean("floors", "disable_call", false);
+    params.Add("disable_call", disable_call);
+
     // These preserve floor values between the "mark" pass and the actual floor application
     // We need them even if floors are disabled, to apply initial values based on some prescription
     // as a part of problem setup
@@ -115,9 +124,14 @@ std::shared_ptr<KHARMAPackage> Floors::Initialize(ParameterInput *pin, std::shar
     m = Metadata({Metadata::Real, Metadata::Cell, Metadata::Derived, Metadata::OneCopy, Metadata::Overridable});
     pkg->AddField("pflag", m);
 
-    // TODO(BSP) THIS IS THE ONLY MeshApplyFloors.  Any others will NOT BE CALLED.
-    // Use BlockApplyFloors in your packages or fix Packages::MeshApplyFloors
-    pkg->MeshApplyFloors = Floors::ApplyGRMHDFloors;
+    // Don't actually call the usual floor function if we're using normal frame w/Kastaun,
+    // floors will be applied during the inversion call.
+    // Also allow manually disabling the call, for testing
+    if (!disable_call && frame != InjectionFrame::normal_kastaun) {
+        // TODO(BSP) THIS IS THE ONLY MeshApplyFloors.  Any others will NOT BE CALLED.
+        // Use BlockApplyFloors in your packages or fix Packages::MeshApplyFloors
+        pkg->MeshApplyFloors = Floors::ApplyGRMHDFloors;
+    }
     pkg->PostStepDiagnosticsMesh = Floors::PostStepDiagnostics;
 
     // List (vector) of HistoryOutputVars that will all be enrolled as output variables
@@ -218,6 +232,7 @@ TaskStatus Floors::DetermineGRMHDFloors(MeshData<Real> *md, IndexDomain domain,
     pmb0->par_for("determine_floors", block.s, block.e, b.ks, b.ke, b.js, b.je, b.is, b.ie,
         KOKKOS_LAMBDA (const int &b, const int &k, const int &j, const int &i) {
             const auto& G = P.GetCoords(b);
+            // The inverter might have set some floor flags, so we add to that non-destructively
             fflag(b, 0, k, j, i) = static_cast<int>(fflag(b, 0, k, j, i)) |
                                     determine_floors(G, P(b), m_p, gam, k, j, i, floors, floors_inner,
                                                      floor_vals(b, rhofi, k, j, i), floor_vals(b, ufi, k, j, i));
@@ -234,8 +249,16 @@ TaskStatus Floors::ApplyGRMHDFloors(MeshData<Real> *md, IndexDomain domain)
 {
     auto pmesh = md->GetMeshPointer();
     const auto& pars = pmesh->packages.Get("Floors")->AllParams();
-    if (pars.Get<InjectionFrame>("frame") == InjectionFrame::normal) {
-        return ApplyFloorsInFrame<InjectionFrame::normal>(md, domain);
+
+    // Determine floors
+    const Floors::Prescription floors = pars.Get<Floors::Prescription>("prescription");
+    const Floors::Prescription floors_inner = pars.Get<Floors::Prescription>("prescription_inner");
+    DetermineGRMHDFloors(md, domain, floors, floors_inner);
+
+    if (pars.Get<InjectionFrame>("frame") == InjectionFrame::normal_kastaun) {
+        return ApplyFloorsInFrame<InjectionFrame::normal_kastaun>(md, domain);
+    } else if (pars.Get<InjectionFrame>("frame") == InjectionFrame::normal_onedw) {
+        return ApplyFloorsInFrame<InjectionFrame::normal_onedw>(md, domain);
     } else if (pars.Get<InjectionFrame>("frame") == InjectionFrame::fluid) {
         return ApplyFloorsInFrame<InjectionFrame::fluid>(md, domain);
     } else if (pars.Get<InjectionFrame>("frame") == InjectionFrame::mixed_fluid_normal) {

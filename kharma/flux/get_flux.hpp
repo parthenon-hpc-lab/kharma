@@ -99,6 +99,9 @@ inline TaskStatus GetFlux(MeshData<Real> *md)
     const bool use_b_cd = packages.AllPackages().count("B_CD");
     const double ctop_max = (use_b_cd) ? packages.Get("B_CD")->Param<Real>("ctop_max_last") : 0.0;
 
+    const bool use_ismr = packages.AllPackages().count("ISMR");
+    const int ng_plus_nlevels = use_ismr ? packages.Get("ISMR")->Param<uint>("nlevels") + Globals::nghost : 0;
+
     const EMHD::EMHD_parameters& emhd_params = EMHD::GetEMHDParameters(packages);
 
     const Loci loc = loc_of(dir);
@@ -162,7 +165,11 @@ inline TaskStatus GetFlux(MeshData<Real> *md)
             // We template on reconstruction type to avoid a big switch statement here.
             // Instead, a version of GetFlux() is generated separately for each reconstruction/direction pair.
             // See reconstruction.hpp for all the implementations.
-            KReconstruction::ReconstructRow<Recon, dir>(member, P_all(bl), k, j, b.is, b.ie, Pl_s, Pr_s);
+            if (use_ismr) {
+                KReconstruction::ReconstructRowIsmr<Recon, dir>(member, P_all(bl), k, j, b.is, b.ie, ng_plus_nlevels, Pl_s, Pr_s);
+            } else {
+                KReconstruction::ReconstructRow<Recon, dir>(member, P_all(bl), k, j, b.is, b.ie, Pl_s, Pr_s);
+            }
 
             // Sync all threads in the team so that scratch memory is consistent
             member.team_barrier();

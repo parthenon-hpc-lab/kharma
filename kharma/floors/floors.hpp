@@ -90,7 +90,7 @@ static const std::map<int, std::string> flag_names = {
 };
 }
 
-enum class InjectionFrame{fluid=0, normal, mixed_fluid_normal, mixed_normal_drift, drift};
+enum class InjectionFrame{fluid=0, normal_onedw, normal_kastaun, mixed_fluid_normal, mixed_normal_drift, drift};
 
 /**
  * Struct to hold floor values without cumbersome dictionary/string logistics.
@@ -102,7 +102,7 @@ class Prescription {
         // Constant sanity limits
         Real rho_min_const, u_min_const;
         // Purely geometric limits
-        Real rho_min_geom, u_min_geom, r_char;
+        Real rho_min_geom, u_min_geom, r_char, floors_switch_r;
         // Dynamic limits on magnetization/temperature
         Real bsq_over_rho_max, bsq_over_u_max, u_over_rho_max;
         // Limit entropy
@@ -113,7 +113,8 @@ class Prescription {
         bool use_r_char, temp_adjust_u, adjust_k;
         // Radius dependent floors?
         bool radius_dependent_floors;
-        Real floors_switch_r;
+        // Add density to respect the gamma ceiling?
+        bool use_rho_to_slow;
 };
 
 inline Prescription MakePrescription(parthenon::ParameterInput *pin, std::string block="floors")
@@ -162,6 +163,8 @@ inline Prescription MakePrescription(parthenon::ParameterInput *pin, std::string
 
     p.radius_dependent_floors = pin->GetOrAddBoolean("floors", "radius_dependent_floors", false); 
     p.floors_switch_r = pin->GetOrAddReal("floors", "floors_switch_r", 50.);
+
+    p.use_rho_to_slow = pin->GetOrAddBoolean("floors", "use_rho_to_slow", false);
 
     return p;
 }

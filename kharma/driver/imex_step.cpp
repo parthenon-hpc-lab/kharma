@@ -42,6 +42,7 @@
 #include "b_flux_ct.hpp"
 #include "electrons.hpp"
 #include "inverter.hpp"
+#include "ismr.hpp"
 #include "grmhd.hpp"
 #include "wind.hpp"
 // Other headers
@@ -80,7 +81,7 @@ TaskCollection KHARMADriver::MakeImExTaskCollection(BlockList_t &blocks, int sta
     // TODO these can now be reduced by including the var lists/flags which actually need to be allocated
     // TODO except the Copy they can be run on step 1 only
     if (stage == 1) {
-        auto &base = pmesh->mesh_data.Get();
+        auto &base = pmesh->mesh_data.Get("base");
         // Fluxes
         pmesh->mesh_data.Add("dUdt");
         for (int i = 1; i < integrator->nstages; i++)
@@ -314,6 +315,12 @@ TaskCollection KHARMADriver::MakeImExTaskCollection(BlockList_t &blocks, int sta
         auto t_ptou = tl.AddTask(t_heat_electrons, Flux::MeshPtoU, md_sub_step_final.get(), IndexDomain::entire, false);
 
         auto t_step_done = t_ptou;
+        if (pkgs.count("ISMR")) {
+            auto t_derefine_b = t_ptou;
+            if (pkgs.count("B_CT"))
+                t_derefine_b = tl.AddTask(t_ptou, B_CT::DerefinePoles, md_sub_step_final.get());
+            t_step_done = tl.AddTask(t_derefine_b, ISMR::DerefinePoles, md_sub_step_final.get());
+        }
 
         // Estimate next time step based on ctop
         if (stage == integrator->nstages) {

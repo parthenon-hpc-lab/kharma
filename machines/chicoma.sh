@@ -12,7 +12,7 @@ if [[ "$HOST" == "ch-fe"* || "$HOST" == "nid00"* ]]; then
   # Cray environments get confused easy
   # Make things as simple as possible
   # Only default "nvhpc" module is supported, see HPC docs
-  module purge
+  module unload cray-libsci
   export CRAY_CPU_TARGET="x86-64"
   if [[ "$ARGS" == *"cuda"* ]]; then
     DEVICE_ARCH="AMPERE80"
@@ -30,7 +30,7 @@ if [[ "$HOST" == "ch-fe"* || "$HOST" == "nid00"* ]]; then
       C_NATIVE=nvc
       CXX_NATIVE=nvc++
     else
-      module load PrgEnv-nvhpc/8.3.3
+      module load PrgEnv-gnu cudatoolkit
     fi
     module load craype-accel-nvidia80
     # GPU runtime opts

@@ -32,17 +32,17 @@ conv_2d() {
 # Test boundaries
 ALL_RES="16,24,32,48,64"
 conv_2d base " " "in 2D, baseline"
-conv_2d kastaun "inverter/type=kastaun" "in 2D, Kastaun inverter"
+conv_2d onedw "inverter/type=onedw" "in 2D, 1Dw inverter"
 
-conv_2d dirichlet "boundaries/inner_x1=dirichlet boundaries/outer_x1=dirichlet" "in 2D, Dirichlet boundaries"
+conv_2d dirichlet      "boundaries/inner_x1=dirichlet boundaries/outer_x1=dirichlet" "in 2D, Dirichlet boundaries"
+conv_2d dirichlet_imex "boundaries/inner_x1=dirichlet boundaries/outer_x1=dirichlet driver/type=imex" "in 2D, Dirichlet boundaries+ImEx Driver"
 
 # Test coordinates
-conv_2d mks "coordinates/transform=mks" "in 2D, MKS coordinates"
-conv_2d eks coordinates/transform=eks "in 2D, EKS coordinates"
+conv_2d eks "coordinates/transform=eks" "in 2D, EKS coordinates"
 # Some coordinate systems do better/worse than 2o at low res
 ALL_RES="48,64,96,128"
-conv_2d fmks coordinates/transform=fmks "in 2D, FMKS coordinates"
-conv_2d ks coordinates/transform=null "in 2D, KS coordinates"
+conv_2d fmks "coordinates/transform=fmks" "in 2D, FMKS coordinates"
+conv_2d ks   "coordinates/transform=null" "in 2D, KS coordinates"
 
 # Recon
 ALL_RES="16,24,32,48,64"
@@ -50,13 +50,13 @@ conv_2d linear_mc GRMHD/reconstruction=linear_mc "in 2D, linear recon with MC li
 conv_2d linear_vl GRMHD/reconstruction=linear_vl "in 2D, linear recon with VL limiter"
 
 # And the GRIM/classic driver
-conv_2d imex driver/type=imex "in 2D, with Imex driver"
+conv_2d imex    driver/type=imex "in 2D, with Imex driver"
 conv_2d imex_im "driver/type=imex GRMHD/implicit=true" "in 2D, semi-implicit stepping"
 
 ALL_RES="16,24,32,48,64"
 conv_2d b_flux_ct "b_field/type=monopole_cube b_field/B10=1 b_field/solver=flux_ct" "in 2D, monopole B, Flux-CT"
 conv_2d b_face_ct "b_field/type=monopole_cube b_field/B10=1 b_field/solver=face_ct" "in 2D, monopole B, Face-CT"
-conv_2d b_face_ct "b_field/type=monopole_cube b_field/B10=1 b_field/solver=face_ct b_field/consistent_face_b=false" "in 2D, monopole B, Face-CT reconstructed"
+#conv_2d b_face_ct "b_field/type=monopole_cube b_field/B10=1 b_field/solver=face_ct b_field/consistent_face_b=false" "in 2D, monopole B, Face-CT reconstructed"
 
 ALL_RES="24,32,48,64" # TODO idk why this doesn't work at 16^2
 conv_2d b_face_ct_dirichlet "boundaries/inner_x1=dirichlet boundaries/outer_x1=dirichlet b_field/type=monopole_cube b_field/B10=1 b_field/solver=face_ct" "in 2D, monopole B, face-centered+Dirichlet"

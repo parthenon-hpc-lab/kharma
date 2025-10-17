@@ -118,14 +118,14 @@ T Reductions::CheckOnAll(MeshData<Real> *md, int channel)
     return reducer.val;
 }
 
-#define INSIDE (x[1] > startx1 && x[2] > startx2 && x[3] > startx3) && \
-                (trivial1 ? xin[1] < startx1 : x[1] < stopx1) && \
-                (trivial2 ? xin[2] < startx2 : x[2] < stopx2) && \
-                (trivial3 ? xin[3] < startx3 : x[3] < stopx3)
+#define INSIDE (x[1] >= startx1 && x[2] >= startx2 && x[3] >= startx3) && \
+                (trivial1 ? xin[1] < startx1 : x[1] <= stopx1) && \
+                (trivial2 ? xin[2] < startx2 : x[2] <= stopx2) && \
+                (trivial3 ? xin[3] < startx3 : x[3] <= stopx3)
 
 // TODO additionally template on return type to avoid counting flags with Reals
-template<Reductions::Var var, typename T>
-T Reductions::DomainReduction(MeshData<Real> *md, UserHistoryOperation op, const GReal startx[3], const GReal stopx[3], int channel)
+template<Reductions::Var var, UserHistoryOperation op, typename T>
+T Reductions::DomainReduction(MeshData<Real> *md, const GReal startx[3], const GReal stopx[3], int channel)
 {
     Flag("DomainReduction");
     auto pmesh = md->GetMeshPointer();
@@ -149,9 +149,7 @@ T Reductions::DomainReduction(MeshData<Real> *md, UserHistoryOperation op, const
     IndexRange block = IndexRange{0, U.GetDim(5) - 1};
 
     bool trivial_tmp[3] = {false, false, false};
-    VLOOP if(startx[v] == stopx[v]) {
-        trivial_tmp[v] = true;
-    }
+    VLOOP trivial_tmp[v] = (startx[v] == stopx[v]);
 
     // Pull values to pass to device, because passing views is cumbersome
     const bool trivial1 = trivial_tmp[0];
@@ -164,6 +162,7 @@ T Reductions::DomainReduction(MeshData<Real> *md, UserHistoryOperation op, const
     const GReal stopx2 = stopx[1];
     const GReal stopx3 = stopx[2];
 
+    // TODO is 'if constexpr' faster now op is compile-time?
     T result = 0.;
     MPI_Op mop;
     switch(op) {
@@ -230,6 +229,8 @@ T Reductions::DomainReduction(MeshData<Real> *md, UserHistoryOperation op, const
     if (channel >= 0) {
         Start<T>(md, channel, result, mop);
     }
+
+    //fprintf(stderr, "r: %f trivial: %d %d %d result: %f\n", startx1, trivial1, trivial2, trivial3, result);
 
     EndFlag();
     return result;

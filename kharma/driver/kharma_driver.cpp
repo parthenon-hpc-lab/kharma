@@ -275,9 +275,7 @@ TaskID KHARMADriver::AddFluxCalculations(TaskID& t_start, TaskList& tl, MeshData
         t_calculate_flux3 = tl.AddTask(t_start_fluxes, Flux::GetFlux<RType::mp5, X3DIR>, md);
         break;
     default:
-        std::cerr << "Reconstruction type not supported!  Main supported reconstructions:" << std::endl
-                  << "donor_cell, linear_mc, weno5" << std::endl;
-        throw std::invalid_argument("Unsupported reconstruction algorithm!");
+        throw std::invalid_argument("Unsupported reconstruction algorithm! Main supported algorithms: linear_mc, weno5, weno5_linear");
     }
     auto t_calc_fluxes = t_calculate_flux1 | t_calculate_flux2 | t_calculate_flux3;
 
@@ -377,9 +375,12 @@ TaskID KHARMADriver::AddStateUpdate(TaskID& t_start, TaskList& tl, MeshData<Real
     auto t_copy_prims = t_update;
     auto pmb0  = md_full_step_init->GetBlockData(0)->GetBlockPointer();
     auto& pkgs = pmb0->packages.AllPackages();
+
+    // If we're explicitly evolving, UtoP needs a guess
+    // TODO why is this necessary still?  Is it necessary on every AddStateUpdate?
     if (!pkgs.at("GRMHD")->Param<bool>("implicit")) {
         t_copy_prims = tl.AddTask(t_start, Copy<MeshData<Real>>,
-                                    std::vector<MetadataFlag>({Metadata::GetUserFlag("HD"), Metadata::GetUserFlag("Primitive")}),
+                                    std::vector<MetadataFlag>({Metadata::GetUserFlag("MHD"), Metadata::GetUserFlag("Primitive")}),
                                     md_sub_step_init, md_update);
     }
 
