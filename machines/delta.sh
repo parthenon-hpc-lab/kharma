@@ -41,6 +41,7 @@ then
     # GNU is the only build tested as of now. 
     # ToDo: Test nvidia HPC SDK and Cray builds.
     module load PrgEnv-gnu
+    # module swap PrgEnv-gnu PrgEnv-cray 
     module load craype/2.7.34
     module load gcc-native/13.2
     module load craype-network-ofi
@@ -56,13 +57,23 @@ then
     export CXX_NATIVE=CC
 
   # CPU-only build. To be tested.
-  else
+  elif [[ $ARGS == *"cpu"* ]]
+  then
     # CPU Compile
-    module load modtree/cpu gcc
-    MPI_NUM_PROCS=1
-  fi
+    module load PrgEnv-gnu
+    module load craype/2.7.34
+    module load gcc-native/13.2
+    module load craype-network-ofi
+    module load libfabric/1.22.0
+    module load cray-mpich/8.1.32
+    module load craype-x86-milan
+    module load cray-hdf5-parallel
+    module list
 
-  echo "--- Using Kokkos version: ---"
-    (cd external/parthenon/external/Kokkos && git describe --tags --always)
-  echo "-----------------------------"
+    export C_NATIVE=cc
+    export CXX_NATIVE=CC
+  else
+    echo "Error: No valid build type specified. Use 'cuda' for GPU build or 'cpu' for CPU-only build."
+    exit 1
+  fi
 fi
