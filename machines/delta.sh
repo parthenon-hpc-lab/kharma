@@ -11,7 +11,7 @@
 
 # HDF5: prefer KHARMA's vendored build:  ./make.sh clean cuda hdf5
 
-if [[ $HOST == *".delta.internal.ncsa.edu" || $HOST == *".delta.ncsa.illinois.edu" ]]
+if [[ ( $HOST == *".delta.internal.ncsa.edu" || $HOST == *".delta.ncsa.illinois.edu" ) && ! $HOST =~ gh-login[0-9]+\.delta\.ncsa\.illinois\.edu ]]
 then
   HOST_ARCH=ZEN3
   DEVICE_ARCH=AMPERE80
