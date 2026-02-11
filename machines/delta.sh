@@ -1,54 +1,79 @@
 
-# Config for NCSA Delta, XSEDE's GPU resource
+# Config for NCSA Delta (RH9), ACCESS GPU resource
+# Uses Cray Programming Environment (CrayPE) + cray-mpich (no OpenMPI anymore!!)
 
-# The Delta modules are in flux, YMMV
-# If the default NVHPC compile does not work,
-# try specifying 'gcc' to use the default stack
+# With the major update to Delta in Fall 2025 (transition to Redhat 9 and newer compilers),
+# the cluster now provides MPI implementation and other packages via CrayPE, similar to how
+# NCSA does it on DeltaAI.
+# The default environment will be based on the GNU CrayPE PrgEnv-gnu.
+# Other cray environments are available (PrgEnv-nvidia, PrgEnv-cray).
+# What's new: https://docs.ncsa.illinois.edu/systems/delta/en/rh9/whats_new.html
 
-# Also note that Delta's hdf5 is no longer serviceable (?)
-# So run './make.sh hdf5 clean cuda'
+# HDF5: prefer KHARMA's vendored build:  ./make.sh clean cuda hdf5
 
-if [[ $HOST == *".delta.internal.ncsa.edu" || $HOST == *".delta.ncsa.illinois.edu" ]]
+if [[ ( $HOST == *".delta.internal.ncsa.edu" || $HOST == *".delta.ncsa.illinois.edu" ) && ! $HOST =~ gh-login[0-9]+\.delta\.ncsa\.illinois\.edu ]]
 then
   HOST_ARCH=ZEN3
   DEVICE_ARCH=AMPERE80
-  MPI_EXE=mpirun
+  MPI_EXE=srun
   NPROC=64
 
   module purge
   module load cmake
 
+  # `cuda` argument still means to build with GPU support.
   if [[ $ARGS == *"cuda"* ]]
   then
     # GPU Compile
     # 4-device MPI w/mapping, should play nice with different numbers
-    MPI_NUM_PROCS=${MPI_NUM_PROCS:-4}
-    MPI_EXTRA_ARGS="--map-by ppr:$MPI_NUM_PROCS:node:pe=16"
+    # MPI_NUM_PROCS=${MPI_NUM_PROCS:-4}
+    # MPI_EXTRA_ARGS="--map-by ppr:$MPI_NUM_PROCS:node:pe=16"
+
+    # Enable GPU RDMA for cray-mpich
+    export MPICH_GPU_SUPPORT_ENABLED=1
+    export MPICH_GPU_MANAGED_MEMORY_SUPPORT_ENABLED=1
 
     if [[ "$ARGS" == *"hostside"* ]]; then
       # Device-side buffers are broken on some Nvidia machines
       EXTRA_FLAGS="-DPARTHENON_ENABLE_HOST_COMM_BUFFERS=ON $EXTRA_FLAGS"
     fi
 
-    if [[ $ARGS == *"gcc"* ]]; then
-      module load gcc/11.4.0 cuda/11.8.0 openmpi/4.1.5+cuda
-      C_NATIVE=gcc
-      CXX_NATIVE=g++
-    elif [[ $ARGS == *"cray"* ]]; then
-      module load PrgEnv-gnu cuda craype-x86-milan craype-accel-ncsa
-      export MPICH_GPU_SUPPORT_ENABLED=1
-      export MPICH_GPU_MANAGED_MEMORY_SUPPORT_ENABLED=1
-      C_NATIVE=cc
-      CXX_NATIVE=CC
-    else
-      # Default to gcc since we know that works
-      module load gcc/11.4.0 cuda/11.8.0 openmpi/4.1.5+cuda
-      C_NATIVE=gcc
-      CXX_NATIVE=g++
-    fi
-  else
+    # GNU is the only build tested as of now. 
+    # ToDo: Test nvidia HPC SDK and Cray builds.
+    module load PrgEnv-gnu
+    # module swap PrgEnv-gnu PrgEnv-cray 
+    module load craype/2.7.34
+    module load gcc-native/13.2
+    module load craype-network-ofi
+    module load libfabric/1.22.0
+    module load cray-mpich/8.1.32
+    module load craype-x86-milan
+    module load cudatoolkit/25.3_12.8
+    module load craype-accel-nvidia80
+    module load cray-hdf5-parallel
+    module list
+
+    export C_NATIVE=cc
+    export CXX_NATIVE=CC
+
+  # CPU-only build. To be tested.
+  elif [[ $ARGS == *"cpu"* ]]
+  then
     # CPU Compile
-    module load modtree/cpu gcc
-    MPI_NUM_PROCS=1
+    module load PrgEnv-gnu
+    module load craype/2.7.34
+    module load gcc-native/13.2
+    module load craype-network-ofi
+    module load libfabric/1.22.0
+    module load cray-mpich/8.1.32
+    module load craype-x86-milan
+    module load cray-hdf5-parallel
+    module list
+
+    export C_NATIVE=cc
+    export CXX_NATIVE=CC
+  else
+    echo "Error: No valid build type specified. Use 'cuda' for GPU build or 'cpu' for CPU-only build."
+    exit 1
   fi
 fi
