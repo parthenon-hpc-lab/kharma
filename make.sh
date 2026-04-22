@@ -311,12 +311,9 @@ if option "clean"; then
   fi
   cd -
 
-  # HIP requires device-capable variant functions
-<<<<<<< Updated upstream
+  # HIP/SYCL require device-capable variant functions
+  # (even though they're never called on device)
   if [[ "$ARGS" == *"hip"* || "$ARGS" == *"sycl"* ]]; then
-=======
-  if  ! ((! option "hip") && (! option "sycl")); then
->>>>>>> Stashed changes
     cd external/variant
     if [[ $(( $(git --version | cut -d '.' -f 2) > 35 )) == "1" ]]; then
       git apply --quiet ../patches/variant-hip.patch

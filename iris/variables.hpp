@@ -33,25 +33,25 @@
  */
 #pragma once
 
-#include "pack/swarm_default_names.hpp"
+#include "pack/default_names.hpp"
 
 namespace rays {
 
-SWARM_VARIABLE(parthenon::Real, swarm, t);
-SWARM_VARIABLE(parthenon::Real, swarm, k);
-SWARM_VARIABLE(parthenon::Real, rays, path_len);
-SWARM_VARIABLE(int, rays, camera_id);
-SWARM_VARIABLE(int, rays, camera_i);
-SWARM_VARIABLE(int, rays, camera_j);
-SWARM_VARIABLE(int, rays, nstep_geo);
-SWARM_VARIABLE(int, rays, nstep_rad);
-SWARM_VARIABLE(int, rays, stop_flag);
-SWARM_VARIABLE(int, rays, at_camera);
-SWARM_VARIABLE(parthenon::Real, rays, xpath);
-SWARM_VARIABLE(parthenon::Real, rays, kpath);
-SWARM_VARIABLE(parthenon::Real, rays, dlpath);
-SWARM_VARIABLE(parthenon::Real, rays, I);
-SWARM_VARIABLE(parthenon::Real, rays, Nr);
-SWARM_VARIABLE(parthenon::Real, rays, Ni);
+PAR_SWARMVAR(parthenon::Real, swarm, t);
+PAR_SWARMVAR(parthenon::Real, swarm, k);
+PAR_SWARMVAR(parthenon::Real, rays, path_len);
+PAR_SWARMVAR(int, rays, camera_id);
+PAR_SWARMVAR(int, rays, camera_i);
+PAR_SWARMVAR(int, rays, camera_j);
+PAR_SWARMVAR(int, rays, nstep_geo);
+PAR_SWARMVAR(int, rays, nstep_rad);
+PAR_SWARMVAR(int, rays, stop_flag);
+PAR_SWARMVAR(int, rays, at_camera);
+PAR_SWARMVAR(parthenon::Real, rays, xpath);
+PAR_SWARMVAR(parthenon::Real, rays, kpath);
+PAR_SWARMVAR(parthenon::Real, rays, dlpath);
+PAR_SWARMVAR(parthenon::Real, rays, I);
+PAR_SWARMVAR(parthenon::Real, rays, Nr);
+PAR_SWARMVAR(parthenon::Real, rays, Ni);
 
 }

@@ -116,12 +116,12 @@ std::shared_ptr<StateDescriptor> Model::Initialize(ParameterInput *pin)
         // pin->SetString("parthenon/mesh", "ox3_bc", "periodic");
 
         // TODO maybe read from the mesh before setting these...
-        pin->GetOrAddString("parthenon/swarm", "ix1_bc", "none");
-        pin->GetOrAddString("parthenon/swarm", "ox1_bc", "none");
-        pin->GetOrAddString("parthenon/swarm", "ix2_bc", "none");
-        pin->GetOrAddString("parthenon/swarm", "ox2_bc", "none");
-        pin->GetOrAddString("parthenon/swarm", "ix3_bc", "periodic");
-        pin->GetOrAddString("parthenon/swarm", "ox3_bc", "periodic");
+        pin->SetString("parthenon/swarm", "ix1_bc", "none");
+        pin->SetString("parthenon/swarm", "ox1_bc", "none");
+        pin->SetString("parthenon/swarm", "ix2_bc", "none");
+        pin->SetString("parthenon/swarm", "ox2_bc", "none");
+        pin->SetString("parthenon/swarm", "ix3_bc", "periodic");
+        pin->SetString("parthenon/swarm", "ox3_bc", "periodic");
 
         // TODO probably shouldn't always match, allow override
         Rout = coords.X1_to_embed(pin->GetReal("parthenon/mesh", "x1max"));
@@ -143,27 +143,27 @@ std::shared_ptr<StateDescriptor> Model::Initialize(ParameterInput *pin)
 
         // TODO Cartesian transport?
 
-        // Analytic models need only a trivial mesh
-        // But, allow overriding for testing
-        pin->GetOrAddInteger("parthenon/mesh", "nx1", 8);
-        pin->GetOrAddInteger("parthenon/mesh", "nx2", 1);
-        pin->GetOrAddInteger("parthenon/mesh", "nx3", 1);
-        pin->GetOrAddInteger("parthenon/meshblock", "nx1", 8);
-        pin->GetOrAddInteger("parthenon/meshblock", "nx2", 1);
-        pin->GetOrAddInteger("parthenon/meshblock", "nx3", 1);
+        // Analytic models need only a trivial mesh, Parthenon's is too big & 2D
+        // TODO ALLOW OVERRIDING
+        pin->SetInteger("parthenon/mesh", "nx1", 8);
+        pin->SetInteger("parthenon/mesh", "nx2", 1);
+        pin->SetInteger("parthenon/mesh", "nx3", 1);
+        pin->SetInteger("parthenon/meshblock", "nx1", 8);
+        pin->SetInteger("parthenon/meshblock", "nx2", 1);
+        pin->SetInteger("parthenon/meshblock", "nx3", 1);
 
-        pin->GetOrAddString("parthenon/mesh", "ix1_bc", "outflow");
-        pin->GetOrAddString("parthenon/mesh", "ox1_bc", "outflow");
-        pin->GetOrAddString("parthenon/mesh", "ix2_bc", "reflecting");
-        pin->GetOrAddString("parthenon/mesh", "ox2_bc", "reflecting");
-        pin->GetOrAddString("parthenon/mesh", "ix3_bc", "periodic");
-        pin->GetOrAddString("parthenon/mesh", "ox3_bc", "periodic");
-        pin->GetOrAddString("parthenon/swarm", "ix1_bc", "none");
-        pin->GetOrAddString("parthenon/swarm", "ox1_bc", "none");
-        pin->GetOrAddString("parthenon/swarm", "ix2_bc", "none");
-        pin->GetOrAddString("parthenon/swarm", "ox2_bc", "none");
-        pin->GetOrAddString("parthenon/swarm", "ix3_bc", "periodic");
-        pin->GetOrAddString("parthenon/swarm", "ox3_bc", "periodic");
+        pin->SetString("parthenon/mesh", "ix1_bc", "outflow");
+        pin->SetString("parthenon/mesh", "ox1_bc", "outflow");
+        pin->SetString("parthenon/mesh", "ix2_bc", "reflecting");
+        pin->SetString("parthenon/mesh", "ox2_bc", "reflecting");
+        pin->SetString("parthenon/mesh", "ix3_bc", "periodic");
+        pin->SetString("parthenon/mesh", "ox3_bc", "periodic");
+        pin->SetString("parthenon/swarm", "ix1_bc", "none");
+        pin->SetString("parthenon/swarm", "ox1_bc", "none");
+        pin->SetString("parthenon/swarm", "ix2_bc", "none");
+        pin->SetString("parthenon/swarm", "ox2_bc", "none");
+        pin->SetString("parthenon/swarm", "ix3_bc", "periodic");
+        pin->SetString("parthenon/swarm", "ox3_bc", "periodic");
 
         // printf("Mesh: %f %f %f to %f %f %f", pin->GetReal("parthenon/mesh", "x1min"),
         //         pin->GetReal("parthenon/mesh", "x2min"),
