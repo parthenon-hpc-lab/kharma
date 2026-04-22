@@ -33,6 +33,9 @@
  */
 #pragma once
 
+// Iris headers
+#include "variables.hpp"
+
 // KHARMA headers
 #include "decs.hpp"
 #include "matrix.hpp"
@@ -66,7 +69,7 @@ KOKKOS_INLINE_FUNCTION void tetrad_to_coordinate(const double Econ[GR_DIM][GR_DI
     DLOOP2 K[mu] += Econ[nu][mu] * K_tetrad[nu];
 }
 
-/* 
+/*
  * Copy the trial vector into a tetrad basis vector,
  * checking to see if it is null, and if it is null
  * setting to some default value
@@ -173,7 +176,7 @@ KOKKOS_INLINE_FUNCTION double check_handedness(const double Econ[GR_DIM][GR_DIM]
     return dot;
 }
 
-/* 
+/*
  * econ/ecov index key:
  * Econ[k][l]
  * k: index attached to tetrad basis
@@ -186,7 +189,7 @@ KOKKOS_INLINE_FUNCTION double check_handedness(const double Econ[GR_DIM][GR_DIM]
  * e^0 along U
  * e^2 along b
  * e^3 along spatial part of K
- * 
+ *
  * Returns flag for whether the tetrad is suspicious.
  * Ideally ipole should crash on these errors but there are a lot of corner cases...
  */
@@ -314,10 +317,25 @@ KOKKOS_INLINE_FUNCTION void write_N(const Kokkos::complex<double> N_coord[GR_DIM
         Ni(mu, nu, n) = N_coord[mu][nu].imag();
     }
 }
+template <typename T>
+KOKKOS_INLINE_FUNCTION void write_N(Kokkos::complex<double> N_coord[GR_DIM][GR_DIM], T &pack,
+                                    const int &b, const int &n)
+{
+    DLOOP2 {
+        pack(b, rays::Nr(4*mu + nu), n) = N_coord[mu][nu].real();
+        pack(b, rays::Ni(4*mu + nu), n) = N_coord[mu][nu].imag();
+    }
+}
 KOKKOS_INLINE_FUNCTION void read_N(const ParArrayND<Real> &Nr, const ParArrayND<Real> &Ni, const int &n,
                                     Kokkos::complex<double> N_coord[GR_DIM][GR_DIM])
 {
     DLOOP2 N_coord[mu][nu] = Kokkos::complex<double>(Nr(mu, nu, n), Ni(mu, nu, n));
+}
+template <typename T>
+KOKKOS_INLINE_FUNCTION void read_N(T &pack, const int &b, const int &n,
+                                    Kokkos::complex<double> N_coord[GR_DIM][GR_DIM])
+{
+    DLOOP2 N_coord[mu][nu] = Kokkos::complex<double>(pack(b, rays::Nr(4*mu + nu), n), pack(b, rays::Ni(4*mu + nu), n));
 }
 
 KOKKOS_INLINE_FUNCTION void stokes_to_N(const double &SI, const double &SQ, const double &SU,

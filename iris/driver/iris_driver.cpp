@@ -66,23 +66,79 @@ TaskCollection IrisDriver::MakeTaskCollection(T &blocks)
     TaskCollection tc;
     TaskID t_none(0);
 
-    MeshBlock *pmb = blocks[0].get(); // TODO eventually iterate over these & sync etc
-    bool thin_disk = pmb->packages.Get("Model")->Param<std::string>("type") == "thin_disk";
-    // TODO read pol, react below
+    auto partitions = pmesh->GetDefaultBlockPartitions();
+    const int num_partitions = partitions.size();
+    int num_blocks = blocks.size();
+    auto pkgs = pmesh->packages.AllPackages();
 
-    TaskRegion &sync_region = tc.AddRegion(1);
-    auto t_load_file = t_none;
-    if (!thin_disk) { // TODO more robust "if we need a file" check
-        t_load_file = sync_region[0].AddTask(t_none, File::InitMeshBlock, pmb);
+    const bool thin_disk = pmesh->packages.Get("Model")->Param<std::string>("type") == "thin_disk";
+    // TODO read pol, react below
+    auto cam_pkg = pmesh->packages.Get("Cameras");
+    const auto camnames = cam_pkg->Param<std::vector<std::string>>("camnames");
+    const auto vars = cam_pkg->Param<std::vector<std::string>>("vars");
+
+    auto ray_pkg = pmesh->packages.Get("Rays");
+    // TODO This is a very large value for iterations (which usually have many steps!)
+    const int max_iter_geo = ray_pkg->Param<int>("max_nstep_geo");
+    const int max_iter_rad = ray_pkg->Param<int>("max_nstep_rad");
+    const auto store_paths = ray_pkg->Param<bool>("store_paths");
+
+    TaskRegion &region1 = tc.AddRegion(num_blocks);
+    for (int i = 0; i < num_blocks; i++) {
+        auto &pmb = pmesh->block_list[i];
+        auto t_load_file = t_none;
+        // File load per-block
+        if (pkgs.count("File"))
+            t_load_file = region1[i].AddTask(t_none, TF(File::InitMeshBlock), pmb.get());
+        // Construct cameras per-block
+        region1[i].AddTask(t_load_file, TF(Cameras::InitGeodesics), pmb.get());
     }
-    auto t_at_camera = sync_region[0].AddTask(t_load_file, Cameras::InitGeodesics, pmb);
-    auto t_at_origins = sync_region[0].AddTask(t_at_camera, Rays::TraceGeodesicsUntilStop, pmb);
-    auto t_set_stokes = t_at_origins;
-    if (thin_disk) {
-        t_set_stokes = sync_region[0].AddTask(t_at_origins, Model::SetStokesThindisk, pmb);
+
+    TaskRegion &all_region = tc.AddRegion(num_partitions);
+    for (int i=0; i < num_partitions; i++) {
+        TaskList &tl = all_region[i];
+        auto &md_base = pmesh->mesh_data.GetOrAdd("base", i);
+
+        // Sync loaded data to fill cell ghost zones once
+        // This will be a no-op for non-grid problems
+        auto t_initial_boundaries = AddBoundaryExchangeTasks(t_none, tl, md_base, false);
+
+        // Rays are traced together over the whole mesh
+        // 'AddTraceTasks' repeats per-block trace until rays reach stop conditions
+        auto t_geodesics = Rays::AddTraceTasks<false>(t_initial_boundaries, tl, Rays::TraceGeodesicsBlock, md_base.get(), max_iter_geo);
+
+
+        // Set any boundary conditions per-block
+        // TODO meshize so we can have a single region
+        if (thin_disk) {
+            t_geodesics = tl.AddTask(t_geodesics, TF(Model::SetStokesThindisk), md_base.get());
+        }
+
+        TaskID t_trace_emission;
+        if (store_paths) {
+            // First template is tracing emission vs geodesics, *second* is store_paths or not
+            t_trace_emission = Rays::AddTraceTasks<true>(t_geodesics, tl, Rays::TraceEmissionBlock<true>, md_base.get(), max_iter_rad);
+        } else {
+            t_trace_emission = Rays::AddTraceTasks<true>(t_geodesics, tl, Rays::TraceEmissionBlock<false>, md_base.get(), max_iter_rad);
+        }
+
+        // Write all cameras on our rank to host arrays
+        auto t_write_local_cams = tl.AddTask(t_trace_emission, TF(Cameras::WriteLocalCameras), md_base.get());
+
+        // MPI reductions to the host arrays
+        auto t_reduce_cams = tl.AddTask(t_write_local_cams, TF(Cameras::ReduceCameras), md_base.get());
+        //auto t_reduce_cams = t_write_local_cams;
+
+        // Any custom outputs, printed summaries
+        auto t_write_reduced_cams = tl.AddTask(t_reduce_cams, TF(Cameras::WriteReducedCameras), md_base.get());
+
     }
-    auto t_trace_rays = sync_region[0].AddTask(t_set_stokes, Rays::TraceRaysToCameras, pmb);
-    auto t_write = sync_region[0].AddTask(t_trace_rays, Cameras::WriteCameras, pmb);
+
+    // TODO write cameras
+
+
+    // TODO if verbose or something
+    //std::cerr << tc << std::endl;
 
     return tc;
 }

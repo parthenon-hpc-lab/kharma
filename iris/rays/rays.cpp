@@ -45,8 +45,16 @@ std::shared_ptr<StateDescriptor> Rays::Initialize(ParameterInput *pin, std::shar
     auto pkg = std::make_shared<KHARMAPackage>("Rays");
     Params &params = pkg->AllParams();
 
-    int max_nstep = pin->GetOrAddInteger("geodesics", "max_nstep", 50000); // ipole's value
-    params.Add("max_nstep", max_nstep);
+    int max_nstep_geo = pin->GetOrAddInteger("geodesics", "max_nstep", 50000); // ipole's value
+    params.Add("max_nstep_geo", max_nstep_geo);
+    int max_nstep_rad = pin->GetOrAddInteger("geodesics", "max_nstep_rad", max_nstep_geo); // separate max radiative steps
+    params.Add("max_nstep_rad", max_nstep_rad);
+    // Max steps per kernel invocation, otherwise long geodesics ruin load balancing
+    int max_kernel_nstep_geo = pin->GetOrAddInteger("geodesics", "max_kernel_nstep", 100); // ipole's value
+    params.Add("max_kernel_nstep_geo", max_kernel_nstep_geo);
+    int max_kernel_nstep_rad = pin->GetOrAddInteger("geodesics", "max_kernel_nstep_rad", max_kernel_nstep_geo); // separate max radiative steps
+    params.Add("max_kernel_nstep_rad", max_kernel_nstep_rad);
+
     GReal eps = pin->GetOrAddReal("geodesics", "eps", 0.01); // ipole's value
     params.Add("eps", eps);
     GReal conn_delta = pin->GetOrAddReal("geodesics", "conn_delta", 1e-7); // ipole's value
@@ -54,7 +62,7 @@ std::shared_ptr<StateDescriptor> Rays::Initialize(ParameterInput *pin, std::shar
     bool store_paths = !pin->GetOrAddBoolean("geodesics", "recalculate_paths", false);
     params.Add("store_paths", store_paths);
 
-    // Store polarized *transport* separaete from *model* in case we want to 
+    // Store polarized *transport* separaete from *model* in case we want to
     bool polarized = pin->GetBoolean("model", "polarized");
     params.Add("polarized", polarized);
 
@@ -64,260 +72,422 @@ std::shared_ptr<StateDescriptor> Rays::Initialize(ParameterInput *pin, std::shar
     pkg->AddSwarm(swarm_name, swarm_metadata);
     // Time/x0.  Traditional name from Parthenon codes...
     Metadata swarmreal({Metadata::Real});
-    pkg->AddSwarmValue("t", swarm_name, swarmreal);
+    pkg->AddSwarmValue(rays::t::name(), swarm_name, swarmreal);
     // Path length
-    pkg->AddSwarmValue("path_len", swarm_name, swarmreal);
+    pkg->AddSwarmValue(rays::path_len::name(), swarm_name, swarmreal);
 
     Metadata swarmint({Metadata::Integer});
     // Keep track of host camera
-    pkg->AddSwarmValue("camera_id", swarm_name, swarmint);
+    pkg->AddSwarmValue(rays::camera_id::name(), swarm_name, swarmint);
     // And pixel location
-    pkg->AddSwarmValue("i", swarm_name, swarmint);
-    pkg->AddSwarmValue("j", swarm_name, swarmint);
+    pkg->AddSwarmValue(rays::camera_i::name(), swarm_name, swarmint);
+    pkg->AddSwarmValue(rays::camera_j::name(), swarm_name, swarmint);
     // Number of geodesic steps
-    pkg->AddSwarmValue("nstep_geo", swarm_name, swarmint);
+    pkg->AddSwarmValue(rays::nstep_geo::name(), swarm_name, swarmint);
+    // Number of radiative steps
+    pkg->AddSwarmValue(rays::nstep_rad::name(), swarm_name, swarmint);
     //pkg->AddSwarmValue("nstep_rad", swarm_name, swarmint); // please make this separate
     // Number of geodesic steps
-    pkg->AddSwarmValue("stop_flag", swarm_name, swarmint);
+    pkg->AddSwarmValue(rays::stop_flag::name(), swarm_name, swarmint);
+    pkg->AddSwarmValue(rays::at_camera::name(), swarm_name, swarmint);
 
     // Wavevector 4-vector
     Metadata swarmvec({Metadata::Real}, std::vector<int>{4});
-    pkg->AddSwarmValue("k", swarm_name, swarmvec);
+    pkg->AddSwarmValue(rays::k::name(), swarm_name, swarmvec);
 
     if (store_paths) {
         // Ray path X, K
-        Metadata swarmpath({Metadata::Real}, std::vector<int>{GR_DIM*(max_nstep+1)});
-        Metadata swarmpathlen({Metadata::Real}, std::vector<int>{max_nstep+1});
-        pkg->AddSwarmValue("xpath", swarm_name, swarmpath);
-        pkg->AddSwarmValue("kpath", swarm_name, swarmpath);
-        pkg->AddSwarmValue("dlpath", swarm_name, swarmpathlen);
+        Metadata swarmpath({Metadata::Real}, std::vector<int>{GR_DIM*(max_nstep_geo+1)});
+        Metadata swarmpathlen({Metadata::Real}, std::vector<int>{max_nstep_geo+1});
+        pkg->AddSwarmValue(rays::xpath::name(), swarm_name, swarmpath);
+        pkg->AddSwarmValue(rays::kpath::name(), swarm_name, swarmpath);
+        pkg->AddSwarmValue(rays::dlpath::name(), swarm_name, swarmpathlen);
     }
 
     // Radiation parameters
-    pkg->AddSwarmValue("I", swarm_name, swarmreal);
+    pkg->AddSwarmValue(rays::I::name(), swarm_name, swarmreal);
     if (polarized) { // TODO if pol etc
         // Full radiation tensor N (Gammie & Leung)
         // We'll always pull the stokes parameters from these locally
         Metadata swarmtensor({Metadata::Real}, std::vector<int>{4,4});
-        pkg->AddSwarmValue("Nr", swarm_name, swarmtensor);
-        pkg->AddSwarmValue("Ni", swarm_name, swarmtensor);
+        pkg->AddSwarmValue(rays::Nr::name(), swarm_name, swarmtensor);
+        pkg->AddSwarmValue(rays::Ni::name(), swarm_name, swarmtensor);
+    }
+
+    // Dummy "primitive" variable to coax parthenon to pack our precious geometry
+    if (!packages->AllPackages().count("File")) {
+        auto m = Metadata({Metadata::Cell, Metadata::Real, Metadata::Derived, Metadata::OneCopy,
+                            Metadata::GetUserFlag("Primitive"), Metadata::Restart});
+        pkg->AddField("prims.rho.fake", m);
     }
 
     return pkg;
 }
 
-// TODO Elliptic analytic solutions! Then we don't need to worry about trace-back!
-
-// Solve just the geodesic equation backward, until defined stopping points
-TaskStatus Rays::TraceGeodesicsUntilStop(MeshBlock* pmb)
+// Count remaining particles at block edges rather than their destinations
+template<bool emission>
+int Rays::CountLiveParticles(MeshData<Real>* md)
 {
     PARTHENON_INSTRUMENT
 
-    auto swarm = pmb->meshblock_data.Get()->GetSwarmData()->Get("rays");
-    auto pkg = pmb->packages.Get("Rays");
-    const auto max_nstep = pkg->Param<int>("max_nstep");
+    auto pmb0 = md->GetBlockData(0)->GetBlockPointer();
+
+    // const auto mesh_size = pmb0->pmy_mesh->mesh_size;
+    // const Real x_max_mesh = mesh_size.xmax(X1DIR);
+    // const int ng = Globals::nghost;
+
+    std::string swarm_name = "rays";
+    static auto desc = MakeSwarmPackDescriptor<rays::t,
+                                               swarm_position::x,
+                                               swarm_position::y,
+                                               swarm_position::z,
+                                               rays::path_len>(swarm_name);
+    auto pack = desc.GetPack(md);
+    static auto int_desc = MakeSwarmPackDescriptor<rays::stop_flag,
+                                                   rays::at_camera>(swarm_name);
+    auto int_pack = int_desc.GetPack(md);
+
+    int live = 0;
+    pmb0->par_reduce(PARTHENON_AUTO_LABEL, 0, int_pack.GetMaxFlatIndex(),
+        KOKKOS_LAMBDA(const int &idx, int &local_result) {
+            auto [b, n] = int_pack.GetBlockParticleIndices(idx);
+            const auto swarm_d = int_pack.GetContext(b);
+            if (swarm_d.IsActive(n)) {
+                // Now: count everything not marked as finished
+                if constexpr (emission) {
+                    // Emission rays are retired when they reach the camera (or where it should be)
+                    local_result += !int_pack(b, rays::at_camera(), n);
+                } else {
+                    // A geodesic stop flag not set (still zero) is an active particle
+                    local_result += !int_pack(b, rays::stop_flag(), n);
+                }
+            }
+        }
+    , Kokkos::Sum<int>(live));
+
+    // If there's one outlier print it
+    if (live == 1) {
+        pmb0->par_for(PARTHENON_AUTO_LABEL, 0, int_pack.GetMaxFlatIndex(),
+            KOKKOS_LAMBDA(const int &idx) {
+                auto [b, n] = int_pack.GetBlockParticleIndices(idx);
+                const auto swarm_d = int_pack.GetContext(b);
+                if (swarm_d.IsActive(n)) {
+                    bool print;
+                    if constexpr (emission) {
+                        print = !int_pack(b, rays::at_camera(), n);
+                    } else {
+                        print = !int_pack(b, rays::stop_flag(), n);
+                    }
+                    if (print) {
+                        printf("Loner: X: %f %f %f Len: %f\n", pack(b, swarm_position::x(), n),
+                                                            pack(b, swarm_position::y(), n),
+                                                            pack(b, swarm_position::z(), n),
+                                                            pack(b, rays::path_len(), n));
+                    }
+                }
+            }
+        );
+    }
+
+    std::cout << live << " active particles remaining." << std::endl;
+
+    // Hack to stop runaway/non-moving particles
+    // Have to reset it for trace back!
+    static int loner_cycles = 0;
+    if (live >= 100) loner_cycles = 0;
+    if (live <= 2) loner_cycles += 1;
+    if (loner_cycles > 5) {
+        return 0;
+    }
+
+    return live;
+}
+// There are only two
+template int Rays::CountLiveParticles<true>(MeshData<Real>* md);
+template int Rays::CountLiveParticles<false>(MeshData<Real>* md);
+
+// Solve just the geodesic equation backward, until defined stopping points incl. block bounds
+TaskStatus Rays::TraceGeodesicsBlock(MeshData<Real>* md)
+{
+    PARTHENON_INSTRUMENT
+
+    // TODO grab pmesh only
+    auto pmb0 = md->GetBlockData(0)->GetBlockPointer();
+    auto pkg = pmb0->packages.Get("Rays");
+    const auto max_nstep = pkg->Param<int>("max_nstep_geo");
+    const auto max_kernel_nstep = pkg->Param<int>("max_kernel_nstep_geo");
     const auto eps = pkg->Param<GReal>("eps");
     const auto conn_delta = pkg->Param<GReal>("conn_delta");
     const auto polarized = pkg->Param<bool>("polarized");
     const auto store_paths = pkg->Param<bool>("store_paths");
 
-    const auto stop_condition = pmb->packages.Get("Model")->Param<Model::StopCondition>("stop_condition");
+    const auto stop_condition = pmb0->packages.Get("Model")->Param<Model::StopCondition>("stop_condition");
 
-    int max_active_index = swarm->GetMaxActiveIndex();
+    std::string swarm_name = "rays";
+    static auto desc = MakeSwarmPackDescriptor<rays::t,
+                                              swarm_position::x,
+                                              swarm_position::y,
+                                              swarm_position::z,
+                                              rays::path_len,
+                                              // Vectors
+                                              rays::k,
+                                              rays::Nr,
+                                              rays::Ni,
+                                              rays::xpath,
+                                              rays::kpath,
+                                              rays::dlpath>(swarm_name);
+    auto pack = desc.GetPack(md);
 
-    auto &x0 = swarm->Get<Real>("t").Get();
-    auto &x1 = swarm->Get<Real>(swarm_position::x::name()).Get();
-    auto &x2 = swarm->Get<Real>(swarm_position::y::name()).Get();
-    auto &x3 = swarm->Get<Real>(swarm_position::z::name()).Get();
-    auto &k = swarm->Get<Real>("k").Get();
-    // Tracing data
-    auto &nstep = swarm->Get<int>("nstep_geo").Get();
-    auto &pathlen = swarm->Get<Real>("path_len").Get();
-    auto &stopflag = swarm->Get<int>("stop_flag").Get();
-    // Path data
-    auto &xpath = (store_paths) ? swarm->Get<Real>("xpath").Get() : swarm->Get<Real>("k").Get();
-    auto &kpath = (store_paths) ? swarm->Get<Real>("kpath").Get() : swarm->Get<Real>("k").Get();
-    auto &dlpath = (store_paths) ? swarm->Get<Real>("dlpath").Get() : swarm->Get<Real>("k").Get();
+    // If running with MPI, sometimes our rank has no rays right now
+    if (pack.GetMaxFlatIndex() < 0) return TaskStatus::complete;
 
-    auto swarm_d = swarm->GetDeviceContext();
+    static auto int_desc = MakeSwarmPackDescriptor<rays::nstep_geo,
+                                                   rays::stop_flag>(swarm_name);
+    auto int_pack = int_desc.GetPack(md);
 
-    const CoordinateEmbedding coords = pmb->coords.coords;
+    // TODO coordinates in swarmpacks
+    auto P = md->PackVariables(std::vector<MetadataFlag>{Metadata::GetUserFlag("Primitive")});
 
-    // TODO implement better than RK2
-    pmb->par_for(
-        PARTHENON_AUTO_LABEL, 0, max_active_index, KOKKOS_LAMBDA(const int &n) {
-            if (swarm_d.IsActive(n)) {
-                nstep(n) = 0;
-                pathlen(n) = 0.0;
-                double X[GR_DIM] = {x0(n), x1(n), x2(n), x3(n)};
-                double Kcon[GR_DIM] = {k(0, n), k(1, n), k(2, n), k(3, n)};
+    const Real x_max_mesh = pmb0->pmy_mesh->mesh_size.xmax(X1DIR);
+    const int ng = Globals::nghost;
+
+    // This load is extremely unbalanced, so we chunk out all rays separately
+    auto policyBlock = Kokkos::RangePolicy<Kokkos::Schedule<Kokkos::Dynamic>>(DevExecSpace(),
+                                            0, pack.GetMaxFlatIndex(), Kokkos::ChunkSize(1));
+    Kokkos::parallel_for(PARTHENON_AUTO_LABEL, policyBlock,
+        KOKKOS_LAMBDA(const int &idx) {
+            auto [b, n] = pack.GetBlockParticleIndices(idx);
+            const auto swarm_d = pack.GetContext(b);
+            if (swarm_d.IsActive(n) && !int_pack(b, rays::stop_flag(), n)) {
+                // Grab pointers
+                const GRCoordinates &G = P.GetCoords(b);
+                const CoordinateEmbedding &coords = G.coords;
+                // Grab position and wavevector
+                double X[GR_DIM] = {pack(b, rays::t(), n),
+                                    pack(b, swarm_position::x(), n),
+                                    pack(b, swarm_position::y(), n),
+                                    pack(b, swarm_position::z(), n)};
+                double Kcon[GR_DIM] = {pack(b, rays::k(0), n),
+                                    pack(b, rays::k(1), n),
+                                    pack(b, rays::k(2), n),
+                                    pack(b, rays::k(3), n)};
+
+                // Need the local number to load balance, global for stopping
+                int nstep_local = 0;
+                int nstep = int_pack(b, rays::nstep_geo(), n);
                 if (store_paths) {
                     // nstep zero
-                    DLOOP1 xpath(mu, n) = X[mu];
-                    DLOOP1 kpath(mu, n) = Kcon[mu];
+                    DLOOP1 pack(b, rays::xpath(4*nstep + mu), n) = X[mu];
+                    DLOOP1 pack(b, rays::kpath(4*nstep + mu), n) = Kcon[mu];
                 }
+
                 double Xi[GR_DIM]; // need Kconi?
+
+                // ======================== BEGIN ITERATION ========================
                 do {
-                    nstep(n)++;
+                    // We need this locally and stored
+                    nstep++;
+                    nstep_local++;
+
                     DLOOP1 Xi[mu] = X[mu];
 
                     double dl = geodesic_step(coords, X, Kcon, eps, conn_delta, true);
-                    pathlen(n) += dl;
+                    pack(b, rays::path_len(), n) += dl;
 
                     if (store_paths) {
-                        DLOOP1 {
-                            xpath(4*nstep(n) + mu, n) = X[mu];
-                            kpath(4*nstep(n) + mu, n) = Kcon[mu];
-                        }
-                        dlpath(nstep(n), n) = dl;
+                        DLOOP1 pack(b, rays::xpath(4*nstep + mu), n) = X[mu];
+                        DLOOP1 pack(b, rays::kpath(4*nstep + mu), n) = Kcon[mu];
+                        pack(b, rays::dlpath(nstep), n) = dl;
                     }
+
                 } while (!Model::stop_backward_integration(Xi[1], Xi[2], Xi[3], X[1], X[2], X[3],
-                                                        Kcon[1], stop_condition, stopflag(n))
-                    && nstep(n) < max_nstep);
+                                                        Kcon[1], stop_condition, int_pack(b, rays::stop_flag(), n))
+                    && nstep < max_nstep && nstep_local < max_kernel_nstep
+                    && in_block(G, X, x_max_mesh));
+                // ======================== END ITERATION ========================
+
+                // Write back nstep
+                int_pack(b, rays::nstep_geo(), n) = nstep;
                 // Set the new position and wavevector
-                x0(n) = X[0];
-                x1(n) = X[1];
-                x2(n) = X[2];
-                x3(n) = X[3];
-                k(0,n) = Kcon[0];
-                k(1,n) = Kcon[1];
-                k(2,n) = Kcon[2];
-                k(3,n) = Kcon[3];
+                pack(b, rays::t(), n) = X[0];
+                pack(b, swarm_position::x(), n) = X[1];
+                pack(b, swarm_position::y(), n) = X[2];
+                pack(b, swarm_position::z(), n) = phi_of(X[3]);
+                DLOOP1 pack(b, rays::k(mu), n) = Kcon[mu];
             }
         }
     );
     Kokkos::fence();
-    std::cerr << "Finished back trace" << std::endl;
+    std::cerr << "Finished block of geodesics" << std::endl;
 
     return TaskStatus::complete;
 }
 
 // Solve the unpolarized transfer equation
-TaskStatus Rays::TraceRaysToCameras(MeshBlock* pmb)
+template<bool store_paths>
+TaskStatus Rays::TraceEmissionBlock(MeshData<Real>* md)
 {
     PARTHENON_INSTRUMENT
 
-    auto swarm = pmb->meshblock_data.Get()->GetSwarmData()->Get("rays");
-    auto pkg = pmb->packages.Get("Rays");
-    const auto max_nstep = pkg->Param<int>("max_nstep");
+    auto pmb0 = md->GetBlockData(0)->GetBlockPointer();
+    auto pkg = pmb0->packages.Get("Rays");
+    const auto max_nstep = pkg->Param<int>("max_nstep_rad");
+    const auto max_kernel_nstep = pkg->Param<int>("max_kernel_nstep_rad");
     const auto eps = pkg->Param<GReal>("eps");
     const auto conn_delta = pkg->Param<GReal>("conn_delta");
     const auto polarized = pkg->Param<bool>("polarized");
-    const auto store_paths = pkg->Param<bool>("store_paths");
 
-    auto &model = pmb->packages.Get("Model")->AllParams();
+    auto &model = pmb0->packages.Get("Model")->AllParams();
     const auto L_unit = model.Get<double>("L_unit");
     const auto RHO_unit = model.Get<double>("RHO_unit");
     const auto B_unit = model.Get<double>("B_unit");
     const auto radiative = model.Get<bool>("radiative");
     const auto stop_condition = model.Get<Model::StopCondition>("stop_condition");
 
+    const Real x_max_mesh = pmb0->pmy_mesh->mesh_size.xmax(X1DIR);
+    const int ng = Globals::nghost;
+
     // Intensity is conserved in vacuum
     if (!polarized && !radiative) {
         return TaskStatus::complete;
     }
 
-    int max_active_index = swarm->GetMaxActiveIndex();
+    std::string swarm_name = "rays";
+    static auto desc = MakeSwarmPackDescriptor<rays::t,
+                                              swarm_position::x,
+                                              swarm_position::y,
+                                              swarm_position::z,
+                                              rays::path_len,
+                                              // Vectors
+                                              rays::k,
+                                              rays::Nr,
+                                              rays::Ni,
+                                              rays::xpath,
+                                              rays::kpath,
+                                              rays::dlpath>(swarm_name);
+    auto pack = desc.GetPack(md);
 
-    auto &x0 = swarm->Get<Real>("t").Get();
-    auto &x1 = swarm->Get<Real>(swarm_position::x::name()).Get();
-    auto &x2 = swarm->Get<Real>(swarm_position::y::name()).Get();
-    auto &x3 = swarm->Get<Real>(swarm_position::z::name()).Get();
-    auto &k = swarm->Get<Real>("k").Get();
-    // Radiation
-    auto &Nr = swarm->Get<Real>("Nr").Get();
-    auto &Ni = swarm->Get<Real>("Ni").Get();
-    // Tracing data
-    auto &nstep = swarm->Get<int>("nstep_geo").Get();
-    // Path data
-    auto &xpath = (store_paths) ? swarm->Get<Real>("xpath").Get() : swarm->Get<Real>("k").Get();
-    auto &kpath = (store_paths) ? swarm->Get<Real>("kpath").Get() : swarm->Get<Real>("k").Get();
-    auto &dlpath = (store_paths) ? swarm->Get<Real>("dlpath").Get() : swarm->Get<Real>("k").Get();
+    // If running with MPI, sometimes our rank has no rays right now
+    if (pack.GetMaxFlatIndex() < 0) return TaskStatus::complete;
 
-    auto swarm_d = swarm->GetDeviceContext();
-
-    const GRCoordinates &G = pmb->coords;
-    const CoordinateEmbedding &coords = pmb->coords.coords;
+    static auto int_desc = MakeSwarmPackDescriptor<rays::nstep_geo,
+                                                   rays::nstep_rad,
+                                                   rays::at_camera>(swarm_name);
+    auto int_pack = int_desc.GetPack(md);
 
     PackIndexMap prims_map;
-    auto P = pmb->meshblock_data.Get()->PackVariables(std::vector<MetadataFlag>{Metadata::GetUserFlag("Primitive")}, prims_map);
+    auto P = md->PackVariables(std::vector<MetadataFlag>{Metadata::GetUserFlag("Primitive")}, prims_map);
     const VarMap m_p(prims_map, false);
-    printf("P size: %d %d %d %d\n", P.GetDim(1), P.GetDim(2), P.GetDim(3), P.GetDim(4));
+    //printf("P size: %d %d %d %d\n", P.GetDim(1), P.GetDim(2), P.GetDim(3), P.GetDim(4));
 
-    // TODO implement better than RK2
-    pmb->par_for(PARTHENON_AUTO_LABEL, 0, max_active_index,
-        KOKKOS_LAMBDA(const int &n) {
-            if (swarm_d.IsActive(n)) {
-                // Read N
+    // This load is extremely unbalanced.
+    auto policyBlock = Kokkos::RangePolicy<Kokkos::Schedule<Kokkos::Dynamic>>(DevExecSpace(),
+                                                        0, pack.GetMaxFlatIndex(), Kokkos::ChunkSize(1));
+    Kokkos::parallel_for(PARTHENON_AUTO_LABEL, policyBlock,
+        KOKKOS_LAMBDA(const int &idx) {
+            auto [b, n] = pack.GetBlockParticleIndices(idx);
+            const auto swarm_d = pack.GetContext(b);
+            if (swarm_d.IsActive(n) && !int_pack(b, rays::at_camera(), n)) {
+                // Grab pointers
+                const GRCoordinates &G = P.GetCoords(b);
+                const CoordinateEmbedding &coords = G.coords;
+
+                // Read N and nsteps
                 Kokkos::complex<double> N_coord[GR_DIM][GR_DIM];
-                read_N(Nr, Ni, n, N_coord);
+                if (polarized)
+                    read_N(pack, b, n, N_coord);
+                int rstep = int_pack(b, rays::nstep_rad(), n);
+                const int gstep = int_pack(b, rays::nstep_geo(), n);
+                int nstep_local = 0;
+
+                // Declare X and K, reading is specific to algorithm
+                double X[GR_DIM], Kcon[GR_DIM];
 
                 // Evolve N
-                if (store_paths) {
-                    for (int step = nstep(n); step >= 1; step--) {
-                        double Xi[GR_DIM]    = {xpath(4*step, n), xpath(4*step+1, n), xpath(4*step+2, n), xpath(4*step+3, n)};
-                        double Kconi[GR_DIM] = {kpath(4*step, n), kpath(4*step+1, n), kpath(4*step+2, n), kpath(4*step+3, n)};
-                        double Xf[GR_DIM]    = {xpath(4*(step-1), n), xpath(4*(step-1)+1, n), xpath(4*(step-1)+2, n), xpath(4*(step-1)+3, n)};
-                        double Kconf[GR_DIM] = {kpath(4*(step-1), n), kpath(4*(step-1)+1, n), kpath(4*(step-1)+2, n), kpath(4*(step-1)+3, n)};
-                        // printf("Path %d step %d: %g %g %g %g to %g %g %g %g, %g %g %g %g to %g %g %g %g\n", n, step,
-                        //         Xi[0], Xi[1], Xi[2], Xi[3], Xf[0], Xf[1], Xf[2], Xf[3],
-                        //         Kconi[0], Kconi[1], Kconi[2], Kconi[3], Kconf[0], Kconf[1], Kconf[2], Kconf[3]);
-                        path_parallel_transport_step(coords, Xi, Kconi, Xf, Kconf, N_coord, conn_delta, dlpath(step, n));
-
-                        if (radiative && Xf[1] > stop_condition.x1min_geo && Xf[1] < stop_condition.x1max_geo &&
-                            Xf[2] > coords.startx(2)+0.01 && Xf[2] < coords.stopx(2)-0.01) {
-                            // Add units to dl to process radiation
-                            Model::process_radiation(G, N_coord, Xf, Kconf, P, m_p, RHO_unit, B_unit,
-                                                    dlpath(step, n) * L_unit * HPL / (ME * CL * CL), false);
-                        }
-                    }
-                    // Last write
-                    x0(n) = xpath(0, n);
-                    x1(n) = xpath(1, n);
-                    x2(n) = xpath(2, n);
-                    x3(n) = xpath(3, n);
-                    k(0,n) = kpath(0, n);
-                    k(1,n) = kpath(1, n);
-                    k(2,n) = kpath(2, n);
-                    k(3,n) = kpath(3, n);
-                } else {
-                    int nstep_back = 0;
-                    double X[GR_DIM] = {x0(n), x1(n), x2(n), x3(n)};
-                    double Kcon[GR_DIM] = {k(0, n), k(1, n), k(2, n), k(3, n)};
+                if constexpr (store_paths) {
+                    double Xi[GR_DIM], Kconi[GR_DIM];
+                    // X and K will be final values "Xf"/"Kf"
+                    // TODO does if constexpr actually eliminate the register use?
 
                     do {
-                        nstep_back++;
+                        // Step backwards from the last geometric step
+                        const int step = gstep-1 - rstep;
+                        DLOOP1 Xi[mu] = pack(b, rays::xpath(4*step + mu), n);
+                        DLOOP1 Kconi[mu] = pack(b, rays::kpath(4*step + mu), n);
+                        const int next = step - 1; // One step toward camera
+                        DLOOP1 X[mu] = pack(b, rays::xpath(4*next + mu), n);
+                        DLOOP1 Kcon[mu] = pack(b, rays::kpath(4*next + mu), n);
+                        // printf("Path %d step %d: %g %g %g %g to %g %g %g %g, %g %g %g %g to %g %g %g %g\n", n, step,
+                        //         Xi[0], Xi[1], Xi[2], Xi[3], X[0], X[1], X[2], X[3],
+                        //         Kconi[0], Kconi[1], Kconi[2], Kconi[3], Kcon[0], Kcon[1], Kcon[2], Kcon[3]);
 
+                        if (polarized)
+                            path_parallel_transport_step(coords, Xi, Kconi, X, Kcon, N_coord, conn_delta, pack(b, rays::dlpath(step), n));
+
+                        // Only process radiation on the mesh domain -- outside it any interpolation means nothing
+                        if (radiative && X[1] > G.Xf<X1DIR>(ng) && X[1] < G.Xf<X1DIR>(G.n1-ng) &&
+                            X[1] > stop_condition.x1min_geo && X[1] < stop_condition.x1max_geo &&
+                            X[2] > G.Xf<X2DIR>(ng)+0.01 && X[2] < G.Xf<X2DIR>(G.n2-ng)-0.01) {
+                            // Add units to dl to process radiation
+                            // TODO template this for unpolarized transport etc w/speed
+                            Model::process_radiation(G, N_coord, X, Kcon, P(b), m_p, RHO_unit, B_unit,
+                                                    pack(b, rays::dlpath(step), n) * L_unit * HPL / (ME * CL * CL), false);
+                        }
+
+                        rstep++;
+                        nstep_local++;
+
+                    } while (rstep < gstep && rstep < max_nstep && nstep_local < max_kernel_nstep && in_block(G, X, x_max_mesh));
+                } else {
+                    // Set initial values
+                    X[0] = pack(b, rays::t(), n);
+                    X[1] = pack(b, swarm_position::x(), n);
+                    X[2] = pack(b, swarm_position::y(), n);
+                    X[3] = pack(b, swarm_position::z(), n);
+                    DLOOP1 Kcon[mu] = pack(b, rays::k(mu), n);
+
+                    do {
+                        // Evolve X, Kcon to get subsequent values
                         double dl = geodesic_parallel_transport_step(coords, X, Kcon, N_coord, eps, conn_delta, false);
 
-                        if (radiative && X[1] > stop_condition.x1min_geo && X[1] < stop_condition.x1max_geo &&
-                            X[2] > coords.startx(2)+0.01 && X[2] < coords.stopx(2)-0.01) {
+                        // Only process radiation on the mesh domain -- outside it any interpolation means nothing
+                        if (radiative && X[1] > G.Xf<X1DIR>(ng) && X[1] < G.Xf<X1DIR>(G.n1-ng) &&
+                            X[1] > stop_condition.x1min_geo && X[1] < stop_condition.x1max_geo &&
+                            X[2] > G.Xf<X2DIR>(ng)+0.01 && X[2] < G.Xf<X2DIR>(G.n2-ng)-0.01) {
                             // Add units to dl to process radiation
-                            Model::process_radiation(G, N_coord, X, Kcon, P, m_p, RHO_unit, B_unit,
+                            Model::process_radiation(G, N_coord, X, Kcon, P(b), m_p, RHO_unit, B_unit,
                                                     dl * L_unit * HPL / (ME * CL * CL), false);
                         }
 
-                    } while (nstep_back < nstep(n)); // Or stop at camera radius
+                        rstep++;
+                        nstep_local++;
 
-                    // Last write
-                    x0(n) = X[0];
-                    x1(n) = X[1];
-                    x2(n) = X[2];
-                    x3(n) = X[3];
-                    k(0,n) = Kcon[0];
-                    k(1,n) = Kcon[1];
-                    k(2,n) = Kcon[2];
-                    k(3,n) = Kcon[3];
+                        // TODO also stop at camera radius etc.
+                    } while (rstep < gstep && rstep < max_nstep && nstep_local < max_kernel_nstep && in_block(G, X, x_max_mesh));
                 }
 
-                // Write N
-                write_N(N_coord, Nr, Ni, n);
+                // Write X and K
+                pack(b, rays::t(), n) = X[0];
+                pack(b, swarm_position::x(), n) = X[1];
+                pack(b, swarm_position::y(), n) = X[2];
+                pack(b, swarm_position::z(), n) = phi_of(X[3]);
+                DLOOP1 pack(b, rays::k(mu), n) = Kcon[mu];
+
+                // Write N and nstep, record if we arrived
+                if (polarized)
+                    write_N(N_coord, pack, b, n);
+                int_pack(b, rays::nstep_rad(), n) = rstep;
+                if (rstep == gstep || rstep == max_nstep)
+                    int_pack(b, rays::at_camera(), n) = 1;
             }
         }
     );
 
     // Make sure we're (a) finished and (b) honest about timings
     Kokkos::fence();
+    std::cerr << "Finished block of emission" << std::endl;
 
     return TaskStatus::complete;
 }
+template TaskStatus Rays::TraceEmissionBlock<true>(MeshData<Real>* md);
+template TaskStatus Rays::TraceEmissionBlock<false>(MeshData<Real>* md);

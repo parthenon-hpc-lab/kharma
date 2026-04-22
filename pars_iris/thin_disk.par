@@ -5,6 +5,16 @@
 # Can use any name
 problem_id = thin_disk
 
+<parthenon/mesh>
+nx1 = 16
+nx2 = 1
+nx3 = 1
+
+<parthenon/meshblock>
+nx1 = 8
+nx2 = 1
+nx3 = 1
+
 <geodesics>
 max_nstep = 10000
 recalculate_paths = true
@@ -41,8 +51,8 @@ dy = 40
 # 1 eV
 frequency = 2.417989e17
 
-nx = 800
-ny = 800
+nx = 80
+ny = 80
 
 dsource = 0.05
 

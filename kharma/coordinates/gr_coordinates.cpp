@@ -68,6 +68,7 @@ GRCoordinates::GRCoordinates(const RegionSize &rs, ParameterInput *pin): Uniform
     n1 = rs.nx(X1DIR) + 2*Globals::nghost;
     n2 = rs.nx(X2DIR) > 1 ? rs.nx(X2DIR) + 2*Globals::nghost : 1;
     n3 = rs.nx(X3DIR) > 1 ? rs.nx(X3DIR) + 2*Globals::nghost : 1;
+    ng = Globals::nghost;
     //cout << "Initialized coordinates with nghost " << Globals::nghost << std::endl;
 
     connection_average_points = pin->GetOrAddInteger("coordinates", "connection_average_points", 1);
@@ -77,7 +78,7 @@ GRCoordinates::GRCoordinates(const RegionSize &rs, ParameterInput *pin): Uniform
 }
 
 GRCoordinates::GRCoordinates(const GRCoordinates &src, int coarsen): UniformCartesian(src, coarsen),
-    coords(src.coords), n1(src.n1/coarsen), n2(src.n2/coarsen), n3(src.n3/coarsen),
+    coords(src.coords), n1(src.n1/coarsen), n2(src.n2/coarsen), n3(src.n3/coarsen), ng(src.ng),
     connection_average_points(src.connection_average_points),
     correct_connections(src.correct_connections)
 {

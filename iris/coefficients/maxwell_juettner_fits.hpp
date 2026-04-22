@@ -105,19 +105,19 @@ KOKKOS_INLINE_FUNCTION double maxwell_juettner_leung_I(const FitParams &params)
     if (nu > 1.e12*nus) return 0.;
 
     const double x = nu/nus ;
-    return (sqrt(2.) * M_PI * EE * EE * Ne * nus / (3. * CL * K2)) * 
-                pow( pow(x,1./2.) + pow(2.,11./12.)*pow(x,1./6.), 2 ) * 
+    return (sqrt(2.) * M_PI * EE * EE * Ne * nus / (3. * CL * K2)) *
+                pow( pow(x,1./2.) + pow(2.,11./12.)*pow(x,1./6.), 2 ) *
                 exp(-pow(x,1./3.));
 }
 
 /********* MAIN/PANDYA FITS *********/
 
 /*maxwell_juettner_I: fitting formula for the emissivity (polarized in Stokes I)
- *                    produced by a Maxwell-Juettner (relativistic thermal) 
+ *                    produced by a Maxwell-Juettner (relativistic thermal)
  *                    distribution of electrons. (Eq. 29, 31 of [1])
  *
  *@params: struct of parameters params
- *@returns: fit to the emissivity, polarized in Stokes I, for the given 
+ *@returns: fit to the emissivity, polarized in Stokes I, for the given
  *          parameters for a Maxwell-Juettner distribution.
  */
 template<>
@@ -136,18 +136,18 @@ KOKKOS_INLINE_FUNCTION double j_nu_fit<Stokes::I, ElectronDist::maxwell_juettner
     double prefactor = (params.electron_density * EE * EE * nu_c) / CL;
     double term1 = sqrt(2.) * M_PI/27. * sin(params.observer_angle);
     double term2 = pow(pow(X, 0.5)+pow(2., 11./12.)*pow(X, 1./6.), 2.);
-    double term3 = exp(-pow(X, 1./3.));    
+    double term3 = exp(-pow(X, 1./3.));
     double ans = prefactor * term1 * term2 * term3;
 
     return ans;
 }
 
 /*maxwell_juettner_Q: fitting formula for the emissivity (polarized in Stokes Q)
- *                    produced by a Maxwell-Juettner (relativistic thermal) 
+ *                    produced by a Maxwell-Juettner (relativistic thermal)
  *                    distribution of electrons. (Eq. 29, 31 of [1])
  *
  *@params: struct of parameters params
- *@returns: fit to the emissivity, polarized in Stokes Q, for the given 
+ *@returns: fit to the emissivity, polarized in Stokes Q, for the given
  *          parameters for a Maxwell-Juettner distribution.
  */
 template<>
@@ -173,11 +173,11 @@ KOKKOS_INLINE_FUNCTION double j_nu_fit<Stokes::Q, ElectronDist::maxwell_juettner
 }
 
 /*maxwell_juettner_V: fitting formula for the emissivity (polarized in Stokes V)
- *                    produced by a Maxwell-Juettner (relativistic thermal) 
+ *                    produced by a Maxwell-Juettner (relativistic thermal)
  *                    distribution of electrons. (Eq. 29, 31 of [1])
  *
  *@params: struct of parameters params
- *@returns: fit to the emissivity, polarized in Stokes V, for the given 
+ *@returns: fit to the emissivity, polarized in Stokes V, for the given
  *          parameters for a Maxwell-Juettner distribution.
  */
 template<>
@@ -200,7 +200,7 @@ KOKKOS_INLINE_FUNCTION double j_nu_fit<Stokes::V, ElectronDist::maxwell_juettner
 }
 
 /*planck_func: The Planck function (used in eq. 25 of [1]) can be used to
- *             obtain alpha_nu() fitting formulae from the j_nu() fitting 
+ *             obtain alpha_nu() fitting formulae from the j_nu() fitting
  *             formulae for the Maxwell-Juettner (relativistic thermal)
  *             distribution.
  *
@@ -219,7 +219,7 @@ KOKKOS_INLINE_FUNCTION double planck_func(const FitParams &params)
  *
  *@params: struct of parameters params
  *@returns: fitting formula to the Faraday conversion coefficient
- *          for a Maxwell-Juettner distribution of electrons. 
+ *          for a Maxwell-Juettner distribution of electrons.
  */
 template<>
 KOKKOS_INLINE_FUNCTION double rho_nu_fit<Stokes::Q, ElectronDist::maxwell_juettner>(const FitParams &params)
@@ -240,14 +240,14 @@ KOKKOS_INLINE_FUNCTION double rho_nu_fit<Stokes::Q, ElectronDist::maxwell_juettn
                         * M_PI * 1.e4 * pow((x + 1.e-16), (-8./3.)))
                         * (0.5 + 0.5 * tanh((log(x) - log(120.)) / 0.1));
 
-    double jffunc = 2.011 * exp(-pow(x, 1.035)/4.7) - cos(x/2.) 
+    double jffunc = 2.011 * exp(-pow(x, 1.035)/4.7) - cos(x/2.)
                     * exp(-pow(x, 1.2)/2.73) - .011 * exp(-x / 47.2) + extraterm;
 
     double k1 = gsl_sf_bessel_Kn(1, 1./params.theta_e);
     double k2 = gsl_sf_bessel_Kn(2, 1./params.theta_e);
     double k_ratio = (k2 > 0) ? k1/k2 : 1;
 
-    double eps11m22 = jffunc * wp2 * pow(omega0, 2.) 
+    double eps11m22 = jffunc * wp2 * pow(omega0, 2.)
                         / pow(2.*M_PI * params.nu, 4.)
                         * (k_ratio + 6. * params.theta_e)
                         * pow(sin(params.observer_angle), 2.);
@@ -262,7 +262,7 @@ KOKKOS_INLINE_FUNCTION double rho_nu_fit<Stokes::Q, ElectronDist::maxwell_juettn
  *
  *@params: struct of parameters params
  *@returns: fitting formula to the Faraday rotation coefficient
- *          for a Maxwell-Juettner distribution of electrons. 
+ *          for a Maxwell-Juettner distribution of electrons.
  */
 template<>
 KOKKOS_INLINE_FUNCTION double rho_nu_fit<Stokes::V, ElectronDist::maxwell_juettner>(const FitParams & params)

@@ -1,25 +1,25 @@
-/* 
+/*
  *  File: file.hpp
- *  
+ *
  *  BSD 3-Clause License
- *  
+ *
  *  Copyright (c) 2025, Iris contributors
  *  All rights reserved.
- *  
+ *
  *  Redistribution and use in source and binary forms, with or without
  *  modification, are permitted provided that the following conditions are met:
- *  
+ *
  *  1. Redistributions of source code must retain the above copyright notice, this
  *     list of conditions and the following disclaimer.
- *  
+ *
  *  2. Redistributions in binary form must reproduce the above copyright notice,
  *     this list of conditions and the following disclaimer in the documentation
  *     and/or other materials provided with the distribution.
- *  
+ *
  *  3. Neither the name of the copyright holder nor the names of its
  *     contributors may be used to endorse or promote products derived from
  *     this software without specific prior written permission.
- *  
+ *
  *  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  *  AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  *  IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -45,26 +45,17 @@
 #include "matrix.hpp"
 #include "types.hpp"
 
+#include "gr_coordinates.hpp"
+
 using namespace parthenon;
 
 /**
  */
 namespace File {
 
-std::shared_ptr<StateDescriptor> Initialize(ParameterInput *pin);
+std::shared_ptr<StateDescriptor> Initialize(ParameterInput* pin);
 
-TaskStatus InitMeshBlock(MeshBlock *pmb);
-
-KOKKOS_INLINE_FUNCTION void clip_x(const GReal X[GR_DIM], GReal Xclip[GR_DIM])
-{
-    DLOOP1 Xclip[mu] = X[mu];
-    // TODO check X1? Outside the domain we just don't process emission
-    if (Xclip[2] < 0 || Xclip[2] > M_PI) printf("BAD X2\n");
-
-    // TODO accommodate X[3] != phi
-    while (Xclip[3] > 2*M_PI) Xclip[3] -= 2*M_PI;
-    while (Xclip[3] < 0.) Xclip[3] += 2*M_PI;
-}
+TaskStatus InitMeshBlock(MeshBlock* pmb);
 
 KOKKOS_INLINE_FUNCTION Real lorentz_calc(const GReal Gcov[GR_DIM][GR_DIM], const Real uv[NVEC])
 {
@@ -83,25 +74,29 @@ KOKKOS_INLINE_FUNCTION void get_fourvectors(const GRCoordinates &G, const double
                                             double Ucon[GR_DIM], double Ucov[GR_DIM], double Bcon[GR_DIM], double Bcov[GR_DIM])
 {
     const auto &coords = G.coords;
-    int i, j, k;
+    int ig, jg, kg;
     GReal del[4];
-    GReal startx[GR_DIM] = {0., G.Xf<1>(0), G.Xf<2>(0), G.Xf<3>(0)};
+    GReal startx[GR_DIM] = {0., G.Xf<1>(G.ng), G.Xf<2>(G.ng), G.Xf<3>(G.ng)};
     GReal dx[GR_DIM] = {0., G.Dxc<1>(), G.Dxc<2>(), G.Dxc<3>()};
-    GReal Xclip[GR_DIM];
-    clip_x(X, Xclip);
-    Interpolation::Xtoijk(Xclip, startx, dx, i, j, k, del);
+    Interpolation::Xtoijk(X, startx, dx, ig, jg, kg, del);
+    const int i = clip(ig + G.ng, 0, G.n1-2);
+    const int j = clip(jg + G.ng, 0, G.n2-2);
+    const int k = clip(kg + G.ng, 0, G.n3-2);
+
+    // if (i < 0 || i > G.n1 || j < 0 || j > G.n2 || k < 0 || k > G.n3)
+    //     printf("OOB X: %f %f %f %f i j k %d %d %d\n", X[0], X[1], X[2], X[3], i, j, k);
 
     // Interpolate for B, U
     Real uvec[NVEC], B_P[NVEC];
-    B_P[V1] = Interpolation::linear(i, j, k, del, m_p.B1, P);
-    B_P[V2] = Interpolation::linear(i, j, k, del, m_p.B2, P);
-    B_P[V3] = Interpolation::linear(i, j, k, del, m_p.B3, P);
-    uvec[V1] = Interpolation::linear(i, j, k, del, m_p.U1, P);
-    uvec[V2] = Interpolation::linear(i, j, k, del, m_p.U2, P);
-    uvec[V3] = Interpolation::linear(i, j, k, del, m_p.U3, P);
+    if (m_p.B1 >= 0) B_P[V1] = Interpolation::linear(i, j, k, del, m_p.B1, P);
+    if (m_p.B2 >= 0) B_P[V2] = Interpolation::linear(i, j, k, del, m_p.B2, P);
+    if (m_p.B3 >= 0) B_P[V3] = Interpolation::linear(i, j, k, del, m_p.B3, P);
+    if (m_p.U1 >= 0) uvec[V1] = Interpolation::linear(i, j, k, del, m_p.U1, P);
+    if (m_p.U2 >= 0) uvec[V2] = Interpolation::linear(i, j, k, del, m_p.U2, P);
+    if (m_p.U3 >= 0) uvec[V3] = Interpolation::linear(i, j, k, del, m_p.U3, P);
 
     double Gcov[GR_DIM][GR_DIM], Gcon[GR_DIM][GR_DIM];
-    coords.gcov_native(Xclip, Gcov);
+    coords.gcov_native(X, Gcov);
     coords.gcon_from_gcov(Gcov, Gcon);
 
     const Real gamma = lorentz_calc(Gcov, uvec);
@@ -128,18 +123,24 @@ KOKKOS_INLINE_FUNCTION void get_params(const GRCoordinates &G,
                                         const VariablePack<Real> &P, const VarMap &m_p,
                                         FitParams &params)
 {
-    int i, j, k;
+    int ig, jg, kg;
     GReal del[4];
-    GReal startx[GR_DIM] = {0., G.Xf<1>(0), G.Xf<2>(0), G.Xf<3>(0)};
+    GReal startx[GR_DIM] = {0., G.Xf<1>(G.ng), G.Xf<2>(G.ng), G.Xf<3>(G.ng)};
     GReal dx[GR_DIM] = {0., G.Dxc<1>(), G.Dxc<2>(), G.Dxc<3>()};
-    GReal Xclip[GR_DIM];
-    clip_x(X, Xclip);
-    Interpolation::Xtoijk(Xclip, startx, dx, i, j, k, del);
+    Interpolation::Xtoijk(X, startx, dx, ig, jg, kg, del);
+    const int i = clip(ig + G.ng, 0, G.n1-2);
+    const int j = clip(jg + G.ng, 0, G.n2-2);
+    const int k = clip(kg + G.ng, 0, G.n3-2);
 
-    double rho = Interpolation::linear(i, j, k, del, m_p.RHO, P);
-    double u = Interpolation::linear(i, j, k, del, m_p.UU, P);
+    double rho = 0, u = 0;
+    if (m_p.RHO >= 0) rho = Interpolation::linear(i, j, k, del, m_p.RHO, P);
+    if (m_p.UU >= 0)  u = Interpolation::linear(i, j, k, del, m_p.UU, P);
     // printf("Interpolated X %g %g %g %g i=%d j=%d k=%d\n", Xclip[0], Xclip[1], Xclip[2], Xclip[3], i, j, k);
     // printf("Interpolated rho=%g u=%g\n", rho, u);
+
+    // if (i < 0 || i > G.n1 || j < 0 || j > G.n2 || k < 0 || k > G.n3) {
+    //     printf("OOB X: %f %f %f %f i j k %d %d %d\n", X[0], X[1], X[2], X[3], i, j, k);
+    // }
 
     // USER PARAMS:
     params.nu = get_fluid_nu(Kcon, Ucov);

@@ -22,9 +22,11 @@ AUX_SOURCE_DIRECTORY(${CMAKE_CURRENT_SOURCE_DIR}/model EXE_NAME_SRC)
 AUX_SOURCE_DIRECTORY(${CMAKE_CURRENT_SOURCE_DIR}/rays EXE_NAME_SRC)
 
 include_directories(${CMAKE_CURRENT_SOURCE_DIR})
-include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../kharma) # Headers only, don't compile KHARMA
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../kharma/coordinates)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../kharma/prob/utils)
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../kharma) # Headers only, don't compile KHARMA
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../kharma/boundaries)
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../kharma/grmhd)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/coefficients) # Header-only "package"
 # PACKAGES
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/cameras)

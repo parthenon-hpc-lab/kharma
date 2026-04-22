@@ -35,6 +35,7 @@
 
 // Iris headers
 #include "camera_tetrads.hpp"
+#include "rays.hpp"
 
 #include <parthenon/parthenon.hpp>
 
@@ -57,31 +58,57 @@ std::shared_ptr<StateDescriptor> Cameras::Initialize(ParameterInput *pin, std::s
     // Pull coordinates, which the model constructed for us
     auto coords = packages->Get("Model")->Param<CoordinateEmbedding>("coords");
 
-    std::vector<Camera> cameras;
-    if (pin->DoesBlockExist("camera")) {
-        cameras.push_back(Camera(coords, pin, "camera"));
-        auto camera = cameras[0]; // the only
-        if (verbose > 0) camera.print();
-        // TODO can't make this float yet...
-        Metadata image_meta = Metadata({Metadata::Real, Metadata::None, Metadata::Derived,
-                                        Metadata::OneCopy}, std::vector<int>{camera.nx, camera.ny});
-        pkg->AddField("camera_unpol", image_meta);
-        if (polarized) {
-            pkg->AddField("camera_I", image_meta);
-            pkg->AddField("camera_Q", image_meta);
-            pkg->AddField("camera_U", image_meta);
-            pkg->AddField("camera_V", image_meta);
-        }
+    std::vector<std::string> vars = {"unpol", "nstep", "pathlen", "stopflag"};
+    if (polarized) vars.push_back("stokes");
+    pkg->AddParam("vars", vars);
 
-        pkg->AddField("camera_nstep", image_meta);
-        pkg->AddField("camera_pathlen", image_meta);
-        pkg->AddField("camera_stopflag", image_meta);
-        
-        // TODO if any parameter is list, repeat & generate new blocks...
-    } else {
-        throw std::runtime_error("Multiple cameras not implemented!");
-        // for block in camera blocks...
+    // Flag for camera variables, used for packing
+    Metadata::AddUserFlag("Camera");
+
+    // TODO basic multiple camera blocks camera1 etc
+    // TODO if any parameter is list, repeat & generate new cameras...
+    // TODO this allocs an output field for every MeshBlock.  Make them sparse or elminate
+    std::vector<Camera> cameras;
+    std::vector<std::string> camnames = {"camera"};
+    for (auto camname : camnames) {
+        if (pin->DoesBlockExist(camname)) {
+            cameras.push_back(Camera(coords, pin, camname));
+            auto camera = cameras.back();
+
+            // For double-checking cameras.  Resembles ipole output
+            if (verbose > 0) camera.print();
+
+            // Ideally we'd want nstep and stopflag to be ints, but no support
+            // We keep the reducers Real too for simplicity
+            // We declare indices backward here to preserve forward indexing in kernels via ()
+            Metadata image_meta = Metadata({Metadata::Real, Metadata::None, Metadata::Derived,
+                                            Metadata::OneCopy, Metadata::GetUserFlag("Camera")},
+                                            std::vector<int>{camera.ny, camera.nx});
+            Metadata image_vector_meta = Metadata({Metadata::Real, Metadata::None, Metadata::Derived,
+                                            Metadata::OneCopy, Metadata::GetUserFlag("Camera")},
+                                            std::vector<int>{4, camera.ny, camera.nx});
+            // Add reducers for all cameras among our MPI ranks (1 per rank!) to Params
+            // Also add fields, which will be allocated on each block but only written at the end, on block 0
+            for (auto var : vars) {
+                bool vector = (var == "stokes");
+                if (vector) {
+                    HostArray3D<Real> camera_reduce =
+                        HostArray3D<Real>(camname+"_reduce_"+var, camera.nx, camera.ny, 4);
+                    pkg->AddParam(camname+"_reduce_"+var, camera_reduce, true);
+                    pkg->AddField(camname+"_"+var, image_vector_meta);
+                } else {
+                    HostArray2D<Real> camera_reduce =
+                        HostArray2D<Real>(camname+"_reduce_"+var, camera.nx, camera.ny);
+                    pkg->AddParam(camname+"_reduce_"+var, camera_reduce, true);
+                    pkg->AddField(camname+"_"+var, image_meta);
+                }
+            }
+        } else {
+            throw std::runtime_error("Camera not defined!");
+            // for block in camera blocks...
+        }
     }
+    params.Add("camnames", camnames);
     params.Add("cameras", cameras);
 
     return pkg;
@@ -91,30 +118,35 @@ TaskStatus Cameras::InitGeodesics(MeshBlock* pmb)
 {
     PARTHENON_INSTRUMENT
 
+    using namespace std;
+
     auto pkg = pmb->packages.Get("Cameras");
     auto swarm = pmb->meshblock_data.Get()->GetSwarmData()->Get("rays");
     auto cameras = pkg->Param<std::vector<Camera>>("cameras");
     auto old_centering = pkg->Param<bool>("old_centering");
 
-    // Meshblock geometry
-    const IndexRange &ib = pmb->cellbounds.GetBoundsI(IndexDomain::interior);
-    const IndexRange &jb = pmb->cellbounds.GetBoundsJ(IndexDomain::interior);
-    const IndexRange &kb = pmb->cellbounds.GetBoundsK(IndexDomain::interior);
-
-    auto &x0 = swarm->Get<Real>("t").Get();
+    auto &x0 = swarm->Get<Real>(rays::t::name()).Get();
     auto &x1 = swarm->Get<Real>(swarm_position::x::name()).Get();
     auto &x2 = swarm->Get<Real>(swarm_position::y::name()).Get();
     auto &x3 = swarm->Get<Real>(swarm_position::z::name()).Get();
-    auto &k = swarm->Get<Real>("k").Get();
+    auto &k = swarm->Get<Real>(rays::k::name()).Get();
 
-    auto &camera_id = swarm->Get<int>("camera_id").Get();
-    auto &ipx = swarm->Get<int>("i").Get();
-    auto &jpx = swarm->Get<int>("j").Get();
+    auto &camera_id = swarm->Get<int>(rays::camera_id::name()).Get();
 
-    auto swarm_d = swarm->GetDeviceContext();
+    auto &ipx = swarm->Get<int>(rays::camera_i::name()).Get();
+    auto &jpx = swarm->Get<int>(rays::camera_j::name()).Get();
+
+    auto &nstep_geo = swarm->Get<int>(rays::nstep_geo::name()).Get();
+    auto &path_len = swarm->Get<Real>(rays::path_len::name()).Get();
+
+    const auto &G = pmb->coords;
+    const Real x_max_mesh = pmb->pmy_mesh->mesh_size.xmax(X1DIR);
+    const int ng = Globals::nghost; // We pull this so it gets copied to device
 
     int ncamera = 0;
     for (Camera camera : cameras) {
+        // If we're responsible for this camera...
+        if (!Rays::in_block_domain(G, camera.X, x_max_mesh)) continue;
 
         // Create new particles for this camera
         auto newParticlesContext = swarm->AddEmptyParticles(camera.nx * camera.ny);
@@ -145,16 +177,18 @@ TaskStatus Cameras::InitGeodesics(MeshBlock* pmb)
                 // Set camera id and pixel
                 camera_id(n) = ncamera;
                 // Turn our index (among new particles only!) into a pixel location
-                int i = new_n % camera.ny;
-                int j = new_n / camera.ny;
+                int i = new_n % camera.nx;
+                int j = new_n / camera.nx;
                 ipx(n) = i;
                 jpx(n) = j;
+                // Reset tracker variables
+                nstep_geo(n) = 0;
+                path_len(n) = 0.;
 
                 // Construct outgoing wavevector
                 // xoff: allow arbitrary offset for e.g. ML training imgs
                 // +0.5: project geodesics from px centers
-                // xoff/yoff are separated to keep consistent behavior between refinement levels
-                double dxoff = (i + 0.5 + camera.xoff - 0.01) / camera.nx - 0.5;
+                double dxoff = (i + 0.5 + camera.xoff) / camera.nx - 0.5;
                 double dyoff = (j + 0.5 + camera.yoff) / camera.ny - 0.5;
                 double Kcon_tetrad[GR_DIM];
                 Kcon_tetrad[0] = 0.;
@@ -181,82 +215,122 @@ TaskStatus Cameras::InitGeodesics(MeshBlock* pmb)
     return TaskStatus::complete;
 }
 
-TaskStatus Cameras::WriteCameras(MeshBlock* pmb)
+TaskStatus Cameras::WriteLocalCameras(MeshData<Real>* md)
 {
     PARTHENON_INSTRUMENT
 
-    auto pkg = pmb->packages.Get("Cameras");
-    auto swarm = pmb->meshblock_data.Get()->GetSwarmData()->Get("rays");
-    const auto cameras = pkg->Param<std::vector<Camera>>("cameras");
+    auto pmb0 = md->GetBlockData(0)->GetBlockPointer();
+    auto pkg = pmb0->packages.Get("Cameras");
     const auto old_centering = pkg->Param<bool>("old_centering");
+    const auto polarized = pmb0->packages.Get("Model")->Param<bool>("polarized");
+    const Real x_max_mesh = pmb0->pmy_mesh->mesh_size.xmax(X1DIR);
 
-    const auto polarized = pmb->packages.Get("Model")->Param<bool>("polarized");
+    const auto camnames = pkg->Param<std::vector<std::string>>("camnames");
+    const auto cameras = pkg->Param<std::vector<Camera>>("cameras");
+    const auto vars = pkg->Param<std::vector<std::string>>("vars");
 
-    // Meshblock geometry
-    const IndexRange &ib = pmb->cellbounds.GetBoundsI(IndexDomain::interior);
-    const IndexRange &jb = pmb->cellbounds.GetBoundsJ(IndexDomain::interior);
-    const IndexRange &kb = pmb->cellbounds.GetBoundsK(IndexDomain::interior);
+    std::string swarm_name = "rays";
+    static auto desc = MakeSwarmPackDescriptor<rays::t,
+                                              swarm_position::x,
+                                              swarm_position::y,
+                                              swarm_position::z,
+                                              rays::path_len,
+                                              rays::I,
+                                              // Vectors
+                                              rays::k,
+                                              rays::Nr,
+                                              rays::Ni>(swarm_name);
+    auto pack = desc.GetPack(md);
 
-    auto &x0 = swarm->Get<Real>("t").Get();
-    auto &x1 = swarm->Get<Real>(swarm_position::x::name()).Get();
-    auto &x2 = swarm->Get<Real>(swarm_position::y::name()).Get();
-    auto &x3 = swarm->Get<Real>(swarm_position::z::name()).Get();
-    auto &k = swarm->Get<Real>("k").Get();
-    // Tracing data
-    auto &nstep = swarm->Get<int>("nstep_geo").Get();
-    auto &pathlen = swarm->Get<Real>("path_len").Get();
-    auto &stopflag = swarm->Get<int>("stop_flag").Get();
-    // Radiation
-    auto &I = swarm->Get<Real>("I").Get();
-    auto &Nr = (polarized) ? swarm->Get<Real>("Nr").Get() : swarm->Get<Real>("I").Get();
-    auto &Ni = (polarized) ? swarm->Get<Real>("Ni").Get() : swarm->Get<Real>("I").Get();
+    static auto int_desc = MakeSwarmPackDescriptor<rays::nstep_geo,
+                                                   rays::nstep_rad,
+                                                   rays::stop_flag,
+                                                   rays::camera_id,
+                                                   rays::camera_i,
+                                                   rays::camera_j>(swarm_name);
+    auto int_pack = int_desc.GetPack(md);
 
-    auto &camera_id = swarm->Get<int>("camera_id").Get();
-    auto &ipx = swarm->Get<int>("i").Get();
-    auto &jpx = swarm->Get<int>("j").Get();
+    // One giant pack of all cameras
+    // std::vector<std::string> all_camera_vars;
+    // for (auto camname : camnames) for (auto var : vars)
+    //     all_camera_vars.push_back(camname+"_"+var);
+    // const auto &resolved = md->GetMeshPointer()->resolved_packages.get();
+    // static auto camera_desc = MakePackDescriptor(resolved, all_camera_vars);
+    // auto camera_pack = camera_desc.GetPack(md);
+    // auto camera_pack_map = camera_desc.GetMap();
 
-    int max_active_index = swarm->GetMaxActiveIndex();
+    // Purely for coordinates.  TODO PackDesc so this doesn't cost ever
+    auto P = md->PackVariables(std::vector<MetadataFlag>{Metadata::GetUserFlag("Primitive")});
 
-    auto swarm_d = swarm->GetDeviceContext();
-
-    const auto &coords = pmb->coords.coords;
-
+    // TODO could maybe interleave all cameras?
+    // Just need to fetch lots of indices
     int ncamera = 0;
     for (const Camera camera : cameras) {
+        // We write any particle from any block into the block-0 camera
+        // Then we'll copy that and run an MPI reduction
+        std::string camname = camnames[ncamera];
+
         const double freq3 = m::pow(camera.frequency, 3);
 
-        // TODO can probably interleave writing all the cameras, but whatever.
-        std::string camname;
-        if (cameras.size() == 1) {
-            camname = "camera";
-        }
-        auto &rc = pmb->meshblock_data.Get();
+        // Individual packs for cameras
+        std::vector<std::string> camera_vars;
+        for (auto var : vars)
+            camera_vars.push_back(camname+"_"+var);
 
-        auto camera_pathlen = rc->Get(camname+"_pathlen").data;
-        auto camera_nstep = rc->Get(camname+"_nstep").data;
-        auto camera_stopflag = rc->Get(camname+"_stopflag").data;
+        const auto &resolved = md->GetMeshPointer()->resolved_packages.get();
+        static auto camera_desc = MakePackDescriptor(resolved, camera_vars);
+        auto camera_pack = camera_desc.GetPack(md);
+        auto camera_pack_map = camera_desc.GetMap();
 
-        auto camera_unpol = rc->Get(camname+"_unpol").data;
-        auto camera_I = (polarized) ? rc->Get(camname+"_I").data : rc->Get(camname+"_unpol").data;
-        auto camera_Q = (polarized) ? rc->Get(camname+"_Q").data : rc->Get(camname+"_unpol").data;
-        auto camera_U = (polarized) ? rc->Get(camname+"_U").data : rc->Get(camname+"_unpol").data;
-        auto camera_V = (polarized) ? rc->Get(camname+"_V").data : rc->Get(camname+"_unpol").data;
+        // Grab only meshblock 0 of our pack, we'll put all camera data there
+        auto *rc0 = md->GetBlockData(0).get();
+        auto &unpol = rc0->Get(camname+"_unpol").data;
+        auto &pathlen = rc0->Get(camname+"_pathlen").data;
+        auto &nstep = rc0->Get(camname+"_nstep").data;
+        auto &stopflag = rc0->Get(camname+"_stopflag").data;
 
-        pmb->par_for(PARTHENON_AUTO_LABEL, 0, max_active_index,
-            KOKKOS_LAMBDA(const int &n) {
-                if (camera_id(n) == ncamera) {
-                    camera_pathlen(ipx(n), jpx(n)) = pathlen(n);
-                    camera_nstep(ipx(n), jpx(n)) = nstep(n);
-                    camera_stopflag(ipx(n), jpx(n)) = stopflag(n);
+        std::cerr << "Writing camera " << camname << std::endl;
+        pmb0->par_for(PARTHENON_AUTO_LABEL, 0, pack.GetMaxFlatIndex(),
+            KOKKOS_LAMBDA(const int &idx) {
+                auto [b, n] = pack.GetBlockParticleIndices(idx);
+                const auto swarm_d = pack.GetContext(b);
+                if (swarm_d.IsActive(n) && int_pack(b, rays::camera_id(), n) == ncamera) {
+                    // TODO detect doubles!!
+                    // Pixel location
+                    const int &ipx = int_pack(b, rays::camera_i(), n);
+                    const int &jpx = int_pack(b, rays::camera_j(), n);
+
                     // Always write the unpolarized image
-                    camera_unpol(ipx(n), jpx(n)) = I(n) * freq3 * camera.scale;
-                    if (polarized) {
+                    unpol(ipx, jpx) = pack(b, rays::I(), n) * freq3 * camera.scale;
+                    pathlen(ipx, jpx) = pack(b, rays::path_len(), n);
+                    // TODO For some reason these crash everything...
+                    nstep(ipx, jpx) = static_cast<Real>(int_pack(b, rays::nstep_geo(), n));
+                    stopflag(ipx, jpx) = static_cast<Real>(int_pack(b, rays::stop_flag(), n));
+                }
+            }
+        );
+        if (polarized) {
+            auto &stokes = rc0->Get(camname+"_stokes").data;
+
+            pmb0->par_for(PARTHENON_AUTO_LABEL, 0, pack.GetMaxFlatIndex(),
+                KOKKOS_LAMBDA(const int &idx) {
+                    auto [b, n] = pack.GetBlockParticleIndices(idx);
+                    const auto swarm_d = pack.GetContext(b);
+
+                    if (swarm_d.IsActive(n) && int_pack(b, rays::camera_id(), n) == ncamera) {
+                        // Grab pointers
+                        const GRCoordinates &G = P.GetCoords(b);
+                        const CoordinateEmbedding &coords = G.coords;
+
+                        // Write polarized camera by measuring it in observer frame
                         Kokkos::complex<double> N_coord[GR_DIM][GR_DIM], N_tetrad[GR_DIM][GR_DIM];
-                        double SI, SQ, SU, SV;
-                        read_N(Nr, Ni, n, N_coord);
+                        read_N(pack, b, n, N_coord);
                         double gcov[GR_DIM][GR_DIM], Ecov[GR_DIM][GR_DIM], Econ[GR_DIM][GR_DIM];
                         // To measure at the geodesic endpoint, if different from camera
-                        double cX[GR_DIM] = {x0(n), x1(n), x2(n), x3(n)};
+                        double cX[GR_DIM] = {pack(b, rays::t(), n),
+                                             pack(b, swarm_position::x(), n),
+                                             pack(b, swarm_position::y(), n),
+                                             pack(b, swarm_position::z(), n)};
                         coords.gcov_native(cX, gcov);
                         if (old_centering) {
                             make_camera_tetrad_old(gcov, cX, Econ, Ecov);
@@ -264,45 +338,172 @@ TaskStatus Cameras::WriteCameras(MeshBlock* pmb)
                             make_camera_tetrad(gcov, cX, Econ, Ecov);
                         }
                         N_to_tetrad(N_coord, Ecov, N_tetrad);
-                        N_to_stokes(N_tetrad, SI, SQ, SU, SV);
+                        double S[4];
+                        N_to_stokes(N_tetrad, S[0], S[1], S[2], S[3]);
 
                         // rotate Stokes Q, U if camera is rotated
                         if (camera.rotcam != 0) {
-                            double qu_angle = camera.rotcam * -2;
-                            double rot_Q = SQ * m::cos(qu_angle) - SU * m::sin(qu_angle);
-                            double rot_U = SQ * m::sin(qu_angle) + SU * m::cos(qu_angle);
-                            SQ = rot_Q; SU = rot_U;
+                            const double qu_angle = camera.rotcam * -2;
+                            const double rot_Q = S[1] * m::cos(qu_angle) - S[2] * m::sin(qu_angle);
+                            const double rot_U = S[1] * m::sin(qu_angle) + S[2] * m::cos(qu_angle);
+                            S[1] = rot_Q;
+                            S[2] = rot_U;
                         }
                         // Written Q/U generally use the opposite convention to transport:
                         // Transport is performed w/EVPA North of West, but parameters are
                         // written East of North.
                         if (camera.qu_conv == 0) {
-                            SQ *= -1;
-                            SU *= -1;
+                            S[1] *= -1;
+                            S[2] *= -1;
                         }
 
-                        camera_I(ipx(n), jpx(n)) = SI * freq3 * camera.scale;
-                        camera_Q(ipx(n), jpx(n)) = SQ * freq3 * camera.scale;
-                        camera_U(ipx(n), jpx(n)) = SU * freq3 * camera.scale;
-                        camera_V(ipx(n), jpx(n)) = SV * freq3 * camera.scale;
+                        const int &ipx = int_pack(b, rays::camera_i(), n);
+                        const int &jpx = int_pack(b, rays::camera_j(), n);
+                        for (int s = 0; s < 4; s++) {
+                            stokes(ipx, jpx, s) = S[s] * freq3 * camera.scale;
+                        }
                     }
                 }
+            );
+        }
+        Kokkos::fence();
+
+        // Now fill the host-side arrays
+        for (auto var : vars) {
+            bool vector = (var == "stokes");
+            if (vector) {
+                // Get reducer
+                HostArray3D<Real> *camera_reduce =
+                    pkg->MutableParam<HostArray3D<Real>>(camname+"_reduce_"+var);
+                // D->H copy.  Only zero-block since that's what we filled above!
+                Kokkos::deep_copy(*camera_reduce,
+                    Kokkos::subview(rc0->Get(camname+"_"+var).data,
+                    0, 0, 0, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL));
+            } else {
+                HostArray2D<Real> *camera_reduce =
+                    pkg->MutableParam<HostArray2D<Real>>(camname+"_reduce_"+var);
+                Kokkos::deep_copy(*camera_reduce,
+                    Kokkos::subview(rc0->Get(camname+"_"+var).data,
+                    0, 0, 0, 0, Kokkos::ALL, Kokkos::ALL));
             }
-        );
+        }
+        std::cerr << "Filled camera " << camname << std::endl;
+        Kokkos::fence();
+
+        // New camera
+        ncamera++;
+    }
+
+    // One more for good measure, this is run once
+    Kokkos::fence();
+    
+    return TaskStatus::complete;
+}
+
+// 
+TaskStatus Cameras::ReduceCameras(MeshData<Real>* md)
+{
+    PARTHENON_INSTRUMENT
+
+    auto pmb0 = md->GetBlockData(0)->GetBlockPointer();
+    auto pkg = pmb0->packages.Get("Cameras");
+    // const auto old_centering = pkg->Param<bool>("old_centering");
+    // const auto polarized = pmb0->packages.Get("Model")->Param<bool>("polarized");
+    // const Real x_max_mesh = pmb0->pmy_mesh->mesh_size.xmax(X1DIR);
+
+    const auto camnames = pkg->Param<std::vector<std::string>>("camnames");
+    // const auto cameras = pkg->Param<std::vector<Camera>>("cameras");
+    const auto vars = pkg->Param<std::vector<std::string>>("vars");
+
+    // TODO free these blocks from sequential dependencies someday
+    // Start reductions, TODO store in vectors
+    std::vector<Reduce<HostArray2D<Real>>> reducers_2d;
+    std::vector<Reduce<HostArray3D<Real>>> reducers_3d;
+    for (auto camname : camnames) {
+        for (auto var : vars) {
+            bool vector = (var == "stokes");
+            if (vector) {
+                // Get reducer
+                auto camera_reduce = Reduce<HostArray3D<Real>>();
+                auto camera_host =
+                    *pkg->MutableParam<HostArray3D<Real>>(camname+"_reduce_"+var);
+                camera_reduce.val = camera_host;
+                // Start MPI reduce
+                // TODO Parthenon's stuff only does sums probably, but we should be doing max()
+                camera_reduce.StartReduce(0, MPI_SUM);
+                // Wait
+                while (camera_reduce.CheckReduce() == TaskStatus::incomplete);
+                camera_host = camera_reduce.val;
+            } else {
+                // Get reducer
+                auto camera_reduce = Reduce<HostArray2D<Real>>();
+                auto camera_host =
+                    *pkg->MutableParam<HostArray2D<Real>>(camname+"_reduce_"+var);
+                camera_reduce.val = camera_host;
+                // Start MPI reduce
+                camera_reduce.StartReduce(0, MPI_SUM);
+                // Wait
+                while (camera_reduce.CheckReduce() == TaskStatus::incomplete);
+                camera_host = camera_reduce.val;
+            }
+        }
+    }
+
+    // TODO now catch them all down here instead
+
+    return TaskStatus::complete;
+}
+
+TaskStatus Cameras::WriteReducedCameras(MeshData<Real>* md)
+{
+    PARTHENON_INSTRUMENT
+
+    if (!MPIRank0()) return TaskStatus::complete;
+
+    auto pmb0 = md->GetBlockData(0)->GetBlockPointer();
+    auto pkg = pmb0->packages.Get("Cameras");
+    const auto polarized = pmb0->packages.Get("Model")->Param<bool>("polarized");
+
+    const auto camnames = pkg->Param<std::vector<std::string>>("camnames");
+    const auto cameras = pkg->Param<std::vector<Camera>>("cameras");
+    const auto vars = pkg->Param<std::vector<std::string>>("vars");
+
+    int ncamera = 0;
+    for (const Camera camera : cameras) {
+        std::string camname = camnames[ncamera];
+
+        // TODO This is stupid.  Write the reducers straight to file!!
+        // (we're copying reduced values back into our block0's values, then to device...
+        // just so Parthenon can pull them back to host and write them out)
+        for (auto var : vars) {
+            bool vector = (var == "stokes");
+            if (vector) {
+                // Get reducer
+                HostArray3D<Real> camera_host =
+                    *pkg->MutableParam<HostArray3D<Real>>(camname+"_reduce_"+var);
+                // D->H copy.  Only zero-block since that's what we filled above!
+                Kokkos::deep_copy(Kokkos::subview(
+                    md->GetBlockData(0)->Get(camname+"_"+var).data, 0, 0, 0, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL),
+                    camera_host);
+            } else {
+                HostArray2D<Real> camera_host =
+                    *pkg->MutableParam<HostArray2D<Real>>(camname+"_reduce_"+var);
+                Kokkos::deep_copy(Kokkos::subview(
+                    md->GetBlockData(0)->Get(camname+"_"+var).data, 0, 0, 0, 0, Kokkos::ALL, Kokkos::ALL),
+                    camera_host);
+            }
+        }
 
         if (pkg->Param<int>("verbose") > 0) {
-            // TODO fast device reductions
-            // pmb->par_reduce(PARTHENON_AUTO_LABEL, 0, camera.nx-1, 0, camera.ny-1,
-            //     KOKKOS_LAMBDA(const int &i, const int &j) {
+            // Get reducer values
+            HostArray2D<Real> image =
+                *pkg->MutableParam<HostArray2D<Real>>(camname+"_reduce_unpol");
+            // TODO any stats on nsteps etc etc
 
-            //     }
-            // );
-            Kokkos::fence();
-            auto image = camera_unpol.GetHostMirrorAndCopy();
-            auto imageI = camera_I.GetHostMirrorAndCopy();
-            auto imageQ = camera_Q.GetHostMirrorAndCopy();
-            auto imageU = camera_U.GetHostMirrorAndCopy();
-            auto imageV = camera_V.GetHostMirrorAndCopy();
+            HostArray3D<Real> stokes;
+            if (polarized) {
+                stokes = *pkg->MutableParam<HostArray3D<Real>>(camname+"_reduce_stokes");
+            }
 
             double Ftot = 0.;
             double Ftot_unpol = 0.;
@@ -316,18 +517,19 @@ TaskStatus Cameras::WriteCameras(MeshBlock* pmb)
             // TODO OpenMP at least?
             for (size_t i = 0; i < camera.nx; i++) {
                 for (size_t j = 0; j < camera.ny; j++) {
+                    // Reduction arrays are opposite order j, i, s
                     Ftot_unpol += image(i, j);
 
                     if (polarized) {
-                        Ftot += imageI(i, j);
-                        Iavg += imageI(i, j) / camera.scale;
-                        Qtot += imageQ(i, j);
-                        Utot += imageU(i, j);
-                        Vtot += imageV(i, j);
-                        if (imageI(i, j) / camera.scale > Imax) {
+                        Ftot += stokes(i, j, 0);
+                        Iavg += stokes(i, j, 0) / camera.scale;
+                        Qtot += stokes(i, j, 1);
+                        Utot += stokes(i, j, 2);
+                        Vtot += stokes(i, j, 3);
+                        if (stokes(i, j, 0) / camera.scale > Imax) {
                             imax = i;
                             jmax = j;
-                            Imax = imageI(i, j) / camera.scale;
+                            Imax = stokes(i, j, 0) / camera.scale;
                         }
                     }
                 }
@@ -345,11 +547,8 @@ TaskStatus Cameras::WriteCameras(MeshBlock* pmb)
             fprintf(stderr, "LP,CP [%%]: %g %g\n", LPfrac, CPfrac);
         }
 
-
         ncamera++;
     }
-
-    // TODO iterate over cameras and print summaries
 
     return TaskStatus::complete;
 }

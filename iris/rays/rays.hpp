@@ -1,25 +1,25 @@
-/* 
+/*
  *  File: rays.hpp
- *  
+ *
  *  BSD 3-Clause License
- *  
+ *
  *  Copyright (c) 2025, Iris contributors
  *  All rights reserved.
- *  
+ *
  *  Redistribution and use in source and binary forms, with or without
  *  modification, are permitted provided that the following conditions are met:
- *  
+ *
  *  1. Redistributions of source code must retain the above copyright notice, this
  *     list of conditions and the following disclaimer.
- *  
+ *
  *  2. Redistributions in binary form must reproduce the above copyright notice,
  *     this list of conditions and the following disclaimer in the documentation
  *     and/or other materials provided with the distribution.
- *  
+ *
  *  3. Neither the name of the copyright holder nor the names of its
  *     contributors may be used to endorse or promote products derived from
  *     this software without specific prior written permission.
- *  
+ *
  *  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  *  AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  *  IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -34,12 +34,16 @@
 #pragma once
 
 #include "units.hpp"
+#include "variables.hpp"
 
 // KHARMA headers
 #include "decs.hpp"
 #include "types.hpp"
+#include "coordinate_embedding.hpp"
 
 using namespace parthenon;
+
+#include "mesh_comms.hpp"
 
 /**
  */
@@ -48,18 +52,87 @@ namespace Rays {
 std::shared_ptr<StateDescriptor> Initialize(ParameterInput *pin, std::shared_ptr<Packages_t>& packages);
 
 // Solve just the geodesic equation backward, until defined stopping points
-TaskStatus TraceGeodesicsUntilStop(MeshBlock* pmb);
+TaskStatus TraceGeodesics(MeshData<Real>* md);
 
 // Trace in a vacuum. No-op to intensity, parallel transport polarization
-TaskStatus TraceRaysToCameras(MeshBlock* pmb);
+TaskStatus TraceEmission(MeshData<Real>* md);
+
+// Just to one block boundary
+TaskStatus TraceGeodesicsBlock(MeshData<Real>* md);
+
+template<bool store_paths>
+TaskStatus TraceEmissionBlock(MeshData<Real>* md);
+
+// Are there remaining rays at block boundaries?
+template<bool emission>
+int CountLiveParticles(MeshData<Real>* md);
+
+template<bool emission, typename T>
+inline TaskID AddTraceTasks(TaskID t_depends, TaskList &tl, T &TransportRays, MeshData<Real>* md_base, int max_iter) {
+    PARTHENON_INSTRUMENT
+
+    TaskID t_none(0);
+
+    auto t_start = tl.AddTask(t_depends, []{fprintf(stderr, "Starting trace\n"); return TaskStatus::complete;});
+    auto [itl, itl_id] = tl.AddSublist(t_start, {1, max_iter});
+
+    // Wrapper to start comms
+    auto t_reset_comms = itl.AddTask(t_none, TF(MeshResetCommunication), md_base);
+
+    // Push rays (all blocks)
+    auto t_transport = itl.AddTask(TaskQualifier::local_sync, t_reset_comms, TF(TransportRays), md_base);
+
+    // Comms wrappers
+    // Always all boundaries!
+    auto t_send = itl.AddTask(t_transport, TF(MeshSend), md_base);
+    auto t_receive = itl.AddTask(t_send, TF(MeshReceive), md_base);
+
+    auto t_check = itl.AddTask(TaskQualifier::global_sync | TaskQualifier::completion, t_receive,
+        [=] { return (CountLiveParticles<emission>(md_base) > 0) ?
+                        TaskStatus::iterate : TaskStatus::complete; });
+
+    return itl_id;
+}
+
+KOKKOS_INLINE_FUNCTION Real phi_of(const Real &x3)
+{
+    Real phi = fmod(x3, M_2_PI);
+    return phi < 0 ? phi + M_2_PI : phi;
+}
+
+// Strict check whether particle is in the physical space covered by (within or radially outside) a block.
+// Should always be true of exactly one block -- blocks own left edges but not right
+KOKKOS_INLINE_FUNCTION bool in_block_domain(const GRCoordinates &G, const double X[GR_DIM], const double &x_max_mesh)
+{
+    // Check just outside the faces of the "interior" of the domain, to let particles move into ghost zones.
+    Real phi = phi_of(X[3]);
+    if (X[1] >= G.Xf<X1DIR>(G.ng) && (X[2] >= G.Xf<X2DIR>(G.ng) || G.n2 == 1)      && (phi >= G.Xf<X3DIR>(G.ng) || G.n3 == 1) &&
+        /* ======OMITTED====== */  (X[2] <  G.Xf<X2DIR>(G.n2-G.ng) || G.n2 == 1) && (phi <  G.Xf<X3DIR>(G.n3-G.ng) || G.n3 == 1)) {
+        // If x is in the zone itelf, or we're the last zone in x1 on the mesh, the particle is in our domain
+        return (X[1] < G.Xf<X1DIR>(G.n1-G.ng) || (G.Xf<X1DIR>(G.n1-G.ng) > 0.99 * x_max_mesh));
+    }
+    return false;
+}
+// Fuzzy block check allowing some movement into ghosts, for particle exchange
+KOKKOS_INLINE_FUNCTION bool in_block(const GRCoordinates &G, const double X[GR_DIM], const double &x_max_mesh)
+{
+    // Check just outside the faces of the "interior" of the domain, to let particles move into ghost zones.
+    Real phi = phi_of(X[3]);
+    if (X[1] > G.Xf<X1DIR>(G.ng-1) && (X[2] >= G.Xf<X2DIR>(G.ng-1) || G.n2 == 1)      && (phi >= G.Xf<X3DIR>(G.ng-1) || G.n3 == 1) &&
+        /* ======OMITTED====== */   (X[2] <  G.Xf<X2DIR>(G.n2-G.ng+1) || G.n2 == 1) && (phi <  G.Xf<X3DIR>(G.n3-G.ng+1) || G.n3 == 1)) {
+        // If x is in the zone itelf, or we're the last zone in x1 on the mesh, the particle is in our domain
+        return (X[1] < G.Xf<X1DIR>(G.n1-G.ng+1) || (G.Xf<X1DIR>(G.n1-G.ng) > 0.99 * x_max_mesh));
+    }
+    return false;
+}
 
 /**
  * Choose stepsize according to inverse Kcon, dramatically decreasing the step
  * toward the coordinate pole and EH.
- * 
+ *
  * Use the sum of inverses by default; the strict minimum seems to occasionally
  * overstep even for small eps
- * 
+ *
  * TODO this is the geometry step but dictates physics as well.
  * Optionally skip geometry steps near the pole for accuracy
  */

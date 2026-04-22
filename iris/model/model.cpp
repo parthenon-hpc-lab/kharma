@@ -106,6 +106,7 @@ std::shared_ptr<StateDescriptor> Model::Initialize(ParameterInput *pin)
 
     double Rout;
     if (type == "file") {
+        // We reset these because it doesn't matter much, and they were "user" in KHARMA
         // TODO figure out merging meshblocks...
         pin->SetString("parthenon/mesh", "ix1_bc", "outflow");
         pin->SetString("parthenon/mesh", "ox1_bc", "outflow");
@@ -114,15 +115,19 @@ std::shared_ptr<StateDescriptor> Model::Initialize(ParameterInput *pin)
         // pin->SetString("parthenon/mesh", "ix3_bc", "periodic");
         // pin->SetString("parthenon/mesh", "ox3_bc", "periodic");
 
+        // TODO maybe read from the mesh before setting these...
+        pin->GetOrAddString("parthenon/swarm", "ix1_bc", "none");
+        pin->GetOrAddString("parthenon/swarm", "ox1_bc", "none");
+        pin->GetOrAddString("parthenon/swarm", "ix2_bc", "none");
+        pin->GetOrAddString("parthenon/swarm", "ox2_bc", "none");
+        pin->GetOrAddString("parthenon/swarm", "ix3_bc", "periodic");
+        pin->GetOrAddString("parthenon/swarm", "ox3_bc", "periodic");
+
         // TODO probably shouldn't always match, allow override
         Rout = coords.X1_to_embed(pin->GetReal("parthenon/mesh", "x1max"));
     } else {
         // Fool Parthenon into building a mesh for us
         // Set any coordinate-determined boundaries...
-        if (coords.startx(1) >= 0)
-            pin->GetOrAddReal("parthenon/mesh", "x1min", coords.startx(1));
-        if (coords.stopx(1) >= 0)
-            pin->GetOrAddReal("parthenon/mesh", "x1max", coords.stopx(1));
         if (coords.startx(2) >= 0)
             pin->GetOrAddReal("parthenon/mesh", "x2min", coords.startx(2));
         if (coords.stopx(2) >= 0)
@@ -131,18 +136,45 @@ std::shared_ptr<StateDescriptor> Model::Initialize(ParameterInput *pin)
             pin->GetOrAddReal("parthenon/mesh", "x3min", coords.startx(3));
         if (coords.stopx(3) >= 0)
             pin->GetOrAddReal("parthenon/mesh", "x3max", coords.stopx(3));
-        // And translate the radial boundaries.  TODO if spherical etc etc.
+        // And translate the radial boundaries
         Rout = pin->GetReal("coordinates", "r_out");
-        pin->SetReal("parthenon/mesh", "x1min", 0.0);
+        pin->SetReal("parthenon/mesh", "x1min", coords.r_to_native(coords.get_horizon()));
         pin->SetReal("parthenon/mesh", "x1max", coords.r_to_native(Rout));
 
-        // Analytic models need only a trivial mesh. TODO determine with MPI breakdown
-        pin->SetInteger("parthenon/mesh", "nx1", 8);
-        pin->SetInteger("parthenon/mesh", "nx2", 8);
-        pin->SetInteger("parthenon/mesh", "nx3", 8);
-        pin->SetInteger("parthenon/meshblock", "nx1", 8);
-        pin->SetInteger("parthenon/meshblock", "nx2", 8);
-        pin->SetInteger("parthenon/meshblock", "nx3", 8);
+        // TODO Cartesian transport?
+
+        // Analytic models need only a trivial mesh
+        // But, allow overriding for testing
+        pin->GetOrAddInteger("parthenon/mesh", "nx1", 8);
+        pin->GetOrAddInteger("parthenon/mesh", "nx2", 1);
+        pin->GetOrAddInteger("parthenon/mesh", "nx3", 1);
+        pin->GetOrAddInteger("parthenon/meshblock", "nx1", 8);
+        pin->GetOrAddInteger("parthenon/meshblock", "nx2", 1);
+        pin->GetOrAddInteger("parthenon/meshblock", "nx3", 1);
+
+        pin->GetOrAddString("parthenon/mesh", "ix1_bc", "outflow");
+        pin->GetOrAddString("parthenon/mesh", "ox1_bc", "outflow");
+        pin->GetOrAddString("parthenon/mesh", "ix2_bc", "reflecting");
+        pin->GetOrAddString("parthenon/mesh", "ox2_bc", "reflecting");
+        pin->GetOrAddString("parthenon/mesh", "ix3_bc", "periodic");
+        pin->GetOrAddString("parthenon/mesh", "ox3_bc", "periodic");
+        pin->GetOrAddString("parthenon/swarm", "ix1_bc", "none");
+        pin->GetOrAddString("parthenon/swarm", "ox1_bc", "none");
+        pin->GetOrAddString("parthenon/swarm", "ix2_bc", "none");
+        pin->GetOrAddString("parthenon/swarm", "ox2_bc", "none");
+        pin->GetOrAddString("parthenon/swarm", "ix3_bc", "periodic");
+        pin->GetOrAddString("parthenon/swarm", "ox3_bc", "periodic");
+
+        // printf("Mesh: %f %f %f to %f %f %f", pin->GetReal("parthenon/mesh", "x1min"),
+        //         pin->GetReal("parthenon/mesh", "x2min"),
+        //         pin->GetReal("parthenon/mesh", "x3min"),
+        //         pin->GetReal("parthenon/mesh", "x1max"),
+        //         pin->GetReal("parthenon/mesh", "x2max"),
+        //         pin->GetReal("parthenon/mesh", "x3max"));
+
+        // Probably don't need to set this?
+        Globals::nghost = pin->GetOrAddInteger("driver", "nghost", 4);
+        pin->SetInteger("parthenon/mesh", "nghost", Globals::nghost);
 
         // We need this tag to exist since we pack using it
         // The "File" package loads it if we're loading from file
@@ -167,11 +199,21 @@ std::shared_ptr<StateDescriptor> Model::Initialize(ParameterInput *pin)
     return pkg;
 }
 
-TaskStatus Model::SetStokesThindisk(MeshBlock *pmb)
+TaskStatus Model::SetStokesThindisk(MeshData<Real> *md)
+{
+    // Make sure to iterate through only the blocks in this MeshData
+    for (int n = 0; n < md->NumBlocks(); n++) {
+        auto &mbd = md->GetBlockData(n);
+        SetStokesThindiskBlock(mbd->GetBlockPointer());
+    }
+    return TaskStatus::complete;
+}
+
+TaskStatus Model::SetStokesThindiskBlock(MeshBlock* pmb)
 {
     PARTHENON_INSTRUMENT
 
-    auto swarm = pmb->meshblock_data.Get()->GetSwarmData()->Get("rays");
+    auto swarm = pmb->meshblock_data.Get("base")->GetSwarmData()->Get("rays");
     auto &model = pmb->packages.Get("Model")->AllParams();
     const auto polarized = model.Get<bool>("polarized");
     const auto verbose = model.Get<int>("verbose");
@@ -185,24 +227,24 @@ TaskStatus Model::SetStokesThindisk(MeshBlock *pmb)
     int max_active_index = swarm->GetMaxActiveIndex();
 
     // Position
-    auto &x0 = swarm->Get<Real>("t").Get();
+    auto &x0 = swarm->Get<Real>(rays::t::name()).Get();
     auto &x1 = swarm->Get<Real>(swarm_position::x::name()).Get();
     auto &x2 = swarm->Get<Real>(swarm_position::y::name()).Get();
     auto &x3 = swarm->Get<Real>(swarm_position::z::name()).Get();
-    auto &k = swarm->Get<Real>("k").Get();
+    auto &k = swarm->Get<Real>(rays::k::name()).Get();
     // Reason geodesics were stopped, i.e. which hit the disk?
-    auto &stopflag = swarm->Get<int>("stop_flag").Get();
+    auto &stopflag = swarm->Get<int>(rays::stop_flag::name()).Get();
     // Radiation
-    auto &I = swarm->Get<Real>("I").Get();
-    auto &Nr = (polarized) ? swarm->Get<Real>("Nr").Get() : swarm->Get<Real>("I").Get();
-    auto &Ni = (polarized) ? swarm->Get<Real>("Ni").Get() : swarm->Get<Real>("I").Get();
+    auto &I = swarm->Get<Real>(rays::I::name()).Get();
+    auto &Nr = (polarized) ? swarm->Get<Real>(rays::Nr::name()).Get() : swarm->Get<Real>(rays::I::name()).Get();
+    auto &Ni = (polarized) ? swarm->Get<Real>(rays::Ni::name()).Get() : swarm->Get<Real>(rays::I::name()).Get();
 
     auto swarm_d = swarm->GetDeviceContext();
 
     const CoordinateEmbedding coords = pmb->coords.coords;
 
-    pmb->par_for(
-        PARTHENON_AUTO_LABEL, 0, max_active_index, KOKKOS_LAMBDA(const int &n) {
+    pmb->par_for(PARTHENON_AUTO_LABEL, 0, max_active_index,
+        KOKKOS_LAMBDA(const int &n) {
             if (swarm_d.IsActive(n)) {
                 if (stopflag(n) == (int) StopFlag::thin_disk) {
                     // A thin disk problem emits nowhere but uses a boundary condition region defined by thindisk_region
@@ -230,8 +272,6 @@ TaskStatus Model::SetStokesThindisk(MeshBlock *pmb)
                         N_to_coord(N_tetrad, Econ, N_coord);
                         write_N(N_coord, Nr, Ni, n);
                     }
-                } else {
-                    I(n) = 0.;
                 }
             }
         });

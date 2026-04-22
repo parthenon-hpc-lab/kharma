@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 fname = sys.argv[1]
 
 with h5py.File(fname, 'r') as dfile:
-    for varname in ["unpol", "I", "Q", "U", "V", "pathlen", "nstep", "stopflag"]:
+    for varname in ["unpol", "pathlen", "nstep", "stopflag"]:
         fig, ax = plt.subplots(1,1, figsize=(10,10))
         arrname = "camera_"+varname
         max_abs = np.max(np.abs(dfile[arrname][0]))
@@ -17,3 +17,13 @@ with h5py.File(fname, 'r') as dfile:
         plt.colorbar(img)
         fig.savefig(f"image_{varname}.png")
         fig.clear()
+    for varname in ["stokes"]:
+        for i in range(4):
+            s = ["I", "Q", "U", "V"][i]
+            fig, ax = plt.subplots(1,1, figsize=(10,10))
+            arrname = "camera_"+varname
+            max_abs = np.max(np.abs(dfile[arrname][0, :, :, i]))
+            img = ax.imshow(dfile[arrname][0, :, :, i].T, origin='lower', cmap='RdBu_r', vmax=max_abs, vmin=-max_abs)
+            plt.colorbar(img)
+            fig.savefig(f"image_{varname}{s}.png")
+            fig.clear()

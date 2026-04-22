@@ -78,6 +78,10 @@ void print_backtrace(int sig) {
 
 using namespace parthenon;
 
+
+// No-op boundary to replace outflow, which kills particles
+void NoneBC(std::shared_ptr<parthenon::Swarm> &swarm) {}
+
 /**
  * Main function for Iris.  Parses parameters, prints basics,
  * constructs the `Mesh`, calls the Driver.
@@ -92,6 +96,13 @@ int main(int argc, char *argv[])
     // Ideally rays will never hit the coordinate singularity, but we
     // register reflecting conditions so Parthenon doesn't yell
     pman.app_input->RegisterDefaultReflectingBoundaryConditions();
+    // We cannot have particles disappearing at boundaries! Register no-ops, so we can select them later
+    pman.app_input->RegisterSwarmBoundaryCondition(parthenon::BoundaryFace::inner_x1, "none", NoneBC);
+    pman.app_input->RegisterSwarmBoundaryCondition(parthenon::BoundaryFace::outer_x1, "none", NoneBC);
+    pman.app_input->RegisterSwarmBoundaryCondition(parthenon::BoundaryFace::inner_x2, "none", NoneBC);
+    pman.app_input->RegisterSwarmBoundaryCondition(parthenon::BoundaryFace::outer_x2, "none", NoneBC);
+    pman.app_input->RegisterSwarmBoundaryCondition(parthenon::BoundaryFace::inner_x3, "none", NoneBC);
+    pman.app_input->RegisterSwarmBoundaryCondition(parthenon::BoundaryFace::outer_x3, "none", NoneBC);
 
     // Initialize Parthenon for MPI (also Kokkos, parses command line, etc.)
     Flag("ParthenonInit");

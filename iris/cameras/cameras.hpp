@@ -1,25 +1,25 @@
-/* 
+/*
  *  File: cameras.hpp
- *  
+ *
  *  BSD 3-Clause License
- *  
+ *
  *  Copyright (c) 2025, Iris contributors
  *  All rights reserved.
- *  
+ *
  *  Redistribution and use in source and binary forms, with or without
  *  modification, are permitted provided that the following conditions are met:
- *  
+ *
  *  1. Redistributions of source code must retain the above copyright notice, this
  *     list of conditions and the following disclaimer.
- *  
+ *
  *  2. Redistributions in binary form must reproduce the above copyright notice,
  *     this list of conditions and the following disclaimer in the documentation
  *     and/or other materials provided with the distribution.
- *  
+ *
  *  3. Neither the name of the copyright holder nor the names of its
  *     contributors may be used to endorse or promote products derived from
  *     this software without specific prior written permission.
- *  
+ *
  *  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  *  AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  *  IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -39,6 +39,8 @@
 // KHARMA headers
 #include "decs.hpp"
 #include "types.hpp"
+
+#include "coordinates/coordinate_embedding.hpp"
 
 using namespace parthenon;
 
@@ -136,14 +138,22 @@ class Camera {
  * Parthenon package for handling cameras together:
  * 1. generates lists of X,K for tracing all pixels of all cameras, with no distinction
  * 2. splits pixel lists out into images, calculate observer frame Stokes params
- * 
+ *
  */
 namespace Cameras {
 
 std::shared_ptr<StateDescriptor> Initialize(ParameterInput *pin, std::shared_ptr<Packages_t>& packages);
 
+// These operate only within the given block
 TaskStatus InitGeodesics(MeshBlock* pmb);
 
-TaskStatus WriteCameras(MeshBlock* pmb);
+// Write local swarm values at cameras into 2D/3D MPI reducers on host
+TaskStatus WriteLocalCameras(MeshData<Real>* md);
+
+// MPI reductions.  Doing them with tasks just sucks too much for no payoff
+TaskStatus ReduceCameras(MeshData<Real>* md);
+
+// Write reduced camera values to MeshBlock (eventually, file!)
+TaskStatus WriteReducedCameras(MeshData<Real>* md);
 
 };
