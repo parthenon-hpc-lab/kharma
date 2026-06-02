@@ -82,39 +82,6 @@ class CoordinateEmbedding {
         SomeBaseCoords base;
         SomeTransform transform;
 
-        // Common code for constructors
-#pragma hd_warning_disable
-        KOKKOS_FUNCTION void EmplaceSystems(const SomeBaseCoords& base_in, const SomeTransform& transform_in) {
-            // Isn't there some more elegant way to say "yeah the types are fine just copy da bits"?
-            if (mpark::holds_alternative<SphMinkowskiCoords>(base_in)) {
-                base.emplace<SphMinkowskiCoords>(mpark::get<SphMinkowskiCoords>(base_in));
-            } else if (mpark::holds_alternative<CartMinkowskiCoords>(base_in)) {
-                base.emplace<CartMinkowskiCoords>(mpark::get<CartMinkowskiCoords>(base_in));
-            } else if (mpark::holds_alternative<SphBLCoords>(base_in)) {
-                base.emplace<SphBLCoords>(mpark::get<SphBLCoords>(base_in));
-            } else if (mpark::holds_alternative<SphKSCoords>(base_in)) {
-                base.emplace<SphKSCoords>(mpark::get<SphKSCoords>(base_in));
-            } else if (mpark::holds_alternative<SphKSExtG>(base_in)) {
-                base.emplace<SphKSExtG>(mpark::get<SphKSExtG>(base_in));
-            } else if (mpark::holds_alternative<SphBLExtG>(base_in)) {
-                base.emplace<SphBLExtG>(mpark::get<SphBLExtG>(base_in));
-            }
-
-            if (mpark::holds_alternative<NullTransform>(transform_in)) {
-                transform.emplace<NullTransform>(mpark::get<NullTransform>(transform_in));
-            } else if (mpark::holds_alternative<ExponentialTransform>(transform_in)) {
-                transform.emplace<ExponentialTransform>(mpark::get<ExponentialTransform>(transform_in));
-            } else if (mpark::holds_alternative<SuperExponentialTransform>(transform_in)) {
-                transform.emplace<SuperExponentialTransform>(mpark::get<SuperExponentialTransform>(transform_in));
-            } else if (mpark::holds_alternative<ModifyTransform>(transform_in)) {
-                transform.emplace<ModifyTransform>(mpark::get<ModifyTransform>(transform_in));
-            } else if (mpark::holds_alternative<FunkyTransform>(transform_in)) {
-                transform.emplace<FunkyTransform>(mpark::get<FunkyTransform>(transform_in));
-            } else if (mpark::holds_alternative<WidepoleTransform>(transform_in)) {
-                transform.emplace<WidepoleTransform>(mpark::get<WidepoleTransform>(transform_in));
-            }
-        }
-
         // Constructors
 #pragma hd_warning_disable
         CoordinateEmbedding() = default;
@@ -207,11 +174,9 @@ class CoordinateEmbedding {
 #pragma hd_warning_disable
         KOKKOS_FUNCTION const CoordinateEmbedding& operator=(const CoordinateEmbedding& src)
         {
-            //CoordinateEmbedding copy(src);
-            //base.swap(copy.base);
-            //transform.swap(copy.transform);
-            EmplaceSystems(src.base, src.transform);
-            return *this;
+          base = src.base;
+          transform = src.transform;
+          return *this;
         }
         // Convenience functions to get common things:
         // Names (host only)
