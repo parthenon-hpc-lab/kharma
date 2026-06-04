@@ -60,6 +60,12 @@ else()
   include_directories(SYSTEM ${MPI_INCLUDE_PATH})
 endif()
 
+set(HDF5_PREFER_PARALLEL ON)
+find_package(HDF5 COMPONENTS C HL)
+if (NOT HDF5_FOUND)
+  message(FATAL_ERROR "HDF5 is required but couldn't be found.")
+endif()
+
 # Build Parthenon
 add_subdirectory(external/parthenon)
 include_directories(external/parthenon/src)
@@ -75,6 +81,7 @@ set(SINGULARITY_USE_SPINER ON CACHE BOOL "" FORCE)
 set(SINGULARITY_USE_SPINER_WITH_HDF5 ON CACHE BOOL "" FORCE)
 set(PARTHENON_DISABLE_HDF5 OFF CACHE BOOL "" FORCE)
 set(SINGULARITY_USE_STELLAR_COLLAPSE ON CACHE BOOL "" FORCE)
+set(SINGULARITY_FORCE_SUBMODULE_MODE ON CACHE BOOL "" FORCE)
 
 # Build Singularity-eos
 add_subdirectory(external/singularity-eos)
