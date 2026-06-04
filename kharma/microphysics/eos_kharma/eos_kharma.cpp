@@ -23,8 +23,8 @@
 // singularity includes
 #include <singularity-eos/eos/eos.hpp>
 
-// phoebus includes
-#include "microphysics/eos_phoebus/eos_phoebus.hpp"
+// kharma includes
+#include "microphysics/eos_kharma/eos_kharma.hpp"
 #include "phoebus_utils/unit_conversions.hpp"
 #include "phoebus_utils/variables.hpp"
 
