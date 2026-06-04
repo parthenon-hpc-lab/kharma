@@ -26,11 +26,11 @@
 #include <singularity-opac/neutrinos/opac_neutrinos.hpp>
 #include <singularity-opac/neutrinos/s_opac_neutrinos.hpp>
 
-// phoebus includes
-#include "microphysics/eos_phoebus/eos_phoebus.hpp"
+// kharma includes
+#include "microphysics/eos_kharma/eos_kharma.hpp"
 #include "phoebus_utils/unit_conversions.hpp"
 
-#include "opac_phoebus.hpp"
+#include "opac_kharma.hpp"
 
 using pc = parthenon::constants::PhysicalConstants<parthenon::constants::CGS>;
 
