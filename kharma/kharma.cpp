@@ -65,6 +65,8 @@
 #include "resize_restart.hpp"
 #include "resize_restart_kharma.hpp"
 
+#include "eos_kharma.hpp"
+
 std::shared_ptr<KHARMAPackage> KHARMA::InitializeGlobals(ParameterInput *pin, std::shared_ptr<Packages_t>& packages)
 {
     // All truly global state.  Mostly mutable state in order to avoid scope creep
@@ -440,6 +442,11 @@ Packages_t KHARMA::ProcessPackages(std::unique_ptr<ParameterInput> &pin)
     // Since it is never required to restart, this is the only time we'd write (hence, need) it
     if (FieldIsOutput(pin.get(), "jcon") && have_b_transport) {
         auto t_current = tl.AddTask(t_b_field, KHARMA::AddPackage, packages, Current::Initialize, pin.get());
+    }
+    
+    //Enable eos package
+    if (pin->GetOrAddBoolean("eos", "on", false)) {
+        auto t_eos = tl.AddTask(t_grmhd, KHARMA::AddPackage, packages, Microphysics::EOS::Initialize, pin.get());
     }
 
     // Execute the whole collection (just in case we do something fancy?)

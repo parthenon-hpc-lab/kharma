@@ -1,16 +1,3 @@
-// © 2021-2022. Triad National Security, LLC. All rights reserved.
-// This program was produced under U.S. Government contract
-// 89233218CNA000001 for Los Alamos National Laboratory (LANL), which
-// is operated by Triad National Security, LLC for the U.S.
-// Department of Energy/National Nuclear Security Administration. All
-// rights in the program are reserved by Triad National Security, LLC,
-// and the U.S. Department of Energy/National Nuclear Security
-// Administration. The Government is granted for itself and others
-// acting on its behalf a nonexclusive, paid-up, irrevocable worldwide
-// license in this material to reproduce, prepare derivative works,
-// distribute copies to the public, perform publicly and display
-// publicly, and to permit others to do so.
-
 // system includes
 #include <memory>
 #include <string>
@@ -26,7 +13,7 @@
 #include <singularity-opac/neutrinos/opac_neutrinos.hpp>
 #include <singularity-opac/neutrinos/s_opac_neutrinos.hpp>
 
-// kharma includes
+// phoebus includes
 #include "microphysics/eos_kharma/eos_kharma.hpp"
 #include "phoebus_utils/unit_conversions.hpp"
 
@@ -144,8 +131,7 @@ std::shared_ptr<StateDescriptor> Initialize(ParameterInput *pin) {
   }
 
   {
-    auto opacity_host =
-        params.Get<singularity::neutrinos::Opacity>("h.opacity_baseunits");
+    auto opacity_host = params.Get<singularity::neutrinos::Opacity>("h.opacity");
     const Real YeMin = pin->GetOrAddReal("mean_opacity", "yemin", 0.1);
     const Real YeMax = pin->GetOrAddReal("mean_opacity", "yemax", 0.5);
     const int NYe = pin->GetOrAddInteger("mean_opacity", "nye", 10);
@@ -159,10 +145,10 @@ std::shared_ptr<StateDescriptor> Initialize(ParameterInput *pin) {
       const Real lNuMin = std::log10(pin->GetOrAddReal("mean_opacity", "numin", 0.1));
       const Real lNuMax = std::log10(pin->GetOrAddReal("mean_opacity", "numax", 10.));
       const int NNu = pin->GetOrAddInteger("mean_opacity", "nnu", 100);
-      MeanOpacity mean_opac_host =
-          MeanOpacityScaleFree(opacity_host, lRhoMin, lRhoMax, NRho, lTMin, lTMax, NT,
-                               YeMin, YeMax, NYe, lNuMin, lNuMax, NNu);
-      auto mean_opac_device = mean_opac_host.GetOnDevice();
+      auto mean_opac_host =
+          MeanOpacityBase(opacity_host, lRhoMin, lRhoMax, NRho, lTMin, lTMax, NT, YeMin,
+                          YeMax, NYe, lNuMin, lNuMax, NNu);
+      MeanOpacity mean_opac_device = mean_opac_host.GetOnDevice();
       params.Add("h.mean_opacity", mean_opac_host);
       params.Add("d.mean_opacity", mean_opac_device);
     } else {
@@ -176,13 +162,13 @@ std::shared_ptr<StateDescriptor> Initialize(ParameterInput *pin) {
       const Real lNuMin = std::log10(pin->GetOrAddReal("mean_opacity", "numin", 1.e10));
       const Real lNuMax = std::log10(pin->GetOrAddReal("mean_opacity", "numax", 1.e24));
       const int NNu = pin->GetOrAddInteger("mean_opacity", "nnu", 100);
-      MeanOpacityCGS cgs_mean_opacity =
-          MeanOpacityCGS(opacity_host, lRhoMin, lRhoMax, NRho, lTMin, lTMax, NT, YeMin,
-                         YeMax, NYe, lNuMin, lNuMax, NNu);
-      MeanOpacity mean_opac_host =
-          MeanNonCGSUnits<MeanOpacityCGS>(std::forward<MeanOpacityCGS>(cgs_mean_opacity),
-                                          time_unit, mass_unit, length_unit, temp_unit);
-      auto mean_opac_device = mean_opac_host.GetOnDevice();
+      auto cgs_mean_opacity =
+          MeanOpacityBase(opacity_host, lRhoMin, lRhoMax, NRho, lTMin, lTMax, NT, YeMin,
+                          YeMax, NYe, lNuMin, lNuMax, NNu);
+      auto mean_opac_host = MeanNonCGSUnits<MeanOpacityBase>(
+          std::forward<MeanOpacityBase>(cgs_mean_opacity), time_unit, mass_unit,
+          length_unit, temp_unit);
+      MeanOpacity mean_opac_device = mean_opac_host.GetOnDevice();
       params.Add("h.mean_opacity", mean_opac_host);
       params.Add("d.mean_opacity", mean_opac_device);
     }

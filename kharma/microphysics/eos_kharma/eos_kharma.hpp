@@ -17,7 +17,15 @@
 #include <memory>
 #include <parthenon/package.hpp>
 
-#include <singularity-eos/eos/eos.hpp>
+#include "grmhd_functions.hpp"
+
+#include <singularity-eos/eos/eos_ideal.hpp>
+#include <singularity-eos/eos/eos_variant.hpp>
+#include <singularity-eos/eos/modifiers/eos_unitsystem.hpp>
+
+#ifdef SPINER_USE_HDF
+#include <singularity-eos/eos/eos_stellar_collapse.hpp>
+#endif
 
 using namespace parthenon::package::prelude;
 
@@ -35,7 +43,7 @@ using EOS = singularity::Variant<
 #endif // SPINER_USE_HDF
     >;
 
-std::shared_ptr<StateDescriptor> Initialize(ParameterInput *pin);
+std::shared_ptr<KHARMAPackage> Initialize(ParameterInput *pin);
 } // namespace EOS
 
 } // namespace Microphysics
