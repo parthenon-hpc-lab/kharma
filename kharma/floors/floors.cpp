@@ -31,6 +31,8 @@
  *  OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  *  OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
+#include <pack/make_pack_descriptor.hpp>
+
 #include "floors.hpp"
 #include "floors_functions.hpp"
 #include "floors_impl.hpp"
@@ -39,6 +41,7 @@
 #include "grmhd.hpp"
 #include "grmhd_functions.hpp"
 #include "inverter.hpp"
+#include "kharma_utils.hpp"
 #include "pack.hpp"
 
 // Floors.  Apply limits to fluid values to maintain integrable state
@@ -178,15 +181,21 @@ std::shared_ptr<KHARMAPackage> Floors::Initialize(
 TaskStatus Floors::ApplyInitialFloors(
     ParameterInput* pin, MeshBlockData<Real>* mbd, IndexDomain domain)
 {
+    using varany = parthenon::variable_names::any;
     Flag("ApplyInitialFloors");
 
     auto pmb = mbd->GetBlockPointer();
 
-    PackIndexMap prims_map, cons_map;
-    auto P = mbd->PackVariables(
-        {Metadata::GetUserFlag("Primitive"), Metadata::Cell}, prims_map);
-    auto U = mbd->PackVariables(
-        std::vector<MetadataFlag>{Metadata::Conserved, Metadata::Cell}, cons_map);
+    std::vector<parthenon::MetadataFlag> m_P{
+        Metadata::GetUserFlag("Primitive"), Metadata::Cell};
+    const static auto desc_P = parthenon::MakePackDescriptor<varany>(mbd, m_P);
+    auto PP = desc_P.GetPack(mbd);
+    auto prims_map = desc_P.GetMap();
+
+    std::vector<parthenon::MetadataFlag> m_U{Metadata::Conserved, Metadata::Cell};
+    const static auto desc_U = parthenon::MakePackDescriptor<varany>(mbd, m_U);
+    auto UU = desc_U.GetPack(mbd);
+    auto cons_map = desc_U.GetMap();
     const VarMap m_u(cons_map, true), m_p(prims_map, false);
 
     const auto& G = pmb->coords;
@@ -226,6 +235,8 @@ TaskStatus Floors::ApplyInitialFloors(
     pmb->par_for("apply_initial_floors", b.ks, b.ke, b.js, b.je, b.is, b.ie,
         KOKKOS_LAMBDA (const int &k, const int &j, const int &i)
         {
+            auto P = SparseBlockPack(PP);
+            auto U = SparseBlockPack(UU);
             Real rhoflr_max, uflr_max;
             // Initial floors, so the radius-dependence of floors don't matter that much.
             int fflag = determine_floors(
@@ -233,7 +244,7 @@ TaskStatus Floors::ApplyInitialFloors(
             if (fflag) {
                 apply_floors<InjectionFrame::fluid>(
                     G, P, m_p, gam, k, j, i, rhoflr_max, uflr_max, U, m_u);
-                apply_ceilings(G, P, m_p, gam, k, j, i, floors, floors, U, m_u);
+                apply_ceilings(G, P, m_p, gam, k, j, i, floors, floors);
                 // P->U for any modified zones
                 Flux::p_to_u_mhd(
                     G, P, m_p, emhd_params, gam, k, j, i, U, m_u, Loci::center);

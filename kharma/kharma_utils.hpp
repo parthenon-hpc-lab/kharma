@@ -39,6 +39,7 @@
 #include <memory>
 #include <string>
 #include <stdexcept>
+#include <utility>
 
 /*
  * General C/C++ convenience functions, anything not specific to KHARMA's datatypes
@@ -158,3 +159,23 @@ KOKKOS_INLINE_FUNCTION void gzero2(T a[GR_DIM][GR_DIM])
     memset(&(a[0][0]), 0, GR_DIM*GR_DIM*sizeof(T));
     //for(int i = 0; i < GR_DIM*GR_DIM; i++) (&(a[0][0]))[i] = 0.;
 }
+
+/**
+ * A little trick to make a block-local SparsePack. Thanks for not doing this in parthenon, Luke.
+ */
+template<typename Pack_t>
+class SparseBlockPack {
+public:
+  SparseBlockPack(const Pack_t &pack) : b_(0), pack_(pack) {}
+  SparseBlockPack(const int b, const Pack_t &pack) : b_(b), pack_(pack) {}
+  
+  template<typename... Args>
+  auto &operator()(Args... args) const {
+    return pack_(b_, std::forward<Args>(args)...);
+  }
+private:
+  Pack_t pack_;
+  int b_;
+};
+template<typename Pack_t>
+SparseBlockPack(const Pack_t) -> SparseBlockPack<Pack_t>;
