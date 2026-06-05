@@ -76,6 +76,7 @@ inline TaskStatus GetFlux(MeshData<Real>* md)
     const auto& pars = packages.Get("Fluxes")->AllParams();
     const auto& mhd_pars = packages.Get("GRMHD")->AllParams();
     const auto& globals = packages.Get("Globals")->AllParams();
+    const auto& eos_params = packages.Get("EOS")->AllParams();
     const bool use_hlle = pars.Get<bool>("use_hlle");
 
     const bool reconstruction_floors = pars.Get<bool>("reconstruction_floors");
@@ -95,6 +96,12 @@ inline TaskStatus GetFlux(MeshData<Real>* md)
     const bool reconstruction_fallback = pars.Get<bool>("reconstruction_fallback");
 
     const Real gam = mhd_pars.Get<Real>("gamma");
+
+    // Create singularity-eos object using ideal equation of state
+    // Replace all the gammas with gamma for specific cell, for now
+    // const Real gam = eos_params.Get<Real>("gm1") + 1.0;
+
+    
 
     // Check whether we're using constraint-damping
     // (which requires that a variable be propagated at ctop_max)
