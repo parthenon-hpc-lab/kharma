@@ -40,7 +40,7 @@ const names_t valid_eos_names = {IdealGas::EosType()
 #endif
 };
 
-std::shared_ptr<KHARMAPackage> Initialize(ParameterInput *pin) {
+std::shared_ptr<KHARMAPackage> Initialize(ParameterInput *pin, std::shared_ptr<Packages_t>& packages) {
   auto pkg = std::make_shared<KHARMAPackage>("eos");
   Params &params = pkg->AllParams();
 

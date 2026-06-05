@@ -128,7 +128,7 @@ class Opacities {
 };
 
 namespace Opacity {
-std::shared_ptr<StateDescriptor> Initialize(ParameterInput *pin);
+std::shared_ptr<KHARMAPackage> Initialize(ParameterInput *pin, std::shared_ptr<Packages_t>& packages);
 } // namespace Opacity
 
 } // namespace Microphysics

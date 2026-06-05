@@ -43,7 +43,7 @@ using EOS = singularity::Variant<
 #endif // SPINER_USE_HDF
     >;
 
-std::shared_ptr<KHARMAPackage> Initialize(ParameterInput *pin);
+std::shared_ptr<KHARMAPackage> Initialize(ParameterInput *pin, std::shared_ptr<Packages_t>& packages);
 } // namespace EOS
 
 } // namespace Microphysics

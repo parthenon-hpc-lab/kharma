@@ -23,10 +23,10 @@ using pc = parthenon::constants::PhysicalConstants<parthenon::constants::CGS>;
 
 namespace Microphysics {
 namespace Opacity {
-std::shared_ptr<StateDescriptor> Initialize(ParameterInput *pin) {
+std::shared_ptr<KHARMAPackage> Initialize(ParameterInput *pin, std::shared_ptr<Packages_t>& packages) {
   using namespace singularity::neutrinos;
 
-  auto pkg = std::make_shared<StateDescriptor>("opacity");
+  auto pkg = std::make_shared<KHARMAPackage>("opacity");
   Params &params = pkg->AllParams();
 
   bool do_rad = pin->GetBoolean("physics", "rad");

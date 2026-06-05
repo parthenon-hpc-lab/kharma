@@ -65,7 +65,8 @@
 #include "resize_restart.hpp"
 #include "resize_restart_kharma.hpp"
 
-#include "eos_kharma.hpp"
+#include "microphysics/eos_kharma/eos_kharma.hpp"
+#include "microphysics/opac_kharma/opac_kharma.hpp"
 
 std::shared_ptr<KHARMAPackage> KHARMA::InitializeGlobals(ParameterInput *pin, std::shared_ptr<Packages_t>& packages)
 {
@@ -449,6 +450,10 @@ Packages_t KHARMA::ProcessPackages(std::unique_ptr<ParameterInput> &pin)
         auto t_eos = tl.AddTask(t_grmhd, KHARMA::AddPackage, packages, Microphysics::EOS::Initialize, pin.get());
     }
 
+    // Enable opac package
+    if (pin->GetOrAddBoolean("opac", "on", false)) {
+        auto t_opac = tl.AddTask(t_grmhd, KHARMA::AddPackage, packages, Microphysics::Opacity::Initialize, pin.get());
+    }
     // Execute the whole collection (just in case we do something fancy?)
     tc.Execute(); // TODO check return if Exe ever returns errors
 
