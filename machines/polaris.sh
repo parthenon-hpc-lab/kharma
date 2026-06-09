@@ -29,6 +29,7 @@ if [[ $HOST == *".polaris.alcf.anl.gov" ]]; then
   module load cray-hdf5-parallel
   module load craype-accel-nvidia80
   module load cmake
+  module list
   
   
   # Ensure the Cray compiler wrappers explicitly target the host architecture
