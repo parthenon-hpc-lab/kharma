@@ -1,94 +1,69 @@
-# SANE ("Standard and Normal Evolution" i.e. not Magnetically Arrested).
-# Similar to "v5" library parameters w/adiabatic index 5/3,
-# and a larger disk (rin=10/rmax=20)
-
+# SANE model in 2D
+# Overall simulation size 50M, to allow
+# running at small scale on e.g. a laptop
+# Uses MKS coordinates, not Funky variant
 
 <parthenon/job>
 problem_id = torus
-archive_parameters = timestamp
 
 <parthenon/mesh>
 nx1 = 128
-nx2 = 64
-nx3 = 64
+nx2 = 128
+nx3 = 1
 
 <parthenon/meshblock>
 nx1 = 128
 nx2 = 64
-# Many boundaries options are incompatible with multiple phi blocks
-nx3 = 64
+nx3 = 1
 
 <coordinates>
 base = spherical_ks
-transform = fmks
-r_out = 1000
+transform = mks
+r_out = 50
 a = 0.9375
 hslope = 0.3
 
 <parthenon/time>
-tlim = 60000.0
+tlim = 3000.0
 nlim = -1
 
+<debug>
+verbose = 1
+extra_checks = 1
+flag_verbose = 0
+
+<GRMHD>
+cfl = 0.9
+gamma = 1.666667
+reconstruction = weno5
+
+<driver>
+type = kharma
+
 <torus>
-rin = 10.0
-rmax = 20.0
-# Tilt in degrees. YMMV.
-tilt = 0.
+rin = 6.0
+rmax = 12.0
 
 <perturbation>
 u_jitter = 0.04
 
 <b_field>
-solver = face_ct
 type = sane
 beta_min = 100.
 
-<GRMHD>
-cfl = 0.7
-gamma = 1.666667
-
-<flux>
-type = llf
-# WENO5 Adaptive Order "At Home" --
-# WENO5Z with fallback to linear recon in difficult regions
-reconstruction = weno5_linear
-
-<driver>
-type = kharma
-# Second sync at the end of each step
-# Can skip this with the robust inverter & face_ct B fields
-two_sync = false
-
-<boundaries>
-inner_x2 = reflecting
-outer_x2 = reflecting
-
 <floors>
-# Minimal floors, applied in the default Normal Observer frame
 rho_min_geom = 1e-6
-u_min_geom   = 1e-8
-
-<fofc>
-# FOFC is disabled by default because of tests but recommended
-# for most production runs
-on = true
-
-<eos>
-type = IdealGas #IdealGas
-Gamma = 5./3.
-Cv = 1.0
-
-<debug>
-verbose = 1
-extra_checks = 1
-flag_verbose = 2
+u_min_geom = 1e-8
 
 <parthenon/output0>
 file_type = hdf5
 write_xdmf = false
-dt = 5.0
+dt = 10.0
 single_precision_output = true
-variables = prims, divB, jcon, fflag, pflag, fofcflag
+# Fields beginning with a specifier here will be included (e.g., all prims.XXX)
+# Fields specified but not present are silently skipped
+# If you need a line break, use '&' at line end
+variables = prims, divB, jcon, pflag, fflag
 
 <parthenon/output1>
 file_type = rst
@@ -99,3 +74,25 @@ dt = 100.0
 file_type = hst
 dt = 0.1
 variables = all_reductions
+
+# This outputs a geometry file, similar to iharm3d's old 'grid.h5'
+# Not needed for pyharm analysis in Kerr metrics, but useful in
+# a bunch of other contexts.
+<parthenon/output3>
+file_type = hdf5
+write_xdmf = false
+analysis_output = true
+dt = 1e20
+single_precision_output = false
+# If you want the convenience and hate disk space, you can add these
+# variables to "normal" dump files like output0 too.
+variables = coords.Xnative, coords.Xsph, &
+            coords.gcon, coords.gcov, coords.gdet, coords.lapse, coords.conn, &
+            coords.gcon_embed, coords.gcov_embed, coords.gdet_embed
+
+
+<eos>
+on = true
+type = IdealGas #IdealGas
+Gamma = 1.666667
+Cv = 1.0
