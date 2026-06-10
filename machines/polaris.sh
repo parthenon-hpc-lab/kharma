@@ -36,5 +36,6 @@ if [[ $HOST == *".polaris.alcf.anl.gov" ]]; then
   export CRAY_CPU_TARGET=x86-64
   # TODO(BSP) need to set CRAYPE_LINK_TYPE=dynamic long-term?
 
+  # Globally enforce the C++17 standard for all targets and submodules
   EXTRA_FLAGS="-DPARTHENON_DISABLE_HDF5_COMPRESSION=ON $EXTRA_FLAGS"
 fi
