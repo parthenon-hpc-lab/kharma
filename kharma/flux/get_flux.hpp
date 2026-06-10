@@ -35,6 +35,13 @@
 
 #include "flux.hpp"
 
+// phoebus includes
+#include "microphysics/eos_kharma/eos_kharma.hpp"
+#include "phoebus_utils/unit_conversions.hpp"
+#include "phoebus_utils/variables.hpp"
+
+using namespace singularity;
+
 #include "domain.hpp"
 #include "floors_functions.hpp"
 
@@ -95,12 +102,11 @@ inline TaskStatus GetFlux(MeshData<Real>* md)
 
     const bool reconstruction_fallback = pars.Get<bool>("reconstruction_fallback");
 
-    //const Real gam = mhd_pars.Get<Real>("gamma");
-
-    // Create singularity-eos object using ideal equation of state
-    // Replace all the gammas with gamma for specific cell, for now
-    const Real gam = eos_params.Get<Real>("gm1") + 1.0;
-    printf("Using gamma = %f\n", gam);
+    const Real gam = mhd_pars.Get<Real>("gamma");
+    auto host_eos = eos_params.Get<Microphysics::EOS::EOS>("h.EOS");
+    Real pressure = host_eos.PressureFromDensityInternalEnergy(1.0, 1.0);
+    Real bulk = host_eos.BulkModulusFromDensityInternalEnergy(1.0, 1.0);
+    printf("gam1 at rho=1, sie=1 is %g\n", bulk/pressure);
 
     
 
