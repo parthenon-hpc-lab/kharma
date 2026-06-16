@@ -69,7 +69,8 @@ std::shared_ptr<KHARMAPackage> Initialize(ParameterInput *pin, std::shared_ptr<P
   Real T, dT, rho, drho, ye, dye, eps, P; // for our bound search, temps
   int n;
 
-  std::string eos_type = pin->GetString(block_name, std::string("type"));
+  //std::string eos_type = pin->GetString(block_name, std::string("type"));
+  std::string eos_type = pin->GetOrAddString(block_name, std::string("type"), "IdealGas");
   params.Add("type", eos_type);
   bool needs_ye = false;
   bool provides_entropy = false;

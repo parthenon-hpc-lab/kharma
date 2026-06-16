@@ -323,7 +323,7 @@ inline TaskStatus GetFlux(MeshData<Real>* md)
 
                     // Magnetosonic speeds
                     Real cmaxL, cminL;
-                    Flux::vchar(G, Pl, m_p, Dtmp, gam, emhd_params, k, j, i, loc, dir,
+                    Flux::vchar(G, Pl, m_p, Dtmp, eos, emhd_params, k, j, i, loc, dir,
                         cmaxL, cminL);
 
                     // Record speeds
@@ -386,7 +386,7 @@ inline TaskStatus GetFlux(MeshData<Real>* md)
 
                     // Magnetosonic speeds
                     Real cmaxR, cminR;
-                    Flux::vchar(G, Pr, m_p, Dtmp, gam, emhd_params, k, j, i, loc, dir,
+                    Flux::vchar(G, Pr, m_p, Dtmp, eos, emhd_params, k, j, i, loc, dir,
                         cmaxR, cminR);
 
                     // Calculate cmax/min based on comparison with cached values
