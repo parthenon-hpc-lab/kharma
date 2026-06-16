@@ -60,7 +60,7 @@ else()
   include_directories(SYSTEM ${MPI_INCLUDE_PATH})
 endif()
 
-set(HDF5_PREFER_PARALLEL ON)
+set(HDF5_PREFER_PARALLEL (NOT KHARMA_DISABLE_MPI))
 find_package(HDF5 COMPONENTS C HL)
 if (NOT HDF5_FOUND)
   message(FATAL_ERROR "HDF5 is required but couldn't be found.")
