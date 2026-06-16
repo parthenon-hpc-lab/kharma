@@ -103,11 +103,9 @@ inline TaskStatus GetFlux(MeshData<Real>* md)
     const bool reconstruction_fallback = pars.Get<bool>("reconstruction_fallback");
 
     const Real gam = mhd_pars.Get<Real>("gamma");
-    auto host_eos = eos_params.Get<Microphysics::EOS::EOS>("h.EOS");
-    Real pressure = host_eos.PressureFromDensityInternalEnergy(1.0, 1.0);
-    Real bulk = host_eos.BulkModulusFromDensityInternalEnergy(1.0, 1.0);
-    printf("gam1 at rho=1, sie=1 is %g\n", bulk/pressure);
-
+    auto eos = eos_params.Get<Microphysics::EOS::EOS>("d.EOS");
+    // Real pressure = host_eos.PressureFromDensityInternalEnergy(1.0, 1.0);
+    // Real bulk = host_eos.BulkModulusFromDensityInternalEnergy(1.0, 1.0);
     
 
     // Check whether we're using constraint-damping
@@ -319,9 +317,9 @@ inline TaskStatus GetFlux(MeshData<Real>* md)
                     // Left
                     GRMHD::calc_4vecs(G, Pl, m_p, j, i, loc, Dtmp);
                     Flux::prim_to_flux(
-                        G, Pl, m_p, Dtmp, emhd_params, gam, j, i, 0, Ul, m_u, loc);
+                        G, Pl, m_p, Dtmp, emhd_params, eos, j, i, 0, Ul, m_u, loc);
                     Flux::prim_to_flux(
-                        G, Pl, m_p, Dtmp, emhd_params, gam, j, i, dir, Fl, m_u, loc);
+                        G, Pl, m_p, Dtmp, emhd_params, eos, j, i, dir, Fl, m_u, loc);
 
                     // Magnetosonic speeds
                     Real cmaxL, cminL;
@@ -382,9 +380,9 @@ inline TaskStatus GetFlux(MeshData<Real>* md)
                     // Right
                     GRMHD::calc_4vecs(G, Pr, m_p, j, i, loc, Dtmp);
                     Flux::prim_to_flux(
-                        G, Pr, m_p, Dtmp, emhd_params, gam, j, i, 0, Ur, m_u, loc);
+                        G, Pr, m_p, Dtmp, emhd_params, eos, j, i, 0, Ur, m_u, loc);
                     Flux::prim_to_flux(
-                        G, Pr, m_p, Dtmp, emhd_params, gam, j, i, dir, Fr, m_u, loc);
+                        G, Pr, m_p, Dtmp, emhd_params, eos, j, i, dir, Fr, m_u, loc);
 
                     // Magnetosonic speeds
                     Real cmaxR, cminR;

@@ -357,8 +357,10 @@ Packages_t KHARMA::ProcessPackages(std::unique_ptr<ParameterInput> &pin)
     }
     // Driver package is the foundation
     auto t_driver = tl.AddTask(t_none, KHARMA::AddPackage, packages, KHARMADriver::Initialize, pin.get());
+    //Enable eos package
+    auto t_eos = tl.AddTask(t_driver, KHARMA::AddPackage, packages, Microphysics::EOS::Initialize, pin.get());
     // GRMHD needs globals to mark packages
-    auto t_grmhd = tl.AddTask(t_globals | t_driver, KHARMA::AddPackage, packages, GRMHD::Initialize, pin.get());
+    auto t_grmhd = tl.AddTask(t_globals | t_eos, KHARMA::AddPackage, packages, GRMHD::Initialize, pin.get());
     // Only load the inverter if GRMHD/EMHD isn't being evolved implicitly
     // Unless we want to use the explicitly-evolved ideal MHD variables as a guess for the solver
     // Or we want first-order flux corrections, which rely on a UtoP guess
@@ -445,10 +447,6 @@ Packages_t KHARMA::ProcessPackages(std::unique_ptr<ParameterInput> &pin)
         auto t_current = tl.AddTask(t_b_field, KHARMA::AddPackage, packages, Current::Initialize, pin.get());
     }
     
-    //Enable eos package
-    if (pin->GetOrAddBoolean("eos", "on", false)) {
-        auto t_eos = tl.AddTask(t_grmhd, KHARMA::AddPackage, packages, Microphysics::EOS::Initialize, pin.get());
-    }
 
     // Enable opac package
     if (pin->GetOrAddBoolean("opac", "on", false)) {

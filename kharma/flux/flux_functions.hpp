@@ -35,6 +35,12 @@
 
 #include "decs.hpp"
 
+// phoebus includes
+#include "microphysics/eos_kharma/eos_kharma.hpp"
+#include "phoebus_utils/unit_conversions.hpp"
+#include "phoebus_utils/variables.hpp"
+
+
 #include "emhd.hpp"
 #include "gr_coordinates.hpp"
 #include "grmhd_functions.hpp"
@@ -117,9 +123,13 @@ KOKKOS_FORCEINLINE_FUNCTION void calc_tensor(const Global& P, const VarMap& m_p,
 template<typename Local>
 KOKKOS_FORCEINLINE_FUNCTION void prim_to_flux(const GRCoordinates& G, const Local& P,
     const VarMap& m_p, const FourVectors D, const EMHD::EMHD_parameters& emhd_params,
-    const Real& gam, const int& j, const int& i, const int& dir, const Local& flux,
+    const Microphysics::EOS::EOS& eos, const int& j, const int& i, const int& dir, const Local& flux,
     const VarMap& m_u, const Loci loc = Loci::center)
 {
+    Real pressure = eos.PressureFromDensityInternalEnergy(P(m_p.RHO), P(m_p.UU));
+    Real bulk = eos.BulkModulusFromDensityInternalEnergy(P(m_p.RHO), P(m_p.UU));
+    Real gam = bulk/pressure;
+    
     Real gdet = G.gdet(loc, j, i);
     // Particle number flux
     flux(m_u.RHO) = P(m_p.RHO) * D.ucon[dir] * gdet;
