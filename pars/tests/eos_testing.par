@@ -25,7 +25,7 @@ hslope = 0.3
 
 <parthenon/time>
 tlim = 3000.0
-nlim = -1
+nlim = 30
 
 <debug>
 verbose = 1
