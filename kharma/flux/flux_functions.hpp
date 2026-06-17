@@ -62,7 +62,7 @@ KOKKOS_FORCEINLINE_FUNCTION void calc_tensor(const Local& P, const VarMap& m_p,
     const int& dir, Real T[GR_DIM])
 {
     // calc pressure
-    Real sie = P(m_p.UU)/P(m_p.RHO) //specific internal energy
+    Real sie = P(m_p.UU)/P(m_p.RHO); //specific internal energy
     Real pressure = eos.PressureFromDensityInternalEnergy(P(m_p.RHO), sie);
     if ((m_p.Q >= 0 || m_p.DP >= 0) && emhd_params.feedback) {
         // Apply higher-order terms conversion if necessary
@@ -404,7 +404,7 @@ KOKKOS_FORCEINLINE_FUNCTION void vchar(const GRCoordinates& G, const Local& P,
 {
     // Find sound speed
     //TODO_EOS: Units from singularity-eos are probably wrong here, we need to find a way to convert pressure to code units
-  const Real sie = P(m.UU)/P(m.RHO)
+    const Real sie = P(m.UU)/P(m.RHO);
     const Real ef1 = P(m.RHO) +  1.666667 * P(m.UU); // \rho * h = rho + u + P.
     const Real pressure = eos.PressureFromDensityInternalEnergy(P(m.RHO),sie);
     fprintf(stderr, "Pressure_sing_eos = %.15e, ideal_gas = %.15e\n", pressure, (1.666667 - 1.) * P(m.UU));
