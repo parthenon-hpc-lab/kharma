@@ -36,6 +36,11 @@
 #include "decs.hpp"
 #include "types.hpp"
 
+// phoebus includes
+#include "microphysics/eos_kharma/eos_kharma.hpp"
+#include "phoebus_utils/unit_conversions.hpp"
+#include "phoebus_utils/variables.hpp"
+
 #include "emhd.hpp"
 #include "flux_functions.hpp"
 
@@ -44,11 +49,11 @@
     const GRCoordinates &G, const VariablePack<Real>&P, const VarMap &m_p,               \
         const VariableFluxPack<Real>&U, const VarMap &m_u,                               \
         const VariablePack<Real>&cmax, const VariablePack<Real>&cmin,                    \
-        const EMHD::EMHD_parameters &emhd_params, const Real &gam, const int &k,         \
+        const EMHD::EMHD_parameters &emhd_params, const Microphysics::EOS::EOS &eos, const int &k,         \
         const int &j, const int &i
 // Call for passing a particular block's values
 #define REDUCE_FUNCTION_CALL                                                             \
-    G, P(b), m_p, U(b), m_u, cmax(b), cmin(b), emhd_params, gam, k, j, i
+    G, P(b), m_p, U(b), m_u, cmax(b), cmin(b), emhd_params, eos, k, j, i
 
 using namespace parthenon;
 
@@ -107,14 +112,18 @@ KOKKOS_INLINE_FUNCTION Real reduction_var<Var::bsq>(REDUCE_FUNCTION_ARGS)
 template<>
 KOKKOS_INLINE_FUNCTION Real reduction_var<Var::gas_pressure>(REDUCE_FUNCTION_ARGS)
 {
-    return (gam - 1) * P(m_p.UU, k, j, i);
+    const Real sie = P(m_p.UU, k, j, i) / P(m_p.RHO, k, j, i);
+    return eos.PressureFromDensityInternalEnergy(P(m_p.RHO, k, j, i), sie);
+    //return (gam - 1) * P(m_p.UU, k, j, i);
 }
 template<>
 KOKKOS_INLINE_FUNCTION Real reduction_var<Var::beta>(REDUCE_FUNCTION_ARGS)
 {
     FourVectors Dtmp;
     GRMHD::calc_4vecs(G, P, m_p, k, j, i, Loci::center, Dtmp);
-    return ((gam - 1) * P(m_p.UU, k, j, i)) /
+    const Real sie = P(m_p.UU, k, j, i) / P(m_p.RHO, k, j, i);
+    const Real Pg = eos.PressureFromDensityInternalEnergy(P(m_p.RHO, k, j, i), sie);
+    return Pg /
            (0.5 * (dot(Dtmp.bcon, Dtmp.bcov) + SMALL_NUM));
 }
 
@@ -161,7 +170,7 @@ KOKKOS_INLINE_FUNCTION Real reduction_var<Var::edot>(REDUCE_FUNCTION_ARGS)
     FourVectors Dtmp;
     Real T1[GR_DIM];
     GRMHD::calc_4vecs(G, P, m_p, k, j, i, Loci::center, Dtmp);
-    Flux::calc_tensor(P, m_p, Dtmp, emhd_params, gam, k, j, i, X1DIR, T1);
+    Flux::calc_tensor(P, m_p, Dtmp, emhd_params, eos, k, j, i, X1DIR, T1);
     // \dot{E} == \int - T^1_0 * gdet * dx2 * dx3
     return -T1[X0DIR] * G.gdet(Loci::center, j, i);
 }
@@ -171,7 +180,7 @@ KOKKOS_INLINE_FUNCTION Real reduction_var<Var::ldot>(REDUCE_FUNCTION_ARGS)
     FourVectors Dtmp;
     Real T1[GR_DIM];
     GRMHD::calc_4vecs(G, P, m_p, k, j, i, Loci::center, Dtmp);
-    Flux::calc_tensor(P, m_p, Dtmp, emhd_params, gam, k, j, i, X1DIR, T1);
+    Flux::calc_tensor(P, m_p, Dtmp, emhd_params, eos, k, j, i, X1DIR, T1);
     // \dot{L} == \int T^1_3 * gdet * dx2 * dx3
     return T1[X3DIR] * G.gdet(Loci::center, j, i);
 }
@@ -200,7 +209,9 @@ KOKKOS_INLINE_FUNCTION Real reduction_var<Var::eht_lum>(REDUCE_FUNCTION_ARGS)
     FourVectors Dtmp;
     GRMHD::calc_4vecs(G, P, m_p, k, j, i, Loci::center, Dtmp);
     Real rho = P(m_p.RHO, k, j, i);
-    Real Pg = (gam - 1.) * P(m_p.UU, k, j, i);
+    //Real Pg = (gam - 1.) * P(m_p.UU, k, j, i);
+    Real sie = P(m_p.UU, k, j, i) / rho;
+    Real Pg = eos.PressureFromDensityInternalEnergy(rho, sie);
     Real Bmag = m::sqrt(dot(Dtmp.bcon, Dtmp.bcov));
     Real j_eht =
         rho * rho * rho / Pg / Pg * m::exp(-0.2 * m::cbrt(rho * rho / (Bmag * Pg * Pg)));
@@ -216,7 +227,7 @@ KOKKOS_INLINE_FUNCTION Real reduction_var<Var::jet_lum>(REDUCE_FUNCTION_ARGS)
     FourVectors Dtmp;
     Real T1[GR_DIM];
     GRMHD::calc_4vecs(G, P, m_p, k, j, i, Loci::center, Dtmp);
-    Flux::calc_tensor(P, m_p, Dtmp, emhd_params, gam, k, j, i, X1DIR, T1);
+    Flux::calc_tensor(P, m_p, Dtmp, emhd_params, eos, k, j, i, X1DIR, T1);
     // If sigma > 1...
     if ((dot(Dtmp.bcon, Dtmp.bcov) / P(m_p.RHO, k, j, i)) > 1.) {
         // Energy flux, like at EH

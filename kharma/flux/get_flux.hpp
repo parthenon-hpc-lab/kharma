@@ -83,7 +83,10 @@ inline TaskStatus GetFlux(MeshData<Real>* md)
     const auto& pars = packages.Get("Fluxes")->AllParams();
     const auto& mhd_pars = packages.Get("GRMHD")->AllParams();
     const auto& globals = packages.Get("Globals")->AllParams();
+    
     const auto& eos_params = packages.Get("eos")->AllParams();
+    auto eos = eos_params.Get<Microphysics::EOS::EOS>("d.EOS");
+
     const bool use_hlle = pars.Get<bool>("use_hlle");
 
     const bool reconstruction_floors = pars.Get<bool>("reconstruction_floors");
@@ -100,13 +103,7 @@ inline TaskStatus GetFlux(MeshData<Real>* md)
     const Floors::Prescription& floors = floors_temp;
     const Floors::Prescription& floors_inner = floors_inner_temp;
 
-    const bool reconstruction_fallback = pars.Get<bool>("reconstruction_fallback");
-
-    const Real gam = mhd_pars.Get<Real>("gamma");
-    auto eos = eos_params.Get<Microphysics::EOS::EOS>("d.EOS");
-    // Real pressure = host_eos.PressureFromDensityInternalEnergy(1.0, 1.0);
-    // Real bulk = host_eos.BulkModulusFromDensityInternalEnergy(1.0, 1.0);
-    
+    const bool reconstruction_fallback = pars.Get<bool>("reconstruction_fallback");    
 
     // Check whether we're using constraint-damping
     // (which requires that a variable be propagated at ctop_max)
@@ -217,9 +214,9 @@ inline TaskStatus GetFlux(MeshData<Real>* md)
                     // zero (as intended)
                     if (reconstruction_floors || reconstruction_fallback) {
                         fallback_tvd(i) = Floors::apply_geo_floors(
-                            G, Pl, m_p, gam, j, i, floors, floors_inner, loc);
+                            G, Pl, m_p, eos, j, i, floors, floors_inner, loc);
                         fallback_tvd(i) |= Floors::apply_geo_floors(
-                            G, Pr, m_p, gam, j, i, floors, floors_inner, loc);
+                            G, Pr, m_p, eos, j, i, floors, floors_inner, loc);
                     }
                 });
             member.team_barrier();

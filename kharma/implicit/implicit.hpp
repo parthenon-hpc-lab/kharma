@@ -41,6 +41,11 @@
 #include "flux_functions.hpp"
 #include "grmhd_functions.hpp"
 
+// phoebus includes
+#include "microphysics/eos_kharma/eos_kharma.hpp"
+#include "phoebus_utils/unit_conversions.hpp"
+#include "phoebus_utils/variables.hpp"
+
 // And an odd but useful loop for ex-iharm3d code
 // This requires nvar to be defined in caller!
 // It is not a const/global anymore.  So, use this loop carefully
@@ -146,7 +151,7 @@ KOKKOS_INLINE_FUNCTION void calc_residual(const GRCoordinates& G, const Global& 
     const Global& Pi, const Global& Ui, const Global& Ps, const Global& dudt_explicit,
     const Global& dUi, const VarMap& m_p, const VarMap& m_u,
     const EMHD::EMHD_parameters& emhd_params, const EMHD::EMHD_parameters& emhd_params_s,
-    const int& nfvar, const int& k, const int& j, const int& i, const Real& gam,
+    const int& nfvar, const int& k, const int& j, const int& i, const Microphysics::EOS::EOS& eos,
     const double& dt, Global& residual)
 {
     // These lines calculate res = (U_test - Ui)/dt - dudt_explicit - 0.5*(dU_new(ip) +
@@ -155,7 +160,7 @@ KOKKOS_INLINE_FUNCTION void calc_residual(const GRCoordinates& G, const Global& 
     Real Utmp[MAX_VARS];
     FourVectors Dtmp;
     GRMHD::calc_4vecs(G, P_test, m_p, k, j, i, Loci::center, Dtmp);
-    Flux::prim_to_flux(G, P_test, m_p, Dtmp, emhd_params, gam, k, j, i, 0, Utmp, m_u);
+    Flux::prim_to_flux(G, P_test, m_p, Dtmp, emhd_params, eos, k, j, i, 0, Utmp, m_u);
     // (U_test - Ui)/dt - dudt_explicit ...
     FLOOP residual(ip, k, j, i) =
         (Utmp[ip] - Ui(ip, k, j, i)) / dt - dudt_explicit(ip, k, j, i);
@@ -169,6 +174,10 @@ KOKKOS_INLINE_FUNCTION void calc_residual(const GRCoordinates& G, const Global& 
 
         // Compute the EMHD parameters, which we'll re-use
         Real tau, chi_e, nu_e;
+        //TODO_EOS: In EMHD, gam is passed here, I'm just gonna use a dumb solution for now in order to compile it, but this should be fixed.
+        Real bulk = eos.BulkModulusFromDensityInternalEnergy(Ps(m_p.RHO, k, j, i), Ps(m_p.UU, k, j, i)/Ps(m_p.RHO, k, j, i));
+        Real pg = eos.PressureFromDensityInternalEnergy(Ps(m_p.RHO, k, j, i), Ps(m_p.UU, k, j, i)/Ps(m_p.RHO, k, j, i));
+        Real gam = bulk / pg;
         EMHD::set_parameters(G, Ps, m_p, emhd_params, gam, k, j, i, tau, chi_e, nu_e);
         GRMHD::calc_4vecs(G, Ps, m_p, k, j, i, Loci::center, Dtmp);
 
@@ -216,12 +225,12 @@ KOKKOS_INLINE_FUNCTION void calc_jacobian(const GRCoordinates& G, const Global& 
     const VarMap& m_p, const VarMap& m_u, const EMHD::EMHD_parameters& emhd_params_solver,
     const EMHD::EMHD_parameters& emhd_params_sub_step_init, const int& nvar,
     const int& nfvar, const int& k, const int& j, const int& i, const Real& jac_delta,
-    const Real& gam, const double& dt, Global& jacobian, Global& residual)
+    const Microphysics::EOS::EOS& eos, const double& dt, Global& jacobian, Global& residual)
 {
     // Calculate residual of P, cache
     calc_residual(G, P_solver, P_full_step_init, U_full_step_init, P_sub_step_init,
         flux_src, dU_implicit, m_p, m_u, emhd_params_solver, emhd_params_sub_step_init,
-        nfvar, k, j, i, gam, dt, residual);
+        nfvar, k, j, i, eos, dt, residual);
 
     // These store the *original* residual and P values,
     // so we can mess with the *arrays* in the loop below.
@@ -248,7 +257,7 @@ KOKKOS_INLINE_FUNCTION void calc_jacobian(const GRCoordinates& G, const Global& 
         // Compute the residual for P_delta, OVERWRITES residual
         calc_residual(G, P_solver, P_full_step_init, U_full_step_init, P_sub_step_init,
             flux_src, dU_implicit, m_p, m_u, emhd_params_solver,
-            emhd_params_sub_step_init, nfvar, k, j, i, gam, dt, residual);
+            emhd_params_sub_step_init, nfvar, k, j, i, eos, dt, residual);
 
         // Compute forward derivatives of each residual vs the primitive col
         for (int row = 0; row < nfvar; row++) {

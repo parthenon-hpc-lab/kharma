@@ -453,6 +453,9 @@ void ApplyEMHDLimits(MeshBlockData<Real>* mbd, IndexDomain domain)
 
     const auto& G = pmb->coords;
 
+    const auto& eos_params = packages.Get("eos")->AllParams();
+    auto eos = eos_params.Get<Microphysics::EOS::EOS>("d.EOS");
+
     GridScalar eflag = mbd->Get("eflag").data;
 
     const EMHD::EMHD_parameters& emhd_params = EMHD::GetEMHDParameters(packages);
@@ -470,7 +473,7 @@ void ApplyEMHDLimits(MeshBlockData<Real>* mbd, IndexDomain domain)
         {
             // Apply limits to the Extended MHD variables
             eflag(k, j, i) =
-                apply_instability_limits(G, P, m_p, gam, emhd_params, k, j, i, U, m_u);
+                apply_instability_limits(G, P, m_p, eos, emhd_params, k, j, i, U, m_u);
         });
 }
 

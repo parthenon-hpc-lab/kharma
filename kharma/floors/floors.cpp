@@ -192,6 +192,8 @@ TaskStatus Floors::ApplyInitialFloors(
     const auto& G = pmb->coords;
 
     const Real gam = pmb->packages.Get("GRMHD")->Param<Real>("gamma");
+    const auto& eos_params = pmb->packages.Get("eos")->AllParams();
+    auto eos = eos_params.Get<Microphysics::EOS::EOS>("d.EOS");
 
     // If we're going to apply floors through the run, apply the same ones at init
     // Otherwise stick to specified/default geometric floors
@@ -236,7 +238,7 @@ TaskStatus Floors::ApplyInitialFloors(
                 apply_ceilings(G, P, m_p, gam, k, j, i, floors, floors, U, m_u);
                 // P->U for any modified zones
                 Flux::p_to_u_mhd(
-                    G, P, m_p, emhd_params, gam, k, j, i, U, m_u, Loci::center);
+                    G, P, m_p, emhd_params, eos, k, j, i, U, m_u, Loci::center);
             }
         });
 

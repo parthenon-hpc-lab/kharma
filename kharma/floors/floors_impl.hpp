@@ -34,7 +34,10 @@
 #pragma once
 
 #include "floors.hpp"
-
+// phoebus includes
+#include "microphysics/eos_kharma/eos_kharma.hpp"
+#include "phoebus_utils/unit_conversions.hpp"
+#include "phoebus_utils/variables.hpp"
 #include "domain.hpp"
 
 namespace Floors
@@ -63,6 +66,10 @@ TaskStatus ApplyFloorsInFrame(MeshData<Real>* md, IndexDomain domain)
     const int ufi = floors_map["Floors.u_floor"].first;
 
     const Real gam = pmb0->packages.Get("GRMHD")->Param<Real>("gamma");
+
+    const auto& eos_params = pmb0->packages.Get("eos")->AllParams();
+    auto eos = eos_params.Get<Microphysics::EOS::EOS>("d.EOS");
+
     const EMHD::EMHD_parameters& emhd_params = EMHD::GetEMHDParameters(pmb0->packages);
     const Real switch_r =
         (frame == InjectionFrame::mixed_fluid_normal)
@@ -135,7 +142,7 @@ TaskStatus ApplyFloorsInFrame(MeshData<Real>* md, IndexDomain domain)
 
                 // P->U for any modified zones
                 Flux::p_to_u_mhd(
-                    G, P(b), m_p, emhd_params, gam, k, j, i, U(b), m_u, Loci::center);
+                    G, P(b), m_p, emhd_params, eos, k, j, i, U(b), m_u, Loci::center);
             }
         });
 

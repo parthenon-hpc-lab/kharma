@@ -51,6 +51,11 @@
 #include "kharma.hpp"
 #include "kharma_driver.hpp"
 
+// phoebus includes
+#include "microphysics/eos_kharma/eos_kharma.hpp"
+#include "phoebus_utils/unit_conversions.hpp"
+#include "phoebus_utils/variables.hpp"
+
 #include <memory>
 
 /**
@@ -591,6 +596,9 @@ void CancelBoundaryU3(MeshBlockData<Real>* rc, IndexDomain domain, bool coarse)
 
     const Real gam = pmb->packages.Get("GRMHD")->Param<Real>("gamma");
 
+    const auto& eos_params = pmb->packages.Get("eos")->AllParams();
+    auto eos = eos_params.Get<Microphysics::EOS::EOS>("d.EOS");
+
     const bool sync_prims = pmb->packages.Get("Driver")->Param<bool>("sync_prims");
 
     const Floors::Prescription floors =
@@ -641,7 +649,7 @@ void CancelBoundaryU3(MeshBlockData<Real>* rc, IndexDomain domain, bool coarse)
                         G, P, m_p, gam, k, jf, i, floors, floors, Loci::center);
 
                     // Always PtoU, we modified P.  Accommodate EMHD
-                    Flux::p_to_u_mhd(G, P, m_p, emhd_params, gam, k, jf, i, U, m_u);
+                    Flux::p_to_u_mhd(G, P, m_p, emhd_params, eos, k, jf, i, U, m_u);
                 });
         });
 }
@@ -736,6 +744,8 @@ void UpdateAveragedCtop(MeshData<Real>* md)
     if (pmesh->packages.AllPackages().count("B_CT"))
         B_CT::MeshUtoP(md, IndexDomain::interior);
     auto& params = pmesh->packages.Get<KHARMAPackage>("Boundaries")->AllParams();
+    const auto& eos_params = pmesh->packages.Get("eos")->AllParams();
+    auto eos = eos_params.Get<Microphysics::EOS::EOS>("d.EOS");
     for (auto& pmb : pmesh->block_list) {
         auto& rc = pmb->meshblock_data.Get(md->StageName());
         for (int i = 0; i < BOUNDARY_NFACES; i++) {
@@ -791,13 +801,13 @@ void UpdateAveragedCtop(MeshData<Real>* md)
                             GRMHD::calc_4vecs(G, P, m_p, k, jf, i, Loci::center, Dtmp);
                             // Remember our 'cmin' array stores *positive* values!
                             Real cmin_minus;
-                            Flux::vchar_global(G, P, m_p, Dtmp, gam, emhd_params, k, jf,
+                            Flux::vchar_global(G, P, m_p, Dtmp, eos, emhd_params, k, jf,
                                 i, Loci::center, X1DIR, cmax(V1, k, jf, i), cmin_minus);
                             cmin(V1, k, jf, i) = -cmin_minus;
-                            Flux::vchar_global(G, P, m_p, Dtmp, gam, emhd_params, k, jf,
+                            Flux::vchar_global(G, P, m_p, Dtmp, eos, emhd_params, k, jf,
                                 i, Loci::center, X2DIR, cmax(V2, k, jf, i), cmin_minus);
                             cmin(V2, k, jf, i) = -cmin_minus;
-                            Flux::vchar_global(G, P, m_p, Dtmp, gam, emhd_params, k, jf,
+                            Flux::vchar_global(G, P, m_p, Dtmp, eos, emhd_params, k, jf,
                                 i, Loci::center, X3DIR, cmax(V3, k, jf, i), cmin_minus);
                             cmin(V3, k, jf, i) = -cmin_minus;
                         });
