@@ -410,7 +410,7 @@ KOKKOS_FORCEINLINE_FUNCTION void vchar(const GRCoordinates& G, const Local& P,
     //fprintf(stderr, "Pressure_sing_eos = %.15e, ideal_gas = %.15e\n", pressure, (1.666667 - 1.) * P(m.UU));
     const Real bulk = eos.BulkModulusFromDensityInternalEnergy(P(m.RHO), sie);
     const Real ef = P(m.RHO) + pressure + P(m.UU);
-    fprintf(stderr, "ef1: %.15e, ef: %.15e, diff: %.15e, gam: %.15e\n", ef1, ef, (ef1 - ef)/ef1, bulk/pressure);
+    //fprintf(stderr, "ef1: %.15e, ef: %.15e, diff: %.15e, gam: %.15e\n", ef1, ef, (ef1 - ef)/ef1, bulk/pressure);
     const Real gam = bulk / pressure;
     // The fluid sound speed should be at most sqrt(gam-1) for a relativistic fluid
     const Real cs2 = clip(bulk / ef, 0., gam - 1.);
