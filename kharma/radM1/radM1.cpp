@@ -129,7 +129,8 @@ std::shared_ptr<KHARMAPackage> RadM1::Initialize(ParameterInput *pin, std::share
     //Add inversion to the tasks
     pkg->BlockUtoP = RadM1::BlockUtoP;
 
-    pkg->BlockApplyFloors = RadM1::ApplyRadM1Floors;
+    if(pin->GetBoolean("floors", "on"))
+        pkg->BlockApplyFloors = RadM1::ApplyRadM1Floors;
 
     pkg->PostStepDiagnosticsMesh = RadM1::PostStepDiagnostics;
 

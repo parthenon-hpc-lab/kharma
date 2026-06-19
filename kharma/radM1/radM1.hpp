@@ -87,12 +87,12 @@ TaskStatus PostStepDiagnostics(const SimTime& tm, MeshData<Real> *md);
 */
 
 KOKKOS_INLINE_FUNCTION Real calc_kabs(Real rho, Real T) {
-    return 1.0; 
+    return 0.0; 
 }
 
 // Scattering Opacity (kappa_s)
 KOKKOS_INLINE_FUNCTION Real calc_kscattering(Real rho, Real T) {
-    return 0.4;
+    return 0.0;
 }
 
 

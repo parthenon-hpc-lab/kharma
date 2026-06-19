@@ -267,11 +267,11 @@ TaskCollection KHARMADriver::MakeImExTaskCollection(BlockList_t &blocks, int sta
             t_implicit = t_explicit;
             // print U_init values before radM1::step
 
-            t_implicit = tl.AddTask(t_explicit, RadM1::Step, 
-                                      md_full_step_init.get(), 
-                                      md_sub_step_init.get(), 
-                                      md_sub_step_final.get(), 
-                                      integrator->beta[stage-1] * integrator->dt);
+            // t_implicit = tl.AddTask(t_explicit, RadM1::Step, 
+            //                           md_full_step_init.get(), 
+            //                           md_sub_step_init.get(), 
+            //                           md_sub_step_final.get(), 
+            //                           integrator->beta[stage-1] * integrator->dt);
         }
 
 
