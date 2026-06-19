@@ -254,44 +254,80 @@ KOKKOS_INLINE_FUNCTION void ComputeCovariantFourForce(
     const int k, const int j, const int i, 
     Real dS[4]) 
 {
+    // Real uvec_mhd[3] = {P_mhd[1], P_mhd[2], P_mhd[3]};
+    // Real ucon_mhd[4], ucov_mhd[4];
+    // GRMHD::calc_ucon(G, uvec_mhd, k, j, i, Loci::center, ucon_mhd);
+    // G.lower(ucon_mhd, ucov_mhd, k, j, i, Loci::center);
+
+    // Real Erf = P_rad[0]; 
+    // Real uvec_rad[3] = {P_rad[1], P_rad[2], P_rad[3]};
+    // Real ucon_rad[4], ucov_rad[4];
+    // GRMHD::calc_ucon(G, uvec_rad, k, j, i, Loci::center, ucon_rad);
+    // G.lower(ucon_rad, ucov_rad, k, j, i, Loci::center);
+
+    // Real gamma_rel = -(ucon_rad[0]*ucov_mhd[0] + 
+    //                    ucon_rad[1]*ucov_mhd[1] + 
+    //                    ucon_rad[2]*ucov_mhd[2] + 
+    //                    ucon_rad[3]*ucov_mhd[3]);
+    // gamma_rel = m::max(gamma_rel, 1.0);
+
+    // Real E_hat = Erf * ((4.0 / 3.0) * gamma_rel * gamma_rel - (1.0 / 3.0));
+    // Real F_hat_cov[4];
+    // for (int mu = 0; mu < 4; ++mu) {
+    //     F_hat_cov[mu] = (4.0 / 3.0) * Erf * gamma_rel * ucov_rad[mu] - 
+    //                     ((1.0 / 3.0) * Erf + E_hat) * ucov_mhd[mu];
+    // }
+
+    // Real Tg = (gam - 1.0) * (P_mhd[0] / Gas_Rho); 
+    // const Real sigma_rad = 3.085e9; // For shocktube test 1
+    // const Real kappa_rho = 0.4;     // For shocktube test 1
+    
+    // Real JBB = 4.0 * sigma_rad * (Tg * Tg * Tg * Tg); 
+    // Real kappa_a = m::min(Gas_Rho * kappa_rho, 1.e5);
+    // Real kappa_tot = kappa_a; 
+
+    // Real coupling_term = kappa_a * (JBB - E_hat);
+    
+    // dS[0] = coupling_term * ucov_mhd[0] - kappa_tot * F_hat_cov[0]; 
+    // dS[1] = coupling_term * ucov_mhd[1] - kappa_tot * F_hat_cov[1]; 
+    // dS[2] = coupling_term * ucov_mhd[2] - kappa_tot * F_hat_cov[2]; 
+    // dS[3] = coupling_term * ucov_mhd[3] - kappa_tot * F_hat_cov[3]; 
+
+
     Real uvec_mhd[3] = {P_mhd[1], P_mhd[2], P_mhd[3]};
     Real ucon_mhd[4], ucov_mhd[4];
     GRMHD::calc_ucon(G, uvec_mhd, k, j, i, Loci::center, ucon_mhd);
     G.lower(ucon_mhd, ucov_mhd, k, j, i, Loci::center);
 
-    Real Erf = P_rad[0]; 
-    Real uvec_rad[3] = {P_rad[1], P_rad[2], P_rad[3]};
-    Real ucon_rad[4], ucov_rad[4];
-    GRMHD::calc_ucon(G, uvec_rad, k, j, i, Loci::center, ucon_rad);
-    G.lower(ucon_rad, ucov_rad, k, j, i, Loci::center);
+    //Calculate R^mu_nu
+    Real R_ud[4][4];
+    RadM1::calc_tensor(G, P_rad, 0, j, i, R_ud[0]);
+    RadM1::calc_tensor(G, P_rad, 1, j, i, R_ud[1]);
+    RadM1::calc_tensor(G, P_rad, 2, j, i, R_ud[2]);
+    RadM1::calc_tensor(G, P_rad, 3, j, i, R_ud[3]);
 
-    Real gamma_rel = -(ucon_rad[0]*ucov_mhd[0] + 
-                       ucon_rad[1]*ucov_mhd[1] + 
-                       ucon_rad[2]*ucov_mhd[2] + 
-                       ucon_rad[3]*ucov_mhd[3]);
-    gamma_rel = m::max(gamma_rel, 1.0);
-
-    Real E_hat = Erf * ((4.0 / 3.0) * gamma_rel * gamma_rel - (1.0 / 3.0));
-    Real F_hat_cov[4];
+    //Product R^mu_nu * u^nu
+    Real R_ucon[4];
     for (int mu = 0; mu < 4; ++mu) {
-        F_hat_cov[mu] = (4.0 / 3.0) * Erf * gamma_rel * ucov_rad[mu] - 
-                        ((1.0 / 3.0) * Erf + E_hat) * ucov_mhd[mu];
+        R_ucon[mu] = R_ud[mu][0] * ucon_mhd[0] + 
+                         R_ud[mu][1] * ucon_mhd[1] + 
+                         R_ud[mu][2] * ucon_mhd[2] + 
+                         R_ud[mu][3] * ucon_mhd[3];
     }
 
-    Real Tg = (gam - 1.0) * (P_mhd[0] / Gas_Rho); 
-    const Real sigma_rad = 3.085e9; // For shocktube test 1
-    const Real kappa_rho = 0.4;     // For shocktube test 1
-    
-    Real JBB = 4.0 * sigma_rad * (Tg * Tg * Tg * Tg); 
-    Real kappa_a = m::min(Gas_Rho * kappa_rho, 1.e5);
-    Real kappa_tot = kappa_a; 
+    //This will come from singularity-opac
+    Real kappa_a = 0.;
+    Real kappa_s = 0.;
+    //Now we follow mckinney's formula:
+    Real thermal = 0.;
+    Real Gcon[4];
+    for (int mu = 0; mu < 4; ++mu) {
+        Gcon[mu] = -(kappa_a * R_ucon[mu] + thermal * ucon_mhd[mu]) - kappa_s * (R_ucon[mu] + (R_ucon[0] * ucov_mhd[0] + R_ucon[1] * ucov_mhd[1] + R_ucon[2] * ucov_mhd[2] + R_ucon[3] * ucov_mhd[3]) * ucon_mhd[mu]);
+    }
 
-    Real coupling_term = kappa_a * (JBB - E_hat);
-    
-    dS[0] = coupling_term * ucov_mhd[0] - kappa_tot * F_hat_cov[0]; 
-    dS[1] = coupling_term * ucov_mhd[1] - kappa_tot * F_hat_cov[1]; 
-    dS[2] = coupling_term * ucov_mhd[2] - kappa_tot * F_hat_cov[2]; 
-    dS[3] = coupling_term * ucov_mhd[3] - kappa_tot * F_hat_cov[3]; 
+    //Lower Gcon
+    G.lower(Gcon, dS, k, j, i, Loci::center);
+
 }
 
 KOKKOS_INLINE_FUNCTION int solve_radiation_4d(

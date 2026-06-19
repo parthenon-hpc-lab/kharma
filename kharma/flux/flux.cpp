@@ -458,7 +458,7 @@ void Flux::AddGeoSource(MeshData<Real> *md, MeshData<Real> *mdudt, IndexDomain d
                 //Out of the package modification RADM1.
                 if(use_rad) {
 
-                    RadM1::calc_tensor_m1(G, P(b), m_p, mu, k, j, i, Loci::center, Rmu);
+                    RadM1::calc_tensor(G, P(b), m_p, mu, k, j, i, Loci::center, Rmu);
                     
                     for (int nu = 0; nu < GR_DIM; ++nu) {
                         for (int lam = 0; lam < GR_DIM; ++lam) {

@@ -142,34 +142,45 @@ KOKKOS_INLINE_FUNCTION void calc_ucon_rad(const GRCoordinates& G, const Local& P
 }
 
 
-
-// Calculate radiation four velocity in the lab frame (Global)
-KOKKOS_INLINE_FUNCTION void calc_4vecs(const GRCoordinates& G, const VariablePack<Real>& P, const VarMap& m,
-                                       const int& k, const int& j, const int& i, const Loci loc, FourVectors& D_rad)
-{
-    
-    calc_ucon_rad(G, P, m, k, j, i, loc, D_rad.ucon);
-    G.lower(D_rad.ucon, D_rad.ucov, k, j, i, loc);
+KOKKOS_INLINE_FUNCTION Real lorentz_calc_rad(const GRCoordinates& G, const Real P[4], const int& j, const int& i) {
+    Real qsq = G.gcov(Loci::center, j, i, 1, 1) * P[1] * P[1] +
+               G.gcov(Loci::center, j, i, 2, 2) * P[2] * P[2] +
+               G.gcov(Loci::center, j, i, 3, 3) * P[3] * P[3] +
+               2. * (G.gcov(Loci::center, j, i, 1, 2) * P[1] * P[2] +
+                     G.gcov(Loci::center, j, i, 1, 3) * P[1] * P[3] +
+                     G.gcov(Loci::center, j, i, 2, 3) * P[2] * P[3]);
+    return m::sqrt(1. + qsq);
 }
 
-// Calculate radiation four velocity in the lab frame (Local)
-template <typename Local>
-KOKKOS_INLINE_FUNCTION void calc_4vecs(const GRCoordinates& G, const Local& P, const VarMap& m, const int& j, const int& i, const Loci loc, FourVectors& D_rad)
-{
-    calc_ucon_rad(G, P, m, j, i, loc, D_rad.ucon);
-    G.lower(D_rad.ucon, D_rad.ucov, 0, j, i, loc); // Note: Assuming k=0 for local slices
-}
 
-// Standard Isotropic Tensor construction
-KOKKOS_INLINE_FUNCTION void calc_tensor(const Real& UU_rad, const FourVectors& D, const int dir, Real mhd_rad[GR_DIM])
-{
-   DLOOP1 {
-        mhd_rad[mu] = (4.0/3.0) * UU_rad * D.ucon[dir] * D.ucov[mu] + (1.0/3.0) * UU_rad * (dir == mu ? 1.0 : 0.0);
-    }
+// Local ucon for Radiation
+KOKKOS_INLINE_FUNCTION void calc_ucon_rad(const GRCoordinates& G, const Real P[4], const int& j, const int& i, Real ucon[GR_DIM]) {
+    const Real gamma = lorentz_calc_rad(G, P, j, i);
+    const Real alpha = 1. / m::sqrt(-G.gcon(Loci::center, j, i, 0, 0));
+    ucon[0] = gamma / alpha;
+    VLOOP ucon[v+1] = P[1 + v] - gamma * alpha * G.gcon(Loci::center, j, i, 0, v+1);
 }
 
 // M1 Tensor construction (Global)
-KOKKOS_INLINE_FUNCTION void calc_tensor_m1(const GRCoordinates& G, const VariablePack<Real>& P, const VarMap& m_p, const int& dir, const int& k, const int& j, const int& i, const Loci loc, Real R_dir_mu[GR_DIM])
+// This will give you R^mu_dir
+KOKKOS_INLINE_FUNCTION void calc_tensor(const GRCoordinates& G, const Real P[4], const int& dir, const int& j, const int& i, Real R_dir_mu[GR_DIM])
+{
+    Real Erf = P[0];
+    Real ucon_rad[GR_DIM];
+    calc_ucon_rad(G, P, j, i, ucon_rad);
+
+    Real R_con_dir[GR_DIM]; 
+    for(int nu=0; nu<4; ++nu) {
+        R_con_dir[nu] = (4.0 / 3.0) * Erf * ucon_rad[dir] * ucon_rad[nu] + 
+                        (1.0 / 3.0) * Erf * G.gcon(Loci::center, j, i, dir, nu);
+    }
+
+    G.lower(R_con_dir, R_dir_mu, 0, j, i, Loci::center);
+}
+
+// M1 Tensor construction (Global)
+// This will give you R^mu_dir
+KOKKOS_INLINE_FUNCTION void calc_tensor(const GRCoordinates& G, const VariablePack<Real>& P, const VarMap& m_p, const int& dir, const int& k, const int& j, const int& i, const Loci loc, Real R_dir_mu[GR_DIM])
 {
     Real Erf = P(m_p.UU_RAD, k, j, i);
     Real ucon_rad[GR_DIM];
@@ -185,8 +196,9 @@ KOKKOS_INLINE_FUNCTION void calc_tensor_m1(const GRCoordinates& G, const Variabl
 }
 
 // M1 Tensor construction (Local)
+// This will give you R^mu_dir
 template <typename Local>
-KOKKOS_INLINE_FUNCTION void calc_tensor_m1(const GRCoordinates& G, const Local& P, const VarMap& m_p, const int& dir, const int& j, const int& i, const Loci loc, Real R_dir_mu[GR_DIM])
+KOKKOS_INLINE_FUNCTION void calc_tensor(const GRCoordinates& G, const Local& P, const VarMap& m_p, const int& dir, const int& j, const int& i, const Loci loc, Real R_dir_mu[GR_DIM])
 {
     Real Erf = P(m_p.UU_RAD);
     Real ucon_rad[GR_DIM];

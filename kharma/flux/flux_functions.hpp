@@ -164,17 +164,10 @@ KOKKOS_FORCEINLINE_FUNCTION void prim_to_flux(const GRCoordinates& G, const Loca
     // Radiation variables are enabled
     // Out of the package modification RADM1.
     if(m_u.U1_RAD >= 0){
-        // First calculate the radiation tensor
-        // Real R[GR_DIM];
-        // const Real UU_rad = P(m_p.UU_RAD);
-        // //Gotta make sure here that D is D_rad
-        // FourVectors D_rad;
-        // RadM1::calc_4vecs(G, P, m_p, j, i, loc, D_rad);
-        // RadM1::calc_tensor(UU_rad, D_rad, dir, R);
         Real R_dir_mu[GR_DIM];
         
         // Use the new M1 tensor function. Note we pass the GAS velocity 'D' here!
-        RadM1::calc_tensor_m1(G, P, m_p, dir, j, i, loc, R_dir_mu);
+        RadM1::calc_tensor(G, P, m_p, dir, j, i, loc, R_dir_mu);
 
         // Then calculate the fluxes
         flux(m_u.UU_RAD) = R_dir_mu[0] * gdet;
@@ -250,23 +243,10 @@ KOKKOS_FORCEINLINE_FUNCTION void prim_to_flux(const GRCoordinates& G, const Glob
 
     // Out of the package modification RADM1.
     if(m_u.U1_RAD >= 0){
-        // // First calculate the radiation tensor
-        // Real R[GR_DIM];
-        // const Real UU_rad = P(m_p.UU_RAD, k, j, i);
-        // //Gotta make sure here that D is D_rad
-        // FourVectors D_rad;
-        // RadM1::calc_4vecs(G, P, m_p, k, j, i, loc, D_rad);
-        // RadM1::calc_tensor(UU_rad, D_rad, dir, R);
-
-        // // Then calculate the fluxes
-        // flux[m_u.UU_RAD] = R[0] * gdet;
-        // flux[m_u.U1_RAD] = R[1] * gdet;
-        // flux[m_u.U2_RAD] = R[2] * gdet;
-        // flux[m_u.U3_RAD] = R[3] * gdet;
         Real R_dir_mu[GR_DIM];
         
         // Use the new M1 tensor function. Note we pass the GAS velocity 'D' here!
-        RadM1::calc_tensor_m1(G, P, m_p, dir, k, j, i, loc, R_dir_mu);
+        RadM1::calc_tensor(G, P, m_p, dir, k, j, i, loc, R_dir_mu);
 
         // Then calculate the fluxes
         flux[m_u.UU_RAD] = R_dir_mu[0] * gdet;
@@ -342,22 +322,10 @@ KOKKOS_FORCEINLINE_FUNCTION void prim_to_flux(const GRCoordinates& G, const Glob
 
     // Out of the package modification RADM1.
     if(m_u.U1_RAD >= 0) {
-        // First calculate the radiation tensor
-        // Real R[GR_DIM];
-        // const Real UU_rad = P(m_p.UU_RAD, k, j, i);
-        // //Gotta make sure here that D is D_rad
-        // FourVectors D_rad;
-        // RadM1::calc_4vecs(G, P, m_p, k, j, i, loc, D_rad);
-        // RadM1::calc_tensor(UU_rad, D_rad, dir, R);
-        // // Then calculate the fluxes
-        // flux(m_u.UU_RAD, k, j, i) = R[0] * gdet;
-        // flux(m_u.U1_RAD, k, j, i) = R[1] * gdet;
-        // flux(m_u.U2_RAD, k, j, i) = R[2] * gdet;
-        // flux(m_u.U3_RAD, k, j, i) = R[3] * gdet;
         Real R_dir_mu[GR_DIM];
         
         // Use the new M1 tensor function. Note we pass the GAS velocity 'D' here!
-        RadM1::calc_tensor_m1(G, P, m_p, dir, k, j, i, loc, R_dir_mu);
+        RadM1::calc_tensor(G, P, m_p, dir, k, j, i, loc, R_dir_mu);
         
         // Then calculate the fluxes
         flux(m_u.UU_RAD, k, j, i) = R_dir_mu[0] * gdet;

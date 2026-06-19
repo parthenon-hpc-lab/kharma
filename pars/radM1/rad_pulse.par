@@ -27,7 +27,8 @@ transform = null
 
 
 <parthenon/time>
-tlim = 35.0
+#tlim = 35.0 # for optically thin
+tlim = 30000.0 # for optically thick
 integrator = rk2
 dt_min = 0.0001
 
@@ -56,9 +57,9 @@ disable_floors = true
 
 <parthenon/output0>
 file_type = hdf5
-dt = 0.1
+dt = 500 #for optically thick#0.1 #for optically thin
 single_precision_output = true
-variables = prims
+variables = prims, cons
 
 <parthenon/output1>
 file_type = hst
