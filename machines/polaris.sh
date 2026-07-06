@@ -1,6 +1,5 @@
-
 # ALCF: Polaris
-if [[ $HOST == *".polaris.alcf.anl.gov" ]]; then
+if [[ $HOST == *"polaris"* ]]; then
   HOST_ARCH=ZEN3
   DEVICE_ARCH=AMPERE80
   NPROC=64
