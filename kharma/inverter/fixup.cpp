@@ -163,6 +163,7 @@ TaskStatus Inverter::Backstop(MeshBlockData<Real> *rc)
 {
     Flag("Inverter::Backstop");
     auto pmb = rc->GetBlockPointer();
+    const int& ndim = KDomain::GetNDim(rc);
 
     auto &pars = pmb->packages.Get("Inverter")->AllParams();
     const Real tol = pars.Get<Real>("err_tol");
@@ -208,8 +209,8 @@ TaskStatus Inverter::Backstop(MeshBlockData<Real> *rc)
             Real rhomin_geom, umin_geom;
             determine_geo_floors(G, P, m_p, gam, k, j, i, floors, floors_inner, rhomin_geom, umin_geom);
             const Real umin = umin_geom;
-            if (failed(pflag(k, j, i)) && (P(m_p.UU, k, j, i) < umin)) {
-                // const Real rho = P(m_p.RHO, k, j, i);
+            if (failed(pflag(k, j, i)) && (P(m_p.UU, k, j, i) < umin_geom)) {
+                const Real rho = m::max(P(m_p.RHO, k, j, i), rhomin_geom);
                 // const Real u = P(m_p.UU, k, j, i);
                 const Real uvec[NVEC] = {P(m_p.U1, k, j, i), P(m_p.U2, k, j, i), P(m_p.U3, k, j, i)};
                 const Real B_P[NVEC] = {P(m_p.B1, k, j, i), P(m_p.B2, k, j, i), P(m_p.B3, k, j, i)};
@@ -219,21 +220,40 @@ TaskStatus Inverter::Backstop(MeshBlockData<Real> *rc)
                 int fflagl = fflag(0, k, j, i);
 
                 // Calculate P->U on the inverted values
-                const Real D = U(m_u.RHO, k, j, i) /
-                                    (m::sqrt(-G.gcon(Loci::center, j, i, 0, 0)) * G.gdet(Loci::center, j, i));
+                // const Real D = U(m_u.RHO, k, j, i) /
+                //                     (m::sqrt(-G.gcon(Loci::center, j, i, 0, 0)) * G.gdet(Loci::center, j, i));
                 const Real W = GRMHD::lorentz_calc(G, uvec, k, j, i, Loci::center);
+
+                // VERY TEMPORARY averaging to set internal energy
+                // Idea is to set u like neighbors, where it needs to be set
+                // Real umin = 0., w = 0.;
+                // for (int n = -1; n <= 1; n++) {
+                //     for (int m = -1; m <= 1; m++) {
+                //         for (int l = -1; l <= 1; l++) {
+                //             int ii = i + l, jj = j + m, kk = k + n;
+                //             // If we haven't overstepped array bounds...
+                //             if (KDomain::inside(kk, jj, ii, b)) {
+                //                 if (!failed(pflag(kk, jj, ii))) {
+                //                     umin += P(m_p.UU, kk, jj, ii);
+                //                     w += 1;
+                //                 }
+                //             }
+                //         }
+                //     }
+                // }
+                // umin /= w;
 
                 // Calculate the total energy of the fluid at rest
                 const Real uvec0[NVEC] = {0.};
                 Real rho_ut = 0.;
                 Real Trest[GR_DIM] = {0.};
-                GRMHD::p_to_u_mhd(G, D, umin, uvec0, B_P, gam, k, j, i, rho_ut, Trest);
+                GRMHD::p_to_u_mhd(G, rho, umin, uvec0, B_P, gam, k, j, i, rho_ut, Trest);
                 // If we're below the at-rest energy (within tolerance),
                 // just bump it to that and kill all kinetic energy
                 if ((Trest[0] - U(m_u.UU, k, j, i)) / U(m_u.UU, k, j, i) > -tol ||
                     (!backstop_recover_vel && !backstop_recover_u)) {
                     // W = 1
-                    P(m_p.RHO, k, j, i) = D;
+                    P(m_p.RHO, k, j, i) = rho;
                     P(m_p.UU, k, j, i) = umin;
                     P(m_p.U1, k, j, i) = 0.;
                     P(m_p.U2, k, j, i) = 0.;
@@ -246,7 +266,7 @@ TaskStatus Inverter::Backstop(MeshBlockData<Real> *rc)
                     auto f = [&] (Real u) {
                         // Calculate tensor (we only need T0)
                         Real rho_ut, T[GR_DIM];
-                        GRMHD::p_to_u_mhd(G, D, u, uvec0, B_P, gam, k, j, i, rho_ut, T);
+                        GRMHD::p_to_u_mhd(G, rho, u, uvec0, B_P, gam, k, j, i, rho_ut, T);
                         // Check that it matches
                         return (T[0] - U(m_u.UU, k, j, i)) / U(m_u.UU, k, j, i);
                     };
@@ -278,7 +298,7 @@ TaskStatus Inverter::Backstop(MeshBlockData<Real> *rc)
 
                     if (!e_solve_failed) {
                         // Set zero velocity with new UU
-                        P(m_p.RHO, k, j, i) = D;
+                        P(m_p.RHO, k, j, i) = rho;
                         P(m_p.UU, k, j, i) = uu;
                         P(m_p.U1, k, j, i) = 0.;
                         P(m_p.U2, k, j, i) = 0.;
@@ -287,7 +307,7 @@ TaskStatus Inverter::Backstop(MeshBlockData<Real> *rc)
                     } else {
                         // The only reason this *should* fail is if we missed
                         // somehow (i.e., round-off) that we really do lack the rest energy
-                        P(m_p.RHO, k, j, i) = D;
+                        P(m_p.RHO, k, j, i) = rho;
                         P(m_p.UU, k, j, i) = umin;
                         P(m_p.U1, k, j, i) = 0.;
                         P(m_p.U2, k, j, i) = 0.;
@@ -306,7 +326,7 @@ TaskStatus Inverter::Backstop(MeshBlockData<Real> *rc)
                                             gamma_fac * uvec[2]};
                         // Calculate tensor (we only need T0)
                         Real rho_ut, T[GR_DIM];
-                        GRMHD::p_to_u_mhd(G, D * iW, umin, uv, B_P, gam, k, j, i, rho_ut, T);
+                        GRMHD::p_to_u_mhd(G, rho, umin, uv, B_P, gam, k, j, i, rho_ut, T);
                         // Check that it matches
                         return (T[0] - U(m_u.UU, k, j, i)) / U(m_u.UU, k, j, i);
                     };
@@ -359,14 +379,14 @@ TaskStatus Inverter::Backstop(MeshBlockData<Real> *rc)
                     if (!e_solve_failed) {
                         // Rescale just the density & velocities with new iW
                         // TODO(CEP) still limit iW >= etc
-                        P(m_p.RHO, k, j, i) = D * iW;
+                        P(m_p.RHO, k, j, i) = rho;
                         P(m_p.UU, k, j, i) = umin;
                         P(m_p.U1, k, j, i) *= gamma_fac;
                         P(m_p.U2, k, j, i) *= gamma_fac;
                         P(m_p.U3, k, j, i) *= gamma_fac;
                         fflagl |= Floors::FFlag::FIXUP_VEL;
                     } else {
-                        P(m_p.RHO, k, j, i) = D;
+                        P(m_p.RHO, k, j, i) = rho;
                         P(m_p.UU, k, j, i) = umin;
                         P(m_p.U1, k, j, i) = 0.;
                         P(m_p.U2, k, j, i) = 0.;
