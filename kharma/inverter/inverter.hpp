@@ -89,6 +89,14 @@ inline TaskStatus MeshFixUtoP(MeshData<Real> *md) {
 }
 
 /**
+ * Ensure minimum temperature in a stable way:
+ * 1. If possible, preserve total energy by stealing kinetic energy
+ * 2. If not (i.e., rest energy of B exceeds total energy), add energy to
+ *    ensure B and u but no velocity
+ */
+TaskStatus Backstop(MeshBlockData<Real> *rc);
+
+/**
  * Count up all nonzero PFlags on md.  Used for history file reductions.
  */
 int CountPFlags(MeshData<Real> *md);

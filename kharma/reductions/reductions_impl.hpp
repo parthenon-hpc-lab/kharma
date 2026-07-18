@@ -125,7 +125,7 @@ T Reductions::CheckOnAll(MeshData<Real> *md, int channel)
 
 // TODO additionally template on return type to avoid counting flags with Reals
 template<Reductions::Var var, UserHistoryOperation op, typename T>
-T Reductions::DomainReduction(MeshData<Real> *md, const GReal startx[3], const GReal stopx[3], int channel)
+T Reductions::DomainReduction(MeshData<Real> *md, const GReal startx[3], const GReal stopx[3], int channel, bool plane_outward)
 {
     Flag("DomainReduction");
     auto pmesh = md->GetMeshPointer();
@@ -174,8 +174,14 @@ T Reductions::DomainReduction(MeshData<Real> *md, const GReal startx[3], const G
                 const auto& G = U.GetCoords(b);
                 GReal x[GR_DIM], xin[GR_DIM];
                 G.coord_embed(k, j, i, Loci::center, x);
-                if (trivial1 || trivial2 || trivial3)
-                    G.coord_embed(k - trivial3, j - trivial2, i - trivial1, Loci::center, xin);
+                if (trivial1 || trivial2 || trivial3) {
+                    if (plane_outward) {
+                        G.coord_embed(k, j, i, Loci::center, xin);
+                        G.coord_embed(k + trivial3, j + trivial2, i + trivial1, Loci::center, x);
+                    } else {
+                        G.coord_embed(k - trivial3, j - trivial2, i - trivial1, Loci::center, xin);
+                    }
+                }
                 if(INSIDE) {
                     local_result += reduction_var<var>(REDUCE_FUNCTION_CALL) *
                         ((trivial3) ? 1. : G.Dxc<3>(k)) * ((trivial2) ? 1. : G.Dxc<2>(j)) * ((trivial1) ? 1. : G.Dxc<1>(i));
@@ -192,8 +198,14 @@ T Reductions::DomainReduction(MeshData<Real> *md, const GReal startx[3], const G
                 const auto& G = U.GetCoords(b);
                 GReal x[GR_DIM], xin[GR_DIM];
                 G.coord_embed(k, j, i, Loci::center, x);
-                if (trivial1 || trivial2 || trivial3)
-                    G.coord_embed(k - trivial3, j - trivial2, i - trivial1, Loci::center, xin);
+                if (trivial1 || trivial2 || trivial3) {
+                    if (plane_outward) {
+                        G.coord_embed(k, j, i, Loci::center, xin);
+                        G.coord_embed(k + trivial3, j + trivial2, i + trivial1, Loci::center, x);
+                    } else {
+                        G.coord_embed(k - trivial3, j - trivial2, i - trivial1, Loci::center, xin);
+                    }
+                }
                 if(INSIDE) {
                     const Real val = reduction_var<var>(REDUCE_FUNCTION_CALL) *
                         ((trivial3) ? 1. : G.Dxc<3>(k)) * ((trivial2) ? 1. : G.Dxc<2>(j)) * ((trivial1) ? 1. : G.Dxc<1>(i));
@@ -211,8 +223,14 @@ T Reductions::DomainReduction(MeshData<Real> *md, const GReal startx[3], const G
                 const auto& G = U.GetCoords(b);
                 GReal x[GR_DIM], xin[GR_DIM];
                 G.coord_embed(k, j, i, Loci::center, x);
-                if (trivial1 || trivial2 || trivial3)
-                    G.coord_embed(k - trivial3, j - trivial2, i - trivial1, Loci::center, xin);
+                if (trivial1 || trivial2 || trivial3) {
+                    if (plane_outward) {
+                        G.coord_embed(k, j, i, Loci::center, xin);
+                        G.coord_embed(k + trivial3, j + trivial2, i + trivial1, Loci::center, x);
+                    } else {
+                        G.coord_embed(k - trivial3, j - trivial2, i - trivial1, Loci::center, xin);
+                    }
+                }
                 if(INSIDE) {
                     const Real val = reduction_var<var>(REDUCE_FUNCTION_CALL) *
                         ((trivial3) ? 1. : G.Dxc<3>(k)) * ((trivial2) ? 1. : G.Dxc<2>(j)) * ((trivial1) ? 1. : G.Dxc<1>(i));

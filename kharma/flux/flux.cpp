@@ -181,8 +181,9 @@ std::shared_ptr<KHARMAPackage> Flux::Initialize(ParameterInput *pin, std::shared
     params.Add("use_fofc", use_fofc);
 
     if (use_fofc) {
-        if (!packages->AllPackages().count("Floors"))
-            throw std::runtime_error("First-order Flux Corrections cannot be used without floors!");
+        // TODO reintroduce this check later when we've actually loaded floors?
+        // if (!packages->AllPackages().count("Floors"))
+        //     throw std::runtime_error("First-order Flux Corrections cannot be used without floors!");
 
         // FOFC-specific options
         bool use_glf = pin->GetOrAddBoolean("fofc", "use_glf", false);

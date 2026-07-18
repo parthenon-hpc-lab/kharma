@@ -86,6 +86,8 @@ TaskCollection KHARMADriver::MakeDefaultTaskCollection(BlockList_t &blocks, int 
     TaskCollection tc;
     const TaskID t_none(0);
 
+    Flag("MakeTaskCollection::allocations");
+
     // Which packages we load affects which tasks we'll add to the list
     auto& pkgs = pmesh->packages.AllPackages();
     auto& flux_pkg   = pkgs.at("Flux")->AllParams();
@@ -94,6 +96,7 @@ TaskCollection KHARMADriver::MakeDefaultTaskCollection(BlockList_t &blocks, int 
     const bool use_electrons = pkgs.count("Electrons");
     const bool use_fofc = flux_pkg.Get<bool>("use_fofc");
     const bool use_jcon = pkgs.count("Current");
+    const bool track_additions = pkgs.at("Floors")->Param<bool>("track_additions");
 
     // Allocate/copy the things we need
     // TODO these can now be reduced by including the var lists/flags which actually need to be allocated
@@ -117,6 +120,10 @@ TaskCollection KHARMADriver::MakeDefaultTaskCollection(BlockList_t &blocks, int 
                             base.get(), pmesh->mesh_data.Get("preserve").get());
             }
         }
+        // Preserve state for time derivatives if we need to output current
+        if (track_additions) {
+            pmesh->mesh_data.Add("pre_fix");
+        }
         // FOFC needs to determine whether the "real" U-divF will violate floors, and needs a safe place to do it.
         // We populate it later, with each *sub-step*'s initial state
         if (use_fofc) {
@@ -125,6 +132,7 @@ TaskCollection KHARMADriver::MakeDefaultTaskCollection(BlockList_t &blocks, int 
         }
     }
 
+    EndFlag();
     Flag("MakeTaskCollection::fluxes");
 
     static std::vector<std::string> sync_vars;
@@ -207,7 +215,13 @@ TaskCollection KHARMADriver::MakeDefaultTaskCollection(BlockList_t &blocks, int 
                                                   std::vector<MetadataFlag>{Metadata::GetUserFlag("Explicit"), Metadata::Independent},
                                                   use_b_ct, stage);
 
-        KHARMADriver::AddBoundarySync(t_update, tl, md_sync);
+        auto t_sync = KHARMADriver::AddBoundarySync(t_update, tl, md_sync);
+
+        if (track_additions) {
+            // Copy the pre-fix state into a container to save it
+            tl.AddTask(t_sync, Copy<MeshData<Real>>, std::vector<MetadataFlag>{Metadata::Conserved},
+                        md_sub_step_final.get(), pmesh->mesh_data.Get("pre_fix").get());
+        }
     }
 
     EndFlag();
@@ -283,6 +297,11 @@ TaskCollection KHARMADriver::MakeDefaultTaskCollection(BlockList_t &blocks, int 
                 auto t_floors_2 = tl.AddTask(t_derefine_f, Packages::MeshApplyFloors, md_sub_step_final.get(), IndexDomain::entire);
                 t_step_done = tl.AddTask(t_floors_2, Inverter::MeshFixUtoP, md_sub_step_final.get());
             }
+        }
+
+        if (track_additions) {
+            auto t_track_additions = tl.AddTask(t_ptou, Floors::TrackAdditions,
+                                                md_sub_step_final.get(), pmesh->mesh_data.Get("pre_fix").get());
         }
 
         // Estimate next time step based on ctop

@@ -72,7 +72,7 @@ std::shared_ptr<KHARMAPackage> Initialize(ParameterInput *pin, std::shared_ptr<P
     // B field as usual
     // TODO allow for implicit B here
     Metadata m = Metadata({Metadata::Real, Metadata::Cell, Metadata::Independent, Metadata::FillGhost,
-                 Metadata::Restart, Metadata::Conserved, Metadata::Conserved,
+                 Metadata::Restart, Metadata::Conserved,
                  Metadata::WithFluxes, Metadata::Vector}, s_vector);
     pkg->AddField("cons.B", m);
     m = Metadata({Metadata::Real, Metadata::Cell, Metadata::Derived,
@@ -83,7 +83,7 @@ std::shared_ptr<KHARMAPackage> Initialize(ParameterInput *pin, std::shared_ptr<P
     // i.e. differ by a factor of gdet.  This is apparently marginally more stable in some
     // circumstances.
     m = Metadata({Metadata::Real, Metadata::Cell, Metadata::Independent, Metadata::FillGhost,
-                  Metadata::Restart, Metadata::Conserved, Metadata::Conserved, Metadata::WithFluxes});
+                  Metadata::Restart, Metadata::Conserved, Metadata::WithFluxes});
     pkg->AddField("cons.psi_cd", m);
     m = Metadata({Metadata::Real, Metadata::Cell, Metadata::Derived,
                   Metadata::Restart, Metadata::GetUserFlag("Primitive")});

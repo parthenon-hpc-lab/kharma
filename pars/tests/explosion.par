@@ -42,13 +42,12 @@ gamma = 1.333333
 type = kharma
 
 <flux>
-type = hlle
-reconstruction = ppm
+type = llf
+reconstruction = weno5
 
 <inverter>
 type = kastaun
-fix_average_neighbors = false
-fix_atmosphere = true
+err_tol = 1e-14
 
 <explosion>
 rho_out = 1e-4
@@ -58,13 +57,16 @@ rho_min_const = 1e-10
 u_min_const = 1e-10
 
 <fofc>
-on = true
+on = false
+#consistent_face_b = false
 
 <b_field>
 solver = face_ct
 ct_scheme = gs05_c
 type = constant
-B10 = 1.0
+# Balsara uses ~250
+B10 = 1.e4
+#B20 = 50.0
 
 <debug>
 verbose = 1
@@ -73,6 +75,7 @@ extra_checks = 2
 
 <parthenon/output0>
 file_type = hdf5
+write_xdmf = false
 dt = 0.1
 single_precision_output = true
 variables = prims, fflag, pflag

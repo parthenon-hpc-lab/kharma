@@ -365,15 +365,6 @@ Packages_t KHARMA::ProcessPackages(std::unique_ptr<ParameterInput> &pin)
         pin->GetOrAddBoolean("emhd", "ideal_guess", false) || pin->GetOrAddBoolean("fofc", "on", false)) {
         t_inverter = tl.AddTask(t_grmhd, KHARMA::AddPackage, packages, Inverter::Initialize, pin.get());
     }
-    // Floors package is only loaded if floors aren't disabled
-    // Respect legacy version for a while
-    bool floors_on_default = true;
-    if (pin->DoesParameterExist("floors", "disable_floors")) {
-        floors_on_default = !pin->GetBoolean("floors", "disable_floors");
-    }
-    if (pin->GetOrAddBoolean("floors", "on", floors_on_default)) {
-        auto t_floors = tl.AddTask(t_inverter, KHARMA::AddPackage, packages, Floors::Initialize, pin.get());
-    }
     // Reductions, needed by most other packages
     auto t_reductions = tl.AddTask(t_none, KHARMA::AddPackage, packages, Reductions::Initialize, pin.get());
 
@@ -448,6 +439,9 @@ Packages_t KHARMA::ProcessPackages(std::unique_ptr<ParameterInput> &pin)
     // And any dirichlet/constant boundaries
     // TODO avoid init if Parthenon will be handling all boundaries?
     KHARMA::AddPackage(packages, KBoundaries::Initialize, pin.get());
+
+    // Now we alsways load floors package -- "on=false" and "disable_floors" map to "disable_call"!
+    KHARMA::AddPackage(packages, Floors::Initialize, pin.get());
 
     // Load the implicit package last, if there are *any* variables that need implicit evolution
     // This lets us just count by flag, rather than checking all the possible parameters that would

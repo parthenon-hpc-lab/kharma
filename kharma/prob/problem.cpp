@@ -122,7 +122,7 @@ void KHARMA::ProblemGenerator(MeshBlock *pmb, ParameterInput *pin)
         status = ReadKharmaRestart(rc, pin);
     } else if (prob == "gizmo") {
         status = InitializeGIZMO(rc, pin);
-    } else if (prob == "vacuum" || prob == "bz_monopole") {
+    } else if (prob == "vacuum" || prob == "bz_monopole" || prob == "split_monopole") {
         // No need for a separate initializer, just seed w/floors
         status = Floors::ApplyInitialFloors(pin, rc.get(), IndexDomain::interior);
     }
