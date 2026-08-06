@@ -87,6 +87,8 @@ flag_verbose = 2
 
 <radM1>
 on = true
+sigma_rad = 1.953e4
+kappa_rho = 0.2
 src_rootfind_eps = 1e-8
 src_rootfind_tol = 1e-8
 src_rootfind_maxiter = 50

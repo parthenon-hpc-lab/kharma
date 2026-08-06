@@ -118,6 +118,24 @@ std::shared_ptr<KHARMAPackage> RadM1::Initialize(ParameterInput *pin, std::share
     pkg->AllParams().Add("src_rootfind_tol", src_rootfind_tol);
     pkg->AllParams().Add("src_rootfind_maxiter", src_rootfind_maxiter);
 
+    // Opacity model selector (see RadM1::OpacityModel in radM1.hpp).
+    //if the problem_id is "shock", then the default opacity model is "shocktube_constant", otherwise it is "default".
+    const std::string default_opacity_model =
+        (pin->GetString("parthenon/job", "problem_id") == "shock") ? "shocktube_constant" : "default";
+    std::string opacity_model_str = pin->GetOrAddString("radM1", "opacity_model", default_opacity_model);
+    int opacity_model = (int) OpacityModel::Default;
+    if (opacity_model_str == "shocktube_constant") {
+        opacity_model = (int) OpacityModel::ShocktubeConstant;
+    }
+    // Constants for the shocktube opacity model. These are only used if the opacity model is set to "shocktube_constant".
+    Real shocktube_sigma_rad = pin->GetOrAddReal("radM1", "sigma_rad", 3.470e7);
+    Real shocktube_kappa_rho = pin->GetOrAddReal("radM1", "kappa_rho", 0.08);
+    Real shocktube_kappa_scat = pin->GetOrAddReal("radM1", "kappa_scat", 0.0);
+    pkg->AllParams().Add("opacity_model", opacity_model);
+    pkg->AllParams().Add("shocktube_sigma_rad", shocktube_sigma_rad);
+    pkg->AllParams().Add("shocktube_kappa_rho", shocktube_kappa_rho);
+    pkg->AllParams().Add("shocktube_kappa_scat", shocktube_kappa_scat);
+
 
     //Right now, to execute the torus problem with radM1, we need to initialize the radiation primitives in fm_torus.cpp (this is stupid) (ASK Cora)
     //I think this should be moved to RadM1 method, maybe call an initialization method like a task straight after initializing the torus?
@@ -358,6 +376,9 @@ TaskStatus RadM1::Step(MeshData<Real> *md_full_init, MeshData<Real> *md_sub_init
         const Real src_rootfind_tol   = params.Get<Real>("src_rootfind_tol");
         const int src_rootfind_maxiter = params.Get<int>("src_rootfind_maxiter");
         const Real gam                 = pmb->packages.Get("GRMHD")->AllParams().Get<Real>("gamma");
+        const int opacity_model        = params.Get<int>("opacity_model");
+        const Real shocktube_sigma_rad = params.Get<Real>("shocktube_sigma_rad");
+        const Real shocktube_kappa_rho = params.Get<Real>("shocktube_kappa_rho");
         const auto& G                  = pmb->coords;
 
         PackIndexMap prims_map, cons_map;
@@ -386,7 +407,8 @@ TaskStatus RadM1::Step(MeshData<Real> *md_full_init, MeshData<Real> *md_sub_init
                 // }
                 int rflagl = solve_radiation_4d(
                     G, U_init, P_init, P_new, U_new, m_p, m_u, k, j, i,
-                    dt, gam, src_rootfind_eps, src_rootfind_tol, src_rootfind_maxiter
+                    dt, gam, src_rootfind_eps, src_rootfind_tol, src_rootfind_maxiter,
+                    opacity_model, shocktube_sigma_rad, shocktube_kappa_rho
                 );
                 // if(i == 110) {
                 //     printf("The new set of U_new is [%.15e, %.15e, %.15e, %.15e]\n\n", U_new(m_u.UU, k, j, i), U_new(m_u.U1, k, j, i), U_new(m_u.U2, k, j, i), U_new(m_u.U3, k, j, i));

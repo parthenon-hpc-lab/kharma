@@ -81,18 +81,26 @@ void ApplyRadM1Floors(MeshBlockData<Real> *rc, IndexDomain domain);
  */
 TaskStatus PostStepDiagnostics(const SimTime& tm, MeshData<Real> *md);
 
-/*
-* These are just place holders to calculate G^\nu following Eq.16 Mckinney et al 2014.
-*/
+// Opacity model selector for calc_kabs/calc_kscattering/ComputeCovariantFourForce.
+// Default is the eventual singularity-opac slot! Add new cases here as more
+// tests need their own opacity law, without causing issues with the default.
+enum class OpacityModel : int { Default = 0, ShocktubeConstant = 1 };
 
-KOKKOS_INLINE_FUNCTION Real calc_kabs(Real rho, Real T) {
-    const Real kappa_rho = 0.08; 
+KOKKOS_INLINE_FUNCTION Real calc_kabs(Real rho, Real T, int opacity_model, Real shocktube_kappa_rho) {
+    Real kappa_rho;
+    if (opacity_model == (int) OpacityModel::ShocktubeConstant) {
+        kappa_rho = shocktube_kappa_rho;
+    } else {
+        kappa_rho = 0.08;
+    }
     return m::min(rho * kappa_rho, 1.e5);
 }
 
-// Scattering Opacity (kappa_s)
-KOKKOS_INLINE_FUNCTION Real calc_kscattering(Real rho, Real T) {
-    return 0.0;
+KOKKOS_INLINE_FUNCTION Real calc_kscattering(Real rho, Real T, int opacity_model, Real shocktube_kappa_scat) {
+    if (opacity_model == (int) OpacityModel::ShocktubeConstant) {
+        return shocktube_kappa_scat;
+    }
+    return 0.0; 
 }
 
 
