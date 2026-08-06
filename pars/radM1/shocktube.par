@@ -84,7 +84,7 @@ flag_verbose = 2
 on = true
 src_rootfind_eps = 1e-8
 src_rootfind_tol = 1e-8
-src_rootfind_maxiter = 10
+src_rootfind_maxiter = 50
 
 <units> 
 on = true

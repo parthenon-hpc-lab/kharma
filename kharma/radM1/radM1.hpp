@@ -83,11 +83,11 @@ TaskStatus PostStepDiagnostics(const SimTime& tm, MeshData<Real> *md);
 
 /*
 * These are just place holders to calculate G^\nu following Eq.16 Mckinney et al 2014.
-* Should check if it should be G^\nu or G_\nu (ASK BEN).
 */
 
 KOKKOS_INLINE_FUNCTION Real calc_kabs(Real rho, Real T) {
-    return 0.0; 
+    const Real kappa_rho = 0.08; 
+    return m::min(rho * kappa_rho, 1.e5);
 }
 
 // Scattering Opacity (kappa_s)

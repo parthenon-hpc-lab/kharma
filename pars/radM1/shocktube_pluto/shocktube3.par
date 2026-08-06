@@ -1,34 +1,36 @@
-# Radiation pulse test
+# Parameter file for the radiation shock tube Test 3 presented in the PLUTO paper
+# https://iopscience.iop.org/article/10.3847/1538-4365/ab18ff
+# To run it, I have to disable Kastaun's bad_vel_tolerance, putting it to a much higher value
 
+# In the current version, remember to change sigma = 3.858e-8, kappa/rho = 0.3
 <parthenon/job>
-problem_id = rad_pulse
+problem_id = shock
 
 <parthenon/mesh>
-nx1 = 50
-x1min = -50.0
-x1max = 50.0
+nx1 = 800
+x1min = -20.0
+x1max = 20.0
 
-nx2 = 50
-x2min = -50.0
-x2max = 50.0
+nx2 = 1
+x2min = 0.0
+x2max = 1.0
 
 nx3 = 1
-x3min = -50.0
-x3max = 50.0
+x3min = 0.0
+x3max = 1.0
 
 <parthenon/meshblock>
-nx1 = 50
-nx2 = 50
+nx1 = 400
+nx2 = 1
 nx3 = 1
 
 <coordinates>
 base = cartesian_minkowski
 transform = null
-
+correct_connections = true
 
 <parthenon/time>
-#tlim = 35.0 # for optically thin
-#tlim = 30000.0 # for optically thick
+tlim = 500.0
 integrator = rk2
 dt_min = 0.0001
 
@@ -39,8 +41,8 @@ type = imex
 two_sync = false
 
 <GRMHD>
-cfl = 0.5
-gamma = 1.666667
+cfl = 0.25
+gamma = 2.
 reconstruction = weno5
 
 <b_field>
@@ -52,12 +54,26 @@ outer_x1 = outflow
 allow_inflow_inner_x1 = true
 allow_inflow_outer_x1 = true
 
+<shock>
+rhoL = 1.
+PL = 60.
+u1L = 10.0
+EL = 2.0
+
+rhoR = 8.0
+PR = 2.34e3
+u1R = 1.25
+ER = 1.14e3
+
+rad_comoving_ic = true
+rad_seed_frac = 0.01
+
 <floors>
 disable_floors = true
 
 <parthenon/output0>
 file_type = hdf5
-dt = 0.1
+dt = 5.0
 single_precision_output = true
 variables = prims
 
@@ -67,14 +83,14 @@ dt = 0.1
 
 <debug>
 verbose = 1
-extra_checks = 0
+extra_checks = 2
 flag_verbose = 2
 
 <radM1>
 on = true
 src_rootfind_eps = 1e-8
 src_rootfind_tol = 1e-8
-src_rootfind_maxiter = 10
+src_rootfind_maxiter = 50
 
 <units> 
 on = true

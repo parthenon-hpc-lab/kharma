@@ -166,7 +166,7 @@ KOKKOS_FORCEINLINE_FUNCTION void prim_to_flux(const GRCoordinates& G, const Loca
     if(m_u.U1_RAD >= 0){
         Real R_dir_mu[GR_DIM];
         
-        // Use the new M1 tensor function. Note we pass the GAS velocity 'D' here!
+        // Use the new M1 tensor function.
         RadM1::calc_tensor(G, P, m_p, dir, j, i, loc, R_dir_mu);
 
         // Then calculate the fluxes
@@ -245,7 +245,7 @@ KOKKOS_FORCEINLINE_FUNCTION void prim_to_flux(const GRCoordinates& G, const Glob
     if(m_u.U1_RAD >= 0){
         Real R_dir_mu[GR_DIM];
         
-        // Use the new M1 tensor function. Note we pass the GAS velocity 'D' here!
+        // Use the new M1 tensor function.
         RadM1::calc_tensor(G, P, m_p, dir, k, j, i, loc, R_dir_mu);
 
         // Then calculate the fluxes
@@ -324,7 +324,7 @@ KOKKOS_FORCEINLINE_FUNCTION void prim_to_flux(const GRCoordinates& G, const Glob
     if(m_u.U1_RAD >= 0) {
         Real R_dir_mu[GR_DIM];
         
-        // Use the new M1 tensor function. Note we pass the GAS velocity 'D' here!
+        // Use the new M1 tensor function.
         RadM1::calc_tensor(G, P, m_p, dir, k, j, i, loc, R_dir_mu);
         
         // Then calculate the fluxes
@@ -418,8 +418,9 @@ KOKKOS_FORCEINLINE_FUNCTION void vchar_rad(const GRCoordinates& G, const Local& 
                                   const int& k, const int& j, const int& i, const Loci& loc, const int& dir,
                                   Real& cmax, Real& cmin)
 {
-    GReal kappa_abs = RadM1::calc_kabs(P(m.RHO), P(m.UU));
-    GReal kappa_s = RadM1::calc_kscattering(P(m.RHO), P(m.UU));
+    GReal Tgas = (gam - 1.) * P(m.UU) / P(m.RHO);
+    GReal kappa_abs = RadM1::calc_kabs(P(m.RHO), Tgas);
+    GReal kappa_s = RadM1::calc_kscattering(P(m.RHO), Tgas);
 
     GReal kappa_tot = kappa_abs + kappa_s;
 
@@ -437,11 +438,10 @@ KOKKOS_FORCEINLINE_FUNCTION void vchar_rad(const GRCoordinates& G, const Local& 
     // tau will be kappa * sqrt(g_{dir,dir}) * dx_dir
     GReal tau = kappa_tot * sqrt(G.gcov(loc, j, i, dir, dir)) * dx;
     
-    // radiation sound speed squared will be the min between 1/3 and (4/(3*tau))**2 
+    // radiation sound speed squared will be the min between 1/3 and (4/(3*tau))**2
     GReal cs2 = m::min(1./3., m::pow(4./(3.*tau), 2.));
 
-    // Check if cs2 < gam - 1. or if it's greater than 1
-    cs2 = clip(cs2, gam - 1., 1.);
+    cs2 = clip(cs2, 0., 1.);
 
     GReal cms2 = cs2;
      // Require that speed of wave measured by observer q.ucon is cms2

@@ -388,11 +388,6 @@ inline TaskStatus GetFlux(MeshData<Real> *md)
 
 
     if(use_rad){
-        // Define bounds for Radiation variables to check against 'p'
-        // We capture 'use_rad' and 'm_u' in the lambda
-        // Out of the package modification RADM1.
-        const int rad_start = (use_rad) ? m_u.UU_RAD : -1;
-        const int rad_end   = (use_rad) ? m_u.U3_RAD : -2;
         if (use_hlle) { 
             pmb0->par_for("flux_hlle", block.s, block.e, 0, nvar-1, b.ks, b.ke, b.js, b.je, b.is, b.ie,
                 KOKKOS_LAMBDA(const int& bl, const int& p, const int& k, const int& j, const int& i) {
@@ -401,7 +396,7 @@ inline TaskStatus GetFlux(MeshData<Real> *md)
                     Real cmin_val = cmin(bl, dir-1, k, j, i);
 
                     //Override with Radiation Speeds if 'p' is a radiation variable
-                    if (use_rad && p >= rad_start && p <= rad_end) {
+                    if (use_rad && (p == m_u.UU_RAD || p == m_u.U1_RAD || p == m_u.U2_RAD || p == m_u.U3_RAD)) {
                         cmax_val = cmax_rad(bl, dir-1, k, j, i);
                         cmin_val = cmin_rad(bl, dir-1, k, j, i);
                     }
@@ -420,7 +415,7 @@ inline TaskStatus GetFlux(MeshData<Real> *md)
                     Real cmin_val = cmin(bl, dir-1, k, j, i);
 
                     //Override with Radiation Speeds
-                    if (use_rad && p >= rad_start && p <= rad_end) {
+                    if (use_rad && (p == m_u.UU_RAD || p == m_u.U1_RAD || p == m_u.U2_RAD || p == m_u.U3_RAD)) {
                         cmax_val = cmax_rad(bl, dir-1, k, j, i);
                         cmin_val = cmin_rad(bl, dir-1, k, j, i);
                     }

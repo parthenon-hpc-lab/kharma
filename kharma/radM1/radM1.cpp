@@ -291,7 +291,7 @@ TaskStatus RadM1::BlockUtoP(MeshBlockData<Real> *rc, IndexDomain domain, bool co
             Real E_rf = (3.0 * R_t_con[0] * alpha_sq) / (4.0 * gammarel2 - 1.0);
             
             // TODO: FLOOR! CHANGE THIS
-            Real GAMMAMAX = 20.;
+            Real GAMMAMAX = 1000.;
             int nonfailure = gammarel2 >= 1.0 && E_rf > min_erad && gammarel2 <= (GAMMAMAX * GAMMAMAX)/(min_erad * min_erad);
             Real uvec_radframe_con[4] = {0};
 
