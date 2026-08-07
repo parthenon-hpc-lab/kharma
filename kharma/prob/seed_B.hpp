@@ -67,6 +67,8 @@ enum BSeedType {
     r5s5,
     gaussian,
     bz_monopole,
+    split_monopole,
+    split_monopole_const,
     vertical,
     r1s2
 };
@@ -96,6 +98,12 @@ template<>
 KOKKOS_INLINE_FUNCTION Real seed_a<BSeedType::bz_monopole>(SEEDA_ARGS)
 {
     return 1. - m::cos(x[2]);
+}
+
+template<>
+KOKKOS_INLINE_FUNCTION Real seed_a<BSeedType::split_monopole>(SEEDA_ARGS)
+{
+    return 1. - m::abs(m::cos(x[2]));
 }
 
 // BR's smoothed poloidal in-torus, EHT standard MAD
@@ -180,11 +188,25 @@ template<>
 KOKKOS_INLINE_FUNCTION void seed_b<BSeedType::constant>(SEEDB_ARGS)
 {}
 
-// Reduce radial component by the cube of radius
+// Reduce set constant radial component by the cube of radius
 template<>
 KOKKOS_INLINE_FUNCTION void seed_b<BSeedType::monopole>(SEEDB_ARGS)
 {
     B1 /= (x[1] * x[1] * x[1]);
+}
+// template<>
+// KOKKOS_INLINE_FUNCTION void seed_b<BSeedType::split_monopole>(SEEDB_ARGS)
+// {
+//     if (x[2] < phase) {
+//         B1 /= (x[1]*x[1]*x[1]);
+//     } else {
+//         B1 /= -(x[1]*x[1]*x[1]);
+//     }
+// }
+template<>
+KOKKOS_INLINE_FUNCTION void seed_b<BSeedType::split_monopole_const>(SEEDB_ARGS)
+{
+    B1 = (x[2] < phase) ? B1 : -B1;
 }
 
 // For mhdmodes or linear waves tests

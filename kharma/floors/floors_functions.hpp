@@ -70,6 +70,7 @@ KOKKOS_INLINE_FUNCTION void apply_ceilings(const GRCoordinates& G,
     Real u_over_rho = P(m_p.UU, k, j, i) / P(m_p.RHO, k, j, i);
 
     // 1. Limit gamma with respect to normal observer
+    // TODO ADJUST RHO
     if (gamma > myfloors.gamma_max) {
         Real f = m::sqrt((SQR(myfloors.gamma_max) - 1.) / (SQR(gamma) - 1.));
         VLOOP
@@ -200,7 +201,9 @@ KOKKOS_INLINE_FUNCTION int apply_floors<InjectionFrame::fluid>(FLOOR_ONE_ARGS)
 {
     P(m_p.RHO, k, j, i) += m::max(0., rhoflr_max - P(m_p.RHO, k, j, i));
     P(m_p.UU, k, j, i) += m::max(0., uflr_max - P(m_p.UU, k, j, i));
-    return 0;
+
+    // Indicates no primitive variable inversion was performed
+    return -1;
 }
 
 template<>
@@ -280,7 +283,7 @@ KOKKOS_INLINE_FUNCTION int apply_floors<InjectionFrame::drift>(FLOOR_ONE_ARGS)
     P(m_p.U1, k, j, i) = Dtmp.ucon[1] + (beta[1] * Dtmp.ucon[0]);
     P(m_p.U2, k, j, i) = Dtmp.ucon[2] + (beta[2] * Dtmp.ucon[0]);
     P(m_p.U3, k, j, i) = Dtmp.ucon[3] + (beta[3] * Dtmp.ucon[0]);
-    return 0;
+    return -1;
 }
 
 // There's a way to avoid code duplication here, but it imposes more template madness
@@ -354,13 +357,13 @@ template<>
 KOKKOS_INLINE_FUNCTION int apply_floors<InjectionFrame::mixed_fluid_normal>(
     FLOOR_ONE_ARGS)
 {
-    return 0;
+    return -1;
 }
 template<>
 KOKKOS_INLINE_FUNCTION int apply_floors<InjectionFrame::mixed_normal_drift>(
     FLOOR_ONE_ARGS)
 {
-    return 0;
+    return -1;
 }
 
 // KOKKOS_INLINE_FUNCTION rho_to_slow()
@@ -507,6 +510,13 @@ KOKKOS_INLINE_FUNCTION int apply_geo_floors(const GRCoordinates& G, Local& P,
     P(m.RHO) += m::max(0., rhoflr_geom - P(m.RHO));
     P(m.UU) += m::max(0., uflr_geom - P(m.UU));
 
+    // These are a last-ditch *after* the usual floor applications.  Keep them stable
+    if (fflag) {
+        P(m.U1) = 0.;
+        P(m.U2) = 0.;
+        P(m.U3) = 0.;
+    }
+
     return fflag;
 }
 
@@ -546,6 +556,48 @@ KOKKOS_INLINE_FUNCTION int apply_geo_floors(const GRCoordinates& G, Global& P,
     P(m.RHO, k, j, i) += m::max(0., rhoflr_geom - P(m.RHO, k, j, i));
     P(m.UU, k, j, i) += m::max(0., uflr_geom - P(m.UU, k, j, i));
 
+    // These are a last-ditch *after* the usual floor applications.  Keep them stable
+    if (fflag) {
+        P(m.U1, k, j, i) = 0.;
+        P(m.U2, k, j, i) = 0.;
+        P(m.U3, k, j, i) = 0.;
+    }
+
+    return fflag;
+}
+
+template<typename Global>
+KOKKOS_INLINE_FUNCTION int determine_geo_floors(const GRCoordinates& G, Global& P,
+    const VarMap& m, const Real& gam, const int& k, const int& j, const int& i,
+    const Floors::Prescription& floors, const Floors::Prescription& floors_inner,
+    Real& rhoflr_geom, Real& uflr_geom, const Loci loc = Loci::center)
+{
+    // Choose our floor scheme
+    const Floors::Prescription& myfloors =
+        (floors.radius_dependent_floors && G.r(0, j, i) < floors.floors_switch_r)
+            ? floors_inner
+            : floors;
+
+    // Apply only the geometric floors
+    if (G.coords.is_spherical()) {
+        const GReal r = G.r(0, j, i);
+        // r_char sets more aggressive floor close to EH but backs off
+        Real rhoscal = (myfloors.use_r_char) ? 1. / ((r * r) * (1 + r / myfloors.r_char))
+                                             : 1. / m::sqrt(r * r * r);
+        rhoflr_geom = m::max(myfloors.rho_min_geom * rhoscal, myfloors.rho_min_const);
+        uflr_geom =
+            m::max(myfloors.u_min_geom * m::pow(rhoscal, gam), myfloors.u_min_const);
+    } else {
+        rhoflr_geom = myfloors.rho_min_const;
+        uflr_geom = myfloors.u_min_const;
+    }
+
+    // TODO(CEP) really needed?  Not used in the only call
+    int fflag = 0;
+    // Record all the floors that were hit, using bitflags
+    // Record Geometric floor hits
+    fflag |= (rhoflr_geom > P(m.RHO, k, j, i)) * FFlag::GEOM_RHO_FLUX;
+    fflag |= (uflr_geom > P(m.UU, k, j, i)) * FFlag::GEOM_U_FLUX;
     return fflag;
 }
 

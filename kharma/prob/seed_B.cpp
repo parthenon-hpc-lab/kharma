@@ -116,6 +116,7 @@ TaskStatus SeedBFieldType(MeshBlockData<Real>* rc, ParameterInput* pin,
 
     // Shortcut to field values for easy fields
     if constexpr (Seed == BSeedType::constant || Seed == BSeedType::monopole ||
+                  Seed == BSeedType::split_monopole_const ||
                   Seed == BSeedType::orszag_tang || Seed == BSeedType::wave ||
                   Seed == BSeedType::shock_tube) {
         // All custom B fields should set what they need of these.
@@ -437,6 +438,10 @@ TaskStatus SeedBField(MeshData<Real>* md, ParameterInput* pin)
             status = SeedBFieldType<BSeedType::gaussian>(rc, pin);
         } else if (b_field_type == "bz_monopole") {
             status = SeedBFieldType<BSeedType::bz_monopole>(rc, pin);
+        } else if (b_field_type == "split_monopole") {
+            status = SeedBFieldType<BSeedType::split_monopole>(rc, pin);
+        } else if (b_field_type == "split_monopole_const") {
+            status = SeedBFieldType<BSeedType::split_monopole_const>(rc, pin);
         } else if (b_field_type == "vertical") {
             status = SeedBFieldType<BSeedType::vertical>(rc, pin);
         } else if (b_field_type == "r1s2") {

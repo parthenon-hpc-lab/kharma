@@ -99,7 +99,7 @@ inline TaskStatus MeshFixUtoP(MeshData<Real>* md)
  * 2. If not (i.e., rest energy of B exceeds total energy), add energy to
  *    ensure B and u but no velocity
  */
-TaskStatus VelRecover(MeshBlockData<Real>* rc);
+TaskStatus Backstop(MeshBlockData<Real>* rc);
 
 /**
  * Count up all nonzero PFlags on md.  Used for history file reductions.

@@ -75,6 +75,28 @@ std::shared_ptr<KHARMAPackage> Inverter::Initialize(
     int iter_max = pin->GetOrAddInteger("inverter", "iter_max", (use_kastaun) ? 25 : 8);
     params.Add("iter_max", iter_max);
 
+    // TODO only need these if Floors aren't loaded
+    // Floor options
+    // Use a custom block for inverter floors to allow customization.  Not sure anyone
+    // *wants* that but...
+    if (!pin->DoesBlockExist("inverter_floors")) {
+        params.Add("inverter_prescription", Floors::MakePrescription(pin, "floors"));
+        if (pin->DoesBlockExist("floors_inner"))
+            params.Add("inverter_prescription_inner",
+                Floors::MakePrescriptionInner(
+                    pin, Floors::MakePrescription(pin, "floors"), "floors_inner"));
+        else
+            params.Add("inverter_prescription_inner",
+                Floors::MakePrescriptionInner(
+                    pin, Floors::MakePrescription(pin, "floors"), "floors"));
+    } else {
+        params.Add(
+            "inverter_prescription", Floors::MakePrescription(pin, "inverter_floors"));
+        params.Add("inverter_prescription_inner",
+            Floors::MakePrescriptionInner(pin,
+                Floors::MakePrescription(pin, "inverter_floors"), "inverter_floors"));
+    }
+
     // Fixup options
     // Fix by averaging neighboring cells.  Enabled by default for 1Dw, but Kastaun
     // failures are more dire
@@ -86,9 +108,23 @@ std::shared_ptr<KHARMAPackage> Inverter::Initialize(
     bool fix_atmosphere =
         pin->GetOrAddBoolean("inverter", "fix_atmosphere", !use_kastaun);
     params.Add("fix_atmosphere", fix_atmosphere);
-    // New velocity recovery: steal enough KE to make temperature nonnegative
-    bool vel_recovery = pin->GetOrAddBoolean("inverter", "vel_recovery", use_kastaun);
-    params.Add("vel_recovery", vel_recovery);
+
+    // New "backstop" code: ensure positive internal energy by
+    // stealing some or all KE and adding any shortfall
+    bool backstop = pin->GetOrAddBoolean("inverter", "backstop", use_kastaun);
+    params.Add("backstop", backstop);
+    // Note these aren't called if the backstop isn't enabled!
+    bool backstop_recover_vel =
+        pin->GetOrAddBoolean("inverter", "backstop_recover_vel", true);
+    params.Add("backstop_recover_vel", backstop_recover_vel);
+    bool backstop_recover_u =
+        pin->GetOrAddBoolean("inverter", "backstop_recover_u", false);
+    params.Add("backstop_recover_u", backstop_recover_u);
+    if (backstop && backstop_recover_vel && backstop_recover_u) {
+        throw std::runtime_error(
+            "Inverter parameters error: cannot recover with backstop_recover_vel and "
+            "backstop_recover_u!  Please choose one option.");
+    }
 
     // Flag denoting UtoP inversion failures
     // Needs boundary sync if the fixup code will use neighbors, and if

@@ -44,6 +44,13 @@ HOST=$(hostname -f)
 ARGS=${ARGS:-$(cat $KHARMA_DIR/make_args)}
 SOURCE_DIR=$(dirname "$(readlink -f "$0")")
 
+# Parse options in a slightly less insane way than before
+# At least this checks for the full space-separated word as a flag
+args_array=($ARGS)
+option() {
+  printf '%s\0' "${args_array[@]}" | grep -Fxqz -- $1
+}
+
 # A machine config in .config overrides our defaults
 if [ -f $HOME/.config/kharma.sh ]; then
   source $HOME/.config/kharma.sh
@@ -133,11 +140,12 @@ if [ -z "$EXE_NAME" ]; then
 fi
 
 # Run based on preferences
+# TODO Use a subdirectory for dumps with -d
 # TODO can we just set +x to print commands, like does that play nice with exec?
 if [ -z "$MPI_EXE" ]; then
   echo "Running $PROF_EXE $PROF_OPTS $KHARMA_DIR/$EXE_NAME $@ $KHARMA_PROF_OPTS"
-  exec $PROF_EXE $PROF_OPTS $KHARMA_DIR/$EXE_NAME "$@" $KHARMA_PROF_OPTS
+  exec $PROF_EXE $PROF_OPTS $KHARMA_DIR/$EXE_NAME -d dumps_kharma "$@" $KHARMA_PROF_OPTS
 else
   echo "Running $MPI_EXE -n $MPI_NUM_PROCS $MPI_EXTRA_ARGS $KHARMA_DIR/$EXE_NAME $@"
-  exec $MPI_EXE -n $MPI_NUM_PROCS $MPI_EXTRA_ARGS $KHARMA_DIR/$EXE_NAME "$@"
+  exec $MPI_EXE -n $MPI_NUM_PROCS $MPI_EXTRA_ARGS $KHARMA_DIR/$EXE_NAME -d dumps_kharma "$@"
 fi

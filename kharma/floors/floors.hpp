@@ -48,25 +48,47 @@ namespace Floors
 
 namespace FFlag
 {
+
+// To avoid numerical typos
+template<typename T>
+constexpr T ipow(T num, unsigned int pow)
+{
+    return (pow >= sizeof(unsigned int) * 8) ? 0
+           : pow == 0                        ? 1
+                                             : num * ipow(num, pow - 1);
+}
+
 // Floor codes are non-exclusive, so it makes little sense to use an enum
 // Instead, we use bitflags, starting high enough that we can stick the pflag in the
 // bottom 5 bits See floors.hpp for explanations of the flags This is the namespaced,
 // typed equivalent of #define
-static constexpr int GEOM_RHO = 32;
-static constexpr int GEOM_U = 64;
-static constexpr int B_RHO = 128;
-static constexpr int B_U = 256;
-static constexpr int TEMP = 512;
-static constexpr int GAMMA = 1024;
-static constexpr int KTOT = 2048;
+static constexpr int GEOM_RHO = ipow(2, 6);
+static constexpr int GEOM_U = ipow(2, 7);
+static constexpr int B_RHO = ipow(2, 8);
+static constexpr int B_U = ipow(2, 9);
+static constexpr int TEMP = ipow(2, 10);
+static constexpr int GAMMA = ipow(2, 11);
+static constexpr int KTOT = ipow(2, 12);
 // Separate flags for when the floors are applied after reconstruction.
 // Not yet used, as this will likely have some speed penalty paid even if
 // the flags aren't written
-static constexpr int GEOM_RHO_FLUX = 4096;
-static constexpr int GEOM_U_FLUX = 8192;
+static constexpr int GEOM_RHO_FLUX = ipow(2, 13);
+static constexpr int GEOM_U_FLUX = ipow(2, 14);
 // Yet more flags for floors hit during inversion
-static constexpr int FIXUP_MOMENTUM = 16384;
-static constexpr int FIXUP_ENERGY = 32768;
+// Energy had to be augmented
+static constexpr int FIXUP_ENERGY = ipow(2, 15);
+// Attempting extra T00 -> velocity
+static constexpr int FIXUP_VEL = ipow(2, 16);
+static constexpr int FIXUP_VEL_FAILED = ipow(2, 17);
+static constexpr int FIXUP_VEL_GAMMA = ipow(2, 18);
+static constexpr int FIXUP_VEL_RANGE = ipow(2, 19);
+// Attempting extra T00 -> internal energy
+static constexpr int FIXUP_U = ipow(2, 20);
+static constexpr int FIXUP_U_FAILED = ipow(2, 21);
+static constexpr int FIXUP_U_RANGE = ipow(2, 22);
+// Direct last-ditch fixups
+static constexpr int FIXUP_RHO_DIRECT = ipow(2, 23);
+static constexpr int FIXUP_U_DIRECT = ipow(2, 24);
 // Lowest flag value. Needed for combining floor and other return flags
 static constexpr int MINIMUM = GEOM_RHO;
 
@@ -74,11 +96,24 @@ static constexpr int MINIMUM = GEOM_RHO;
 // TODO
 // 1. prettier names?
 // 2. What deep majicks would allow this to be constexpr?
-static const std::map<int, std::string> flag_names = {{GEOM_RHO, "GEOM_RHO"},
-    {GEOM_U, "GEOM_U"}, {B_RHO, "B_RHO"}, {B_U, "B_U"}, {GAMMA, "GAMMA"},
-    {TEMP, "TEMPERATURE"}, {KTOT, "ENTROPY"}, {GEOM_RHO_FLUX, "GEOM_RHO_ON_RECON"},
-    {GEOM_U_FLUX, "GEOM_U_ON_RECON"}, {FIXUP_MOMENTUM, "MOMENTUM_FIXUP"},
-    {FIXUP_ENERGY, "ENERGY_FIXUP"}};
+static const std::map<int, std::string> flag_names = {
+    {GEOM_RHO, "GEOM_RHO: Geometric floor on density"},
+    {GEOM_U, "GEOM_U: Geometric floor on internal energy"},
+    {B_RHO, "B_RHO: Ceiling on plasma sigma"}, {B_U, "B_U: Ceiling on plasma beta"},
+    {GAMMA, "GAMMA: Direct limit on Lorentz factor"}, {TEMP, "TEMP: Temperature ceiling"},
+    {KTOT, "KTOT: Entropy ceiling"},
+    {GEOM_RHO_FLUX, "GEOM_RHO_FLUX: Geometric rho post-reconstruction"},
+    {GEOM_U_FLUX, "GEOM_U_FLUX: Geometric u post-reconstruction"},
+    {FIXUP_ENERGY, "FIXUP_ENERGY: Total energy backstop"},
+    {FIXUP_VEL, "FIXUP_VEL: Internal energy backstop, recovered some velocity"},
+    {FIXUP_VEL_FAILED, "FIXUP_VEL_FAILED: Velocity recovery failed"},
+    {FIXUP_VEL_GAMMA, "FIXUP_VEL_GAMMA:  Vel recovery failure: speed would increase"},
+    {FIXUP_VEL_RANGE, "FIXUP_VEL_RANGE:  Vel recovery failure: solution out of range"},
+    {FIXUP_U, "FIXUP_VEL: Internal energy backstop, recovered some internal energy"},
+    {FIXUP_U_FAILED, "FIXUP_VEL_FAILED: Energy recovery failed"},
+    {FIXUP_U_RANGE, "FIXUP_VEL_RANGE:  E recovery failure: solution out of range"},
+    {FIXUP_RHO_DIRECT, "FIXUP_RHO_DIRECT: Last-ditch fluid-frame rho"},
+    {FIXUP_U_DIRECT, "FIXUP_U_DIRECT: Last-ditch fluid-frame u"}};
 }
 
 enum class InjectionFrame {
@@ -279,6 +314,13 @@ TaskStatus ApplyInitialFloors(
  * Count up all nonzero FFlags on md.  Used for history file reductions.
  */
 int CountFFlags(MeshData<Real>* md);
+
+/**
+ * Record any changes in conserved variables since the application of flux divergence +
+ * geometric sources Intended as a way to track *all* changes (floors, fixups, boundaries,
+ * etc.)
+ */
+TaskStatus TrackAdditions(MeshData<Real>* md, MeshData<Real>* md_save);
 
 /**
  * Print a summary of floors which were hit
