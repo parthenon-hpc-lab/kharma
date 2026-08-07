@@ -240,9 +240,10 @@ int main(int argc, char *argv[])
     }
 
     // Parthenon cleanup includes Kokkos, MPI
-    Flag("ParthenonFinalize");
-    pman.ParthenonFinalize();
-    EndFlag();
+    // TODO(CEP) BUT IT HANGS
+    //Flag("ParthenonFinalize");
+    //pman.ParthenonFinalize();
+    //EndFlag();
 
     return 0;
 }
