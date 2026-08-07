@@ -154,7 +154,7 @@ std::shared_ptr<KHARMAPackage> Floors::Initialize(
     // Don't actually call the usual floor function if we're using normal frame w/Kastaun,
     // floors will be applied during the inversion call.
     // Also allow manually disabling the call, for testing
-    if (!disable_call && frame != InjectionFrame::normal_kastaun) {
+    if (!disable_call) {
         // TODO(BSP) THIS IS THE ONLY MeshApplyFloors.  Any others will NOT BE CALLED.
         // Use BlockApplyFloors in your packages or fix Packages::MeshApplyFloors
         pkg->MeshApplyFloors = Floors::ApplyGRMHDFloors;
@@ -240,7 +240,6 @@ TaskStatus Floors::ApplyInitialFloors(
             if (fflag) {
                 apply_floors<InjectionFrame::fluid>(
                     G, P, m_p, gam, k, j, i, rhoflr_max, uflr_max, U, m_u);
-
                 apply_ceilings(G, P, m_p, gam, k, j, i, floors, floors, U, m_u);
                 // P->U for any modified zones
                 Flux::p_to_u_mhd(
@@ -293,10 +292,9 @@ TaskStatus Floors::DetermineGRMHDFloors(MeshData<Real>* md, IndexDomain domain,
             const auto& G = P.GetCoords(b);
             // The inverter might have set some floor flags, so we add to that
             // non-destructively
-            fflag(b, 0, k, j, i) =
-                static_cast<int>(fflag(b, 0, k, j, i)) |
+            fflag(b, 0, k, j, i) = static_cast<int>(
                 determine_floors(G, P(b), m_p, gam, k, j, i, floors, floors_inner,
-                    floor_vals(b, rhofi, k, j, i), floor_vals(b, ufi, k, j, i));
+                    floor_vals(b, rhofi, k, j, i), floor_vals(b, ufi, k, j, i)));
         });
 
     // TODO(BSP) if we can somehow guarantee one call/rank we can start the reduction here

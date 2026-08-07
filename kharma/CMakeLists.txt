@@ -21,6 +21,7 @@ AUX_SOURCE_DIRECTORY(${CMAKE_CURRENT_SOURCE_DIR}/flux EXE_NAME_SRC)
 
 AUX_SOURCE_DIRECTORY(${CMAKE_CURRENT_SOURCE_DIR}/b_cd EXE_NAME_SRC)
 AUX_SOURCE_DIRECTORY(${CMAKE_CURRENT_SOURCE_DIR}/b_cleanup EXE_NAME_SRC)
+AUX_SOURCE_DIRECTORY(${CMAKE_CURRENT_SOURCE_DIR}/b_cleanup_gmg EXE_NAME_SRC)
 AUX_SOURCE_DIRECTORY(${CMAKE_CURRENT_SOURCE_DIR}/b_ct EXE_NAME_SRC)
 AUX_SOURCE_DIRECTORY(${CMAKE_CURRENT_SOURCE_DIR}/b_flux_ct EXE_NAME_SRC)
 AUX_SOURCE_DIRECTORY(${CMAKE_CURRENT_SOURCE_DIR}/boundaries EXE_NAME_SRC)
@@ -52,6 +53,7 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR}/flux)
 
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/b_cd)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/b_cleanup)
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/b_cleanup_gmg)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/b_ct)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/b_flux_ct)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/boundaries)
@@ -168,6 +170,12 @@ if (Kokkos_ENABLE_HWLOC)
     target_compile_definitions(${EXE_NAME} PUBLIC Kokkos_ENABLE_HWLOC)
     target_link_libraries(${EXE_NAME} PUBLIC hwloc)
 endif()
+
+target_link_libraries(${EXE_NAME} 
+PUBLIC
+    singularity-eos::singularity-eos
+    singularity-opac::flags    
+)
 
 # Installation
 # Install binary

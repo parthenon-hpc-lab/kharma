@@ -73,7 +73,7 @@ TaskStatus InitializeKelvinHelmholtz(
     IndexDomain domain = IndexDomain::entire;
     IndexRange3 b = KDomain::GetRange(rc, domain, 0, 0);
     pmb->par_for("kh_init", b.ks, b.ke, b.js, b.je, b.is, b.ie,
-        KOKKOS_LAMBDA (const int &k, const int &j, const int &i)
+                 KOKKOS_LAMBDA(const int& k, const int& j, const int& i)
         {
             GReal X[GR_DIM];
             G.coord_embed(k, j, i, Loci::center, X);

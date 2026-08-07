@@ -38,6 +38,7 @@
 #include "b_ct.hpp"
 #include "grmhd.hpp"
 #include "kharma.hpp"
+#include <stdexcept>
 
 // Out of the package modification RADM1.
 #include "radM1.hpp"
@@ -58,7 +59,7 @@ std::shared_ptr<KHARMAPackage> Flux::Initialize(
     ParameterInput* pin, std::shared_ptr<Packages_t>& packages)
 {
     Flag("Initializing Flux");
-    auto pkg = std::make_shared<KHARMAPackage>("Flux");
+    auto pkg = std::make_shared<KHARMAPackage>("Fluxes");
     Params& params = pkg->AllParams();
 
     // Don't even error on this. Use LLF unless the user is very clear otherwise.
@@ -164,7 +165,9 @@ std::shared_ptr<KHARMAPackage> Flux::Initialize(
 
     // We can't just use GetVariables or something since there's no mesh yet.
     // That's what this function is for.
-    int nvar = KHARMA::PackDimension(packages.get(), Metadata::WithFluxes);
+    int nvar =
+        StateDescriptor::CreateResolvedStateDescriptor(*packages)->GetPackDimension(
+            Metadata::WithFluxes);
     std::vector<int> s_flux({nvar});
     if (packages->Get("Globals")->Param<int>("verbose") > 2)
         std::cout << "Allocating fluxes for " << nvar << " variables" << std::endl;
@@ -205,7 +208,9 @@ std::shared_ptr<KHARMAPackage> Flux::Initialize(
     params.Add("use_fofc", use_fofc);
 
     if (use_fofc) {
-        // TODO check floors are enabled!  We can't do fofc without them
+        if (!packages->AllPackages().count("Floors"))
+            throw std::runtime_error(
+                "First-order Flux Corrections cannot be used without floors!");
 
         // FOFC-specific options
         bool use_glf = pin->GetOrAddBoolean("fofc", "use_glf", false);
@@ -308,7 +313,7 @@ TaskStatus Flux::BlockPtoUMHD(MeshBlockData<Real>* rc, IndexDomain domain, bool 
     const auto& G = pmb->coords;
 
     pmb->par_for("p_to_u_mhd", kb.s, kb.e, jb.s, jb.e, ib.s, ib.e,
-        KOKKOS_LAMBDA (const int &k, const int &j, const int &i)
+                 KOKKOS_LAMBDA(const int& k, const int& j, const int& i)
         {
             Flux::p_to_u_mhd(G, P, m_p, emhd_params, gam, k, j, i, U, m_u);
         });
@@ -348,7 +353,7 @@ TaskStatus Flux::BlockPtoU(MeshBlockData<Real>* rc, IndexDomain domain, bool coa
     const auto& G = pmb->coords;
 
     pmb->par_for("p_to_u", kb.s, kb.e, jb.s, jb.e, ib.s, ib.e,
-        KOKKOS_LAMBDA (const int &k, const int &j, const int &i)
+                 KOKKOS_LAMBDA(const int& k, const int& j, const int& i)
         {
             Flux::p_to_u(G, P, m_p, emhd_params, gam, k, j, i, U, m_u);
         });
@@ -424,12 +429,12 @@ TaskStatus Flux::BlockPtoU_Send(MeshBlockData<Real>* rc, IndexDomain domain, boo
         if (ndim < 3) return TaskStatus::complete;
         kb.s -= ng;
         kb.e -= ng;
-    } // TODO(BSP) error?
+    } // TODO(CEP) error?
 
     const auto& G = pmb->coords;
 
     pmb->par_for("p_to_u_send", kb.s, kb.e, jb.s, jb.e, ib.s, ib.e,
-        KOKKOS_LAMBDA (const int &k, const int &j, const int &i)
+                 KOKKOS_LAMBDA(const int& k, const int& j, const int& i)
         {
             Flux::p_to_u(G, P, m_p, emhd_params, gam, k, j, i, U, m_u);
         });
@@ -471,14 +476,13 @@ void Flux::AddGeoSource(MeshData<Real>* md, MeshData<Real>* mdudt, IndexDomain d
 
     pmb0->par_for("tmunu_source", block.s, block.e, bd.ks, bd.ke, bd.js, bd.je, bd.is,
         bd.ie,
-        KOKKOS_LAMBDA (const int& b, const int &k, const int &j, const int &i)
+        KOKKOS_LAMBDA(const int& b, const int& k, const int& j, const int& i)
         {
             const auto& G = dUdt.GetCoords(b);
             FourVectors D;
             GRMHD::calc_4vecs(G, P(b), m_p, k, j, i, Loci::center, D);
-
-            // Call Flux::calc_tensor which will in turn call the right calc_tensor based
-            // on the number of primitives
+            // Call Flux::calc_tensor which will in turn call the right
+            // calc_tensor based on the number of primitives
             Real Tmu[GR_DIM] = {0};
             Real new_du[GR_DIM] = {0};
 
@@ -500,8 +504,8 @@ void Flux::AddGeoSource(MeshData<Real>* md, MeshData<Real>* mdudt, IndexDomain d
                     }
                 }
                 for (int nu = 0; nu < GR_DIM; ++nu) {
-                    // Contract mhd stress tensor with connection, and multiply by metric
-                    // determinant
+                    // Contract mhd stress tensor with connection, and multiply
+                    // by metric determinant
                     for (int lam = 0; lam < GR_DIM; ++lam) {
                         new_du[lam] += Tmu[nu] * G.gdet_conn(j, i, nu, lam, mu);
                     }
@@ -537,7 +541,7 @@ TaskStatus Flux::PostStepDiagnostics(const SimTime& tm, MeshData<Real>* md)
     const auto& globals = pmesh->packages.Get("Globals")->AllParams();
     const int extra_checks = globals.Get<int>("extra_checks");
     const int flag_verbose = globals.Get<int>("flag_verbose");
-    const auto& flux_pars = pmesh->packages.Get("Flux")->AllParams();
+    const auto& flux_pars = pmesh->packages.Get("Fluxes")->AllParams();
     const bool use_fofc = flux_pars.Get<bool>("use_fofc");
 
     // Debugging/diagnostic info about FOFC hits

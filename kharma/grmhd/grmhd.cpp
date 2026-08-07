@@ -342,10 +342,9 @@ Real EstimateTimestep(MeshData<Real>* md)
         (ismr_poles) ? pmesh->packages.Get("ISMR")->Param<uint>("nlevels") : 0;
 
     // TODO version preserving location, with switch to keep this fast one
-    // TODO maybe split normal vs ISMR (/Excised pole/etc) timesteps? Make normal
-    // calculation mesh-wise?
+    // TODO maybe split normal vs funky/additional timesteps (ISMR, excised polar)?
+    // TODO Make the base calculation a mesh-wise function?
     double min_ndt = std::numeric_limits<double>::max();
-
     for (auto& pmb : pmesh->block_list) {
         auto rc = pmb->meshblock_data.Get(md->StageName()).get();
         // We only need this block-wise to check boundary flags for ISMR, could
@@ -450,7 +449,7 @@ Real EstimateRadiativeTimestep(MeshData<Real>* md)
         {
             const auto& G = dummy.GetCoords(b);
 
-            double light_phase_speed = SMALL;
+            double light_phase_speed = SMALL_NUM;
             double dt_light_local = 0.;
 
             if (phase_speed) {
@@ -477,7 +476,7 @@ Real EstimateRadiativeTimestep(MeshData<Real>* md)
 
                         local_phase_speed[mu] = m::max(cplus, cminus);
                     } else {
-                        local_phase_speed[mu] = SMALL;
+                        local_phase_speed[mu] = SMALL_NUM;
                     }
                 }
                 dt_light_local = 1. / (G.Dxc<1>(0) / local_phase_speed[1]) +
@@ -623,8 +622,8 @@ void CancelBoundaryU3(MeshBlockData<Real>* rc, IndexDomain domain, bool coarse)
                 parthenon::par_for_inner(member, bi.ks, bi.ke,
                     [&](const int& k)
                     {
-                        Inverter::u_to_p<Inverter::Type::kastaun>(G, U, m_u, gam, k, jf,
-                            i, P, m_p, Loci::center, 25, 1e-12, false);
+                        Inverter::u_to_p<Inverter::Type::kastaun>(
+                            G, U, m_u, gam, k, jf, i, P, m_p, Loci::center, 25, 1e-12);
                     });
             }
             member.team_barrier();
@@ -633,7 +632,7 @@ void CancelBoundaryU3(MeshBlockData<Real>* rc, IndexDomain domain, bool coarse)
             Real U3_sum = 0.;
             Kokkos::Sum<Real> sum_reducer(U3_sum);
             parthenon::par_reduce_inner(
-                member, bi.ks, bi.ke,
+                inner_loop_pattern_ttr_tag, member, bi.ks, bi.ke,
                 [&](const int& k, Real& local_result)
                 {
                     local_result +=
@@ -716,7 +715,7 @@ void CancelBoundaryT3(MeshBlockData<Real>* rc, IndexDomain domain, bool coarse)
             Real T3_sum = 0.;
             Kokkos::Sum<Real> sum_reducer(T3_sum);
             parthenon::par_reduce_inner(
-                member, bi.ks, bi.ke,
+                inner_loop_pattern_ttr_tag, member, bi.ks, bi.ke,
                 [&](const int& k, Real& local_result)
                 {
                     local_result +=
@@ -733,7 +732,7 @@ void CancelBoundaryT3(MeshBlockData<Real>* rc, IndexDomain domain, bool coarse)
                     U(m_u.U3, k, jf, i) -= T3_avg;
                     // Recover primitive GRMHD variables from our modified U
                     Inverter::u_to_p<Inverter::Type::kastaun>(
-                        G, U, m_u, gam, k, jf, i, P, m_p, Loci::center, 25, 1e-12, false);
+                        G, U, m_u, gam, k, jf, i, P, m_p, Loci::center, 25, 1e-12);
                     // Floor them
                     int fflag = Floors::apply_geo_floors(
                         G, P, m_p, gam, k, jf, i, floors, floors, Loci::center);

@@ -49,6 +49,7 @@ extra_checks = 1
 
 <parthenon/output0>
 file_type = hdf5
+write_xdmf = false
 dt = 1.0
 single_precision_output = true
 variables = prims, jcon
@@ -61,4 +62,5 @@ dt = 0.1
 # checkpointing.  However, we have a test which uses it.
 #<parthenon/output2>
 #file_type = rst
+write_xdmf = false
 #dt = 10.0

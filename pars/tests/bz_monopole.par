@@ -68,6 +68,7 @@ power = 40
 
 <parthenon/output0>
 file_type = hdf5
+write_xdmf = false
 dt = 5.0
 single_precision_output = true
 variables = prims, fflag, pflag

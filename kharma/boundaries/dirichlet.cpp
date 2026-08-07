@@ -98,7 +98,7 @@ void KBoundaries::DirichletSetFromField(MeshBlockData<Real>* rc, VariablePack<Re
         // Flatten TopologicalElements when reading/writing to boundaries cache
         pmb->par_for("dirichlet_boundary_" + bname, 0, q.GetDim(4) - 1, b.ks, b.ke, b.js,
             b.je, b.is, b.ie,
-            KOKKOS_LAMBDA (const int &v, const int &k, const int &j, const int &i)
+                     KOKKOS_LAMBDA(const int& v, const int& k, const int& j, const int& i)
             {
                 if (set) {
                     bound(el_tot * v + (static_cast<int>(el) % el_tot), k - b.ks,

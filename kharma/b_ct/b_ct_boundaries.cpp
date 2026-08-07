@@ -143,7 +143,7 @@ void B_CT::AverageBoundaryEMF(MeshBlockData<Real>* rc, IndexDomain domain,
                     if (inner_dir == X1DIR) {
                         len = bi.ie - bi.is;
                         parthenon::par_reduce_inner(
-                            member, bi.is, bi.ie - 1,
+                            inner_loop_pattern_ttr_tag, member, bi.is, bi.ie - 1,
                             [&](const int& i, double& local_result)
                             {
                                 local_result += emfpack(el, 0, kk, jj, i);
@@ -152,7 +152,7 @@ void B_CT::AverageBoundaryEMF(MeshBlockData<Real>* rc, IndexDomain domain,
                     } else if (inner_dir == X2DIR) {
                         len = bi.je - bi.js;
                         parthenon::par_reduce_inner(
-                            member, bi.js, bi.je - 1,
+                            inner_loop_pattern_ttr_tag, member, bi.js, bi.je - 1,
                             [&](const int& j, double& local_result)
                             {
                                 local_result += emfpack(el, 0, kk, j, ii);
@@ -161,7 +161,7 @@ void B_CT::AverageBoundaryEMF(MeshBlockData<Real>* rc, IndexDomain domain,
                     } else {
                         len = bi.ke - bi.ks;
                         parthenon::par_reduce_inner(
-                            member, bi.ks, bi.ke - 1,
+                            inner_loop_pattern_ttr_tag, member, bi.ks, bi.ke - 1,
                             [&](const int& k, double& local_result)
                             {
                                 local_result += emfpack(el, 0, k, jj, ii);
@@ -265,7 +265,7 @@ void B_CT::DestructiveBoundaryClean(MeshBlockData<Real>* rc, IndexDomain domain,
                         new_face -= fpack(F3, 0, k + 1, last_rank_c, i) *
                                         G.Volume<F3>(k + 1, last_rank_c, i) -
                                     fpack(F3, 0, k, last_rank_c, i) *
-                                        G.Volume<F3>(k, j, last_rank_c, i);
+                                        G.Volume<F3>(k, last_rank_c, i);
 
                     fpack(F2, 0, k, j, i) =
                         outward_sign * new_face / G.Volume<F2>(k, j, i);
@@ -348,7 +348,7 @@ void B_CT::ReconnectBoundaryB3(MeshBlockData<Real>* rc, IndexDomain domain,
             double B3_sum = 0.;
             Kokkos::Sum<double> sum_reducer(B3_sum);
             parthenon::par_reduce_inner(
-                member, bi.ks, bi.ke - 1,
+                inner_loop_pattern_ttr_tag, member, bi.ks, bi.ke - 1,
                 [&](const int& k, double& local_result)
                 {
                     local_result += fpack(F3, v, k, jf, i);
@@ -380,7 +380,7 @@ void B_CT::ReconnectBoundaryB3(MeshBlockData<Real>* rc, IndexDomain domain,
 
                     // Recover primitive GRMHD variables from our modified U
                     Inverter::u_to_p<Inverter::Type::kastaun>(
-                        G, U, m_u, gam, k, jf, i, P, m_p, Loci::center, 25, 1e-12, false);
+                        G, U, m_u, gam, k, jf, i, P, m_p, Loci::center, 25, 1e-12);
                     // Floor them
                     // TODO THIS IS IN FLUID FRAME
                     int fflag = Floors::apply_geo_floors(

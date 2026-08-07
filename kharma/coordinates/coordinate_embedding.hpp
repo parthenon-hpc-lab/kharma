@@ -44,7 +44,7 @@
 // Instead we use mpark's reimplementation,
 // patched to never throw exceptions.
 // Because who needs those?
-// TODO(BSP) try to switch to std:: unless using SYCL
+// TODO(CEP) try to switch to std:: unless using SYCL
 #include <mpark/variant.hpp>
 // #include <variant>
 // namespace mpark = std;

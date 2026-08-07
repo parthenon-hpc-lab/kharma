@@ -49,16 +49,19 @@
 
 // The package should never be loaded if there is not a global solve to be done.
 // Therefore we yell at load time rather than waiting for the first solve
+// But we still need some stubs to compile
 std::shared_ptr<KHARMAPackage> B_Cleanup::Initialize(
     ParameterInput* pin, std::shared_ptr<Packages_t>& packages)
 {
     throw std::runtime_error(
         "KHARMA was compiled without global solvers!  Cannot clean B Field!");
 }
-// We still need a stub for CleanupDivergence() in order to compile, but it will never be
-// called
-TaskStatus B_Cleanup::CleanupDivergence(std::shared_ptr<MeshData<Real>>& md) {}
-bool B_Cleanup::CleanupThisStep(Mesh* pmesh, int nstep) {}
+TaskStatus B_Cleanup::CleanupDivergence(std::shared_ptr<MeshData<Real>>& md)
+{
+    throw std::runtime_error(
+        "KHARMA was compiled without global solvers!  Cannot clean B Field!");
+}
+bool B_Cleanup::CleanupThisStep(Mesh* pmesh, int nstep) { return false; }
 
 #else
 
@@ -189,7 +192,7 @@ bool B_Cleanup::CleanupThisStep(Mesh* pmesh, int nstep)
            (nstep % pkg->Param<int>("cleanup_interval") == 0);
 }
 
-// TODO(BSP) Make this add to a TaskCollection rather than operating synchronously
+// TODO(CEP) Make this add to a TaskCollection rather than operating synchronously
 TaskStatus B_Cleanup::CleanupDivergence(std::shared_ptr<MeshData<Real>>& md)
 {
     auto pmesh = md->GetMeshPointer();
@@ -239,16 +242,16 @@ TaskStatus B_Cleanup::CleanupDivergence(std::shared_ptr<MeshData<Real>>& md)
     // msolve is just a sub-set of vars we need from md, making MPI syncs etc faster
     std::vector<std::string> names = KHARMA::GetVariableNames(&pmesh->packages,
         {Metadata::GetUserFlag("B_Cleanup"), Metadata::GetUserFlag("StartupOnly")});
-    auto& msolve = pmesh->mesh_data.AddShallow("solve", names);
+    auto& msolve = pmesh->mesh_data.AddShallow("solve", md, names);
 
     // Initialize the divB variable, which we'll be solving against.
     if (use_b_ct) {
-        B_CT::CalcDivB(
-            md.get(), "RHS_divB"); // this fn draws from cons.fB, which is not in msolve
+        B_CT::CalcDivB(md.get(),
+            "RHS_divB"); // this fn draws from cons.fB, which is not in msolve
     } else {
         // This gets signed divB on all physical corners (total (N+1)^3)
-        B_FluxCT::CalcDivB(
-            md.get(), "RHS_divB"); // this fn draws from cons.B, which is not in msolve
+        B_FluxCT::CalcDivB(md.get(),
+            "RHS_divB"); // this fn draws from cons.B, which is not in msolve
     }
     if (use_normalized) {
         // Normalize divB by local metric determinant for fairer weighting of errors
@@ -260,7 +263,8 @@ TaskStatus B_Cleanup::CleanupDivergence(std::shared_ptr<MeshData<Real>>& md)
         const IndexRange kb = msolve->GetBoundsK(IndexDomain::entire);
         pmb0->par_for("normalize_divB", 0, divb_rhs.GetDim(5) - 1, kb.s, kb.e, jb.s, jb.e,
             ib.s, ib.e,
-            KOKKOS_LAMBDA (const int& b, const int &k, const int &j, const int &i)
+                      KOKKOS_LAMBDA(const int& b, const int& k, const int& j,
+                                    const int& i)
             {
                 const auto& G = divb_rhs.GetCoords(b);
                 if (use_b_ct) {
@@ -277,9 +281,9 @@ TaskStatus B_Cleanup::CleanupDivergence(std::shared_ptr<MeshData<Real>>& md)
     // execute it to perform BiCGStab iteration
     TaskID t_none(0);
     TaskCollection tc;
-    auto tr = tc.AddRegion(1);
+    auto& tr = tc.AddRegion(1);
     auto t_solve_step = solver.CreateTaskList(t_none, 0, tr, msolve, msolve);
-    while (!tr.Execute());
+    tc.Execute();
     // Make sure solution's ghost zones are sync'd
     KHARMADriver::SyncAllBounds(msolve);
 
@@ -329,7 +333,7 @@ TaskStatus B_Cleanup::ApplyPCenter(MeshData<Real>* msolve, MeshData<Real>* md)
 
     // dB = grad(p), defined at cell centers, subtract to make field divergence-free
     pmb0->par_for("gradient_P", 0, P.GetDim(5) - 1, b.ks, b.ke, b.js, b.je, b.is, b.ie,
-        KOKKOS_LAMBDA (const int& b, const int &k, const int &j, const int &i)
+                  KOKKOS_LAMBDA(const int& b, const int& k, const int& j, const int& i)
         {
             const auto& G = P.GetCoords(b);
             double b1, b2, b3;
@@ -354,7 +358,7 @@ TaskStatus B_Cleanup::ApplyPFace(MeshData<Real>* msolve, MeshData<Real>* md)
     // Apply on all physical faces, we'll be syncing/updating ghosts
     const IndexRange3 b = KDomain::GetRange(msolve, IndexDomain::interior, 0, 1);
     pmb0->par_for("gradient_P", 0, P.GetDim(5) - 1, b.ks, b.ke, b.js, b.je, b.is, b.ie,
-        KOKKOS_LAMBDA (const int& b, const int &k, const int &j, const int &i)
+                  KOKKOS_LAMBDA(const int& b, const int& k, const int& j, const int& i)
         {
             const auto& G = P.GetCoords(b);
             B(b, F1, 0, k, j, i) -= B_CT::face_grad<X1DIR>(G, P(b), k, j, i);
@@ -396,7 +400,7 @@ TaskStatus B_Cleanup::CornerLaplacian(MeshData<Real>* md, const std::string& p_v
     // dB = grad(p), defined at cell centers
     pmb0->par_for("gradient_P", 0, P.GetDim(5) - 1, kb_l.s, kb_l.e, jb_l.s, jb_l.e,
         ib_l.s, ib_l.e,
-        KOKKOS_LAMBDA (const int& b, const int &k, const int &j, const int &i)
+                  KOKKOS_LAMBDA(const int& b, const int& k, const int& j, const int& i)
         {
             const auto& G = P.GetCoords(b);
             double b1, b2, b3;
@@ -416,7 +420,7 @@ TaskStatus B_Cleanup::CornerLaplacian(MeshData<Real>* md, const std::string& p_v
             auto dB_block = rc->PackVariables(std::vector<std::string>{"dB"});
             if (KBoundaries::IsPhysicalBoundary(pmb, BoundaryFace::inner_x2)) {
                 pmb->par_for("dB_boundary", kb_l.s, kb_l.e, ib_l.s, ib_l.e,
-                    KOKKOS_LAMBDA (const int &k, const int &i)
+                             KOKKOS_LAMBDA(const int& k, const int& i)
                     {
                         dB_block(V1, k, jb.s - 1, i) = dB_block(V1, k, jb.s, i);
                         dB_block(V2, k, jb.s - 1, i) = -dB_block(V2, k, jb.s, i);
@@ -425,7 +429,7 @@ TaskStatus B_Cleanup::CornerLaplacian(MeshData<Real>* md, const std::string& p_v
             }
             if (KBoundaries::IsPhysicalBoundary(pmb, BoundaryFace::outer_x2)) {
                 pmb->par_for("dB_boundary", kb_l.s, kb_l.e, ib_l.s, ib_l.e,
-                    KOKKOS_LAMBDA (const int &k, const int &i)
+                             KOKKOS_LAMBDA(const int& k, const int& i)
                     {
                         dB_block(V1, k, jb.e + 1, i) = dB_block(V1, k, jb.e, i);
                         dB_block(V2, k, jb.e + 1, i) = -dB_block(V2, k, jb.e, i);
@@ -438,10 +442,11 @@ TaskStatus B_Cleanup::CornerLaplacian(MeshData<Real>* md, const std::string& p_v
     // lap = div(dB), defined at cell corners
     pmb0->par_for("laplacian_dB", 0, lap.GetDim(5) - 1, kb_r.s, kb_r.e, jb_r.s, jb_r.e,
         ib_r.s, ib_r.e,
-        KOKKOS_LAMBDA (const int& b, const int &k, const int &j, const int &i)
+                  KOKKOS_LAMBDA(const int& b, const int& k, const int& j, const int& i)
         {
             const auto& G = lap.GetCoords(b);
-            // This is the inverse diagonal element of a fictional a_ij Laplacian operator
+            // This is the inverse diagonal element of a fictional a_ij
+            // Laplacian operator
             lap(b, 0, k, j, i) = B_FluxCT::corner_div(G, dB(b), k, j, i, ndim > 2);
             if (use_normalized) {
                 lap(b, 0, k, j, i) /= G.gdet(Loci::corner, j, i);
@@ -473,7 +478,7 @@ TaskStatus B_Cleanup::CenterLaplacian(MeshData<Real>* md, const std::string& p_v
     const IndexRange3 b1 = KDomain::GetRange(md, IndexDomain::entire, F1, 1, -1, false);
     pmb0->par_for("gradient_P", block.s, block.e, b1.ks, b1.ke, b1.js, b1.je, b1.is,
         b1.ie,
-        KOKKOS_LAMBDA (const int& b, const int &k, const int &j, const int &i)
+                  KOKKOS_LAMBDA(const int& b, const int& k, const int& j, const int& i)
         {
             const auto& G = P.GetCoords(b);
             dB(b, F1, 0, k, j, i) = B_CT::face_grad<X1DIR>(G, P(b), k, j, i);
@@ -481,7 +486,7 @@ TaskStatus B_Cleanup::CenterLaplacian(MeshData<Real>* md, const std::string& p_v
     const IndexRange3 b2 = KDomain::GetRange(md, IndexDomain::entire, F2, 1, -1, false);
     pmb0->par_for("gradient_P", block.s, block.e, b2.ks, b2.ke, b2.js, b2.je, b2.is,
         b2.ie,
-        KOKKOS_LAMBDA (const int& b, const int &k, const int &j, const int &i)
+                  KOKKOS_LAMBDA(const int& b, const int& k, const int& j, const int& i)
         {
             const auto& G = P.GetCoords(b);
             dB(b, F2, 0, k, j, i) = B_CT::face_grad<X2DIR>(G, P(b), k, j, i);
@@ -491,7 +496,7 @@ TaskStatus B_Cleanup::CenterLaplacian(MeshData<Real>* md, const std::string& p_v
             KDomain::GetRange(md, IndexDomain::entire, F3, 1, -1, false);
         pmb0->par_for("gradient_P", block.s, block.e, b3.ks, b3.ke, b3.js, b3.je, b3.is,
             b3.ie,
-            KOKKOS_LAMBDA (const int& b, const int &k, const int &j, const int &i)
+            KOKKOS_LAMBDA(const int& b, const int& k, const int& j, const int& i)
             {
                 const auto& G = P.GetCoords(b);
                 dB(b, F3, 0, k, j, i) = B_CT::face_grad<X3DIR>(G, P(b), k, j, i);
@@ -507,14 +512,14 @@ TaskStatus B_Cleanup::CenterLaplacian(MeshData<Real>* md, const std::string& p_v
             const IndexRange3 bi2 = KDomain::GetRange(md, IndexDomain::interior, F2);
             if (KBoundaries::IsPhysicalBoundary(pmb, BoundaryFace::inner_x2)) {
                 pmb->par_for("dB_boundary", b2.ks, b2.ke, bi2.js, bi2.js, b2.is, b2.ie,
-                    KOKKOS_LAMBDA (const int &k, const int &j, const int &i)
+                             KOKKOS_LAMBDA(const int& k, const int& j, const int& i)
                     {
                         dB_block(F2, 0, k, j, i) = 0.;
                     });
             }
             if (KBoundaries::IsPhysicalBoundary(pmb, BoundaryFace::outer_x2)) {
                 pmb->par_for("dB_boundary", b2.ks, b2.ke, bi2.je, bi2.je, b2.is, b2.ie,
-                    KOKKOS_LAMBDA (const int &k, const int &j, const int &i)
+                             KOKKOS_LAMBDA(const int& k, const int& j, const int& i)
                     {
                         dB_block(F2, 0, k, j, i) = 0.;
                     });
@@ -526,10 +531,11 @@ TaskStatus B_Cleanup::CenterLaplacian(MeshData<Real>* md, const std::string& p_v
     const IndexRange3 bc = KDomain::GetRange(md, IndexDomain::entire, CC, false);
     pmb0->par_for("laplacian_dB", block.s, block.e, bc.ks, bc.ke, bc.js, bc.je, bc.is,
         bc.ie,
-        KOKKOS_LAMBDA (const int& b, const int &k, const int &j, const int &i)
+                  KOKKOS_LAMBDA(const int& b, const int& k, const int& j, const int& i)
         {
             const auto& G = lap.GetCoords(b);
-            // This is the inverse diagonal element of a fictional a_ij Laplacian operator
+            // This is the inverse diagonal element of a fictional a_ij
+            // Laplacian operator
             lap(b, 0, k, j, i) = B_CT::face_div(G, dB(b), ndim, k, j, i);
             if (use_normalized) {
                 lap(b, 0, k, j, i) /= G.gdet(Loci::corner, j, i);
@@ -547,7 +553,7 @@ TaskStatus B_Cleanup::CenterLaplacian(MeshData<Real>* md, const std::string& p_v
             const IndexRange3 bic = KDomain::GetRange(md, IndexDomain::interior);
             if (KBoundaries::IsPhysicalBoundary(pmb, BoundaryFace::inner_x1)) {
                 pmb->par_for("lap_boundary", bc.ks, bc.ke, bc.js, bc.je, bc.is, bic.is,
-                    KOKKOS_LAMBDA (const int &k, const int &j, const int &i)
+                             KOKKOS_LAMBDA(const int& k, const int& j, const int& i)
                     {
                         lap_block(0, k, j, i) = 0.;
                     });
@@ -562,7 +568,7 @@ TaskStatus B_Cleanup::CenterLaplacian(MeshData<Real>* md, const std::string& p_v
             const IndexRange3 bic = KDomain::GetRange(md, IndexDomain::interior);
             if (KBoundaries::IsPhysicalBoundary(pmb, BoundaryFace::outer_x1)) {
                 pmb->par_for("lap_boundary", bc.ks, bc.ke, bc.js, bc.je, bic.ie, bc.ie,
-                    KOKKOS_LAMBDA (const int &k, const int &j, const int &i)
+                             KOKKOS_LAMBDA(const int& k, const int& j, const int& i)
                     {
                         lap_block(0, k, j, i) = 0.;
                     });
@@ -573,4 +579,4 @@ TaskStatus B_Cleanup::CenterLaplacian(MeshData<Real>* md, const std::string& p_v
     return TaskStatus::complete;
 }
 
-#endif
+#endif // DISABLE_CLEANUP

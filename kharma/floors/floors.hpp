@@ -41,6 +41,7 @@
 #include "flux_functions.hpp"
 #include "grmhd_functions.hpp"
 #include "reductions.hpp"
+#include <limits>
 
 namespace Floors
 {
@@ -64,10 +65,8 @@ static constexpr int KTOT = 2048;
 static constexpr int GEOM_RHO_FLUX = 4096;
 static constexpr int GEOM_U_FLUX = 8192;
 // Yet more flags for floors hit during inversion
-static constexpr int INVERTER_RHO = 16384;
-static constexpr int INVERTER_U = 32768;
-static constexpr int INVERTER_GAMMA = 65536;
-static constexpr int INVERTER_U_MAX = 131072;
+static constexpr int FIXUP_MOMENTUM = 16384;
+static constexpr int FIXUP_ENERGY = 32768;
 // Lowest flag value. Needed for combining floor and other return flags
 static constexpr int MINIMUM = GEOM_RHO;
 
@@ -78,9 +77,8 @@ static constexpr int MINIMUM = GEOM_RHO;
 static const std::map<int, std::string> flag_names = {{GEOM_RHO, "GEOM_RHO"},
     {GEOM_U, "GEOM_U"}, {B_RHO, "B_RHO"}, {B_U, "B_U"}, {GAMMA, "GAMMA"},
     {TEMP, "TEMPERATURE"}, {KTOT, "ENTROPY"}, {GEOM_RHO_FLUX, "GEOM_RHO_ON_RECON"},
-    {GEOM_U_FLUX, "GEOM_U_ON_RECON"}, {INVERTER_RHO, "GEOM_RHO_ON_INVERT"},
-    {INVERTER_U, "GEOM_U_ON_INVERT"}, {INVERTER_GAMMA, "GAMMA_ON_INVERT"},
-    {INVERTER_U_MAX, "U_MAX_ON_INVERT"}};
+    {GEOM_U_FLUX, "GEOM_U_ON_RECON"}, {FIXUP_MOMENTUM, "MOMENTUM_FIXUP"},
+    {FIXUP_ENERGY, "ENERGY_FIXUP"}};
 }
 
 enum class InjectionFrame {
@@ -151,20 +149,23 @@ inline Prescription MakePrescription(
     p.r_char = pin->GetOrAddReal(block, "r_char", 10);
 
     // Floors vs magnetic field.  Most commonly hit & most temperamental
-    p.bsq_over_rho_max = pin->GetOrAddReal(block, "bsq_over_rho_max", 1e20);
-    p.bsq_over_u_max = pin->GetOrAddReal(block, "bsq_over_u_max", 1e20);
+    p.bsq_over_rho_max =
+        pin->GetOrAddReal(block, "bsq_over_rho_max", std::numeric_limits<Real>::max());
+    p.bsq_over_u_max =
+        pin->GetOrAddReal(block, "bsq_over_u_max", std::numeric_limits<Real>::max());
 
     // Limit temperature or entropy, optionally by siphoning off extra rather
     // than by adding material.
-    p.u_over_rho_max = pin->GetOrAddReal(block, "u_over_rho_max", 1e20);
-    p.ktot_max = pin->GetOrAddReal(block, "ktot_max", 1e20);
+    p.u_over_rho_max =
+        pin->GetOrAddReal(block, "u_over_rho_max", std::numeric_limits<Real>::max());
+    p.ktot_max = pin->GetOrAddReal(block, "ktot_max", std::numeric_limits<Real>::max());
     p.temp_adjust_u = pin->GetOrAddBoolean(block, "temp_adjust_u", false);
     // Adjust electron entropy values when applying density floors to conserve
     // internal energy, as in Ressler+ but not more recent implementations
     p.adjust_k = pin->GetOrAddBoolean(block, "adjust_k", true);
 
     // Limit the fluid Lorentz factor gamma
-    p.gamma_max = pin->GetOrAddReal(block, "gamma_max", 50.);
+    p.gamma_max = pin->GetOrAddReal(block, "gamma_max", std::numeric_limits<Real>::max());
 
     p.radius_dependent_floors =
         pin->GetOrAddBoolean("floors", "radius_dependent_floors", false);

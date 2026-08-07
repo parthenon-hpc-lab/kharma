@@ -104,7 +104,7 @@ KOKKOS_INLINE_FUNCTION Real get_T(
     f0 = get_Tfunc(T0, r, C1, C2, n);
     T1 = Tmax;
     f1 = get_Tfunc(T1, r, C1, C2, n);
-    // TODO(BSP) where does this trigger an error?  Can we make it clearer?
+    // TODO(CEP) where does this trigger an error?  Can we make it clearer?
     if (f0 * f1 > 0) return -1.;
 
     Th = (T0 + T1) / 2.; // a simple bisection method which is stable and fast
@@ -176,7 +176,7 @@ KOKKOS_INLINE_FUNCTION void get_prim_bondi(const GRCoordinates& G, const bool di
         if (fill_interior) {
             // just match at the rin_bondi value
             r = rin_bondi;
-            // TODO(BSP) previous impl could also do values at inf, restore that?
+            // TODO(CEP) previous impl could also do values at inf, restore that?
         } else {
             rho = 0.;
             u = 0.;

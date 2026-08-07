@@ -11,6 +11,10 @@
 // the public, perform publicly and display publicly, and to permit others to do so.
 //========================================================================================
 
+#if DISABLE_CLEANUP
+
+#else
+
 #include "bicgstab_solver.hpp"
 
 namespace parthenon
@@ -22,3 +26,5 @@ int BiCGStabCounter::global_num_bicgstab_solvers = 0;
 
 } // namespace solvers
 } // namespace parthenon
+
+#endif // DISABLE_CLEANUP

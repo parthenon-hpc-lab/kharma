@@ -77,15 +77,17 @@ KOKKOS_INLINE_FUNCTION void Xtoindex(const GReal XG[GR_DIM],
     del[1] = 0.; //(XG[1] - ((i) * dx[1] + startx[1])) / dx[1];
     del[2] = 0.; //(XG[2] - ((j) * dx[2] + startx[2])) / dx[2];
     del[3] = 0.; // (phi   - ((k) * dx[3] + startx[3])) / dx[3];
+#ifndef KOKKOS_ENABLE_SYCL
     if (m::abs(dx1_min / m::pow(XG[1], 2.)) > 1.e-8)
         printf("Xtoindex: dx2 pretty large = %g at r= %g \n", dx1_min, XG[1]);
     if (m::abs(dx2_min) > 1.e-8)
         printf("Xtoindex: dx2 pretty large = %g at th = %g \n", dx2_min, XG[2]);
     if (m::abs(dx3_min) > 1.e-8)
         printf("Xtoindex: dx2 pretty large = %g at phi = %g \n", dx3_min, XG[3]);
+#endif
 }
 
-// TOOD(BSP) these can be merged and moved back into the fn body now
+// TOOD(CEP) these can be merged and moved back into the fn body now
 
 KOKKOS_INLINE_FUNCTION void get_prim_restart_kharma(const GRCoordinates& G,
     const VariablePack<Real>& P, const VarMap& m_p, const Real fx1min, const Real fx1max,

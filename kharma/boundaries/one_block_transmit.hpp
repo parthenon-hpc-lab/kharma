@@ -38,7 +38,7 @@
 namespace KBoundaries
 {
 
-// TODO(BSP) privatize probably
+// TODO(CEP) privatize probably
 void TransmitImpl(MeshBlockData<Real>* rc, BoundaryFace bface, bool coarse);
 void TransmitSetTE(MeshBlockData<Real>* rc, VariablePack<Real>& q, BoundaryFace bface,
     PackIndexMap& bounds_map, bool coarse, bool do_face);

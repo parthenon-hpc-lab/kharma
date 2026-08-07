@@ -19,7 +19,7 @@ git submodule update --recursive --init
 # Parthenon wants
 cd ${KHARMA_DIR}/external/parthenon/external/Kokkos
 git fetch
-git checkout release-candidate-4.7.02
+git checkout release-candidate-4.7.04
 cd ../../../..
 
 # Apply patch to add an old definition back to the current

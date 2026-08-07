@@ -53,9 +53,9 @@ std::shared_ptr<KHARMAPackage> ISMR::Initialize(
 
     // ISMR cache: not evolved, immediately copied to fluid state after averaging
     // Must be total size of variable list
-    using FC = Metadata::FlagCollection;
-    FC fluid_vars = FC({Metadata::Conserved, Metadata::Cell, Metadata::Independent});
-    int nvar = KHARMA::PackDimension(packages.get(), fluid_vars);
+    int nvar =
+        StateDescriptor::CreateResolvedStateDescriptor(*packages)->GetPackDimension(
+            Metadata::WithFluxes);
     std::vector<int> s_avg({nvar});
     auto m = Metadata(
         {Metadata::Real, Metadata::Cell, Metadata::Derived, Metadata::OneCopy}, s_avg);
@@ -172,7 +172,7 @@ TaskStatus ISMR::DerefinePoles(MeshData<Real>* md)
                         // The usual inverter is not EMHD-aware, so it's going to dump all
                         // of T into the ideal GRMHD fluid variables
                         Inverter::u_to_p<Inverter::Type::kastaun>(G, vars_utop, m_u, gam,
-                            k, j_c, i, P, m_p, Loci::center, 8, 1e-8, false);
+                            k, j_c, i, P, m_p, Loci::center, 25, 1e-12);
                         // Consistent with that, we zero out the EMHD extra variables.
                         // This switches theories to evolving ideal GRMHD in ISMR region,
                         // but conserves the components of T themselves

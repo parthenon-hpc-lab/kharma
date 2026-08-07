@@ -71,7 +71,7 @@ class KHARMADriver : public MultiStageDriver
 
     // Also override the timestep calculation, so we can start moving options etc out of
     // GRMHD package
-    void SetGlobalTimeStep();
+    void SetGlobalTimeStep() override;
 
     // And the PostExecute, so we can add a package callback here
     void PostExecute(DriverStatus status) override;
@@ -118,7 +118,7 @@ class KHARMADriver : public MultiStageDriver
     /**
      * Add first-order flux corrections.  This is split out because it needs an additional
      * MeshData object for the "guess"
-     * TODO(BSP) Maybe a less-cowardly approach to adding MeshDatas lets me shove this
+     * TODO(CEP) Maybe a less-cowardly approach to adding MeshDatas lets me shove this
      * into AddFluxCalculations
      */
     TaskID AddFOFC(TaskID& t_start, TaskList& tl, MeshData<Real>* md,
@@ -192,7 +192,7 @@ class KHARMADriver : public MultiStageDriver
         parthenon::par_for(DEFAULT_LOOP_PATTERN, "WeightedSumDataFace", DevExecSpace(), 0,
             x.GetDim(5) - 1, 0, x.GetDim(4) - 1, 0, x.GetDim(3) - 1, 0, x.GetDim(2) - 1,
             0, x.GetDim(1) - 1,
-                KOKKOS_LAMBDA(const int b, const int l, const int k, const int j, const int i)
+            KOKKOS_LAMBDA(const int b, const int l, const int k, const int j, const int i)
             {
                 // TOOD(someone) This is potentially dangerous and/or not intended
                 // behavior as we still may want to update (or populate) z if any of those
@@ -244,7 +244,7 @@ class KHARMADriver : public MultiStageDriver
         const int ndim = vin.GetNdim();
         parthenon::par_for(DEFAULT_LOOP_PATTERN, "FluxDivergenceMesh", DevExecSpace(), 0,
             vin.GetDim(5) - 1, 0, vin.GetDim(4) - 1, b.ks, b.ke, b.js, b.je, b.is, b.ie,
-                KOKKOS_LAMBDA(const int m, const int l, const int k, const int j, const int i)
+            KOKKOS_LAMBDA(const int m, const int l, const int k, const int j, const int i)
             {
                 if (dudt.IsAllocated(m, l) && vin.IsAllocated(m, l)) {
                     const auto& coords = vin.GetCoords(m);

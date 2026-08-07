@@ -38,6 +38,8 @@
 #include "hdf5_utils.h"
 #include "types.hpp"
 
+#include <outputs/restart_hdf5.hpp>
+
 #include <ctype.h>
 #include <sys/stat.h>
 
@@ -49,12 +51,12 @@ void ReadFillFile(int i, ParameterInput* pin)
     auto fname_fill = pin->GetOrAddString("resize_restart", "fname_fill", "none");
 
     if (!(fname_fill == "none")) {
-        auto restartReader = std::make_unique<RestartReader>(fname_fill.c_str());
+        auto restartReader = std::make_unique<RestartReaderHDF5>(fname_fill.c_str());
 
         // Load input stream
         std::unique_ptr<ParameterInput> fpinput;
         fpinput = std::make_unique<ParameterInput>();
-        auto inputString = restartReader->GetAttr<std::string>("Input", "File");
+        auto inputString = restartReader->GetInputString();
         std::istringstream is(inputString);
         fpinput->LoadFromStream(is);
 
@@ -76,16 +78,16 @@ void ReadKharmaRestartHeader(std::string fname, ParameterInput* pin)
 
     // Read input from restart file
     // (from external/parthenon/src/parthenon_manager.cpp)
-    auto restartReader = std::make_unique<RestartReader>(fname.c_str());
+    auto restartReader = std::make_unique<RestartReaderHDF5>(fname.c_str());
 
     // Load input stream
     std::unique_ptr<ParameterInput> fpinput;
     fpinput = std::make_unique<ParameterInput>();
-    auto inputString = restartReader->GetAttr<std::string>("Input", "File");
+    auto inputString = restartReader->GetInputString();
     std::istringstream is(inputString);
     fpinput->LoadFromStream(is);
 
-    // TODO(BSP) is there a way to copy all parameters finput->pin and fine-tune later?
+    // TODO(CEP) is there a way to copy all parameters finput->pin and fine-tune later?
     int fnx1, fnx2, fnx3, fmbnx1, fmbnx2, fmbnx3;
     fnx1 = fpinput->GetInteger("parthenon/mesh", "nx1");
     fnx2 = fpinput->GetInteger("parthenon/mesh", "nx2");
@@ -615,7 +617,7 @@ TaskStatus ReadKharmaRestart(std::shared_ptr<MeshBlockData<Real>> rc, ParameterI
     int ks = pmb->cellbounds.ks(domain), ke = pmb->cellbounds.ke(domain);
 
     pmb->par_for("copy_restart_state_kharma", ks, ke, js, je, is, ie,
-        KOKKOS_LAMBDA (const int &k, const int &j, const int &i)
+                 KOKKOS_LAMBDA(const int& k, const int& j, const int& i)
         {
             get_prim_restart_kharma(G, P, m_p, fx1min_ghost, fx1max_ghost, should_fill,
                 is_spherical, gam, rs, mdot, ur_frac, uphi, rin_bondi, length, f_length,
@@ -632,7 +634,7 @@ TaskStatus ReadKharmaRestart(std::shared_ptr<MeshBlockData<Real>> rc, ParameterI
                 loc = Loci::center;
             pmb->par_for("copy_B_restart_state_kharma", ks, ke + (dir_of(loc) == 3), js,
                 je + (dir_of(loc) == 2), is, ie + (dir_of(loc) == 1),
-                KOKKOS_LAMBDA (const int &k, const int &j, const int &i)
+                         KOKKOS_LAMBDA(const int& k, const int& j, const int& i)
                 {
                     get_B_restart_kharma(G, fx1min_ghost, fx1max_ghost, should_fill, loc,
                         length, f_length, lengthB, f_lengthB, x1_f_device, x2_f_device,

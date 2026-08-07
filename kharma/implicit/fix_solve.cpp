@@ -40,7 +40,7 @@
 
 #define NFVAR_MAX 10
 
-// TODO(BSP) should merge this with FixUtoP by generalizing that
+// TODO(CEP) should merge this with FixUtoP by generalizing that
 TaskStatus Implicit::FixSolve(MeshBlockData<Real>* mbd)
 {
 
@@ -65,7 +65,7 @@ TaskStatus Implicit::FixSolve(MeshBlockData<Real>* mbd)
     const int flag_verbose = pmb->packages.Get("Globals")->Param<int>("flag_verbose");
 
     pmb->par_for("fix_solver_failures", b.ks, b.ke, b.js, b.je, b.is, b.ie,
-        KOKKOS_LAMBDA (const int& k, const int& j, const int& i)
+        KOKKOS_LAMBDA(const int& k, const int& j, const int& i)
         {
             // Fix only bad zones
             // Remember "failed" here has a different implementation
@@ -102,8 +102,9 @@ TaskStatus Implicit::FixSolve(MeshBlockData<Real>* mbd)
                 if (wsum < 1.e-10) {
                 // TODO probably should crash here.
 #ifndef KOKKOS_ENABLE_SYCL
-                    if (flag_verbose >= 3) // && KDomain::inside(k, j, i, kb_b, jb_b,
-                                           // ib_b)) // If an interior zone...
+                    if (flag_verbose >=
+                        3) // && KDomain::inside(k, j, i, kb_b, jb_b, ib_b))
+                           // // If an interior zone...
                         printf("No neighbors were available at %d %d %d!\n", i, j, k);
 #endif
                     FLOOP P(ip, k, j, i) = sum_x[ip] / wsum_x;
@@ -127,7 +128,7 @@ TaskStatus Implicit::FixSolve(MeshBlockData<Real>* mbd)
     const EMHD::EMHD_parameters emhd_params = EMHD::GetEMHDParameters(pmb->packages);
 
     pmb->par_for("fix_solver_failures_PtoU", b.ks, b.ke, b.js, b.je, b.is, b.ie,
-        KOKKOS_LAMBDA (const int& k, const int& j, const int& i)
+        KOKKOS_LAMBDA(const int& k, const int& j, const int& i)
         {
             if (failed(solve_fail(k, j, i)))
                 Flux::p_to_u(G, P_all, m_p, emhd_params, gam, k, j, i, U_all, m_u);

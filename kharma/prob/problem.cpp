@@ -61,6 +61,7 @@
 #include "emhd/emhdmodes.hpp"
 #include "emhd/emhdshock.hpp"
 
+// Out of the Package RadM1 modification
 // RadM1 problem headers
 #include "radm1/rad_pulse.hpp"
 // Electron problem headers

@@ -22,6 +22,7 @@
 # noimplicit: Disable implicit solver, avoids pulling in Kokkos-kernels
 # nocleanup:  Disable magnetic field cleaning code for resizing, avoids
 #             pulling in some unofficial Parthenon code.
+# test:       Build unit tests and register them with CTest
 # Many machine files have additional options, check machines/machinename.sh
 
 # Make processes to use
@@ -76,11 +77,15 @@ fi
 if option "noimplicit"; then
   EXTRA_FLAGS="-DKHARMA_DISABLE_IMPLICIT=1 $EXTRA_FLAGS"
 fi
-if option "nocleanup"; then
-  EXTRA_FLAGS="-DKHARMA_DISABLE_CLEANUP=1 $EXTRA_FLAGS"
-fi
+# Always disable old resizing, it's broken w/new tasking
+#if option "nocleanup"; then
+EXTRA_FLAGS="-DKHARMA_DISABLE_CLEANUP=1 $EXTRA_FLAGS"
+#fi
 if option "split_implicit"; then
   EXTRA_FLAGS="-DKHARMA_SPLIT_IMPLICIT_SOLVE=1 $EXTRA_FLAGS"
+fi
+if option "test"; then
+  EXTRA_FLAGS="-DKHARMA_BUILD_TESTS=ON $EXTRA_FLAGS"
 fi
 
 ### Enivoronment Prep ###
@@ -164,6 +169,7 @@ export CC="$C_NATIVE"
 # Outer: SIMDFOR_LOOP;MANUAL1D_LOOP;MDRANGE_LOOP;TPTTR_LOOP;TPTVR_LOOP;TPTTRTVR_LOOP
 # Inner: SIMDFOR_INNER_LOOP;TVR_INNER_LOOP
 if option "sycl"; then
+  # TODO CXXFLAGS add -Wno-dynamic-class-memaccess
   OUTER_LAYOUT="MANUAL1D_LOOP"
   INNER_LAYOUT="TVR_INNER_LOOP"
   ENABLE_OPENMP="ON"
@@ -184,6 +190,7 @@ elif option "cuda"; then
     echo "Dry-running the nvcc wrapper with $CXXFLAGS"
   fi
   export NVCC_WRAPPER_DEFAULT_COMPILER="$CXX_NATIVE"
+  # TODO set Kokkos CUDA options here instead of CMakeLists to avoid warnings
   OUTER_LAYOUT="MANUAL1D_LOOP"
   INNER_LAYOUT="TVR_INNER_LOOP"
   ENABLE_OPENMP="OFF"
@@ -198,7 +205,7 @@ elif option "nvc++"; then
   ENABLE_SYCL="OFF"
   ENABLE_HIP="OFF"
 else
-  OUTER_LAYOUT="MDRANGE_LOOP"
+  OUTER_LAYOUT="MANUAL1D_LOOP"
   INNER_LAYOUT="SIMDFOR_INNER_LOOP"
   ENABLE_OPENMP="ON"
   ENABLE_CUDA="OFF"
@@ -308,7 +315,7 @@ if option "clean"; then
   cd -
 
   # HIP requires device-capable variant functions
-  if option "hip"; then
+  if  ! ((! option "hip") && (! option "sycl")); then
     cd external/variant
     if [[ $(( $(git --version | cut -d '.' -f 2) > 35 )) == "1" ]]; then
       git apply --quiet ../patches/variant-hip.patch

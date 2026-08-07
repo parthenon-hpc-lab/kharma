@@ -132,7 +132,7 @@ void init_GRCoordinates(GRCoordinates& G)
     auto gdet_conn_local = G.gdet_conn_direct;
 
     Kokkos::parallel_for("init_geom", MDRangePolicy<Rank<2>>({0, 0}, {n2 + 1, n1 + 1}),
-        KOKKOS_LAMBDA (const int& j, const int& i)
+        KOKKOS_LAMBDA(const int& j, const int& i)
         {
             // Iterate through locations. This could be done in fancy ways, but
             // this highlights what's actually going on.
@@ -225,58 +225,6 @@ void init_GRCoordinates(GRCoordinates& G)
                 }
             }
         });
-    // if (correct_connections) {
-    //     Kokkos::parallel_for("geom_corrections", MDRangePolicy<Rank<2>>({0,0}, {n2,
-    //     n1}),
-    //         KOKKOS_LAMBDA (const int& j, const int& i) {
-    //             // In the two directions the grid changes, make sure that we *exactly*
-    //             // satisfy the req't gdet*conn^mu_mu_nu = d_nu gdet, when evaluated on
-    //             faces
-    //             // This will make the source term exactly balance the flux differences,
-    //             // crucial near the poles
-    //             GReal X[GR_DIM];
-    //             G.coord(0, j, i, Loci::center, X);
-    //             if (1) { //(m::abs(X[2] - 0) < 0.08 || m::abs(X[2] - 1.0) < 0.08)) {
-    //                 for (int lam=1; lam < GR_DIM; lam++) {
-    //                     const Loci loc = loc_of(lam);
-    //                     // Get gdet values at faces we calculated above
-    //                     GReal Xfm[GR_DIM], Xfp[GR_DIM];
-    //                     G.coord(0, j, i, loc, Xfm);
-    //                     G.coord(0, j + (lam == X2DIR), i + (lam == X1DIR), loc, Xfp);
-    //                     double gdetfm = gdet_local(loc, j, i);
-    //                     double gdetfp = gdet_local(loc, j + (lam == X2DIR), i + (lam ==
-    //                     X1DIR)); GReal target = (gdetfp - gdetfm) / (Xfp[lam] -
-    //                     Xfm[lam] + SMALL);
-
-    //                     // Then sum the coefficients and record nonzero ones for
-    //                     modification GReal test_sum = 0; GReal sum_portions = 0; GReal
-    //                     portions[GR_DIM] = {0}; DLOOP1 {
-    //                         test_sum += gdet_conn_local(j, i, mu, mu, lam);
-    //                         portions[mu] = m::abs(gdet_conn_local(j, i, mu, mu, lam));
-    //                         sum_portions += portions[mu];
-    //                     }
-    //                     DLOOP1 portions[mu] /= sum_portions;
-
-    //                     // Add the difference among components equally
-    //                     const GReal diff = test_sum - target;
-    //                     //printf("Zone %d %d target: %.3e test_sum: %.3e correction:
-    //                     %.3e\n", i, j, target, test_sum, diff);
-
-    //                     //printf("Diff = %.5e, portions = %.3e %.3e %.3e, %.3e\n",
-    //                     diff, portions[0], portions[1], portions[2], portions[3]);
-
-    //                     DLOOP1 gdet_conn_local(j, i, mu, mu, lam) = gdet_conn_local(j,
-    //                     i, mu, mu, lam) - diff*portions[mu];
-
-    //                     // This is separated and set equal, as there will be one
-    //                     self-assignment DLOOP1 gdet_conn_local(j, i, mu, lam, mu) =
-    //                     gdet_conn_local(j, i, mu, mu, lam);
-    //                 }
-    //             }
-    //         }
-    //     );
-    // }
-
     // Out of the package modification RADM1.
     // Here we follow Mckinney et al. (2012) to correct the connection coefficients:
     // https://ui.adsabs.harvard.edu/abs/2012MNRAS.423.3083M/abstract
@@ -301,7 +249,7 @@ void init_GRCoordinates(GRCoordinates& G)
                     double gdet_c = gdet_local(Loci::center, j, i);
 
                     GReal D_k =
-                        (gdetfp - gdetfm) / ((Xfp[lam] - Xfm[lam] + SMALL) * gdet_c);
+                        (gdetfp - gdetfm) / ((Xfp[lam] - Xfm[lam] + SMALL_NUM) * gdet_c);
 
                     // Then sum the coefficients and record nonzero ones for modification
                     GReal C_k = 0;

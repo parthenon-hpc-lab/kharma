@@ -180,10 +180,11 @@ KOKKOS_INLINE_FUNCTION void calc_residual(const GRCoordinates& G, const Global& 
         if (m_u.DP >= 0) rdP -= 0.5 * (dUdP + dUi(m_u.DP, k, j, i));
 
         // Note we're now getting tau/chi_e/nu_e with emhd_params_s!
-        // TODO(BSP) split out time-dependent parts of the params struct
+        // TODO(CEP) split out time-dependent parts of the params struct
         EMHD::set_parameters(G, Ps, m_p, emhd_params_s, gam, k, j, i, tau, chi_e, nu_e);
         EMHD::time_derivative_sources(G, P_test, Pi, Ps, m_p, tau, chi_e, nu_e, Dtmp,
-            emhd_params_s.higher_order_terms, gam, dt, k, j, i, dUq, dUdP); // dU_time
+            emhd_params_s.higher_order_terms, gam, dt, k, j, i, dUq,
+            dUdP); // dU_time
         // ... - dU_time(ip)
         rq -= dUq;
         rdP -= dUdP;
@@ -253,7 +254,7 @@ KOKKOS_INLINE_FUNCTION void calc_jacobian(const GRCoordinates& G, const Global& 
         for (int row = 0; row < nfvar; row++) {
             jacobian(row * nfvar + col, k, j, i) =
                 (residual(row, k, j, i) - residual_save[row]) /
-                (P_solver(col, k, j, i) - P_save[col] + SMALL);
+                (P_solver(col, k, j, i) - P_save[col] + SMALL_NUM);
         }
 
         // Reset P_delta in this col

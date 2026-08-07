@@ -63,7 +63,7 @@ KOKKOS_INLINE_FUNCTION bool inside(const int& k, const int& j, const int& i, con
     return !outside(k, j, i, b);
 }
 
-// TODO(BSP) these really should be in Parthenon
+// TODO(CEP) these really should be in Parthenon
 // There's a templated way to do it I forget, but this would be easier
 template<typename T>
 inline const int& GetNDim(MeshBlockData<T>* rc)

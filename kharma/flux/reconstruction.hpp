@@ -303,7 +303,7 @@ KOKKOS_FORCEINLINE_FUNCTION void reconstruct<Type::weno5_linear>(RECONSTRUCT_ONE
     rout = alpha_lin * rout + (1.0 - alpha_lin) * (x3 + 0.5 * dq);
     lout = alpha_lin * lout + (1.0 - alpha_lin) * (x3 - 0.5 * dq);
 }
-// TODO(BSP) Breaking out l & r probably doesn't save us much time on this one,
+// TODO(CEP) Breaking out l & r probably doesn't save us much time on this one,
 // but we could
 template<>
 KOKKOS_FORCEINLINE_FUNCTION void reconstruct_left<Type::weno5_linear>(
@@ -421,7 +421,7 @@ KOKKOS_FORCEINLINE_FUNCTION void reconstruct<Type::ppm>(const Real& q_im2,
         }
     }
 }
-// TODO(BSP) We also probably don't save much splitting here, but worth a shot?
+// TODO(CEP) We also probably don't save much splitting here, but worth a shot?
 template<>
 KOKKOS_FORCEINLINE_FUNCTION void reconstruct_left<Type::ppm>(RECONSTRUCT_ONE_LEFT_ARGS)
 {
@@ -565,13 +565,12 @@ KOKKOS_FORCEINLINE_FUNCTION void reconstruct_right<Type::ppmx>(RECONSTRUCT_ONE_R
 #define RECONSTRUCT_ROW_LEFT_ARGS RECONSTRUCT_ROW_INPUT ScratchPad2D<Real>& ql
 #define RECONSTRUCT_ROW_RIGHT_ARGS RECONSTRUCT_ROW_INPUT ScratchPad2D<Real>& qr
 
-// TODO(BSP) I'm sure these could be shorter with more C++ magic
+// TODO(CEP) I'm sure these could be shorter with more C++ magic
 template<Type recon_type>
 KOKKOS_FORCEINLINE_FUNCTION void ReconstructX1(RECONSTRUCT_ROW_ARGS)
 {
     for (int p = 0; p <= q.GetDim(4) - 1; ++p) {
-        parthenon::par_for_inner(member, il, iu,
-            KOKKOS_LAMBDA (const int& i)
+        parthenon::par_for_inner(member, il, iu, KOKKOS_LAMBDA(const int& i)
             {
                 reconstruct<recon_type>(q(p, k, j, i - 2), q(p, k, j, i - 1),
                     q(p, k, j, i), q(p, k, j, i + 1), q(p, k, j, i + 2), qr(p, i),
@@ -583,8 +582,7 @@ template<Type recon_type>
 KOKKOS_FORCEINLINE_FUNCTION void ReconstructX2l(RECONSTRUCT_ROW_LEFT_ARGS)
 {
     for (int p = 0; p <= q.GetDim(4) - 1; ++p) {
-        parthenon::par_for_inner(member, il, iu,
-            KOKKOS_LAMBDA (const int& i)
+        parthenon::par_for_inner(member, il, iu, KOKKOS_LAMBDA(const int& i)
             {
                 reconstruct_right<recon_type>(q(p, k, j - 2, i), q(p, k, j - 1, i),
                     q(p, k, j, i), q(p, k, j + 1, i), q(p, k, j + 2, i), ql(p, i));
@@ -595,8 +593,7 @@ template<Type recon_type>
 KOKKOS_FORCEINLINE_FUNCTION void ReconstructX2r(RECONSTRUCT_ROW_RIGHT_ARGS)
 {
     for (int p = 0; p <= q.GetDim(4) - 1; ++p) {
-        parthenon::par_for_inner(member, il, iu,
-            KOKKOS_LAMBDA (const int& i)
+        parthenon::par_for_inner(member, il, iu, KOKKOS_LAMBDA(const int& i)
             {
                 reconstruct_left<recon_type>(q(p, k, j - 2, i), q(p, k, j - 1, i),
                     q(p, k, j, i), q(p, k, j + 1, i), q(p, k, j + 2, i), qr(p, i));
@@ -607,8 +604,7 @@ template<Type recon_type>
 KOKKOS_FORCEINLINE_FUNCTION void ReconstructX3l(RECONSTRUCT_ROW_LEFT_ARGS)
 {
     for (int p = 0; p <= q.GetDim(4) - 1; ++p) {
-        parthenon::par_for_inner(member, il, iu,
-            KOKKOS_LAMBDA (const int& i)
+        parthenon::par_for_inner(member, il, iu, KOKKOS_LAMBDA(const int& i)
             {
                 reconstruct_right<recon_type>(q(p, k - 2, j, i), q(p, k - 1, j, i),
                     q(p, k, j, i), q(p, k + 1, j, i), q(p, k + 2, j, i), ql(p, i));
@@ -619,8 +615,7 @@ template<Type recon_type>
 KOKKOS_FORCEINLINE_FUNCTION void ReconstructX3r(RECONSTRUCT_ROW_RIGHT_ARGS)
 {
     for (int p = 0; p <= q.GetDim(4) - 1; ++p) {
-        parthenon::par_for_inner(member, il, iu,
-            KOKKOS_LAMBDA (const int& i)
+        parthenon::par_for_inner(member, il, iu, KOKKOS_LAMBDA(const int& i)
             {
                 reconstruct_left<recon_type>(q(p, k - 2, j, i), q(p, k - 1, j, i),
                     q(p, k, j, i), q(p, k + 1, j, i), q(p, k + 2, j, i), qr(p, i));

@@ -127,10 +127,9 @@ std::shared_ptr<KHARMAPackage> Implicit::Initialize(
     params.Add("linesearch_lambda", linesearch_lambda);
 
     // Allocate the Jacobian and step so we can split the solver kernel
-    int nvars_implicit =
-        KHARMA::PackDimension(packages.get(), Metadata::GetUserFlag("Implicit"));
-    int nvars_explicit =
-        KHARMA::PackDimension(packages.get(), Metadata::GetUserFlag("Explicit"));
+    auto resolved = StateDescriptor::CreateResolvedStateDescriptor(*packages);
+    int nvars_implicit = resolved->GetPackDimension(Metadata::GetUserFlag("Implicit"));
+    int nvars_explicit = resolved->GetPackDimension(Metadata::GetUserFlag("Explicit"));
     std::vector<int> s_vars_implicit({nvars_implicit});
     std::vector<int> s_jac_implicit({nvars_implicit, nvars_implicit});
     std::vector<int> s_vars_all({nvars_implicit + nvars_explicit});
@@ -182,7 +181,7 @@ TaskStatus Implicit::Step(MeshData<Real>* md_full_step_init,
 {
     Flag("Implicit::Step");
     // Pull out the block pointers for each sub-step, as we need the *mutable parameters*
-    // of the EMHD package.  TODO(BSP) restrict state back to the variables...
+    // of the EMHD package.  TODO(CEP) restrict state back to the variables...
     auto pmb_full_step_init = md_full_step_init->GetBlockData(0)->GetBlockPointer();
     auto pmb_sub_step_init = md_sub_step_init->GetBlockData(0)->GetBlockPointer();
     auto pmb_solver = md_solver->GetBlockData(0)->GetBlockPointer();
@@ -207,7 +206,7 @@ TaskStatus Implicit::Step(MeshData<Real>* md_full_step_init,
 
     // Misc other constants for inside the kernel
     const bool am_rank0 = MPIRank0();
-    const Real tiny(SMALL), alpha(1.0);
+    const Real tiny(SMALL_NUM), alpha(1.0);
 
     // We need two sets of emhd_params because we need the relaxation scale
     // at the same state in the implicit source terms
@@ -289,7 +288,7 @@ TaskStatus Implicit::Step(MeshData<Real>* md_full_step_init,
     const int n3 = bounds.ncellsk(IndexDomain::entire);
 
     // RETURN if there aren't any implicit variables to evolve
-    // TODO(BSP) probably redundant with not loading package, see kharma.cpp
+    // TODO(CEP) probably redundant with not loading package, see kharma.cpp
     // std::cerr << "Solve size " << nfvar << " on prim size " << nvar << std::endl;
     if (nfvar == 0) return TaskStatus::complete;
 
@@ -420,7 +419,7 @@ TaskStatus Implicit::Step(MeshData<Real>* md_full_step_init,
                 }
                 member.team_barrier();
 
-                // TODO(BSP) even still worth keeping non-QR version?  Much less stable
+                // TODO(CEP) even still worth keeping non-QR version?  Much less stable
                 if (use_qr) {
                     parthenon::par_for_inner(member, ib.s, ib.e,
                         [&](const int& i)
@@ -574,7 +573,7 @@ TaskStatus Implicit::Step(MeshData<Real>* md_full_step_init,
 
                         // Compute new step length
                         int condition =
-                            f1 > (f0 * (1. - linesearch_eps * lambda) + SMALL);
+                            f1 > (f0 * (1. - linesearch_eps * lambda) + SMALL_NUM);
                         Real denom =
                             (f1 - f0 - (fprime0 * lambda)) * condition + (1 - condition);
                         Real lambda_new = -fprime0 * lambda * lambda / denom * 0.5;
@@ -602,7 +601,7 @@ TaskStatus Implicit::Step(MeshData<Real>* md_full_step_init,
                 // Did we converge to required tolerance? If not, update solve_fail
                 // accordingly
                 if (m::isnan(solve_norm)) {
-                    // TODO(BSP) this can probably be detected/implemented alongside the
+                    // TODO(CEP) this can probably be detected/implemented alongside the
                     // floors above
                     solve_fail = SolverStatusR::fail;
                     FLOOP P_solver_all(b, ip, k, j, i) =

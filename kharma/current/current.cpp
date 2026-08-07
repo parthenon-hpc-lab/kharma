@@ -83,7 +83,7 @@ TaskStatus Current::CalculateCurrent(
     const IndexRange kb = pmb->cellbounds.GetBoundsK(IndexDomain::entire);
     const IndexRange nv = IndexRange{0, NVEC - 1};
     pmb->par_for("get_center", nv.s, nv.e, kb.s, kb.e, jb.s, jb.e, ib.s, ib.e,
-        KOKKOS_LAMBDA (const int &p, const int &k, const int &j, const int &i)
+                 KOKKOS_LAMBDA(const int& p, const int& k, const int& j, const int& i)
         {
             uvec_c(p, k, j, i) = 0.5 * (uvec_old(p, k, j, i) + uvec_new(p, k, j, i));
             B_P_c(p, k, j, i) = 0.5 * (B_P_old(p, k, j, i) + B_P_new(p, k, j, i));
@@ -96,22 +96,22 @@ TaskStatus Current::CalculateCurrent(
     const IndexRange n4v = IndexRange{0, GR_DIM - 1};
     pmb->par_for("jcon_calc", n4v.s, n4v.e, kb_i.s, kb_i.e, jb_i.s, jb_i.e, ib_i.s,
         ib_i.e,
-        KOKKOS_LAMBDA (const int &mu, const int &k, const int &j, const int &i)
+        KOKKOS_LAMBDA(const int& mu, const int& k, const int& j, const int& i)
         {
             // Get sqrt{-g}*F^{mu nu} at neighboring points
-            // TODO(BSP) this recalculates Fcon a lot...
-            const Real gF0p = get_gdet_Fcon(G, uvec_new, B_P_new, 0, mu, k, j, i);
-            const Real gF0m = get_gdet_Fcon(G, uvec_old, B_P_old, 0, mu, k, j, i);
-            const Real gF1p = get_gdet_Fcon(G, uvec_c, B_P_c, 1, mu, k, j, i + 1);
-            const Real gF1m = get_gdet_Fcon(G, uvec_c, B_P_c, 1, mu, k, j, i - 1);
+            // TODO(CEP) this recalculates Fcon a lot...
+            const Real gF0p = get_gdet_Fcon(G, uvec_new, B_P_new, mu, 0, k, j, i);
+            const Real gF0m = get_gdet_Fcon(G, uvec_old, B_P_old, mu, 0, k, j, i);
+            const Real gF1p = get_gdet_Fcon(G, uvec_c, B_P_c, mu, 1, k, j, i + 1);
+            const Real gF1m = get_gdet_Fcon(G, uvec_c, B_P_c, mu, 1, k, j, i - 1);
             const Real gF2p =
-                (ndim > 1) ? get_gdet_Fcon(G, uvec_c, B_P_c, 2, mu, k, j + 1, i) : 0.;
+                (ndim > 1) ? get_gdet_Fcon(G, uvec_c, B_P_c, mu, 2, k, j + 1, i) : 0.;
             const Real gF2m =
-                (ndim > 1) ? get_gdet_Fcon(G, uvec_c, B_P_c, 2, mu, k, j - 1, i) : 0.;
+                (ndim > 1) ? get_gdet_Fcon(G, uvec_c, B_P_c, mu, 2, k, j - 1, i) : 0.;
             const Real gF3p =
-                (ndim > 2) ? get_gdet_Fcon(G, uvec_c, B_P_c, 3, mu, k + 1, j, i) : 0.;
+                (ndim > 2) ? get_gdet_Fcon(G, uvec_c, B_P_c, mu, 3, k + 1, j, i) : 0.;
             const Real gF3m =
-                (ndim > 2) ? get_gdet_Fcon(G, uvec_c, B_P_c, 3, mu, k - 1, j, i) : 0.;
+                (ndim > 2) ? get_gdet_Fcon(G, uvec_c, B_P_c, mu, 3, k - 1, j, i) : 0.;
 
             // Difference: D_mu F^{mu nu} = 4 \pi j^nu
             jcon(mu, k, j, i) = 1. / (m::sqrt(4. * M_PI) * G.gdet(Loci::center, j, i)) *

@@ -59,6 +59,8 @@
 #include <interface/update.hpp>
 #include <parthenon/parthenon.hpp>
 
+using FC = Metadata::FlagCollection;
+
 TaskCollection KHARMADriver::MakeTaskCollection(BlockList_t& blocks, int stage)
 {
     DriverType driver_type = blocks[0]->packages.Get("Driver")->Param<DriverType>("type");
@@ -93,7 +95,7 @@ TaskCollection KHARMADriver::MakeDefaultTaskCollection(BlockList_t& blocks, int 
 
     // Which packages we load affects which tasks we'll add to the list
     auto& pkgs = pmesh->packages.AllPackages();
-    auto& flux_pkg = pkgs.at("Flux")->AllParams();
+    auto& flux_pkg = pkgs.at("Fluxes")->AllParams();
     const bool use_b_cleanup = pkgs.count("B_Cleanup");
     const bool use_b_ct = pkgs.count("B_CT");
     const bool use_electrons = pkgs.count("Electrons");
@@ -107,30 +109,38 @@ TaskCollection KHARMADriver::MakeDefaultTaskCollection(BlockList_t& blocks, int 
     if (stage == 1) {
         auto& base = pmesh->mesh_data.Get();
         // Fluxes
-        pmesh->mesh_data.Add("dUdt");
+        pmesh->mesh_data.Add("dUdt", base);
         for (int i = 1; i < integrator->nstages; i++)
-            pmesh->mesh_data.Add(integrator->stage_name[i]);
-        // Preserve state for time derivatives if we need to output current
+            pmesh->mesh_data.Add(integrator->stage_name[i], base);
+
         if (use_jcon) {
-            pmesh->mesh_data.Add("preserve");
-            // Above only copies on allocate -- ensure we copy the MHD variables every
-            // step with a task
-            std::vector<MetadataFlag> vars_jcon_needs = {
-                Metadata::GetUserFlag("MHD"), Metadata::GetUserFlag("Primitive")};
+            // Preserve state for time derivatives if we need to output current
+            // Pick out the variables we need, to allocate and copy less
+            static parthenon::Metadata::FlagVec preserve_flags;
+            static std::vector<std::string> preserve_vars;
+            if (preserve_vars.size() == 0) {
+                preserve_flags = {
+                    Metadata::GetUserFlag("MHD"), Metadata::GetUserFlag("Primitive")};
+                preserve_vars =
+                    KHARMA::GetVariableNames(&(pmesh->packages), FC(preserve_flags));
+            }
+            // Add the container once to avoid re-adding if we have lots of partitions
+            // pmesh->mesh_data.Add("preserve", base, preserve_vars);
+            // Ensure we copy the MHD variables every step with a task
             const int num_partitions = pmesh->DefaultNumPartitions();
             TaskRegion& copy_region = tc.AddRegion(num_partitions);
             for (int i = 0; i < num_partitions; i++) {
                 auto& tl = copy_region[i];
-                tl.AddTask(t_none, Copy<MeshData<Real>>, vars_jcon_needs, base.get(),
-                    pmesh->mesh_data.Get("preserve").get());
+                tl.AddTask(t_none, Copy<MeshData<Real>>, preserve_flags, base.get(),
+                    pmesh->mesh_data.Add("preserve", base, preserve_vars).get());
             }
         }
         // FOFC needs to determine whether the "real" U-divF will violate floors, and
         // needs a safe place to do it. We populate it later, with each *sub-step*'s
         // initial state
         if (use_fofc) {
-            pmesh->mesh_data.Add("fofc_source");
-            pmesh->mesh_data.Add("fofc_guess");
+            pmesh->mesh_data.Add("fofc_source", base);
+            pmesh->mesh_data.Add("fofc_guess", base);
         }
     }
 
@@ -142,7 +152,6 @@ TaskCollection KHARMADriver::MakeDefaultTaskCollection(BlockList_t& blocks, int 
         // boundaries. This is built to exclude incidental variables like B field
         // initialization stuff, EMFs, etc. "Boundaries" packs in buffers e.g. Dirichlet
         // boundaries
-        using FC = Metadata::FlagCollection;
         auto sync_flags = FC({Metadata::GetUserFlag("Primitive"), Metadata::Conserved,
                                  Metadata::Face, Metadata::GetUserFlag("Boundaries")},
             true);
@@ -208,9 +217,9 @@ TaskCollection KHARMADriver::MakeDefaultTaskCollection(BlockList_t& blocks, int 
             auto t_emf = t_flux_bounds;
             if (use_b_ct) {
                 // Pull out a container of only EMF to synchronize
-                auto& md_emf_only = pmesh->mesh_data.AddShallow(
-                    "EMF", std::vector<std::string>{
-                               "B_CT.emf"}); // TODO this gets weird if we partition
+                auto& md_emf_only = pmesh->mesh_data.AddShallow("EMF", md_sub_step_init,
+                    std::vector<std::string>{
+                        "B_CT.emf"}); // TODO this gets weird if we partition
                 auto t_emf_local =
                     tl.AddTask(t_flux_bounds, B_CT::CalculateEMF, md_sub_step_init.get());
                 t_emf = KHARMADriver::AddBoundarySync(t_emf_local, tl, md_emf_only);
@@ -317,9 +326,10 @@ TaskCollection KHARMADriver::MakeDefaultTaskCollection(BlockList_t& blocks, int 
         // Electron heating goes where it does in HARMDriver, for the same reasons
         auto t_heat_electrons = t_prim_source;
         if (use_electrons) {
-            t_heat_electrons = tl.AddTask(t_prim_source,
-                Electrons::MeshApplyElectronHeating, md_sub_step_init.get(),
-                md_sub_step_final.get(), stage == 1); // bool is generate_grf
+            t_heat_electrons =
+                tl.AddTask(t_prim_source, Electrons::MeshApplyElectronHeating,
+                    md_sub_step_init.get(), md_sub_step_final.get(),
+                    stage == 1); // bool is generate_grf
         }
 
         // Make sure *all* conserved vars are synchronized at step end

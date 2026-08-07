@@ -114,8 +114,8 @@ std::shared_ptr<KHARMAPackage> Initialize(
     // TODO NOT USED until we template AddSource
     if (pin->DoesParameterExist("emhd", "slope_recon") &&
         pin->GetString("emhd", "slope_recon") == "linear_vl") {
-        //|| packages->Get("Flux")->Param<KReconstruction::Type>("recon") ==
-        //KReconstruction::Type::linear_vl) {
+        //|| packages->Get("Fluxes")->Param<KReconstruction::Type>("recon") ==
+        // KReconstruction::Type::linear_vl) {
         params.Add("slope_recon", KReconstruction::Type::linear_vl);
     } else {
         params.Add("slope_recon", KReconstruction::Type::linear_mc);
@@ -219,7 +219,7 @@ void MeshUtoP(MeshData<Real>* md, IndexDomain domain, bool coarse)
     IndexRange block = IndexRange{0, U_E.GetDim(5) - 1};
 
     pmb->par_for("UtoP_EMHD", block.s, block.e, kb.s, kb.e, jb.s, jb.e, ib.s, ib.e,
-        KOKKOS_LAMBDA (const int& b, const int &k, const int &j, const int &i)
+                 KOKKOS_LAMBDA(const int& b, const int& k, const int& j, const int& i)
         {
             const Real gamma = GRMHD::lorentz_calc(G, P(b), m_p, k, j, i, Loci::center);
             const Real inv_alpha = m::sqrt(-G.gcon(Loci::center, j, i, 0, 0));
@@ -257,7 +257,7 @@ void BlockUtoP(MeshBlockData<Real>* rc, IndexDomain domain, bool coarse)
     const IndexRange kb = bounds.GetBoundsK(domain);
 
     pmb->par_for("UtoP_EMHD", kb.s, kb.e, jb.s, jb.e, ib.s, ib.e,
-        KOKKOS_LAMBDA (const int &k, const int &j, const int &i)
+                 KOKKOS_LAMBDA(const int& k, const int& j, const int& i)
         {
             const Real gamma = GRMHD::lorentz_calc(G, P, m_p, k, j, i, Loci::center);
             const Real inv_alpha = m::sqrt(-G.gcon(Loci::center, j, i, 0, 0));
@@ -293,7 +293,7 @@ void BlockPtoU(MeshBlockData<Real>* rc, IndexDomain domain, bool coarse)
     const IndexRange kb = bounds.GetBoundsK(domain);
 
     pmb->par_for("PtoU_EMHD", kb.s, kb.e, jb.s, jb.e, ib.s, ib.e,
-        KOKKOS_LAMBDA (const int &k, const int &j, const int &i)
+                 KOKKOS_LAMBDA(const int& k, const int& j, const int& i)
         {
             const Real gamma = GRMHD::lorentz_calc(G, P, m_p, k, j, i, Loci::center);
             const Real inv_alpha = m::sqrt(-G.gcon(Loci::center, j, i, 0, 0));
@@ -356,7 +356,7 @@ TaskStatus AddSource(MeshData<Real>* md, MeshData<Real>* mdudt, IndexDomain doma
     // Calculate & apply source terms
     pmb0->par_for("emhd_sources_pre", block.s, block.e, kl.s, kl.e, jl.s, jl.e, il.s,
         il.e,
-        KOKKOS_LAMBDA (const int& b, const int &k, const int &j, const int &i)
+        KOKKOS_LAMBDA(const int& b, const int& k, const int& j, const int& i)
         {
             const auto& G = dUdt.GetCoords(b);
             // ucon
@@ -366,13 +366,13 @@ TaskStatus AddSource(MeshData<Real>* md, MeshData<Real>* mdudt, IndexDomain doma
             DLOOP1
                 Temps(b, m_ucov + mu, k, j, i) = ucov[mu];
             // theta
-            Temps(b, m_theta, k, j, i) =
-                m::max((gam - 1) * P(b)(m_p.UU, k, j, i) / P(b)(m_p.RHO, k, j, i), SMALL);
+            Temps(b, m_theta, k, j, i) = m::max(
+                (gam - 1) * P(b)(m_p.UU, k, j, i) / P(b)(m_p.RHO, k, j, i), SMALL_NUM);
         });
 
     // Calculate & apply source terms
     pmb0->par_for("emhd_sources", block.s, block.e, kb.s, kb.e, jb.s, jb.e, ib.s, ib.e,
-        KOKKOS_LAMBDA (const int& b, const int &k, const int &j, const int &i)
+        KOKKOS_LAMBDA(const int& b, const int& k, const int& j, const int& i)
         {
             const auto& G = dUdt.GetCoords(b);
 
@@ -384,7 +384,7 @@ TaskStatus AddSource(MeshData<Real>* md, MeshData<Real>* mdudt, IndexDomain doma
             // and the 4-vectors
             FourVectors D;
             GRMHD::calc_4vecs(G, P(b), m_p, k, j, i, Loci::center, D);
-            const double bsq = m::max(dot(D.bcon, D.bcov), SMALL);
+            const double bsq = m::max(dot(D.bcon, D.bcov), SMALL_NUM);
 
             // Compute gradient of ucov and Theta
             Real grad_ucov[GR_DIM][GR_DIM], grad_Theta[GR_DIM];
@@ -466,7 +466,7 @@ void ApplyEMHDLimits(MeshBlockData<Real>* mbd, IndexDomain domain)
     const IndexRange jb = mbd->GetBoundsJ(domain);
     const IndexRange kb = mbd->GetBoundsK(domain);
     pmb->par_for("apply_emhd_limits", kb.s, kb.e, jb.s, jb.e, ib.s, ib.e,
-        KOKKOS_LAMBDA (const int &k, const int &j, const int &i)
+        KOKKOS_LAMBDA(const int& k, const int& j, const int& i)
         {
             // Apply limits to the Extended MHD variables
             eflag(k, j, i) =

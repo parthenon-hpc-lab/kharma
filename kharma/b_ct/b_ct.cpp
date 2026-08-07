@@ -219,7 +219,7 @@ TaskStatus B_CT::BlockUtoP(MeshBlockData<Real>* rc, IndexDomain domain, bool coa
 
     // Average the primitive vals to zone centers
     pmb->par_for("UtoP_B_center", bc.ks, bc.ke, bc.js, bc.je, bc.is, bc.ie,
-        KOKKOS_LAMBDA (const int &k, const int &j, const int &i)
+        KOKKOS_LAMBDA(const int& k, const int& j, const int& i)
         {
             B_P(V1, k, j, i) =
                 (B_Uf(F1, 0, k, j, i) / G.gdet(Loci::face1, j, i) +
@@ -240,7 +240,7 @@ TaskStatus B_CT::BlockUtoP(MeshBlockData<Real>* rc, IndexDomain domain, bool coa
     // Recover conserved B at centers
     pmb->par_for("UtoP_B_centerPtoU", 0, NVEC - 1, bc.ks, bc.ke, bc.js, bc.je, bc.is,
         bc.ie,
-        KOKKOS_LAMBDA (const int &v, const int &k, const int &j, const int &i)
+                 KOKKOS_LAMBDA(const int& v, const int& k, const int& j, const int& i)
         {
             B_U(v, k, j, i) = B_P(v, k, j, i) * G.gdet(Loci::center, j, i);
         });
@@ -259,28 +259,34 @@ TaskStatus B_CT::DangerousPtoU(MeshData<Real>* md, IndexDomain domain, bool coar
 
     auto pmb0 = md->GetBlockData(0)->GetBlockPointer();
     // Average the primitive vals to faces and multiply by gdet
-    const IndexRange3 bf1 = KDomain::GetRange(md, domain, F1, coarse);
+    const IndexRange3 bf1 = (domain == IndexDomain::entire)
+                                ? KDomain::GetRange(md, domain, F1, coarse, 1, 0)
+                                : KDomain::GetRange(md, domain, F1, coarse);
     pmb0->par_for("PtoU_B_F1", block.s, block.e, bf1.ks, bf1.ke, bf1.js, bf1.je, bf1.is,
         bf1.ie,
-        KOKKOS_LAMBDA (const int &b, const int &k, const int &j, const int &i)
+        KOKKOS_LAMBDA(const int& b, const int& k, const int& j, const int& i)
         {
             const auto& G = B_Uf.GetCoords(b);
             B_Uf(b, F1, 0, k, j, i) = G.gdet(Loci::face1, j, i) *
                                       (B_P(b, V1, k, j, i - 1) + B_P(b, V1, k, j, i)) / 2;
         });
-    const IndexRange3 bf2 = KDomain::GetRange(md, domain, F2, coarse);
+    const IndexRange3 bf2 = (domain == IndexDomain::entire)
+                                ? KDomain::GetRange(md, domain, F2, coarse, 1, 0)
+                                : KDomain::GetRange(md, domain, F2, coarse);
     pmb0->par_for("PtoU_B_F2", block.s, block.e, bf2.ks, bf2.ke, bf2.js, bf2.je, bf2.is,
         bf2.ie,
-        KOKKOS_LAMBDA (const int &b, const int &k, const int &j, const int &i)
+        KOKKOS_LAMBDA(const int& b, const int& k, const int& j, const int& i)
         {
             const auto& G = B_Uf.GetCoords(b);
             B_Uf(b, F2, 0, k, j, i) = G.gdet(Loci::face2, j, i) *
                                       (B_P(b, V2, k, j - 1, i) + B_P(b, V2, k, j, i)) / 2;
         });
-    const IndexRange3 bf3 = KDomain::GetRange(md, domain, F3, coarse);
+    const IndexRange3 bf3 = (domain == IndexDomain::entire)
+                                ? KDomain::GetRange(md, domain, F3, coarse, 1, 0)
+                                : KDomain::GetRange(md, domain, F3, coarse);
     pmb0->par_for("PtoU_B_F3", block.s, block.e, bf3.ks, bf3.ke, bf3.js, bf3.je, bf3.is,
         bf3.ie,
-        KOKKOS_LAMBDA (const int &b, const int &k, const int &j, const int &i)
+        KOKKOS_LAMBDA(const int& b, const int& k, const int& j, const int& i)
         {
             const auto& G = B_Uf.GetCoords(b);
             B_Uf(b, F3, 0, k, j, i) = G.gdet(Loci::face3, j, i) *
@@ -292,29 +298,34 @@ TaskStatus B_CT::DangerousPtoU(MeshData<Real>* md, IndexDomain domain, bool coar
         for (int i = 0; i < md->GetMeshPointer()->GetNumMeshBlocksThisRank(); i++) {
             auto rc = md->GetBlockData(i);
             auto pmb = rc->GetBlockPointer();
-            auto dB_block = rc->PackVariables(std::vector<std::string>{"dB"});
+            const IndexRange3 be = KDomain::GetRange(md, IndexDomain::entire, coarse);
+            const IndexRange3 bi2 =
+                KDomain::GetRange(md, IndexDomain::interior, F2, coarse);
+            auto B_Uf_block = rc->PackVariables(std::vector<std::string>{"cons.fB"});
             if (KBoundaries::IsPhysicalBoundary(pmb, BoundaryFace::inner_x2)) {
-                pmb->par_for("dB_boundary", bf2.ks, bf2.ke, bf2.is, bf2.ie,
-                    KOKKOS_LAMBDA (const int &k, const int &i)
+                pmb->par_for("B_Uf_boundary", be.ks, be.ke, be.is, be.ie,
+                             KOKKOS_LAMBDA(const int& k, const int& i)
                     {
-                        dB_block(F2, 0, k, bf2.js, i) = 0.;
+                        B_Uf_block(F2, 0, k, bi2.js, i) = 0.;
                     });
             }
             if (KBoundaries::IsPhysicalBoundary(pmb, BoundaryFace::outer_x2)) {
-                pmb->par_for("dB_boundary", bf2.ks, bf2.ke, bf2.is, bf2.ie,
-                    KOKKOS_LAMBDA (const int &k, const int &i)
+                pmb->par_for("B_Uf_boundary", be.ks, be.ke, be.is, be.ie,
+                             KOKKOS_LAMBDA(const int& k, const int& i)
                     {
-                        dB_block(F2, 0, k, bf2.je, i) = 0.;
+                        B_Uf_block(F2, 0, k, bi2.je, i) = 0.;
                     });
             }
         }
     }
 
     // Also recover conserved B at centers, just in case
+    // TODO would calling UtoP be more stable?
     const IndexRange3 bc = KDomain::GetRange(md, domain, CC, coarse);
     pmb0->par_for("UtoP_B_centerPtoU", block.s, block.e, 0, NVEC - 1, bc.ks, bc.ke, bc.js,
         bc.je, bc.is, bc.ie,
-        KOKKOS_LAMBDA (const int &b, const int &v, const int &k, const int &j, const int &i)
+                  KOKKOS_LAMBDA(const int& b, const int& v, const int& k, const int& j,
+                                const int& i)
         {
             const auto& G = B_U.GetCoords(b);
             B_U(b, v, k, j, i) = B_P(b, v, k, j, i) * G.gdet(Loci::center, j, i);
@@ -347,7 +358,7 @@ TaskStatus B_CT::CalculateEMF(MeshData<Real>* md)
     auto& B_U = md->PackVariablesAndFluxes(std::vector<std::string>{"cons.B"});
     pmb0->par_for("B_CT_emf_BS", block.s, block.e, b1.ks, b1.ke, b1.js, b1.je, b1.is,
         b1.ie,
-        KOKKOS_LAMBDA (const int &bl, const int &k, const int &j, const int &i)
+        KOKKOS_LAMBDA(const int& bl, const int& k, const int& j, const int& i)
         {
             // The basic EMF per length along edges is the B field flux
             // We use this form rather than multiply by edge length here,
@@ -399,7 +410,8 @@ TaskStatus B_CT::CalculateEMF(MeshData<Real>* md)
         const IndexRange3 be = KDomain::GetRange(md, IndexDomain::entire);
         pmb0->par_for("B_CT_emfc", block.s, block.e, be.ks, be.ke, be.js, be.je, be.is,
             be.ie,
-            KOKKOS_LAMBDA (const int &bl, const int &k, const int &j, const int &i)
+                      KOKKOS_LAMBDA(const int& bl, const int& k, const int& j,
+                                    const int& i)
             {
                 const auto& G = P.GetCoords(bl);
                 Real gdet = G.gdet(Loci::center, j, i);
@@ -420,7 +432,7 @@ TaskStatus B_CT::CalculateEMF(MeshData<Real>* md)
         if (scheme == "gs05_0") {
             pmb0->par_for("B_CT_emf_GS05_0", block.s, block.e, b1.ks, b1.ke, b1.js, b1.je,
                 b1.is, b1.ie,
-                KOKKOS_LAMBDA (const int &bl, const int &k, const int &j, const int &i)
+                KOKKOS_LAMBDA(const int& bl, const int& k, const int& j, const int& i)
                 {
                     const auto& G = emfc.GetCoords(bl);
                     // Just subtract centered emf from twice the face version
@@ -447,7 +459,7 @@ TaskStatus B_CT::CalculateEMF(MeshData<Real>* md)
             auto& rho = md->PackVariablesAndFluxes(std::vector<std::string>{"cons.rho"});
             pmb0->par_for("B_CT_emf_SG07", block.s, block.e, b1.ks, b1.ke, b1.js, b1.je,
                 b1.is, b1.ie,
-                KOKKOS_LAMBDA (const int &bl, const int &k, const int &j, const int &i)
+                KOKKOS_LAMBDA(const int& bl, const int& k, const int& j, const int& i)
                 {
                     // Following adapted closely from AthenaK, including clever use of the
                     // mass flux for the sign of the contact mode.
@@ -548,7 +560,7 @@ TaskStatus B_CT::AddSource(MeshData<Real>* md, MeshData<Real>* mdudt, IndexDomai
     const IndexRange3 bf1 = KDomain::GetRange(md, domain, F1);
     pmb0->par_for("B_CT_Circ_1", block.s, block.e, bf1.ks, bf1.ke, bf1.js, bf1.je, bf1.is,
         bf1.ie,
-        KOKKOS_LAMBDA (const int &bl, const int &k, const int &j, const int &i)
+        KOKKOS_LAMBDA(const int& bl, const int& k, const int& j, const int& i)
         {
             const auto& G = dB_Uf_dt.GetCoords(bl);
             dB_Uf_dt(bl, F1, 0, k, j, i) =
@@ -563,7 +575,7 @@ TaskStatus B_CT::AddSource(MeshData<Real>* md, MeshData<Real>* mdudt, IndexDomai
     const IndexRange3 bf2 = KDomain::GetRange(md, domain, F2);
     pmb0->par_for("B_CT_Circ_2", block.s, block.e, bf2.ks, bf2.ke, bf2.js, bf2.je, bf2.is,
         bf2.ie,
-        KOKKOS_LAMBDA (const int &bl, const int &k, const int &j, const int &i)
+        KOKKOS_LAMBDA(const int& bl, const int& k, const int& j, const int& i)
         {
             const auto& G = dB_Uf_dt.GetCoords(bl);
             dB_Uf_dt(bl, F2, 0, k, j, i) =
@@ -578,7 +590,7 @@ TaskStatus B_CT::AddSource(MeshData<Real>* md, MeshData<Real>* mdudt, IndexDomai
     const IndexRange3 bf3 = KDomain::GetRange(md, domain, F3);
     pmb0->par_for("B_CT_Circ_3", block.s, block.e, bf3.ks, bf3.ke, bf3.js, bf3.je, bf3.is,
         bf3.ie,
-        KOKKOS_LAMBDA (const int &bl, const int &k, const int &j, const int &i)
+                  KOKKOS_LAMBDA(const int& bl, const int& k, const int& j, const int& i)
         {
             const auto& G = dB_Uf_dt.GetCoords(bl);
             dB_Uf_dt(bl, F3, 0, k, j, i) =
@@ -642,7 +654,7 @@ TaskStatus B_CT::DerefinePoles(MeshData<Real>* md)
                 // F1 average
                 pmb->par_for("B_CT_derefine_poles_avg_F1", bCC.ks, bCC.ke, j_p.s, j_p.e,
                     bF1.is, bF1.ie,
-                    KOKKOS_LAMBDA (const int &k, const int &j, const int &i)
+                             KOKKOS_LAMBDA(const int& k, const int& j, const int& i)
                     {
                         const int coarse_cell_len =
                             m::pow(2, ((binner) ? jps - j : j - jps) + 1);
@@ -653,7 +665,8 @@ TaskStatus B_CT::DerefinePoles(MeshData<Real>* md)
                         const int k_start =
                             k - k_fine; // starting k-index of the coarse cell
 
-                        // average over fine cells within the coarse cell we're in
+                        // average over fine cells within the coarse cell we're
+                        // in
                         Real avg = 0.;
                         for (int ktemp = 0; ktemp < coarse_cell_len; ++ktemp)
                             avg += B_Uf(F1, 0, k_start + ktemp, j_c, i) *
@@ -665,7 +678,7 @@ TaskStatus B_CT::DerefinePoles(MeshData<Real>* md)
                 // F2 average
                 pmb->par_for("B_CT_derefine_poles_avg_F2", bCC.ks, bCC.ke, j_p.s, j_p.e,
                     bCC.is, bCC.ie,
-                    KOKKOS_LAMBDA (const int &k, const int &j, const int &i)
+                             KOKKOS_LAMBDA(const int& k, const int& j, const int& i)
                     {
                         const int coarse_cell_len =
                             m::pow(2, ((binner) ? jps - j : j - jps) + 1);
@@ -675,8 +688,8 @@ TaskStatus B_CT::DerefinePoles(MeshData<Real>* md)
                         const int k_start = k - k_fine;
 
                         if (!allow_flux && j == j_f) {
-                            // The fine cells have 0 fluxes through the physical-ghost
-                            // boundaries.
+                            // The fine cells have 0 fluxes through the
+                            // physical-ghost boundaries.
                             B_avg(F2, 0, k, j, i) = 0.;
                         } else { // average the fine cells
                             Real avg = 0.;
@@ -691,7 +704,7 @@ TaskStatus B_CT::DerefinePoles(MeshData<Real>* md)
                 // F3 average
                 pmb->par_for("B_CT_derefine_poles_avg_F3", bF3.ks, bF3.ke, j_p.s, j_p.e,
                     bCC.is, bCC.ie,
-                    KOKKOS_LAMBDA (const int &k, const int &j, const int &i)
+                    KOKKOS_LAMBDA(const int& k, const int& j, const int& i)
                     {
                         // the current level of derefinement at given j
                         const int current_lv = ((binner) ? jps - j : j - jps);
@@ -755,7 +768,7 @@ TaskStatus B_CT::DerefinePoles(MeshData<Real>* md)
                 // F1 write
                 pmb->par_for("B_CT_derefine_poles_F1", bCC.ks, bCC.ke, j_p.s, j_p.e,
                     bF1.is, bF1.ie,
-                    KOKKOS_LAMBDA (const int &k, const int &j, const int &i)
+                             KOKKOS_LAMBDA(const int& k, const int& j, const int& i)
                     {
                         int j_c = j + ((binner) ? 0 : -1); // cell center
                         B_Uf(F1, 0, k, j_c, i) =
@@ -764,7 +777,7 @@ TaskStatus B_CT::DerefinePoles(MeshData<Real>* md)
                 // F2 write
                 pmb->par_for("B_CT_derefine_poles_F2", bCC.ks, bCC.ke, j_p.s, j_p.e,
                     bCC.is, bCC.ie,
-                    KOKKOS_LAMBDA (const int &k, const int &j, const int &i)
+                             KOKKOS_LAMBDA(const int& k, const int& j, const int& i)
                     {
                         B_Uf(F2, 0, k, j, i) =
                             B_avg(F2, 0, k, j, i) / G.Volume<F2>(k, j, i);
@@ -772,7 +785,7 @@ TaskStatus B_CT::DerefinePoles(MeshData<Real>* md)
                 // F3 write
                 pmb->par_for("B_CT_derefine_poles_F3", bF3.ks, bF3.ke, j_p.s, j_p.e,
                     bCC.is, bCC.ie,
-                    KOKKOS_LAMBDA (const int &k, const int &j, const int &i)
+                             KOKKOS_LAMBDA(const int& k, const int& j, const int& i)
                     {
                         int j_c = j + ((binner) ? 0 : -1); // cell center
                         B_Uf(F3, 0, k, j_c, i) =
@@ -785,7 +798,7 @@ TaskStatus B_CT::DerefinePoles(MeshData<Real>* md)
                 auto B_P = rc->PackVariables(std::vector<std::string>{"prims.B"});
                 pmb->par_for("UtoP_B_center", bCC.ks, bCC.ke, j_p.s, j_p.e, bCC.is,
                     bCC.ie,
-                    KOKKOS_LAMBDA (const int &k, const int &j, const int &i)
+                    KOKKOS_LAMBDA(const int& k, const int& j, const int& i)
                     {
                         int j_c = j + ((binner) ? 0 : -1); // cell center
                         B_P(V1, k, j_c, i) =
@@ -811,7 +824,8 @@ TaskStatus B_CT::DerefinePoles(MeshData<Real>* md)
                 // Recover conserved B at centers
                 pmb->par_for("UtoP_B_centerPtoU", 0, NVEC - 1, bCC.ks, bCC.ke, j_p.s,
                     j_p.e, bCC.is, bCC.ie,
-                    KOKKOS_LAMBDA (const int &v, const int &k, const int &j, const int &i)
+                             KOKKOS_LAMBDA(const int& v, const int& k, const int& j,
+                                           const int& i)
                     {
                         int j_c = j + ((binner) ? 0 : -1); // cell center
                         B_U(v, k, j_c, i) =
@@ -933,7 +947,7 @@ void B_CT::CalcDivB(MeshData<Real>* md, std::string divb_field_name)
 
     // See MaxDivB for details
     pmb0->par_for("calc_divB", block.s, block.e, kb.s, kb.e, jb.s, jb.e, ib.s, ib.e,
-        KOKKOS_LAMBDA (const int &b, const int &k, const int &j, const int &i)
+                  KOKKOS_LAMBDA(const int& b, const int& k, const int& j, const int& i)
         {
             const auto& G = B_U.GetCoords(b);
             divB(b, 0, k, j, i) = face_div(G, B_U(b), ndim, k, j, i);
@@ -956,7 +970,7 @@ void B_CT::FillOutput(MeshBlock* pmb, ParameterInput* pin)
     const IndexRange block = IndexRange{0, B_U.GetDim(5) - 1};
 
     pmb->par_for("divB_output", kb.s, kb.e, jb.s, jb.e, ib.s, ib.e,
-        KOKKOS_LAMBDA (const int &k, const int &j, const int &i)
+                 KOKKOS_LAMBDA(const int& k, const int& j, const int& i)
         {
             const auto& G = B_U.GetCoords();
             divB(0, k, j, i) = face_div(G, B_U, ndim, k, j, i);

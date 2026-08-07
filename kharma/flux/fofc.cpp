@@ -53,7 +53,7 @@ TaskStatus Flux::MarkFOFC(MeshData<Real>* guess)
     auto fofcflag = guess->PackVariables(std::vector<std::string>{"fofcflag"});
 
     // Parameters
-    const auto& pars = pmb0->packages.Get("Flux")->AllParams();
+    const auto& pars = pmb0->packages.Get("Fluxes")->AllParams();
     const bool spherical = pmb0->coords.coords.is_spherical();
     const int polar_cells = pars.Get<int>("fofc_polar_cells");
     const GReal r_eh = pmb0->coords.coords.get_horizon();
@@ -68,7 +68,7 @@ TaskStatus Flux::MarkFOFC(MeshData<Real>* guess)
     const IndexRange3 b = KDomain::GetRange(guess, IndexDomain::entire);
     const IndexRange block = IndexRange{0, fofcflag.GetDim(5) - 1};
     pmb0->par_for("fofc_mark", block.s, block.e, b.ks, b.ke, b.js, b.je, b.is, b.ie,
-        KOKKOS_LAMBDA (const int &b, const int &k, const int &j, const int &i)
+        KOKKOS_LAMBDA(const int& b, const int& k, const int& j, const int& i)
         {
             const auto& G = fofcflag.GetCoords(b);
             // if cell failed to invert or would call floors...
@@ -98,7 +98,7 @@ TaskStatus Flux::MarkFOFC(MeshData<Real>* guess)
                     int jend = jstart + polar_cells - 1;
                     pmb0->par_for("fofc_mark_inner_x2", b.ks, b.ke, jstart, jend, b.is,
                         b.ie,
-                        KOKKOS_LAMBDA (const int &k, const int &j, const int &i)
+                                  KOKKOS_LAMBDA(const int& k, const int& j, const int& i)
                         {
                             lfofcflag(0, k, j, i) = 1;
                         });
@@ -109,7 +109,7 @@ TaskStatus Flux::MarkFOFC(MeshData<Real>* guess)
                     int jstart = jend - polar_cells + 1;
                     pmb0->par_for("fofc_mark_outer_x2", b.ks, b.ke, jstart, jend, b.is,
                         b.ie,
-                        KOKKOS_LAMBDA (const int &k, const int &j, const int &i)
+                                  KOKKOS_LAMBDA(const int& k, const int& j, const int& i)
                         {
                             lfofcflag(0, k, j, i) = 1;
                         });
@@ -156,7 +156,7 @@ TaskStatus Flux::FOFC(MeshData<Real>* md, MeshData<Real>* guess)
     const auto& Bf = md->PackVariables(std::vector<std::string>{"cons.fB"});
 
     // Parameters
-    const auto& pars = packages.Get("Flux")->AllParams();
+    const auto& pars = packages.Get("Fluxes")->AllParams();
     const Real gam = packages.Get("GRMHD")->Param<Real>("gamma");
     const bool use_global = pars.Get<bool>("fofc_use_glf");
     const EMHD::EMHD_parameters& emhd_params = EMHD::GetEMHDParameters(packages);
@@ -170,11 +170,12 @@ TaskStatus Flux::FOFC(MeshData<Real>* md, MeshData<Real>* guess)
         const IndexRange block = IndexRange{0, P_all.GetDim(5) - 1};
         pmb0->par_for("fofc_replacement", block.s, block.e, b.ks, b.ke, b.js, b.je, b.is,
             b.ie,
-            KOKKOS_LAMBDA (const int &b, const int &k, const int &j, const int &i)
+            KOKKOS_LAMBDA(const int& b, const int& k, const int& j, const int& i)
             {
                 const auto& G = P_all.GetCoords(b);
 
-                // Face i,j,k borders cell with same index and 1 left with index:
+                // Face i,j,k borders cell with same index and 1 left with
+                // index:
                 int kk = (dir == 3) ? k - 1 : k;
                 int jj = (dir == 2) ? j - 1 : j;
                 int ii = (dir == 1) ? i - 1 : i;
@@ -183,8 +184,8 @@ TaskStatus Flux::FOFC(MeshData<Real>* md, MeshData<Real>* guess)
                     static_cast<int>(
                         fofcflag(b, 0, kk, jj, ii))) { // TODO allow customizing
 
-                    // "Reconstruct" left & right of this face: left is left cell, right
-                    // is shared-index
+                    // "Reconstruct" left & right of this face: left is left
+                    // cell, right is shared-index
                     PLOOP
                         Pl_all(b, ip, k, j, i) = P_all(b, ip, kk, jj, ii);
                     PLOOP
@@ -229,15 +230,16 @@ TaskStatus Flux::FOFC(MeshData<Real>* md, MeshData<Real>* guess)
                         cmin(b, dir - 1, k, j, i) =
                             -m::min(cmin(b, dir - 1, k, j, i), cminR);
                     } else {
-                        // This conveniently also reduces the timestep if necessary
-                        // Though, you should almost certainly set use_dt_light w/this
+                        // This conveniently also reduces the timestep if
+                        // necessary -- though, you should almost certainly set
+                        // use_dt_light w/this
                         cmax(b, dir - 1, k, j, i) = 1.;
                         cmin(b, dir - 1, k, j, i) = 1.;
                     }
 
-                    // Use LLF flux. Note we replace fluxes of all variables (including
-                    // B!) This is for a consistent scheme, i.e. all cells FOFC == using
-                    // DC+LLF
+                    // Use LLF flux. Note we replace fluxes of all variables
+                    // (including B!) This is for a consistent scheme, i.e. all
+                    // cells FOFC == using DC+LLF
                     PLOOP
                         U_all(b).flux(dir, ip, k, j, i) =
                             llf(Fl_all(b, ip, k, j, i), Fr_all(b, ip, k, j, i),

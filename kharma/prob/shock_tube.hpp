@@ -75,7 +75,7 @@ TaskStatus InitializeShockTube(
     pin->GetOrAddReal("b_field", "amp2_B3", B3R);
 
     pmb->par_for("ot_init", kb.s, kb.e, jb.s, jb.e, ib.s, ib.e,
-        KOKKOS_LAMBDA (const int &k, const int &j, const int &i)
+                 KOKKOS_LAMBDA(const int& k, const int& j, const int& i)
         {
             Real X[GR_DIM];
             G.coord(k, j, i, Loci::center, X);

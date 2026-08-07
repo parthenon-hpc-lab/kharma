@@ -211,7 +211,7 @@ TaskStatus Packages::MeshApplyFloors(MeshData<Real> *md, IndexDomain domain)
         }
     }
     // Then everything else i.e. block versions
-    // TODO(BSP) allow Mesh versions and fallback
+    // TODO(CEP) allow Mesh versions and fallback
     for (int i=0; i < md->NumBlocks(); ++i) {
         auto mbd = md->GetBlockData(i).get();
         auto pmb = mbd->GetBlockPointer();
@@ -232,7 +232,7 @@ TaskStatus Packages::MeshApplyFloors(MeshData<Real> *md, IndexDomain domain)
 
 // GENERAL CALLBACKS
 // TODO this will need to be mesh'd too
-void Packages::UserWorkBeforeOutput(MeshBlock *pmb, ParameterInput *pin)
+void Packages::UserWorkBeforeOutput(MeshBlock *pmb, ParameterInput *pin, const SimTime& unused)
 {
     Flag("UserWorkBeforeOutput");
     auto kpackages = pmb->packages.AllPackagesOfType<KHARMAPackage>();

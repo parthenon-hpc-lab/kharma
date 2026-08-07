@@ -82,7 +82,7 @@ TaskStatus InitializeDrivenTurbulence(
     IndexRange myjb = pmb->cellbounds.GetBoundsJ(IndexDomain::interior);
     IndexRange mykb = pmb->cellbounds.GetBoundsK(IndexDomain::interior);
     pmb->par_for("driven_turb_rho_u_init", mykb.s, mykb.e, myjb.s, myjb.e, myib.s, myib.e,
-        KOKKOS_LAMBDA (const int &k, const int &j, const int &i)
+                 KOKKOS_LAMBDA(const int& k, const int& j, const int& i)
         {
             rho(k, j, i) = rho0;
             u(k, j, i) = u0;
@@ -212,7 +212,7 @@ void ApplyDrivingTurbulence(MeshBlockData<Real>* rc)
                           A; // going from k:(0, 0), j:(4, 515), i:(4, 515) inclusive
         pmb->par_for("forced_mhd_normal_kick_setting", mykb.s, mykb.e, myjb.s, myjb.e,
             myib.s, myib.e,
-            KOKKOS_LAMBDA (const int &k, const int &j, const int &i)
+            KOKKOS_LAMBDA(const int& k, const int& j, const int& i)
             {
                 grf_normalized(0, k, j, i) = (dv0[(i - 4) * Nx1 + (j - 4)] * norm_const);
                 grf_normalized(1, k, j, i) = (dv1[(i - 4) * Nx1 + (j - 4)] * norm_const);

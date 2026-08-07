@@ -63,10 +63,6 @@ void KBoundaries::TransmitSetTE(MeshBlockData<Real>* rc, VariablePack<Real>& q,
     // We're sometimes called without any variables to sync (e.g. syncing flags, EMFs),
     // just return
     if (q.GetDim(4) == 0) return;
-    // We're also sometimes called on coarse buffers with or without AMR.
-    // Use of transmitting polar conditions when coarse buffers matter (e.g., refinement
-    // boundary touching the pole) is UNSUPPORTED
-    if (coarse) return;
 
     // Pull boundary properties
     auto pmb = rc->GetBlockPointer();
@@ -128,7 +124,7 @@ void KBoundaries::TransmitSetTE(MeshBlockData<Real>* rc, VariablePack<Real>& q,
 
         pmb->par_for("transmitting_polar_boundary_" + bname, 0, q.GetDim(4) - 1, b.ks,
             b.ke, b.js, b.je, b.is, b.ie,
-            KOKKOS_LAMBDA (const int &v, const int &k, const int &j, const int &i)
+                     KOKKOS_LAMBDA(const int& v, const int& k, const int& j, const int& i)
             {
                 const int ki = ((k - ksp + Nk3p2) % Nk3p) + ksp;
                 const int ji = jpivot + reflect_offset + (jpivot - j);
@@ -142,8 +138,8 @@ void KBoundaries::TransmitSetTE(MeshBlockData<Real>* rc, VariablePack<Real>& q,
                         ? -1.
                         : 1.;
                 // if (i == 10 && j == 3 && k == 10)
-                //    printf("Set el %d v %d zone %d %d %d from %d %d %d invert: %f\n",
-                //    (int) el, v, k, j, i, ki, ji, ii, invert);
+                //    printf("Set el %d v %d zone %d %d %d from %d %d %d invert:
+                //    %f\n", (int) el, v, k, j, i, ki, ji, ii, invert);
                 q(el, v, k, j, i) = (corresponding_face && j == jpivot)
                                         ? 0.
                                         : invert * q(el, v, ki, ji, ii);

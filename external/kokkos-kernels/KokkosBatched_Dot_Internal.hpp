@@ -5,6 +5,8 @@
 
 #include "KokkosBatched_Util.hpp"
 
+#define KOKKOS_IMPL_DO_NOT_USE_PRINTF(...) ::printf(__VA_ARGS__)
+
 namespace KokkosBatched {
 
 ///

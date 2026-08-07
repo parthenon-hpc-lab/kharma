@@ -167,7 +167,7 @@ class BiCGStabSolver : BiCGStabCounter
                     precom, this->user_precomm_scale, spmd.get(), vec_name);
             }
 
-            // TODO(BSP) this is AddBoundaryExchangeTasks, would use that except it's not
+            // TODO(CEP) this is AddBoundaryExchangeTasks, would use that except it's not
             // templated for special iterative lists
             auto dependency = precom2;
             auto& tl = task_list;
@@ -376,7 +376,7 @@ class BiCGStabSolver : BiCGStabCounter
 
         par_for(loop_pattern_mdrange_tag, "initialize bicgstab", DevExecSpace(), 0,
             v.GetDim(5) - 1, kb.s, kb.e, jb.s, jb.e, ib.s, ib.e,
-        KOKKOS_LAMBDA(const int b, const int k, const int j, const int i)
+                KOKKOS_LAMBDA(const int b, const int k, const int j, const int i)
             {
                 v(b, ires, k, j, i) = v(b, irhs, k, j, i) - v(b, ires, k, j, i);
             });
@@ -444,7 +444,7 @@ class BiCGStabSolver : BiCGStabCounter
         const Real w_o = omega_old;
         par_for(DEFAULT_LOOP_PATTERN, "compute pk", DevExecSpace(), 0, v.GetDim(5) - 1,
             kb.s, kb.e, jb.s, jb.e, ib.s, ib.e,
-        KOKKOS_LAMBDA(const int b, const int k, const int j, const int i)
+                KOKKOS_LAMBDA(const int b, const int k, const int j, const int i)
             {
                 v(b, ipk, k, j, i) =
                     v(b, ires, k, j, i) +
@@ -479,7 +479,7 @@ class BiCGStabSolver : BiCGStabCounter
 
         par_for(DEFAULT_LOOP_PATTERN, "MatVec", DevExecSpace(), 0, v.GetDim(5) - 1, kb.s,
             kb.e, jb.s, jb.e, ib.s, ib.e,
-        KOKKOS_LAMBDA(const int b, const int k, const int j, const int i)
+                KOKKOS_LAMBDA(const int b, const int k, const int j, const int i)
             {
                 v(b, iout, k, j, i) =
                     r_sp_accessor.MatVec(v, isp_lo, isp_hi, v, iin, b, k, j, i);
@@ -512,7 +512,7 @@ class BiCGStabSolver : BiCGStabCounter
         if (std::abs(r0_dot_vk.val) < 1.e-200) alpha = 0.0;
         par_for(DEFAULT_LOOP_PATTERN, "Update_h", DevExecSpace(), 0, v.GetDim(5) - 1,
             kb.s, kb.e, jb.s, jb.e, ib.s, ib.e,
-        KOKKOS_LAMBDA(const int b, const int k, const int j, const int i)
+                KOKKOS_LAMBDA(const int b, const int k, const int j, const int i)
             {
                 dv(b, 0, k, j, i) += alpha * v(b, ipk, k, j, i);
                 v(b, ires, k, j, i) -= alpha * v(b, ivk, k, j, i);
@@ -538,7 +538,7 @@ class BiCGStabSolver : BiCGStabCounter
         // rhoi.val, alpha);
         par_for(DEFAULT_LOOP_PATTERN, "Update_h", DevExecSpace(), 0, v.GetDim(5) - 1,
             kb.s, kb.e, jb.s, jb.e, ib.s, ib.e,
-        KOKKOS_LAMBDA(const int b, const int k, const int j, const int i)
+                KOKKOS_LAMBDA(const int b, const int k, const int j, const int i)
             {
                 dv(b, 0, k, j, i) += alpha * v(b, 0, k, j, i);
             });
@@ -565,7 +565,7 @@ class BiCGStabSolver : BiCGStabCounter
         // rhoi.val, alpha);
         par_for(DEFAULT_LOOP_PATTERN, "Update_s", DevExecSpace(), 0, v.GetDim(5) - 1,
             kb.s, kb.e, jb.s, jb.e, ib.s, ib.e,
-        KOKKOS_LAMBDA(const int b, const int k, const int j, const int i)
+                KOKKOS_LAMBDA(const int b, const int k, const int j, const int i)
             {
                 v(b, ires, k, j, i) -= alpha * v(b, ivk, k, j, i);
             });

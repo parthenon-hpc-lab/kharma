@@ -218,7 +218,7 @@ KOKKOS_INLINE_FUNCTION int apply_floors<InjectionFrame::drift>(FLOOR_ONE_ARGS)
     const Real rho = P(m_p.RHO, k, j, i);
     const Real uu = P(m_p.UU, k, j, i);
     const Real pg = (gam - 1.) * uu;
-    const Real w_old = m::max(rho + uu + pg, SMALL);
+    const Real w_old = m::max(rho + uu + pg, SMALL_NUM);
 
     // Normal observer magnetic field
     Real Bcon[GR_DIM] = {0};
@@ -231,7 +231,7 @@ KOKKOS_INLINE_FUNCTION int apply_floors<InjectionFrame::drift>(FLOOR_ONE_ARGS)
     }
     DLOOP2
         Bcov[mu] += G.gcov(Loci::center, j, i, mu, nu) * Bcon[nu];
-    const Real Bsq = m::max(dot(Bcon, Bcov), SMALL);
+    const Real Bsq = m::max(dot(Bcon, Bcov), SMALL_NUM);
     const Real B_mag = m::sqrt(Bsq);
 
     // Get four-vectors again
@@ -314,7 +314,7 @@ KOKKOS_INLINE_FUNCTION int apply_floors<InjectionFrame::normal_onedw>(FLOOR_ONE_
 
     // Recover primitive variables from conserved versions
     return Inverter::u_to_p<Inverter::Type::onedw>(
-        G, U, m_u, gam, k, j, i, P, m_p, Loci::center, 8, 1e-8, false);
+        G, U, m_u, gam, k, j, i, P, m_p, Loci::center, 8, 1e-8);
 }
 
 template<>
@@ -327,9 +327,10 @@ KOKKOS_INLINE_FUNCTION int apply_floors<InjectionFrame::normal_kastaun>(FLOOR_ON
     // We compute rho u^0 and T^00 using the existing velocities to determine Lorentz
     // factor. This is a guaranteed overestimate of the fluid contributions to these
     // quantities
-    const Real uvec[NVEC] = {P(m_p.U1, k, j, i), P(m_p.U2, k, j, i), P(m_p.U3, k, j, i)};
+    // const Real uvec[NVEC] = {P(m_p.U1, k, j, i), P(m_p.U2, k, j, i), P(m_p.U3, k, j,
+    // i)};
     // Alternatively, add less than will produce our floored values
-    // const Real uvec[NVEC] = {0.};
+    const Real uvec[NVEC] = {0.};
     const Real B[NVEC] = {0.};
 
     // 2. Calculate the increase in conserved mass/energy corresponding to the new
@@ -342,26 +343,123 @@ KOKKOS_INLINE_FUNCTION int apply_floors<InjectionFrame::normal_kastaun>(FLOOR_ON
     U(m_u.RHO, k, j, i) += rho_ut;
     U(m_u.UU, k, j, i) += T[0]; // Actually T^0_0 + rho u^t
 
-    // Recover new primitive variables.  Use Kastaun with safe parameters so we don't fail
-    // often
+    // Recover new primitive variables
     return Inverter::u_to_p<Inverter::Type::kastaun>(
-        G, U, m_u, gam, k, j, i, P, m_p, Loci::center, 25, 1e-12, true);
+        G, U, m_u, gam, k, j, i, P, m_p, Loci::center, 25, 1e-14);
 }
 
-/**
- * Out of the package modification RADM1.
- * Template for setting floors to RADM1 variables.
- * For now we only have the initial floors for the radiation energy field variable.
- */
-template<InjectionFrame frame>
-KOKKOS_INLINE_FUNCTION int apply_floors_radM1(FLOOR_ONE_ARGS);
-
+// These are implemented as special cases in the kernel in floors_impl.hpp
+// We define them here as no-ops so they resolve in the general template call-through
 template<>
-KOKKOS_INLINE_FUNCTION int apply_floors_radM1<InjectionFrame::fluid>(FLOOR_ONE_ARGS)
+KOKKOS_INLINE_FUNCTION int apply_floors<InjectionFrame::mixed_fluid_normal>(
+    FLOOR_ONE_ARGS)
 {
-    P(m_p.UU_RAD, k, j, i) += m::max(0., uflr_max - P(m_p.UU_RAD, k, j, i));
     return 0;
 }
+template<>
+KOKKOS_INLINE_FUNCTION int apply_floors<InjectionFrame::mixed_normal_drift>(
+    FLOOR_ONE_ARGS)
+{
+    return 0;
+}
+
+// KOKKOS_INLINE_FUNCTION rho_to_slow()
+// {
+
+//     // No floors/floors_inner distinction, TODO?
+//     const Real rhoh_denom_max = SQR(floors.gamma_max) *
+//                                 m::sqrt(1 - 1 / SQR(floors.gamma_max));
+
+//     //const Real rho = std::max(P(m_p.RHO, k, j, i), rhoflr_max);
+//     //const Real u = std::max(P(m_p.UU, k, j, i), uflr_max);
+//     const Real rho = P(m_p.RHO, k, j, i);
+//     const Real u = P(m_p.UU, k, j, i);
+//     const Real rhoh = rho + gam * u;
+//     const Real alpha  = 1. / m::sqrt(-G.gcon(Loci::center, j, i, 0, 0));
+//     const Real a_over_g = alpha / G.gdet(Loci::center, j, i);
+//     Real Scov[3] = {U(m_u.U1, k, j, i) * a_over_g,
+//                     U(m_u.U2, k, j, i) * a_over_g,
+//                     U(m_u.U3, k, j, i) * a_over_g};
+//     Real Scon[3];
+//     Real gupper[GR_DIM][GR_DIM], glower[GR_DIM][GR_DIM];
+//     G.gcon(Loci::center, j, i, gupper);
+//     G.gcov(Loci::center, j, i, glower);
+//     Scon[0] = ((gupper[1][1] - gupper[0][1]*gupper[0][1]/gupper[0][0])*Scov[0] +
+//                 (gupper[1][2] - gupper[0][1]*gupper[0][2]/gupper[0][0])*Scov[1] +
+//                 (gupper[1][3] - gupper[0][1]*gupper[0][3]/gupper[0][0])*Scov[2]);
+
+//     Scon[1] = ((gupper[2][1] - gupper[0][2]*gupper[0][1]/gupper[0][0])*Scov[0] +
+//                 (gupper[2][2] - gupper[0][2]*gupper[0][2]/gupper[0][0])*Scov[1] +
+//                 (gupper[2][3] - gupper[0][2]*gupper[0][3]/gupper[0][0])*Scov[2]);
+
+//     Scon[2] = ((gupper[3][1] - gupper[0][3]*gupper[0][1]/gupper[0][0])*Scov[0] +
+//                 (gupper[3][2] - gupper[0][3]*gupper[0][2]/gupper[0][0])*Scov[1] +
+//                 (gupper[3][3] - gupper[0][3]*gupper[0][3]/gupper[0][0])*Scov[2]);
+//     Real Ssq = 0.0;
+//     SPACELOOP(ii) Ssq += Scon[ii] * Scov[ii];
+
+//     const Real rhoh_min = m::sqrt(Ssq) / rhoh_denom_max;
+//     if (rhoh < rhoh_min) {
+//         fflagl |= Floors::FFlag::INVERTER_GAMMA;
+//         // Proportional increases to rho,u preserve temperature
+//         // TODO could play with this ratio
+//         P(m_p.RHO, k, j, i) = rho * rhoh_min/rhoh;
+//         P(m_p.UU, k, j, i) = u * rhoh_min/rhoh;
+
+//         Real Bvec[] = {0.0, 0.0, 0.0};
+//         SPACELOOP(ii) Bvec[ii] = P(m_u.B1 + ii, k, j, i) * alpha;
+//         Real BdotS = 0.;
+//         SPACELOOP(ii) BdotS += Bvec[ii] * Scov[ii];
+//         Real Bsq = 0.;
+//         SPACELOOP2(ii, jj) Bsq += glower[ii + 1][jj + 1] * Bvec[ii] * Bvec[jj];
+//         Real Sparsq = BdotS * BdotS / Bsq;
+//         Real Sperpsq = Ssq - Sparsq;
+//         Real Spar[3], Sperp[3];
+//         SPACELOOP(ii) Spar[ii] = BdotS * Bvec[ii] / Bsq;
+//         SPACELOOP(ii) Sperp[ii] = Scon[ii] - Spar[ii];
+
+//         auto func_W = [&] (Real W) {
+//             const Real rhohW2 = rhoh_min * W * W;
+//             return Sparsq / SQR(rhohW2) +
+//             Sperpsq / SQR(rhohW2 + Bsq) +
+//             1. / (W * W) - 1.;
+//         };
+
+//         Real zm = 1.;
+//         Real zp = floors.gamma_max;
+//         Real z = 0.5*(zm + zp);
+
+//         Real fm = func_W(zm);
+//         Real fp = func_W(zp);
+
+//         bool vel_solve_failed = false;
+//         for (int iter = 0; iter < 30; ++iter) {
+//             z =  (zm*fp - zp*fm) / (fp-fm);  // linear interpolation to point f(z)=0
+//             Real f = func_W(z);
+//             // Quit if convergence reached
+//             if ((m::abs(f) < 1e-8) || (m::abs(zm-zp) < 1e-10)) {
+//                 // Return failure if out of tolerance
+//                 vel_solve_failed = m::abs(f) > 1e-8;
+//                 break;
+//             }
+//             // assign zm-->zp if root bracketed by [z,zp]
+//             if (f*fp < 0.0) {
+//                 zm = zp;
+//                 fm = fp;
+//                 zp = z;
+//                 fp = f;
+//             } else {  // assign zp-->z if root bracketed by [zm,z]
+//                 fm = 0.5*fm; // 1/2 comes from "Illinois algorithm" to accelerate
+//                 convergence zp = z; fp = f;
+//             }
+//         }
+
+//         SPACELOOP(ii) P(m_p.U1+ii, k, j, i) = z * (Spar[ii] / (rhoh_min * z * z) +
+//                                                 Sperp[ii] / (rhoh_min * z * z + Bsq));
+//         // TODO(BSP) record when solve fails?
+//         // TODO(BSP) Fallthrough
+//     }
+// }
 
 /**
  * Apply just the geometric floors to a set of local primitives.

@@ -174,7 +174,7 @@ inline void EdgeCurl(MeshBlockData<Real>* rc, const GridVector& A,
     const auto& G = pmb->coords;
     IndexRange3 bB = KDomain::GetRange(rc, domain, el);
     pmb->par_for("EdgeCurl", bB.ks, bB.ke, bB.js, bB.je, bB.is, bB.ie,
-        KOKKOS_LAMBDA(const int &k, const int &j, const int &i)
+                 KOKKOS_LAMBDA(const int& k, const int& j, const int& i)
         {
             B_CT::edge_curl<el, NDIM>(G, A, B_U, k, j, i);
         });

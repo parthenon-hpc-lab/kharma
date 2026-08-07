@@ -211,9 +211,9 @@ TaskStatus KHARMADriver::SyncAllBounds(std::shared_ptr<MeshData<Real>>& md)
     MPIBarrier();
 
     TaskCollection tc;
-    auto tr = tc.AddRegion(1);
+    auto& tr = tc.AddRegion(1);
     AddBoundarySync(t_none, tr[0], md);
-    while (!tr.Execute());
+    tc.Execute();
 
     MPIBarrier();
 
@@ -228,7 +228,7 @@ TaskID KHARMADriver::AddFluxCalculations(
     auto pmb0 = md->GetBlockData(0)->GetBlockPointer();
     auto& pkgs = pmb0->packages.AllPackages();
     const KReconstruction::Type& recon =
-        pkgs.at("Flux")->Param<KReconstruction::Type>("recon");
+        pkgs.at("Fluxes")->Param<KReconstruction::Type>("recon");
 
     // Pre-calculate B field cell-center values
     auto t_start_fluxes = t_start;
@@ -239,7 +239,7 @@ TaskID KHARMADriver::AddFluxCalculations(
     // Calculate fluxes in each direction using given reconstruction
     // Must be spelled out so as to generate each templated version of GetFlux<> to be
     // available at runtime Details in flux/get_flux.hpp
-    // TODO(BSP) This could be a macro, maybe... But there's no easy foreach(enum_val):
+    // TODO(CEP) This could be a macro, maybe... But there's no easy foreach(enum_val):
     // instantiate pattern
     using RType = KReconstruction::Type;
     TaskID t_calculate_flux1, t_calculate_flux2, t_calculate_flux3;
@@ -357,9 +357,9 @@ TaskID KHARMADriver::AddFOFC(TaskID& t_start, TaskList& tl, MeshData<Real>* md,
     auto& pkgs = pmb0->packages.AllPackages();
 
     const Floors::Prescription fofc_floors =
-        pmb0->packages.Get("Flux")->Param<Floors::Prescription>("fofc_prescription");
+        pmb0->packages.Get("Fluxes")->Param<Floors::Prescription>("fofc_prescription");
     const Floors::Prescription fofc_floors_inner =
-        pmb0->packages.Get("Flux")->Param<Floors::Prescription>(
+        pmb0->packages.Get("Fluxes")->Param<Floors::Prescription>(
             "fofc_prescription_inner");
 
     // Populate guess source term with divergence of the existing fluxes
@@ -371,7 +371,7 @@ TaskID KHARMADriver::AddFOFC(TaskID& t_start, TaskList& tl, MeshData<Real>* md,
     // also would need to deal with B_CT::AddSource == flux update, which we don't
     // want/need
     auto t_guess_sources = t_guess_divergence;
-    if (pmb0->packages.Get("Flux")->Param<bool>("fofc_use_source_term")) {
+    if (pmb0->packages.Get("Fluxes")->Param<bool>("fofc_use_source_term")) {
         auto t_guess_sources = tl.AddTask(t_guess_divergence, Flux::AddGeoSourceTask, md,
             guess_src, IndexDomain::entire);
     }
@@ -392,10 +392,13 @@ TaskID KHARMADriver::AddFOFC(TaskID& t_start, TaskList& tl, MeshData<Real>* md,
         IndexDomain::entire, fofc_floors, fofc_floors_inner);
     // Determine which cells are FOFC in our block
     auto t_mark_fofc = tl.AddTask(t_mark_floors, Flux::MarkFOFC, guess);
-    // Sync with neighbor blocks.  This seems to ameliorate an increasing divB on X1
-    // boundaries in GR, but it should be able to be eliminated
-    auto& md_fofc = pmesh->mesh_data.AddShallow("FOFC",
-        std::vector<std::string>{"fofcflag"}); // TODO this gets weird if we partition
+    // Sync the FOFC flag with neighbors
+    // TODO this shouldn't be necessary, eliminate ASAP
+    std::shared_ptr<MeshData<Real>> md_shr{md, [](MeshData<Real>*)
+        {
+        } /*No-Op Deleter*/};
+    auto& md_fofc =
+        pmesh->mesh_data.AddShallow("FOFC", md_shr, std::vector<std::string>{"fofcflag"});
     auto t_sync_fofc = KHARMADriver::AddBoundarySync(t_mark_fofc, tl, md_fofc);
     // Finally, replace any fluxes bordering marked zones with donor-cell/LLF versions
     auto t_fofc = tl.AddTask(t_sync_fofc, Flux::FOFC, md, guess);
@@ -507,7 +510,7 @@ TaskID KHARMADriver::AddStateUpdateIdealGuess(TaskID& t_start, TaskList& tl,
 
 void KHARMADriver::SetGlobalTimeStep()
 {
-    // TODO(BSP) apply the limits from GRMHD package here
+    // TODO(CEP) apply the limits from GRMHD package here
     if (tm.dt < 0.1 * std::numeric_limits<Real>::max()) {
         tm.dt *= 2.0;
     }
@@ -517,7 +520,7 @@ void KHARMADriver::SetGlobalTimeStep()
         pmb->SetAllowedDt(big);
     }
 
-    // TODO(BSP) start reduce at the end of the per-meshblock stuff, then check it here
+    // TODO(CEP) start reduce at the end of the per-meshblock stuff, then check it here
 #ifdef MPI_PARALLEL
     PARTHENON_MPI_CHECK(MPI_Allreduce(
         MPI_IN_PLACE, &tm.dt, 1, MPI_PARTHENON_REAL, MPI_MIN, MPI_COMM_WORLD));

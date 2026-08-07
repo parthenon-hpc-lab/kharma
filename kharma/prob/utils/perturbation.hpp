@@ -99,7 +99,7 @@ TaskStatus PerturbU(std::shared_ptr<MeshBlockData<Real>>& rc, ParameterInput* pi
         RandPoolType rand_pool(rng_seed + pmb->gid);
         typedef typename RandPoolType::generator_type gen_type;
         pmb->par_for("perturb_u", ks, ke, js, je, is, ie,
-            KOKKOS_LAMBDA (const int &k, const int &j, const int &i)
+                     KOKKOS_LAMBDA(const int& k, const int& j, const int& i)
             {
                 GReal X[GR_DIM];
                 G.coord(k, j, i, Loci::center, X);

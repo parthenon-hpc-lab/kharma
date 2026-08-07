@@ -91,7 +91,7 @@ std::shared_ptr<KHARMAPackage> KBoundaries::Initialize(
     // Never use this if not in spherical coordinates
     // Activates by default only with reflecting X2/outflow X1 and interior boundary
     // inside EH
-    // TODO(BSP) may also be specific to Funky MKS coords with zero_point==startx1
+    // TODO(CEP) may also be specific to Funky MKS coords with zero_point==startx1
     bool fix_corner = false;
     if (spherical) {
         bool correct_bounds = (pin->GetString("boundaries", "inner_x2") == "reflecting" &&
@@ -113,11 +113,12 @@ std::shared_ptr<KHARMAPackage> KBoundaries::Initialize(
     FC ghost_vars = FC({Metadata::FillGhost, Metadata::Conserved}) +
                     FC({Metadata::FillGhost, Metadata::GetUserFlag("Primitive")}) -
                     FC({Metadata::GetUserFlag("StartupOnly")});
-    int nvar = KHARMA::PackDimension(packages.get(), ghost_vars);
+    auto res_state = StateDescriptor::CreateResolvedStateDescriptor(*packages);
+    int nvar = res_state->GetPackDimension(ghost_vars);
     // Face-centered fields: some duplicate stuff, leaving it separate for now
     FC ghost_vars_f = FC({Metadata::FillGhost, Metadata::Face}) -
                       FC({Metadata::GetUserFlag("StartupOnly")});
-    int nvar_f = 3 * KHARMA::PackDimension(packages.get(), ghost_vars_f);
+    int nvar_f = 3 * res_state->GetPackDimension(ghost_vars_f);
 
     // TODO encapsulate this
     Metadata m_x1, m_x2, m_x3, m_x1_f, m_x2_f, m_x3_f;
@@ -542,7 +543,8 @@ void KBoundaries::ApplyBoundary(
             auto k_f = (binner) ? b.ke : b.ks;
             pmb->par_for("reflect_face_vector_" + bname, 0, fpack.GetDim(4) - 1, b.ks,
                 b.ke, b.js, b.je, b.is, b.ie,
-                KOKKOS_LAMBDA (const int &v, const int &k, const int &j, const int &i)
+                         KOKKOS_LAMBDA(const int& v, const int& k, const int& j,
+                                       const int& i)
                 {
                     const int kk = (bdir == 3) ? k_f - (k - k_f) : k;
                     const int jj = (bdir == 2) ? j_f - (j - j_f) : j;
@@ -598,8 +600,8 @@ void KBoundaries::ApplyBoundary(
                                              : bounds.GetBoundsK(IndexDomain::interior));
         const int ref = binner ? range.s : range.e;
         pmb->par_for_bndry("outflow_EMHD", IndexRange{0, EMHDg.GetDim(4) - 1}, domain, CC,
-            coarse,
-            KOKKOS_LAMBDA (const int &v, const int &k, const int &j, const int &i)
+            coarse, false,
+            KOKKOS_LAMBDA(const int& v, const int& k, const int& j, const int& i)
             {
                 EMHDg(v, k, j, i) = EMHDg(v, (bdir == 3) ? ref : k, (bdir == 2) ? ref : j,
                     (bdir == 1) ? ref : i);
@@ -686,8 +688,9 @@ void KBoundaries::CheckInflow(
 
     // Inflow check
     // Iterate over all boundary domain zones w/p=0
-    pmb->par_for_bndry("check_inflow", IndexRange{0, 0}, domain, CC, coarse,
-        KOKKOS_LAMBDA(const int &p, const int &k, const int &j, const int &i)
+    pmb->par_for_bndry("check_inflow", IndexRange{0, 0}, domain, CC, coarse, false,
+                       KOKKOS_LAMBDA(const int& p, const int& k, const int& j,
+                                     const int& i)
         {
             KBoundaries::check_inflow(G, P, domain, m_p.U1, k, j, i);
         });
@@ -746,7 +749,8 @@ TaskStatus KBoundaries::FixFlux(MeshData<Real>* md)
                     if (binner) {
                         pmb->par_for("zero_inflow_flux_" + bname, b.ks, b.ke, b.js, b.je,
                             b.is, b.ie,
-                            KOKKOS_LAMBDA(const int &k, const int &j, const int &i)
+                                     KOKKOS_LAMBDA(const int& k, const int& j,
+                                                   const int& i)
                             {
                                 F.flux(bdir, m_rho, k, j, i) =
                                     m::min(F.flux(bdir, m_rho, k, j, i), 0.);
@@ -754,7 +758,8 @@ TaskStatus KBoundaries::FixFlux(MeshData<Real>* md)
                     } else {
                         pmb->par_for("zero_inflow_flux_" + bname, b.ks, b.ke, b.js, b.je,
                             b.is, b.ie,
-                            KOKKOS_LAMBDA(const int &k, const int &j, const int &i)
+                                     KOKKOS_LAMBDA(const int& k, const int& j,
+                                                   const int& i)
                             {
                                 F.flux(bdir, m_rho, k, j, i) =
                                     m::max(F.flux(bdir, m_rho, k, j, i), 0.);
@@ -769,7 +774,10 @@ TaskStatus KBoundaries::FixFlux(MeshData<Real>* md)
                 if (KBoundaries::IsPhysicalBoundary(pmb, bface)) {
                     pmb->par_for("zero_flux_" + bname, 0, F.GetDim(4) - 1, b.ks, b.ke,
                         b.js, b.je, b.is, b.ie,
-                        KOKKOS_LAMBDA(const int &p, const int &k, const int &j, const int &i)
+                        KOKKOS_LAMBDA(const int& p,
+                                      const int& k,
+                                      const int& j,
+                                      const int& i)
                         {
                             F.flux(bdir, p, k, j, i) = 0.;
                         });
@@ -837,7 +845,7 @@ TaskStatus KBoundaries::FixFlux(MeshData<Real>* md)
                     const int dir = X3DIR;
                     pmb->par_for("excise_flux_" + bname, b.ks, b.ke, j_cell, j_cell, b.is,
                         b.ie,
-                        KOKKOS_LAMBDA(const int &k, const int &j, const int &i)
+                        KOKKOS_LAMBDA(const int& k, const int& j, const int& i)
                         {
                             // Leftover Pl/Pr from X3DIR flux calculation!
                             const int jn = (binner) ? j + 1 : j - 1;
@@ -897,7 +905,7 @@ TaskStatus KBoundaries::FixFlux(MeshData<Real>* md)
                     // halo!
                     pmb->par_for("excise_flux_" + bname, b.ks, b.ke, b.js, b.je, b.is,
                         b.ie,
-                        KOKKOS_LAMBDA(const int &k, const int &j, const int &i)
+                        KOKKOS_LAMBDA(const int& k, const int& j, const int& i)
                         {
                             // Face i,j,k borders cell with same index and 1 left with
                             // index:
@@ -978,7 +986,10 @@ TaskStatus KBoundaries::FixFlux(MeshData<Real>* md)
                     // range
                     pmb->par_for("average_excised_flux_" + bname, 0, F.GetDim(4) - 1,
                         bi.ks, bi.ks + Nk3p2 - 1, b.js, b.je, bi.is, bi.ie,
-                        KOKKOS_LAMBDA(const int &v, const int &k, const int &j, const int &i)
+                        KOKKOS_LAMBDA(const int& v,
+                                      const int& k,
+                                      const int& j,
+                                      const int& i)
                         {
                             const int ki = ((k - ksp + Nk3p2) % Nk3p) + ksp;
                             Real avg = 0.;
@@ -1055,7 +1066,10 @@ void KBoundaries::AddSource(MeshData<Real>* md, MeshData<Real>* mdudt, IndexDoma
 
                     pmb->par_for("normalize_excised_flux_" + bname, 0, dUdt.GetDim(4) - 1,
                         b.ks, b.ke, b.js, b.je, b.is, b.ie,
-                        KOKKOS_LAMBDA(const int &v, const int &k, const int &j, const int &i)
+                        KOKKOS_LAMBDA(const int& v,
+                                      const int& k,
+                                      const int& j,
+                                      const int& i)
                         {
                             // Factor of 2 because cell is half-size in fluxdiv
                             // gdet factors move conserved vars at outer cell to the

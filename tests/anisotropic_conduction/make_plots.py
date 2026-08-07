@@ -55,7 +55,7 @@ def plotting_bfield_lines(ax, dump, nlines=20):
   AJ_phi = np.zeros([dump['n1'], dump['n2']])
   for j in range(dump['n2']):
     for i in range(dump['n1']):
-      AJ_phi[dump['n1']-1-i,j] = (np.trapz(B2[:i,j], dx=dump['dx1']) - np.trapz(B1[i,:j], dx=dump['dx2']))
+      AJ_phi[dump['n1']-1-i,j] = (np.trapezoid(B2[:i,j], dx=dump['dx1']) - np.trapezoid(B1[i,:j], dx=dump['dx2']))
   AJ_phi -= AJ_phi.min()
   levels  = np.linspace(0, AJ_phi.max(), nlines)
   ax.contour(np.squeeze(dump['X1']), np.squeeze(dump['X2']), AJ_phi, levels=levels, colors='k')

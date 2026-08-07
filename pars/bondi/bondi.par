@@ -65,7 +65,7 @@ disable_floors = true
 <inverter>
 # Don't hide problems by being cute about inversion
 # We should never hit inversion failures in this problem
-apply_floors_with_inversion = false
+vel_recovery = false
 fix_average_neighbors = true
 
 <boundaries>
@@ -88,6 +88,7 @@ extra_checks = 1
 
 <parthenon/output0>
 file_type = hdf5
+write_xdmf = false
 dt = 5.0
 single_precision_output = true
 variables = prims, pflag
