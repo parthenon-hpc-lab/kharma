@@ -167,17 +167,14 @@ class VarMap {
                 // Extended MHD
                 Q = name_map["cons.q"].first;
                 DP = name_map["cons.dP"].first;
-<<<<<<< HEAD
                 // RAD_M1. Out of the package modification RADM1.
                 UU_RAD = name_map["cons.u_rad"].first;
                 U1_RAD = name_map["cons.uvec_rad"].first;
-=======
 
                 // Added material
                 RHOADD = name_map["Floors.rhou0add"].first;
                 T0ADD = name_map["Floors.Tadd"].first;
 
->>>>>>> origin/fix/new-recovery-dev
             } else {
                 // HD
                 RHO = name_map["prims.rho"].first;

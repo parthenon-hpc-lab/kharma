@@ -159,7 +159,12 @@ std::shared_ptr<KHARMAPackage> RadM1::Initialize(
     // Add inversion to the tasks
     pkg->BlockUtoP = RadM1::BlockUtoP;
 
-    if (pin->GetBoolean("floors", "on")) pkg->BlockApplyFloors = RadM1::ApplyRadM1Floors;
+    bool floors_on_default = true;
+    if (pin->DoesParameterExist("floors", "disable_floors")) {
+        floors_on_default = !pin->GetBoolean("floors", "disable_floors");
+    }
+    if (pin->GetOrAddBoolean("floors", "on", floors_on_default))
+        pkg->BlockApplyFloors = RadM1::ApplyRadM1Floors;
 
     pkg->PostStepDiagnosticsMesh = RadM1::PostStepDiagnostics;
 
