@@ -1,25 +1,25 @@
-/* 
+/*
  *  File: one_block_transmit.hpp
- *  
+ *
  *  BSD 3-Clause License
- *  
+ *
  *  Copyright (c) 2020, AFD Group at UIUC
  *  All rights reserved.
- *  
+ *
  *  Redistribution and use in source and binary forms, with or without
  *  modification, are permitted provided that the following conditions are met:
- *  
+ *
  *  1. Redistributions of source code must retain the above copyright notice, this
  *     list of conditions and the following disclaimer.
- *  
+ *
  *  2. Redistributions in binary form must reproduce the above copyright notice,
  *     this list of conditions and the following disclaimer in the documentation
  *     and/or other materials provided with the distribution.
- *  
+ *
  *  3. Neither the name of the copyright holder nor the names of its
  *     contributors may be used to endorse or promote products derived from
  *     this software without specific prior written permission.
- *  
+ *
  *  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  *  AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  *  IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -35,15 +35,16 @@
 
 #include "boundary_types.hpp"
 
-namespace KBoundaries {
+namespace KBoundaries
+{
 
 // TODO(BSP) privatize probably
-void TransmitImpl(MeshBlockData<Real> *rc, BoundaryFace bface, bool coarse);
-void TransmitSetTE(MeshBlockData<Real> *rc, VariablePack<Real> &q, BoundaryFace bface,
-                    PackIndexMap &bounds_map, bool coarse, bool do_face);
+void TransmitImpl(MeshBlockData<Real>* rc, BoundaryFace bface, bool coarse);
+void TransmitSetTE(MeshBlockData<Real>* rc, VariablePack<Real>& q, BoundaryFace bface,
+    PackIndexMap& bounds_map, bool coarse, bool do_face);
 
-template <BoundaryFace bface>
-inline void OneBlockTransmit(std::shared_ptr<MeshBlockData<Real>> &rc, bool coarse)
+template<BoundaryFace bface>
+inline void OneBlockTransmit(std::shared_ptr<MeshBlockData<Real>>& rc, bool coarse)
 {
     TransmitImpl(rc.get(), bface, coarse);
 }

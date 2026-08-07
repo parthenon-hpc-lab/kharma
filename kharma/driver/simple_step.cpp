@@ -33,59 +33,65 @@
  */
 #include "kharma_driver.hpp"
 
-#include "inverter.hpp"
 #include "flux.hpp"
+#include "inverter.hpp"
 
-TaskCollection KHARMADriver::MakeSimpleTaskCollection(BlockList_t &blocks, int stage)
+TaskCollection KHARMADriver::MakeSimpleTaskCollection(BlockList_t& blocks, int stage)
 {
     // This is probably incompatible with everything
     TaskCollection tc;
     TaskID t_none(0);
 
     // Which packages we've loaded affects which tasks we'll add to the list
-    auto& pkgs         = blocks[0]->packages.AllPackages();
-    auto& flux_pkg   = pkgs.at("Flux")->AllParams();
+    auto& pkgs = blocks[0]->packages.AllPackages();
+    auto& flux_pkg = pkgs.at("Flux")->AllParams();
 
-    if (pkgs.count("B_Cleanup") || pkgs.count("B_CT") ||
-        pkgs.count("Electrons") || flux_pkg.Get<bool>("use_fofc") ||
-        pkgs.count("Implicit") || pkgs.count("Current") ||
-        pkgs.count("EMHD") || pkgs.count("ISMR") || pmesh->multilevel)
-        throw std::runtime_error("Simple driver cannot be used with any advanced features! Use KHARMA or ImEx driver instead!");
+    if (pkgs.count("B_Cleanup") || pkgs.count("B_CT") || pkgs.count("Electrons") ||
+        flux_pkg.Get<bool>("use_fofc") || pkgs.count("Implicit") ||
+        pkgs.count("Current") || pkgs.count("EMHD") || pkgs.count("ISMR") ||
+        pmesh->multilevel)
+        throw std::runtime_error("Simple driver cannot be used with any advanced "
+                                 "features! Use KHARMA or ImEx driver instead!");
 
     // Allocate the fluid states ("containers") we need for each block
     if (stage == 1) {
-        auto &base = pmesh->mesh_data.Get("base");
+        auto& base = pmesh->mesh_data.Get("base");
         // Fluxes
         pmesh->mesh_data.Add("dUdt");
         for (int i = 1; i < integrator->nstages; i++)
             pmesh->mesh_data.Add(integrator->stage_name[i]);
     }
 
-
-
     // Big synchronous region: get & apply fluxes to advance the fluid state
     // num_partitions is nearly always 1
     const int num_partitions = pmesh->DefaultNumPartitions();
-    TaskRegion &flux_region = tc.AddRegion(num_partitions);
+    TaskRegion& flux_region = tc.AddRegion(num_partitions);
     for (int i = 0; i < num_partitions; i++) {
-        auto &tl = flux_region[i];
+        auto& tl = flux_region[i];
         // Container names:
-        // '_full_step_init' refers to the fluid state at the start of the full time step (Si in iharm3d)
-        // '_sub_step_init' refers to the fluid state at the start of the sub step (Ss in iharm3d)
-        // '_sub_step_final' refers to the fluid state at the end of the sub step (Sf in iharm3d)
+        // '_full_step_init' refers to the fluid state at the start of the full time step
+        // (Si in iharm3d)
+        // '_sub_step_init' refers to the fluid state at the start of the sub step (Ss in
+        // iharm3d)
+        // '_sub_step_final' refers to the fluid state at the end of the sub step (Sf in
+        // iharm3d)
         // '_flux_src' refers to the mesh object corresponding to -divF + S
-        auto &md_full_step_init = pmesh->mesh_data.GetOrAdd("base", i);
-        auto &md_sub_step_init  = pmesh->mesh_data.GetOrAdd(integrator->stage_name[stage - 1], i);
-        auto &md_sub_step_final = pmesh->mesh_data.GetOrAdd(integrator->stage_name[stage], i);
-        auto &md_flux_src       = pmesh->mesh_data.GetOrAdd("dUdt", i);
+        auto& md_full_step_init = pmesh->mesh_data.GetOrAdd("base", i);
+        auto& md_sub_step_init =
+            pmesh->mesh_data.GetOrAdd(integrator->stage_name[stage - 1], i);
+        auto& md_sub_step_final =
+            pmesh->mesh_data.GetOrAdd(integrator->stage_name[stage], i);
+        auto& md_flux_src = pmesh->mesh_data.GetOrAdd("dUdt", i);
 
-        auto t_start_recv_bound = tl.AddTask(t_none, parthenon::StartReceiveBoundBufs<parthenon::BoundaryType::any>, md_sub_step_final);
-
+        auto t_start_recv_bound = tl.AddTask(t_none,
+            parthenon::StartReceiveBoundBufs<parthenon::BoundaryType::any>,
+            md_sub_step_final);
 
         // Calculate the flux of each variable through each face
         // This reconstructs the primitives (P) at faces and uses them to calculate fluxes
         // of the conserved variables (U) through each face.
-        auto t_fluxes = KHARMADriver::AddFluxCalculations(t_none, tl, md_sub_step_init.get());
+        auto t_fluxes =
+            KHARMADriver::AddFluxCalculations(t_none, tl, md_sub_step_init.get());
 
         // Any package modifications to the fluxes.  e.g.:
         // 1. CT calculations for B field transport
@@ -94,51 +100,64 @@ TaskCollection KHARMADriver::MakeSimpleTaskCollection(BlockList_t &blocks, int s
         auto t_fix_flux = tl.AddTask(t_fluxes, Packages::FixFlux, md_sub_step_init.get());
 
         // Apply the fluxes to calculate a change in cell-centered values "md_flux_src"
-        auto t_flux_div = tl.AddTask(t_fix_flux, FluxDivergence, md_sub_step_init.get(), md_flux_src.get(),
-                                    std::vector<MetadataFlag>{Metadata::Independent, Metadata::Cell, Metadata::WithFluxes}, 0);
+        auto t_flux_div = tl.AddTask(t_fix_flux, FluxDivergence, md_sub_step_init.get(),
+            md_flux_src.get(),
+            std::vector<MetadataFlag>{
+                Metadata::Independent, Metadata::Cell, Metadata::WithFluxes},
+            0);
 
         // Add any source terms: geometric \Gamma * T, wind, damping, etc etc
-        auto t_sources = tl.AddTask(t_flux_div, Packages::AddSource, md_sub_step_init.get(), md_flux_src.get(), IndexDomain::interior);
+        auto t_sources = tl.AddTask(t_flux_div, Packages::AddSource,
+            md_sub_step_init.get(), md_flux_src.get(), IndexDomain::interior);
 
         // Update explicit state with the explicit fluxes/sources
-        auto t_update = KHARMADriver::AddStateUpdate(t_sources, tl, md_full_step_init.get(), md_sub_step_init.get(),
-                                                     md_flux_src.get(), md_sub_step_final.get(),
-                                                     std::vector<MetadataFlag>{Metadata::GetUserFlag("Explicit"), Metadata::Independent},
-                                                     false, stage);
+        auto t_update =
+            KHARMADriver::AddStateUpdate(t_sources, tl, md_full_step_init.get(),
+                md_sub_step_init.get(), md_flux_src.get(), md_sub_step_final.get(),
+                std::vector<MetadataFlag>{
+                    Metadata::GetUserFlag("Explicit"), Metadata::Independent},
+                false, stage);
 
         // Make sure the primitive values are updated.
-        auto t_UtoP = tl.AddTask(t_update, Packages::MeshUtoP, md_sub_step_final.get(), IndexDomain::entire, false);
+        auto t_UtoP = tl.AddTask(t_update, Packages::MeshUtoP, md_sub_step_final.get(),
+            IndexDomain::entire, false);
 
         // Apply any floors
-        auto t_floors = tl.AddTask(t_UtoP, Packages::MeshApplyFloors, md_sub_step_final.get(), IndexDomain::interior);
+        auto t_floors = tl.AddTask(t_UtoP, Packages::MeshApplyFloors,
+            md_sub_step_final.get(), IndexDomain::interior);
 
         // Boundary sync: neighbors must be available for FixUtoP below
         KHARMADriver::AddBoundarySync(t_floors, tl, md_sub_step_final);
     }
 
-    // Fix Region: prims/cons sync, floors, fixes, boundary conditions which need primitives
-    TaskRegion &fix_region = tc.AddRegion(num_partitions);
+    // Fix Region: prims/cons sync, floors, fixes, boundary conditions which need
+    // primitives
+    TaskRegion& fix_region = tc.AddRegion(num_partitions);
     for (int i = 0; i < num_partitions; i++) {
-        auto &tl = fix_region[i];
-        auto &md_sub_step_final = pmesh->mesh_data.GetOrAdd(integrator->stage_name[stage], i);
+        auto& tl = fix_region[i];
+        auto& md_sub_step_final =
+            pmesh->mesh_data.GetOrAdd(integrator->stage_name[stage], i);
 
-        // If we're evolving the GRMHD variables explicitly, we need to fix UtoP variable inversion failures
-        // Syncing bounds before calling this, and then running it over the whole domain, will make
-        // behavior for different mesh breakdowns much more similar (identical?), since bad zones in
-        // relevant ghost zone ranks will get to use all the same neighbors as if they were in the bulk
+        // If we're evolving the GRMHD variables explicitly, we need to fix UtoP variable
+        // inversion failures Syncing bounds before calling this, and then running it over
+        // the whole domain, will make behavior for different mesh breakdowns much more
+        // similar (identical?), since bad zones in relevant ghost zone ranks will get to
+        // use all the same neighbors as if they were in the bulk
         auto t_fix_p = tl.AddTask(t_none, Inverter::MeshFixUtoP, md_sub_step_final.get());
 
-        auto t_set_bc = tl.AddTask(t_fix_p, parthenon::ApplyBoundaryConditionsOnCoarseOrFineMD, md_sub_step_final, false);
+        auto t_set_bc = tl.AddTask(t_fix_p,
+            parthenon::ApplyBoundaryConditionsOnCoarseOrFineMD, md_sub_step_final, false);
 
         // Make sure *all* conserved vars are synchronized at step end
-        auto t_ptou = tl.AddTask(t_set_bc, Flux::MeshPtoU, md_sub_step_final.get(), IndexDomain::entire, false);
+        auto t_ptou = tl.AddTask(t_set_bc, Flux::MeshPtoU, md_sub_step_final.get(),
+            IndexDomain::entire, false);
 
         auto t_step_done = t_ptou;
 
         // Estimate next time step based on ctop
         if (stage == integrator->nstages) {
-            auto t_new_dt =
-                tl.AddTask(t_step_done, Update::EstimateTimestep<MeshData<Real>>, md_sub_step_final.get());
+            auto t_new_dt = tl.AddTask(t_step_done,
+                Update::EstimateTimestep<MeshData<Real>>, md_sub_step_final.get());
         }
     }
 
@@ -146,9 +165,10 @@ TaskCollection KHARMADriver::MakeSimpleTaskCollection(BlockList_t &blocks, int s
     // ensure that primitive variables in ghost zones are *exactly*
     // identical to their physical counterparts, now that they have been
     // modified on each rank.
-    const auto &two_sync = pkgs.at("Driver")->Param<bool>("two_sync");
+    const auto& two_sync = pkgs.at("Driver")->Param<bool>("two_sync");
     if (two_sync) {
-        auto &md_sub_step_final = pmesh->mesh_data.GetOrAdd(integrator->stage_name[stage], 0);
+        auto& md_sub_step_final =
+            pmesh->mesh_data.GetOrAdd(integrator->stage_name[stage], 0);
         KHARMADriver::AddFullSyncRegion(tc, md_sub_step_final);
     }
 

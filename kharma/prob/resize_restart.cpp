@@ -1,25 +1,25 @@
-/* 
+/*
  *  File: resize_restart.cpp
- *  
+ *
  *  BSD 3-Clause License
- *  
+ *
  *  Copyright (c) 2020, AFD Group at UIUC
  *  All rights reserved.
- *  
+ *
  *  Redistribution and use in source and binary forms, with or without
  *  modification, are permitted provided that the following conditions are met:
- *  
+ *
  *  1. Redistributions of source code must retain the above copyright notice, this
  *     list of conditions and the following disclaimer.
- *  
+ *
  *  2. Redistributions in binary form must reproduce the above copyright notice,
  *     this list of conditions and the following disclaimer in the documentation
  *     and/or other materials provided with the distribution.
- *  
+ *
  *  3. Neither the name of the copyright holder nor the names of its
  *     contributors may be used to endorse or promote products derived from
  *     this software without specific prior written permission.
- *  
+ *
  *  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  *  AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  *  IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -36,12 +36,12 @@
 
 #include "b_flux_ct.hpp"
 #include "hdf5_utils.h"
-#include "kharma_utils.hpp"
 #include "interpolation.hpp"
+#include "kharma_utils.hpp"
 #include "types.hpp"
 
-#include <sys/stat.h>
 #include <ctype.h>
+#include <sys/stat.h>
 
 // TODO: The iharm3d restart format fails to record several things we must guess:
 // 1. Sometimes, even precise domain boundaries in native coordinates
@@ -58,7 +58,7 @@
 hsize_t static_max(int i, int n) { return static_cast<hsize_t>(m::max(i, n)); }
 hsize_t static_min(int i, int n) { return static_cast<hsize_t>(m::min(i, n)); }
 
-void ReadIharmRestartHeader(std::string fname, ParameterInput *pin)
+void ReadIharmRestartHeader(std::string fname, ParameterInput* pin)
 {
     // Read the restart file and set parameters that need to be specified at early loading
     hdf5_open(fname.c_str());
@@ -70,7 +70,9 @@ void ReadIharmRestartHeader(std::string fname, ParameterInput *pin)
     char version[20];
     hdf5_read_single_val(version, "version", string_type);
     if (MPIRank0()) {
-        std::cout << "Initialized from " << fname << ", file version " << version << std::endl << std::endl;
+        std::cout << "Initialized from " << fname << ", file version " << version
+                  << std::endl
+                  << std::endl;
     }
 
     // Read what we need from the file, regardless of where we're putting it
@@ -120,7 +122,7 @@ void ReadIharmRestartHeader(std::string fname, ParameterInput *pin)
 
     // Set the number of primitive vars
     // TODO do this better by recording/counting flags in MODEL
-    if(hdf5_exists("game")) {
+    if (hdf5_exists("game")) {
         pin->SetInteger("resize_restart", "nfprim", 10);
     } else {
         pin->SetInteger("resize_restart", "nfprim", 8);
@@ -149,12 +151,13 @@ void ReadIharmRestartHeader(std::string fname, ParameterInput *pin)
         pin->SetReal("resize_restart", "startx2", 0.0);
         pin->SetReal("resize_restart", "stopx2", 1.0);
         pin->SetReal("resize_restart", "startx3", 0.0);
-        pin->SetReal("resize_restart", "stopx3", 2*M_PI);
+        pin->SetReal("resize_restart", "stopx3", 2 * M_PI);
     }
 
     // If specified, set *our* grid to exactly match the *file's* grid
     if (pin->GetOrAddBoolean("resize_restart", "regrid_only", false)) {
-        // This locks the Parthenon mesh size to be zone-for-zone the same as the iharm3d dump file...
+        // This locks the Parthenon mesh size to be zone-for-zone the same as the iharm3d
+        // dump file...
         pin->SetInteger("parthenon/mesh", "nx1", n1file);
         pin->SetInteger("parthenon/mesh", "nx2", n2file);
         pin->SetInteger("parthenon/mesh", "nx3", n3file);
@@ -182,12 +185,14 @@ void ReadIharmRestartHeader(std::string fname, ParameterInput *pin)
                 pin->SetReal("coordinates", "r_out", m::exp(x1max));
             }
         } else {
-            std::cout << "Guessing geometry when restarting! This is potentially very bad to do!" << std::endl;
+            std::cout << "Guessing geometry when restarting! This is potentially very "
+                         "bad to do!"
+                      << std::endl;
             // NOTE: the reason guessing is bad here has to do with old KHARMA versions:
-            // input parameters (even geometry) were only stored to 6-digit precision in old KHARMA.
-            // This means that r_in and x3max especially were cut off, and only correct to 6 digits.
-            // Restarting with more accurate parameters can mess with the B field divergence,
-            // so we warn about it.
+            // input parameters (even geometry) were only stored to 6-digit precision in
+            // old KHARMA. This means that r_in and x3max especially were cut off, and
+            // only correct to 6 digits. Restarting with more accurate parameters can mess
+            // with the B field divergence, so we warn about it.
             pin->SetReal("coordinates", "r_in", Rin);
             pin->SetReal("coordinates", "r_out", Rout);
             // xNmin/max will then be set by kharma.cpp.
@@ -208,7 +213,8 @@ void ReadIharmRestartHeader(std::string fname, ParameterInput *pin)
             pin->SetString("coordinates", "transform", "funky");
         }
     } else {
-        std::cout << "Guessing the restart file is in Cartesian coordinates!" << std::endl;
+        std::cout << "Guessing the restart file is in Cartesian coordinates!"
+                  << std::endl;
         // Anything without a BH spin was pretty likely Cartesian
         pin->SetString("coordinates", "base", "cartesian_minkowski");
         pin->SetString("coordinates", "transform", "null");
@@ -230,11 +236,12 @@ void ReadIharmRestartHeader(std::string fname, ParameterInput *pin)
     }
 }
 
-TaskStatus ReadIharmRestart(std::shared_ptr<MeshBlockData<Real>>& rc, ParameterInput *pin)
+TaskStatus ReadIharmRestart(std::shared_ptr<MeshBlockData<Real>>& rc, ParameterInput* pin)
 {
     auto pmb = rc->GetBlockPointer();
 
-    const auto fname = pin->GetString("resize_restart", "fname"); // Require this, don't guess
+    const auto fname =
+        pin->GetString("resize_restart", "fname"); // Require this, don't guess
     const bool regrid_only = pin->GetOrAddBoolean("resize_restart", "regrid_only", false);
     const bool is_spherical = pin->GetBoolean("coordinates", "spherical");
 
@@ -243,17 +250,14 @@ TaskStatus ReadIharmRestart(std::shared_ptr<MeshBlockData<Real>>& rc, ParameterI
     const hsize_t n1tot = pin->GetInteger("resize_restart", "n1tot");
     const hsize_t n2tot = pin->GetInteger("resize_restart", "n2tot");
     const hsize_t n3tot = pin->GetInteger("resize_restart", "n3tot");
-    const GReal startx[GR_DIM] = {0,
-        pin->GetReal("resize_restart", "startx1"),
+    const GReal startx[GR_DIM] = {0, pin->GetReal("resize_restart", "startx1"),
         pin->GetReal("resize_restart", "startx2"),
         pin->GetReal("resize_restart", "startx3")};
-    const GReal stopx[GR_DIM] = {0,
-        pin->GetReal("resize_restart", "stopx1"),
+    const GReal stopx[GR_DIM] = {0, pin->GetReal("resize_restart", "stopx1"),
         pin->GetReal("resize_restart", "stopx2"),
         pin->GetReal("resize_restart", "stopx3")};
-    const GReal dx[GR_DIM] = {0., (stopx[1] - startx[1])/n1tot,
-                                  (stopx[2] - startx[2])/n2tot,
-                                  (stopx[3] - startx[3])/n3tot};
+    const GReal dx[GR_DIM] = {0., (stopx[1] - startx[1]) / n1tot,
+        (stopx[2] - startx[2]) / n2tot, (stopx[3] - startx[3]) / n3tot};
 
     // Sanity checks.  Unlikely to fire but nice to have
     if (regrid_only) {
@@ -278,7 +282,8 @@ TaskStatus ReadIharmRestart(std::shared_ptr<MeshBlockData<Real>>& rc, ParameterI
             !close_to(pin->GetReal("parthenon/mesh", "x3min"), startx[3]) ||
             !close_to(pin->GetReal("parthenon/mesh", "x3max"), stopx[3])) {
             printf("Mesh shape does not match!\n");
-            printf("X1 %g vs %g & %g vs %g\nX2 %g vs %g & %g vs %g\nX3 %g vs %g & %g vs %g",
+            printf(
+                "X1 %g vs %g & %g vs %g\nX2 %g vs %g & %g vs %g\nX3 %g vs %g & %g vs %g",
                 pin->GetReal("parthenon/mesh", "x1min"), startx[1],
                 pin->GetReal("parthenon/mesh", "x1max"), stopx[1],
                 pin->GetReal("parthenon/mesh", "x2min"), startx[2],
@@ -288,16 +293,18 @@ TaskStatus ReadIharmRestart(std::shared_ptr<MeshBlockData<Real>>& rc, ParameterI
         }
     }
 
-    if(MPIRank0()) std::cout << "Reading mesh from file to cache..." << std::endl;
+    if (MPIRank0()) std::cout << "Reading mesh from file to cache..." << std::endl;
 
-    // In this section we're dealing with two different meshes: the one we're interpolating *from* (the "file" grid)
-    // and the one we're interpolating *to* -- the "meshblock."
-    // Additionally, in the "file" mesh we must deail with global file locations (no ghost zones, global index, prefixed "g")
-    // as well as local file locations (locations in a cache we read to host memory, prefixed "m")
+    // In this section we're dealing with two different meshes: the one we're
+    // interpolating *from* (the "file" grid) and the one we're interpolating *to* -- the
+    // "meshblock." Additionally, in the "file" mesh we must deail with global file
+    // locations (no ghost zones, global index, prefixed "g") as well as local file
+    // locations (locations in a cache we read to host memory, prefixed "m")
 
     // Size/domain of the MeshBlock we're reading *to*.
     // Note that we only fill the block's physical zones --
-    // PostInitialize will take care of ghosts with MPI syncs and calls to the domain boundary conditions
+    // PostInitialize will take care of ghosts with MPI syncs and calls to the domain
+    // boundary conditions
     IndexDomain domain = IndexDomain::interior;
     const IndexRange ib = pmb->cellbounds.GetBoundsI(domain);
     const IndexRange jb = pmb->cellbounds.GetBoundsJ(domain);
@@ -333,23 +340,25 @@ TaskStatus ReadIharmRestart(std::shared_ptr<MeshBlockData<Real>>& rc, ParameterI
         G.coord(kb.e, jb.e, ib.e, Loci::center, X);
         Interpolation::Xtoijk(X, startx, dx, gie, gje, gke, tmp);
         // Include one extra zone in each direction, for right side of linear interp
-        gke += 1; gje += 1; gie += 1;
+        gke += 1;
+        gje += 1;
+        gie += 1;
     }
 
     // Truncate the file read sizes so we don't overrun the file data
     hsize_t fstart[4] = {0, static_max(gks, 0), static_max(gjs, 0), static_max(gis, 0)};
     // Test gXe against last valid index, i.e. nXtot-1
-    hsize_t fstop[4] = {nfprim-1, static_min(gke, n3tot-1), static_min(gje, n2tot-1), static_min(gie, n1tot-1)};
+    hsize_t fstop[4] = {nfprim - 1, static_min(gke, n3tot - 1),
+        static_min(gje, n2tot - 1), static_min(gie, n1tot - 1)};
     // We add one here to get sizes from indices
-    hsize_t fcount[4] = {fstop[0] - fstart[0] + 1,
-                         fstop[1] - fstart[1] + 1,
-                         fstop[2] - fstart[2] + 1,
-                         fstop[3] - fstart[3] + 1};
-    // If we overran an index on the left, we need to leave a blank row (i.e., start at 1 == true) to reflect this
+    hsize_t fcount[4] = {fstop[0] - fstart[0] + 1, fstop[1] - fstart[1] + 1,
+        fstop[2] - fstart[2] + 1, fstop[3] - fstart[3] + 1};
+    // If we overran an index on the left, we need to leave a blank row (i.e., start at 1
+    // == true) to reflect this
     hsize_t mstart[4] = {0, (gks < 0), (gjs < 0), (gis < 0)};
     // Total memory size is never truncated
     // This calculation produces XxYx2 arrays for 2D sims w/linear interp but that's fine
-    hsize_t nmk = gke-gks+1, nmj = gje-gjs+1, nmi = gie-gis+1;
+    hsize_t nmk = gke - gks + 1, nmj = gje - gjs + 1, nmi = gie - gis + 1;
     hsize_t mdims[4] = {nfprim, nmk, nmj, nmi};
     // TODO these should be const but hdf5_read_array yells about it, fix that
     // TODO should yell if any of these fired for nearest-neighbor
@@ -357,7 +366,7 @@ TaskStatus ReadIharmRestart(std::shared_ptr<MeshBlockData<Real>>& rc, ParameterI
     // Allocate the array we'll need
     hsize_t nmblock = nmk * nmj * nmi;
     // TODO this may be float[] if we ever want to read dump files as restarts
-    double *ptmp = new double[nfprim*nmblock];
+    double* ptmp = new double[nfprim * nmblock];
 
     // Open the file
     hdf5_open(fname.c_str());
@@ -367,55 +376,70 @@ TaskStatus ReadIharmRestart(std::shared_ptr<MeshBlockData<Real>>& rc, ParameterI
     hdf5_read_array(ptmp, "p", 4, fdims, fstart, fcount, mdims, mstart, H5T_IEEE_F64LE);
 
     // Do some special reads from elsewhere in the file to fill periodic bounds
-    // Note we do NOT fill outflow/reflecting bounds here -- instead, we treat them specially below
+    // Note we do NOT fill outflow/reflecting bounds here -- instead, we treat them
+    // specially below
     // TODO this could probably be a lot cleaner
     hsize_t fstart_tmp[4], fcount_tmp[4], mstart_tmp[4];
-#define RESET_COUNTS DLOOP1 {fstart_tmp[mu] = fstart[mu]; fcount_tmp[mu] = fcount[mu]; mstart_tmp[mu] = mstart[mu];}
+#define RESET_COUNTS                                                                     \
+    DLOOP1 {                                                                             \
+        fstart_tmp[mu] = fstart[mu];                                                     \
+        fcount_tmp[mu] = fcount[mu];                                                     \
+        mstart_tmp[mu] = mstart[mu];                                                     \
+    }
     if (gks < 0 && pmb->boundary_flag[BoundaryFace::inner_x3] == BoundaryFlag::periodic) {
         RESET_COUNTS
         // same X1/X2, but take only the globally LAST rank in X3
-        fstart_tmp[1] = n3tot-1;
+        fstart_tmp[1] = n3tot - 1;
         fcount_tmp[1] = 1;
         // Read it to the FIRST rank of our array
         mstart_tmp[1] = 0;
-        hdf5_read_array(ptmp, "p", 4, fdims, fstart_tmp, fcount_tmp, mdims, mstart_tmp, H5T_IEEE_F64LE);
+        hdf5_read_array(ptmp, "p", 4, fdims, fstart_tmp, fcount_tmp, mdims, mstart_tmp,
+            H5T_IEEE_F64LE);
     }
-    if (gke > n3tot-1 && pmb->boundary_flag[BoundaryFace::outer_x3] == BoundaryFlag::periodic) {
+    if (gke > n3tot - 1 &&
+        pmb->boundary_flag[BoundaryFace::outer_x3] == BoundaryFlag::periodic) {
         RESET_COUNTS
         // same X1/X2, but take only the globally FIRST rank in X3
         fstart_tmp[1] = 0;
         fcount_tmp[1] = 1;
         // Read it to the LAST rank of our array
-        mstart_tmp[1] = mdims[1]-1;
-        hdf5_read_array(ptmp, "p", 4, fdims, fstart_tmp, fcount_tmp, mdims, mstart_tmp, H5T_IEEE_F64LE);
+        mstart_tmp[1] = mdims[1] - 1;
+        hdf5_read_array(ptmp, "p", 4, fdims, fstart_tmp, fcount_tmp, mdims, mstart_tmp,
+            H5T_IEEE_F64LE);
     }
     if (gjs < 0 && pmb->boundary_flag[BoundaryFace::inner_x2] == BoundaryFlag::periodic) {
         RESET_COUNTS
-        fstart_tmp[2] = n2tot-1;
+        fstart_tmp[2] = n2tot - 1;
         fcount_tmp[2] = 1;
         mstart_tmp[2] = 0;
-        hdf5_read_array(ptmp, "p", 4, fdims, fstart_tmp, fcount_tmp, mdims, mstart_tmp, H5T_IEEE_F64LE);
+        hdf5_read_array(ptmp, "p", 4, fdims, fstart_tmp, fcount_tmp, mdims, mstart_tmp,
+            H5T_IEEE_F64LE);
     }
-    if (gje > n2tot-1 && pmb->boundary_flag[BoundaryFace::outer_x2] == BoundaryFlag::periodic) {
+    if (gje > n2tot - 1 &&
+        pmb->boundary_flag[BoundaryFace::outer_x2] == BoundaryFlag::periodic) {
         RESET_COUNTS
         fstart_tmp[2] = 0;
         fcount_tmp[2] = 1;
-        mstart_tmp[2] = mdims[2]-1;
-        hdf5_read_array(ptmp, "p", 4, fdims, fstart_tmp, fcount_tmp, mdims, mstart_tmp, H5T_IEEE_F64LE);
+        mstart_tmp[2] = mdims[2] - 1;
+        hdf5_read_array(ptmp, "p", 4, fdims, fstart_tmp, fcount_tmp, mdims, mstart_tmp,
+            H5T_IEEE_F64LE);
     }
     if (gis < 0 && pmb->boundary_flag[BoundaryFace::inner_x1] == BoundaryFlag::periodic) {
         RESET_COUNTS
-        fstart_tmp[3] = n1tot-1;
+        fstart_tmp[3] = n1tot - 1;
         fcount_tmp[3] = 1;
         mstart_tmp[3] = 0;
-        hdf5_read_array(ptmp, "p", 4, fdims, fstart_tmp, fcount_tmp, mdims, mstart_tmp, H5T_IEEE_F64LE);
+        hdf5_read_array(ptmp, "p", 4, fdims, fstart_tmp, fcount_tmp, mdims, mstart_tmp,
+            H5T_IEEE_F64LE);
     }
-    if (gie > n1tot-1 && pmb->boundary_flag[BoundaryFace::outer_x1] == BoundaryFlag::periodic) {
+    if (gie > n1tot - 1 &&
+        pmb->boundary_flag[BoundaryFace::outer_x1] == BoundaryFlag::periodic) {
         RESET_COUNTS
         fstart_tmp[3] = 0;
         fcount_tmp[3] = 1;
-        mstart_tmp[3] = mdims[3]-1;
-        hdf5_read_array(ptmp, "p", 4, fdims, fstart_tmp, fcount_tmp, mdims, mstart_tmp, H5T_IEEE_F64LE);
+        mstart_tmp[3] = mdims[3] - 1;
+        hdf5_read_array(ptmp, "p", 4, fdims, fstart_tmp, fcount_tmp, mdims, mstart_tmp,
+            H5T_IEEE_F64LE);
     }
 
     hdf5_close();
@@ -434,24 +458,33 @@ TaskStatus ReadIharmRestart(std::shared_ptr<MeshBlockData<Real>>& rc, ParameterI
     auto B_host = B_P.GetHostMirror();
 
     // Interpolate on the host side & copy into the mirror Views
-    // Nearest-neighbor interpolation is currently only used when grids exactly correspond -- otherwise, linear interpolation is used
-    // to minimize the resulting B field divergence.
+    // Nearest-neighbor interpolation is currently only used when grids exactly correspond
+    // -- otherwise, linear interpolation is used to minimize the resulting B field
+    // divergence.
     if (regrid_only) {
         // TODO Kokkos calls here had problems with CUDA, reintroduce/fix
         // OpenMP here conflicts with Kokkos parallel in some cases, so we're stuck
-        for (int k=kb.s; k <= kb.e; ++k) for (int j=jb.s; j <= jb.e; ++j) for (int i=ib.s; i <= ib.e; ++i) {
-            GReal X[GR_DIM]; int gk, gj, gi;
-            G.coord(k, j, i, Loci::center, X);
-            Interpolation::Xtoijk_nearest(X, startx, dx, gi, gj, gk);
-            // TODO verify this never reads zones outside the cache
-            // Calculate indices inside our cached block
-            int mk = gk - gks, mj = gj - gjs, mi = gi - gis;
-            // Fill cells of the new block with equivalents in the cached block
-            rho_host(k, j, i) = ptmp[0*nmblock + mk*nmj*nmi + mj*nmi + mi];
-            u_host(k, j, i)   = ptmp[1*nmblock + mk*nmj*nmi + mj*nmi + mi];
-            VLOOP uvec_host(v, k, j, i) = ptmp[(2+v)*nmblock + mk*nmj*nmi + mj*nmi + mi];
-            VLOOP B_host(v, k, j, i) = ptmp[(5+v)*nmblock + mk*nmj*nmi + mj*nmi + mi];
-        }
+        for (int k = kb.s; k <= kb.e; ++k)
+            for (int j = jb.s; j <= jb.e; ++j)
+                for (int i = ib.s; i <= ib.e; ++i) {
+                    GReal X[GR_DIM];
+                    int gk, gj, gi;
+                    G.coord(k, j, i, Loci::center, X);
+                    Interpolation::Xtoijk_nearest(X, startx, dx, gi, gj, gk);
+                    // TODO verify this never reads zones outside the cache
+                    // Calculate indices inside our cached block
+                    int mk = gk - gks, mj = gj - gjs, mi = gi - gis;
+                    // Fill cells of the new block with equivalents in the cached block
+                    rho_host(k, j, i) =
+                        ptmp[0 * nmblock + mk * nmj * nmi + mj * nmi + mi];
+                    u_host(k, j, i) = ptmp[1 * nmblock + mk * nmj * nmi + mj * nmi + mi];
+                    VLOOP
+                        uvec_host(v, k, j, i) =
+                            ptmp[(2 + v) * nmblock + mk * nmj * nmi + mj * nmi + mi];
+                    VLOOP
+                        B_host(v, k, j, i) =
+                            ptmp[(5 + v) * nmblock + mk * nmj * nmi + mj * nmi + mi];
+                }
     } else {
         // TODO real boundary flags. Repeat on any outflow/reflecting bounds
         const bool repeat_x1i = is_spherical;
@@ -459,26 +492,48 @@ TaskStatus ReadIharmRestart(std::shared_ptr<MeshBlockData<Real>>& rc, ParameterI
         const bool repeat_x2i = is_spherical;
         const bool repeat_x2o = is_spherical;
 
-        for (int k=kb.s; k <= kb.e; ++k) for (int j=jb.s; j <= jb.e; ++j) for (int i=ib.s; i <= ib.e; ++i) {
-            GReal X[GR_DIM], del[GR_DIM]; int gk, gj, gi;
-            // Get the zone center location
-            G.coord(k, j, i, Loci::center, X);
-            // Get global indices
-            Interpolation::Xtoijk(X, startx, dx, gi, gj, gk, del);
-            // Make any corrections due to global boundaries
-            // Currently just repeats the last zone, equivalent to falling back to nearest-neighbor
-            if (repeat_x1i && gi < 0) { gi = 0; del[1] = 0; }
-            if (repeat_x1o && gi > n1tot-2) { gi = n1tot - 2; del[1] = 1; }
-            if (repeat_x2i && gj < 0) { gj = 0; del[2] = 0; }
-            if (repeat_x2o && gj > n2tot-2) { gj = n2tot - 2; del[2] = 1; }
-            // Calculate indices inside our cached block
-            int mk = gk - gks, mj = gj - gjs, mi = gi - gis;
-            // Interpolate the value at this location from the cached grid
-            rho_host(k, j, i) = Interpolation::linear(mi, mj, mk, nmi, nmj, nmk, del, &(ptmp[0*nmblock]));
-            u_host(k, j, i) = Interpolation::linear(mi, mj, mk, nmi, nmj, nmk, del, &(ptmp[1*nmblock]));
-            VLOOP uvec_host(v, k, j, i) = Interpolation::linear(mi, mj, mk, nmi, nmj, nmk, del, &(ptmp[(2+v)*nmblock]));
-            VLOOP B_host(v, k, j, i) = Interpolation::linear(mi, mj, mk, nmi, nmj, nmk, del, &(ptmp[(5+v)*nmblock]));
-        }
+        for (int k = kb.s; k <= kb.e; ++k)
+            for (int j = jb.s; j <= jb.e; ++j)
+                for (int i = ib.s; i <= ib.e; ++i) {
+                    GReal X[GR_DIM], del[GR_DIM];
+                    int gk, gj, gi;
+                    // Get the zone center location
+                    G.coord(k, j, i, Loci::center, X);
+                    // Get global indices
+                    Interpolation::Xtoijk(X, startx, dx, gi, gj, gk, del);
+                    // Make any corrections due to global boundaries
+                    // Currently just repeats the last zone, equivalent to falling back to
+                    // nearest-neighbor
+                    if (repeat_x1i && gi < 0) {
+                        gi = 0;
+                        del[1] = 0;
+                    }
+                    if (repeat_x1o && gi > n1tot - 2) {
+                        gi = n1tot - 2;
+                        del[1] = 1;
+                    }
+                    if (repeat_x2i && gj < 0) {
+                        gj = 0;
+                        del[2] = 0;
+                    }
+                    if (repeat_x2o && gj > n2tot - 2) {
+                        gj = n2tot - 2;
+                        del[2] = 1;
+                    }
+                    // Calculate indices inside our cached block
+                    int mk = gk - gks, mj = gj - gjs, mi = gi - gis;
+                    // Interpolate the value at this location from the cached grid
+                    rho_host(k, j, i) = Interpolation::linear(
+                        mi, mj, mk, nmi, nmj, nmk, del, &(ptmp[0 * nmblock]));
+                    u_host(k, j, i) = Interpolation::linear(
+                        mi, mj, mk, nmi, nmj, nmk, del, &(ptmp[1 * nmblock]));
+                    VLOOP
+                        uvec_host(v, k, j, i) = Interpolation::linear(
+                            mi, mj, mk, nmi, nmj, nmk, del, &(ptmp[(2 + v) * nmblock]));
+                    VLOOP
+                        B_host(v, k, j, i) = Interpolation::linear(
+                            mi, mj, mk, nmi, nmj, nmk, del, &(ptmp[(5 + v) * nmblock]));
+                }
     }
 
     // Deep copy to device
