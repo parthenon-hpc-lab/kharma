@@ -30,7 +30,7 @@ transform = null
 correct_connections = true
 
 <parthenon/time>
-tlim = 500.0
+tlim = 250.0
 integrator = rk2
 dt_min = 0.0001
 

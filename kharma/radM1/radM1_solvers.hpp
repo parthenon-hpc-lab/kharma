@@ -906,10 +906,9 @@ KOKKOS_INLINE_FUNCTION int solve_radiation_4d(
     U_new(m_u.U3, k, j, i) -= dcov_rad[3];
 
 
-    // Do GRMHD U2P with the new guess for the fluid primitives.
     auto mhd_inverter_status = Inverter::u_to_p<Inverter::Type::kastaun>(
         G, U_new, m_u, gam, k, j, i, P_new, m_p, Loci::center,
-        25, 1e-12, true);
+        25, 1e-12, false);
     if (mhd_inverter_status != static_cast<int>(Inverter::Status::success)) {
         successful_prim_recovery = false;
 
