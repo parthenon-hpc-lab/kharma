@@ -35,6 +35,13 @@
 
 #include "flux.hpp"
 
+// phoebus includes
+#include "microphysics/eos_kharma/eos_kharma.hpp"
+#include "phoebus_utils/unit_conversions.hpp"
+#include "phoebus_utils/variables.hpp"
+
+using namespace singularity;
+
 #include "domain.hpp"
 #include "floors_functions.hpp"
 
@@ -76,6 +83,10 @@ inline TaskStatus GetFlux(MeshData<Real>* md)
     const auto& pars = packages.Get("Fluxes")->AllParams();
     const auto& mhd_pars = packages.Get("GRMHD")->AllParams();
     const auto& globals = packages.Get("Globals")->AllParams();
+    
+    const auto& eos_params = packages.Get("eos")->AllParams();
+    auto eos = eos_params.Get<Microphysics::EOS::EOS>("d.EOS");
+
     const bool use_hlle = pars.Get<bool>("use_hlle");
 
     // Out of the Package modification RADM1.
@@ -105,9 +116,7 @@ inline TaskStatus GetFlux(MeshData<Real>* md)
     const Floors::Prescription& floors = floors_temp;
     const Floors::Prescription& floors_inner = floors_inner_temp;
 
-    const bool reconstruction_fallback = pars.Get<bool>("reconstruction_fallback");
-
-    const Real gam = mhd_pars.Get<Real>("gamma");
+    const bool reconstruction_fallback = pars.Get<bool>("reconstruction_fallback");    
 
     // Check whether we're using constraint-damping
     // (which requires that a variable be propagated at ctop_max)
@@ -225,9 +234,9 @@ inline TaskStatus GetFlux(MeshData<Real>* md)
                     // zero (as intended)
                     if (reconstruction_floors || reconstruction_fallback) {
                         fallback_tvd(i) = Floors::apply_geo_floors(
-                            G, Pl, m_p, gam, j, i, floors, floors_inner, loc);
+                            G, Pl, m_p, eos, j, i, floors, floors_inner, loc);
                         fallback_tvd(i) |= Floors::apply_geo_floors(
-                            G, Pr, m_p, gam, j, i, floors, floors_inner, loc);
+                            G, Pr, m_p, eos, j, i, floors, floors_inner, loc);
                     }
                 });
             member.team_barrier();
@@ -325,13 +334,13 @@ inline TaskStatus GetFlux(MeshData<Real>* md)
                     // Left
                     GRMHD::calc_4vecs(G, Pl, m_p, j, i, loc, Dtmp);
                     Flux::prim_to_flux(
-                        G, Pl, m_p, Dtmp, emhd_params, gam, j, i, 0, Ul, m_u, loc);
+                        G, Pl, m_p, Dtmp, emhd_params, eos, j, i, 0, Ul, m_u, loc);
                     Flux::prim_to_flux(
-                        G, Pl, m_p, Dtmp, emhd_params, gam, j, i, dir, Fl, m_u, loc);
+                        G, Pl, m_p, Dtmp, emhd_params, eos, j, i, dir, Fl, m_u, loc);
 
                     // Magnetosonic speeds
                     Real cmaxL, cminL;
-                    Flux::vchar(G, Pl, m_p, Dtmp, gam, emhd_params, k, j, i, loc, dir,
+                    Flux::vchar(G, Pl, m_p, Dtmp, eos, emhd_params, k, j, i, loc, dir,
                         cmaxL, cminL);
 
                     // Out of the package modification RADM1. Calculate radiation
@@ -399,13 +408,13 @@ inline TaskStatus GetFlux(MeshData<Real>* md)
                     // Right
                     GRMHD::calc_4vecs(G, Pr, m_p, j, i, loc, Dtmp);
                     Flux::prim_to_flux(
-                        G, Pr, m_p, Dtmp, emhd_params, gam, j, i, 0, Ur, m_u, loc);
+                        G, Pr, m_p, Dtmp, emhd_params, eos, j, i, 0, Ur, m_u, loc);
                     Flux::prim_to_flux(
-                        G, Pr, m_p, Dtmp, emhd_params, gam, j, i, dir, Fr, m_u, loc);
+                        G, Pr, m_p, Dtmp, emhd_params, eos, j, i, dir, Fr, m_u, loc);
 
                     // Magnetosonic speeds
                     Real cmaxR, cminR;
-                    Flux::vchar(G, Pr, m_p, Dtmp, gam, emhd_params, k, j, i, loc, dir,
+                    Flux::vchar(G, Pr, m_p, Dtmp, eos, emhd_params, k, j, i, loc, dir,
                         cmaxR, cminR);
 
                     // Out of the package modification RADM1. Calculate radiation

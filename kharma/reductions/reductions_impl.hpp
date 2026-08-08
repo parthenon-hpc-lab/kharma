@@ -40,6 +40,11 @@
 // Satisfy IDE parsers who aren't wise to our schemes
 #include "reductions.hpp"
 
+// phoebus includes
+#include "microphysics/eos_kharma/eos_kharma.hpp"
+#include "phoebus_utils/unit_conversions.hpp"
+#include "phoebus_utils/variables.hpp"
+
 template<typename T, bool all_reduce>
 inline std::string GetPoolName()
 {
@@ -131,6 +136,9 @@ T Reductions::DomainReduction(MeshData<Real>* md, const GReal startx[3],
     const auto& pars = pmesh->packages.Get("GRMHD")->AllParams();
     const Real gam = pars.Get<Real>("gamma");
     const auto& emhd_params = EMHD::GetEMHDParameters(pmesh->packages);
+       
+    const auto& eos_params = pmesh->packages.Get("eos")->AllParams();
+    auto eos = eos_params.Get<Microphysics::EOS::EOS>("d.EOS");
 
     // Just pass in everything we might want. Probably slow?
     PackIndexMap prims_map, cons_map;

@@ -43,6 +43,11 @@ AUX_SOURCE_DIRECTORY(${CMAKE_CURRENT_SOURCE_DIR}/units EXE_NAME_SRC)
 AUX_SOURCE_DIRECTORY(${CMAKE_CURRENT_SOURCE_DIR}/radM1 EXE_NAME_SRC)
 AUX_SOURCE_DIRECTORY(${CMAKE_CURRENT_SOURCE_DIR}/wind EXE_NAME_SRC)
 
+AUX_SOURCE_DIRECTORY(${CMAKE_CURRENT_SOURCE_DIR}/geometry EXE_NAME_SRC)
+AUX_SOURCE_DIRECTORY(${CMAKE_CURRENT_SOURCE_DIR}/microphysics/eos_kharma EXE_NAME_SRC)
+AUX_SOURCE_DIRECTORY(${CMAKE_CURRENT_SOURCE_DIR}/microphysics/opac_kharma EXE_NAME_SRC)
+AUX_SOURCE_DIRECTORY(${CMAKE_CURRENT_SOURCE_DIR}/phoebus_utils EXE_NAME_SRC)
+
 include_directories(${CMAKE_CURRENT_SOURCE_DIR})
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/prob)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/prob/elec)
@@ -74,6 +79,9 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR}/units)
 # Out of the package modification RADM1.
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/radM1)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/wind)
+
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/microphysics/eos_kharma)
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/microphysics/opac_kharma)
 
 # generate version.cpp file from current git commit in a way that
 # 1. Re-generates if hash changes

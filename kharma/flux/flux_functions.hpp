@@ -35,6 +35,12 @@
 
 #include "decs.hpp"
 
+// phoebus includes
+#include "microphysics/eos_kharma/eos_kharma.hpp"
+#include "phoebus_utils/unit_conversions.hpp"
+#include "phoebus_utils/variables.hpp"
+
+
 #include "emhd.hpp"
 #include "gr_coordinates.hpp"
 #include "grmhd_functions.hpp"
@@ -54,59 +60,73 @@ namespace Flux
 // TODO Q > 0 != emhd_enabled.  Store enablement in emhd_params since we need it anyway
 template<typename Local>
 KOKKOS_FORCEINLINE_FUNCTION void calc_tensor(const Local& P, const VarMap& m_p,
-    const FourVectors D, const EMHD::EMHD_parameters& emhd_params, const Real& gam,
+    const FourVectors D, const EMHD::EMHD_parameters& emhd_params, const Microphysics::EOS::EOS& eos,
     const int& dir, Real T[GR_DIM])
 {
+    // calc pressure
+    Real sie = P(m_p.UU)/P(m_p.RHO); //specific internal energy
+    Real pressure = eos.PressureFromDensityInternalEnergy(P(m_p.RHO), sie);
     if ((m_p.Q >= 0 || m_p.DP >= 0) && emhd_params.feedback) {
         // Apply higher-order terms conversion if necessary
         Real qtilde = 0., dPtilde = 0.;
         if (m_p.Q >= 0) qtilde = P(m_p.Q);
         if (m_p.DP >= 0) dPtilde = P(m_p.DP);
-        const Real Theta = (gam - 1) * P(m_p.UU) / P(m_p.RHO);
-        const Real cs2 = gam * (gam - 1) * P(m_p.UU) / (P(m_p.RHO) + gam * P(m_p.UU));
+        const Real ef = P(m_p.RHO) + P(m_p.UU) + pressure; // \rho * h = rho + u + P.
+        const Real cs2 = eos.BulkModulusFromDensityInternalEnergy(P(m_p.RHO),sie)/ef;
+        //TODO_EOS: Is this actually what's needed here?
+        const Real Theta = pressure/P(m_p.RHO);
+        
+        // const Real Theta = (gam - 1) * P(m_p.UU) / P(m_p.RHO); //dimensionless temperature ? Check with cora
+        // const Real cs2 = gam * (gam - 1) * P(m_p.UU) / (P(m_p.RHO) + gam * P(m_p.UU));
         Real q, dP;
         EMHD::convert_prims_to_q_dP(
             qtilde, dPtilde, P(m_p.RHO), Theta, cs2, emhd_params, q, dP);
-
         // Then calculate the tensor
-        EMHD::calc_tensor(P(m_p.RHO), P(m_p.UU), (gam - 1) * P(m_p.UU), q, dP, D, dir, T);
+        EMHD::calc_tensor(P(m_p.RHO), P(m_p.UU), pressure, q, dP, D, dir, T);
     } else if (m_p.B1 >= 0) {
         // GRMHD stress-energy tensor w/ first index up, second index down
-        GRMHD::calc_tensor(P(m_p.RHO), P(m_p.UU), (gam - 1) * P(m_p.UU), D, dir, T);
+        GRMHD::calc_tensor(P(m_p.RHO), P(m_p.UU), pressure, D, dir, T);
     } else {
         // GRHD stress-energy tensor
-        GRHD::calc_tensor(P(m_p.RHO), P(m_p.UU), (gam - 1) * P(m_p.UU), D, dir, T);
+        GRHD::calc_tensor(P(m_p.RHO), P(m_p.UU), pressure, D, dir, T);
     }
 }
-
 template<typename Global>
 KOKKOS_FORCEINLINE_FUNCTION void calc_tensor(const Global& P, const VarMap& m_p,
-    const FourVectors D, const EMHD::EMHD_parameters& emhd_params, const Real& gam,
+    const FourVectors D, const EMHD::EMHD_parameters& emhd_params, const Microphysics::EOS::EOS& eos,
     const int& k, const int& j, const int& i, const int& dir, Real T[GR_DIM])
 {
+    // calc pressure
+    Real sie = P(m_p.UU, k, j, i)/P(m_p.RHO, k, j, i); //specific internal energy
+    Real pressure = eos.PressureFromDensityInternalEnergy(P(m_p.RHO, k, j, i), sie);
     if ((m_p.Q >= 0 || m_p.DP >= 0) && emhd_params.feedback) {
         // Apply higher-order terms conversion if necessary
         Real qtilde = 0., dPtilde = 0.;
         if (m_p.Q >= 0) qtilde = P(m_p.Q, k, j, i);
         if (m_p.DP >= 0) dPtilde = P(m_p.DP, k, j, i);
-        const Real Theta = (gam - 1) * P(m_p.UU, k, j, i) / P(m_p.RHO, k, j, i);
-        const Real cs2 = gam * (gam - 1) * P(m_p.UU, k, j, i) /
-                         (P(m_p.RHO, k, j, i) + gam * P(m_p.UU, k, j, i));
+
+        const Real ef = P(m_p.RHO, k, j, i) + P(m_p.UU, k, j, i) + pressure; // \rho * h = rho + u + P.
+        const Real cs2 = eos.BulkModulusFromDensityInternalEnergy(P(m_p.RHO, k, j, i), sie)/ef;
+        //TODO_EOS: Is this actually what's needed here?
+        const Real Theta = pressure/P(m_p.RHO, k, j, i);
+        // const Real Theta = (gam - 1) * P(m_p.UU, k, j, i) / P(m_p.RHO, k, j, i);
+        // const Real cs2 = gam * (gam - 1) * P(m_p.UU, k, j, i) /
+        //                  (P(m_p.RHO, k, j, i) + gam * P(m_p.UU, k, j, i));
         Real q, dP;
         EMHD::convert_prims_to_q_dP(
             qtilde, dPtilde, P(m_p.RHO, k, j, i), Theta, cs2, emhd_params, q, dP);
 
         // Then calculate the tensor
         EMHD::calc_tensor(P(m_p.RHO, k, j, i), P(m_p.UU, k, j, i),
-            (gam - 1) * P(m_p.UU, k, j, i), q, dP, D, dir, T);
+            pressure, q, dP, D, dir, T);
     } else if (m_p.B1 >= 0) {
         // GRMHD stress-energy tensor w/ first index up, second index down
         GRMHD::calc_tensor(P(m_p.RHO, k, j, i), P(m_p.UU, k, j, i),
-            (gam - 1) * P(m_p.UU, k, j, i), D, dir, T);
+            pressure, D, dir, T);
     } else {
         // GRHD stress-energy tensor w/ first index up, second index down
         GRHD::calc_tensor(P(m_p.RHO, k, j, i), P(m_p.UU, k, j, i),
-            (gam - 1) * P(m_p.UU, k, j, i), D, dir, T);
+            pressure, D, dir, T);
     }
 }
 
@@ -119,16 +139,17 @@ KOKKOS_FORCEINLINE_FUNCTION void calc_tensor(const Global& P, const VarMap& m_p,
 template<typename Local>
 KOKKOS_FORCEINLINE_FUNCTION void prim_to_flux(const GRCoordinates& G, const Local& P,
     const VarMap& m_p, const FourVectors D, const EMHD::EMHD_parameters& emhd_params,
-    const Real& gam, const int& j, const int& i, const int& dir, const Local& flux,
+    const Microphysics::EOS::EOS& eos, const int& j, const int& i, const int& dir, const Local& flux,
     const VarMap& m_u, const Loci loc = Loci::center)
 {
+    
     Real gdet = G.gdet(loc, j, i);
     // Particle number flux
     flux(m_u.RHO) = P(m_p.RHO) * D.ucon[dir] * gdet;
 
     // Stress-energy tensor
     Real T[GR_DIM];
-    calc_tensor(P, m_p, D, emhd_params, gam, dir, T);
+    calc_tensor(P, m_p, D, emhd_params, eos, dir, T);
     flux(m_u.UU) = T[0] * gdet + flux(m_u.RHO);
     flux(m_u.U1) = T[1] * gdet;
     flux(m_u.U2) = T[2] * gdet;
@@ -183,6 +204,7 @@ KOKKOS_FORCEINLINE_FUNCTION void prim_to_flux(const GRCoordinates& G, const Loca
     }
 
     // Electrons: normalized by density
+    // TODO_EOS: I think this might need some changes
     if (m_u.KTOT >= 0) {
         flux(m_u.KTOT) = flux(m_u.RHO) * P(m_p.KTOT);
         if (m_u.K_CONSTANT >= 0) flux(m_u.K_CONSTANT) = flux(m_u.RHO) * P(m_p.K_CONSTANT);
@@ -197,7 +219,7 @@ KOKKOS_FORCEINLINE_FUNCTION void prim_to_flux(const GRCoordinates& G, const Loca
 template<typename Global>
 KOKKOS_FORCEINLINE_FUNCTION void prim_to_flux(const GRCoordinates& G, const Global& P,
     const VarMap& m_p, const FourVectors D, const EMHD::EMHD_parameters& emhd_params,
-    const Real& gam, const int& k, const int& j, const int& i, const int& dir,
+    const Microphysics::EOS::EOS& eos, const int& k, const int& j, const int& i, const int& dir,
     Real flux[MAX_VARS], const VarMap& m_u, const Loci loc = Loci::center)
 {
     Real gdet = G.gdet(loc, j, i);
@@ -206,7 +228,7 @@ KOKKOS_FORCEINLINE_FUNCTION void prim_to_flux(const GRCoordinates& G, const Glob
 
     // Stress-energy tensor
     Real T[GR_DIM];
-    calc_tensor(P, m_p, D, emhd_params, gam, k, j, i, dir, T);
+    calc_tensor(P, m_p, D, emhd_params, eos, k, j, i, dir, T);
     flux[m_u.UU] = T[0] * gdet + flux[m_u.RHO];
     flux[m_u.U1] = T[1] * gdet;
     flux[m_u.U2] = T[2] * gdet;
@@ -278,7 +300,7 @@ KOKKOS_FORCEINLINE_FUNCTION void prim_to_flux(const GRCoordinates& G, const Glob
 template<typename Global>
 KOKKOS_FORCEINLINE_FUNCTION void prim_to_flux(const GRCoordinates& G, const Global& P,
     const VarMap& m_p, const FourVectors D, const EMHD::EMHD_parameters& emhd_params,
-    const Real& gam, const int& k, const int& j, const int& i, const int dir,
+    const Microphysics::EOS::EOS& eos, const int& k, const int& j, const int& i, const int dir,
     const Global& flux, const VarMap& m_u, const Loci loc = Loci::center)
 {
     const Real gdet = G.gdet(loc, j, i);
@@ -286,7 +308,7 @@ KOKKOS_FORCEINLINE_FUNCTION void prim_to_flux(const GRCoordinates& G, const Glob
     flux(m_u.RHO, k, j, i) = P(m_p.RHO, k, j, i) * D.ucon[dir] * gdet;
 
     Real T[GR_DIM];
-    calc_tensor(P, m_p, D, emhd_params, gam, k, j, i, dir, T);
+    calc_tensor(P, m_p, D, emhd_params, eos, k, j, i, dir, T);
     flux(m_u.UU, k, j, i) = T[0] * gdet + flux(m_u.RHO, k, j, i);
     flux(m_u.U1, k, j, i) = T[1] * gdet;
     flux(m_u.U2, k, j, i) = T[2] * gdet;
@@ -369,7 +391,7 @@ KOKKOS_FORCEINLINE_FUNCTION void prim_to_flux(const GRCoordinates& G, const Glob
 template<typename Global>
 KOKKOS_FORCEINLINE_FUNCTION void prim_to_flux_mhd(const GRCoordinates& G, const Global& P,
     const VarMap& m_p, const FourVectors D, const EMHD::EMHD_parameters& emhd_params,
-    const Real& gam, const int& k, const int& j, const int& i, const int dir,
+    const Microphysics::EOS::EOS& eos, const int& k, const int& j, const int& i, const int dir,
     const Global& flux, const VarMap& m_u, const Loci loc = Loci::center)
 {
     const Real& gdet = G.gdet(loc, j, i);
@@ -377,7 +399,7 @@ KOKKOS_FORCEINLINE_FUNCTION void prim_to_flux_mhd(const GRCoordinates& G, const 
     flux(m_u.RHO, k, j, i) = P(m_p.RHO, k, j, i) * D.ucon[dir] * gdet;
 
     Real T[GR_DIM];
-    calc_tensor(P, m_p, D, emhd_params, gam, k, j, i, dir, T);
+    calc_tensor(P, m_p, D, emhd_params, eos, k, j, i, dir, T);
     flux(m_u.UU, k, j, i) = T[0] * gdet + flux(m_u.RHO, k, j, i);
     flux(m_u.U1, k, j, i) = T[1] * gdet;
     flux(m_u.U2, k, j, i) = T[2] * gdet;
@@ -401,24 +423,24 @@ KOKKOS_FORCEINLINE_FUNCTION void p_to_u(const GRCoordinates& G, const Local& P,
 
 template<typename Global>
 KOKKOS_FORCEINLINE_FUNCTION void p_to_u(const GRCoordinates& G, const Global& P,
-    const VarMap& m_p, const EMHD::EMHD_parameters& emhd_params, const Real& gam,
+    const VarMap& m_p, const EMHD::EMHD_parameters& emhd_params, const Microphysics::EOS::EOS& eos,
     const int& k, const int& j, const int& i, const Global& U, const VarMap& m_u,
     const Loci& loc = Loci::center)
 {
     FourVectors Dtmp;
     GRMHD::calc_4vecs(G, P, m_p, k, j, i, Loci::center, Dtmp);
-    prim_to_flux(G, P, m_p, Dtmp, emhd_params, gam, k, j, i, 0, U, m_u, loc);
+    prim_to_flux(G, P, m_p, Dtmp, emhd_params, eos, k, j, i, 0, U, m_u, loc);
 }
 
 template<typename Global>
 KOKKOS_FORCEINLINE_FUNCTION void p_to_u_mhd(const GRCoordinates& G, const Global& P,
-    const VarMap& m_p, const EMHD::EMHD_parameters& emhd_params, const Real& gam,
+    const VarMap& m_p, const EMHD::EMHD_parameters& emhd_params, const Microphysics::EOS::EOS& eos,
     const int& k, const int& j, const int& i, const Global& U, const VarMap& m_u,
     const Loci& loc = Loci::center)
 {
     FourVectors Dtmp;
     GRMHD::calc_4vecs(G, P, m_p, k, j, i, Loci::center, Dtmp);
-    prim_to_flux_mhd(G, P, m_p, Dtmp, emhd_params, gam, k, j, i, 0, U, m_u, loc);
+    prim_to_flux_mhd(G, P, m_p, Dtmp, emhd_params, eos, k, j, i, 0, U, m_u, loc);
 }
 
 /**
@@ -496,24 +518,34 @@ KOKKOS_FORCEINLINE_FUNCTION void vchar_rad(const GRCoordinates& G, const Local& 
  */
 template<typename Local>
 KOKKOS_FORCEINLINE_FUNCTION void vchar(const GRCoordinates& G, const Local& P,
-    const VarMap& m, const FourVectors& D, const Real& gam,
+    const VarMap& m, const FourVectors& D, const Microphysics::EOS::EOS& eos,
     const EMHD::EMHD_parameters& emhd_params, const int& k, const int& j, const int& i,
     const Loci& loc, const int& dir, Real& cmax, Real& cmin)
 {
     // Find sound speed
-    const Real ef = P(m.RHO) + gam * P(m.UU);
+
+    //TODO_EOS: apparently singularity-eos has a relativistic EOS constructor that will take care of making sure the sound speed is less than c.
+    // Check it out later https://lanl.github.io/singularity-eos/main/src/modifiers.html
+    const Real sie = P(m.UU)/P(m.RHO);
+    const Real pressure = eos.PressureFromDensityInternalEnergy(P(m.RHO),sie);
+    const Real bulk = eos.BulkModulusFromDensityInternalEnergy(P(m.RHO), sie);
+    const Real ef = P(m.RHO) + pressure + P(m.UU);
+    const Real gam = bulk / pressure;
+
     // The fluid sound speed should be at most sqrt(gam-1) for a relativistic fluid
-    const Real cs2 = clip(gam * (gam - 1) * P(m.UU) / ef, 0., gam - 1.);
+    // TODO_EOS: Is that the right limit for a general eos?
+    const Real cs2 = clip(bulk / ef, 0., gam - 1.);
     Real cms2;
     if (m.Q >= 0 || m.DP >= 0) {
         // Get the EGRMHD parameters
         Real tau, chi_e, nu_e;
+        // TODO_EOS: This might need to be changed for general eos.
         EMHD::set_parameters(G, P, m, emhd_params, gam, j, i, tau, chi_e, nu_e);
 
         // Find fast magnetosonic speed
         const Real bsq = dot(D.bcon, D.bcov);
         const Real va2 = bsq / (bsq + ef);
-
+        // TODO_EOS: This might need to be changed for general eos.
         const Real ccond2 =
             (m.Q >= 0) ? (gam - 1.) * emhd_params.conduction_alpha * cs2 : 0.0;
         const Real cvis2 = (m.DP >= 0) ? (4. / 3.) / (P(m.RHO) + (gam * P(m.UU))) *
@@ -572,24 +604,40 @@ KOKKOS_FORCEINLINE_FUNCTION void vchar(const GRCoordinates& G, const Local& P,
 // w/different signatures trick
 template<typename Global>
 KOKKOS_FORCEINLINE_FUNCTION void vchar_global(const GRCoordinates& G, const Global& P,
-    const VarMap& m, const FourVectors& D, const Real& gam,
+    const VarMap& m, const FourVectors& D, const Microphysics::EOS::EOS& eos,
     const EMHD::EMHD_parameters& emhd_params, const int& k, const int& j, const int& i,
     const Loci& loc, const int& dir, Real& cmax, Real& cmin)
 {
     // Find sound speed
-    const Real ef = P(m.RHO, k, j, i) + gam * P(m.UU, k, j, i);
+    // const Real ef = P(m.RHO, k, j, i) + gam * P(m.UU, k, j, i);
+    
+    // // The fluid sound speed should be at most sqrt(gam-1) for a relativistic fluid
+    // const Real cs2 = clip(gam * (gam - 1) * P(m.UU, k, j, i) / ef, 0., gam - 1.);
+    
+    //TODO_EOS: apparently singularity-eos has a relativistic EOS constructor that will take care of making sure the sound speed is less than c.
+    //Check it out later https://lanl.github.io/singularity-eos/main/src/modifiers.html
+    const Real sie = P(m.UU, k, j, i)/P(m.RHO, k, j, i);
+    const Real pressure = eos.PressureFromDensityInternalEnergy(P(m.RHO, k, j, i), sie);
+    const Real bulk = eos.BulkModulusFromDensityInternalEnergy(P(m.RHO, k, j, i), sie);
+    const Real ef = P(m.RHO, k, j, i) + pressure + P(m.UU, k, j, i);
+    const Real gam = bulk / pressure;
+
     // The fluid sound speed should be at most sqrt(gam-1) for a relativistic fluid
-    const Real cs2 = clip(gam * (gam - 1) * P(m.UU, k, j, i) / ef, 0., gam - 1.);
+    // TODO_EOS: Is that the right limit for a general eos?
+    const Real cs2 = clip(bulk / ef, 0., gam - 1.);
     Real cms2;
     if (m.Q >= 0 || m.DP >= 0) {
         // Get the EGRMHD parameters
         Real tau, chi_e, nu_e;
+        //TODO_EOS: This might need to be changed for general eos.
         EMHD::set_parameters(G, P, m, emhd_params, gam, k, j, i, tau, chi_e, nu_e);
 
         // Find fast magnetosonic speed
         const Real bsq = dot(D.bcon, D.bcov);
         const Real va2 = bsq / (bsq + ef);
 
+
+        //TODO_EOS: This might need to be changed for general eos.
         const Real ccond2 =
             (m.Q >= 0) ? (gam - 1.) * emhd_params.conduction_alpha * cs2 : 0.0;
         const Real cvis2 =

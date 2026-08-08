@@ -477,7 +477,7 @@ KOKKOS_INLINE_FUNCTION int apply_floors<InjectionFrame::mixed_normal_drift>(
  */
 template<typename Local>
 KOKKOS_INLINE_FUNCTION int apply_geo_floors(const GRCoordinates& G, Local& P,
-    const VarMap& m, const Real& gam, const int& j, const int& i,
+    const VarMap& m, const Microphysics::EOS::EOS& eos, const int& j, const int& i,
     const Floors::Prescription& floors, const Floors::Prescription& floors_inner,
     const Loci loc = Loci::center)
 {
@@ -493,10 +493,14 @@ KOKKOS_INLINE_FUNCTION int apply_geo_floors(const GRCoordinates& G, Local& P,
         const GReal r = G.r(0, j, i);
         // r_char sets more aggressive floor close to EH but backs off
         Real rhoscal = (myfloors.use_r_char) ? 1. / ((r * r) * (1 + r / myfloors.r_char))
-                                             : 1. / m::sqrt(r * r * r);
+                                             : 1. / m::sqrt(r * r * r);// 
         rhoflr_geom = m::max(myfloors.rho_min_geom * rhoscal, myfloors.rho_min_const);
+        //TODO_EOS: check with cora what she's trying to do here. 
+        // For now make it gam1
+        Real sie = P(m.UU) / P(m.RHO);
+        Real gamma1 = eos.BulkModulusFromDensityInternalEnergy(P(m.RHO),sie)/eos.PressureFromDensityInternalEnergy(P(m.RHO),sie);
         uflr_geom =
-            m::max(myfloors.u_min_geom * m::pow(rhoscal, gam), myfloors.u_min_const);
+            m::max(myfloors.u_min_geom * m::pow(rhoscal, gamma1), myfloors.u_min_const); //ufloor = max(rhoscal^gamma1, constant umin)
     } else {
         rhoflr_geom = myfloors.rho_min_const;
         uflr_geom = myfloors.u_min_const;
