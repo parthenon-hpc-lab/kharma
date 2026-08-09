@@ -152,6 +152,7 @@ TaskStatus SetBondiImpl(
         return TaskStatus::complete;
     }
 
+
     const Real mdot = pmb->packages.Get("GRMHD")->Param<Real>("mdot");
     const Real rs = pmb->packages.Get("GRMHD")->Param<Real>("rs");
     const Real gam = pmb->packages.Get("GRMHD")->Param<Real>("gamma");

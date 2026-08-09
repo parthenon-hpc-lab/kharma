@@ -39,8 +39,11 @@
 #include "grmhd_functions.hpp"
 #include "kharma_utils.hpp"
 #include "types.hpp"
+#include "utils/constants.hpp"
 
 #include <parthenon/parthenon.hpp>
+
+using pc = parthenon::constants::PhysicalConstants<parthenon::constants::CGS>;
 
 namespace RadM1
 {
@@ -96,27 +99,37 @@ void ApplyRadM1Floors(MeshBlockData<Real>* rc, IndexDomain domain);
 TaskStatus PostStepDiagnostics(const SimTime& tm, MeshData<Real>* md);
 
 // Opacity model selector for calc_kabs/calc_kscattering/ComputeCovariantFourForce.
-// Default is the eventual singularity-opac slot! Add new cases here as more
-// tests need their own opacity law, without causing issues with the default.
 enum class OpacityModel : int { Default = 0, ShocktubeConstant = 1, Bondi = 2};
 
-KOKKOS_INLINE_FUNCTION Real calc_kabs(
-    Real rho, Real T, int opacity_model, Real shocktube_kappa_rho)
+
+KOKKOS_INLINE_FUNCTION Real calc_kabs(Real rho, Real T, int opacity_model,
+    Real shocktube_kappa_rho, const UnitScales& units_cgs)
 {
-    Real kappa_rho;
     if (opacity_model == (int)OpacityModel::ShocktubeConstant) {
-        kappa_rho = shocktube_kappa_rho;
+        return m::min(rho * shocktube_kappa_rho, 1.e5);
+    } else if (opacity_model == (int)OpacityModel::Bondi) {
+        // Thermal bremsstrahlung, McKinney et al. 2014 eq. 91.
+        const Real T_cgs = T * units_cgs.temperature_cgs;
+        const Real rho_cgs = rho * units_cgs.mass_cgs / m::pow(units_cgs.length_cgs, 3.0); 
+        const Real kappa_a_cgs =
+            1.7e-25 * m::pow(T_cgs, -3.5) * m::pow(pc::mp, -2.0) * rho_cgs;
+        return kappa_a_cgs * units_cgs.length_cgs; 
     } else {
-        kappa_rho = 0.08;
+        // TODO: singularity-opac
+        return m::min(rho * 0.08, 1.e5);
     }
-    return m::min(rho * kappa_rho, 1.e5);
 }
 
-KOKKOS_INLINE_FUNCTION Real calc_kscattering(
-    Real rho, Real T, int opacity_model, Real shocktube_kappa_scat)
+KOKKOS_INLINE_FUNCTION Real calc_kscattering(Real rho, Real T, int opacity_model,
+    Real shocktube_kappa_scat, const UnitScales& units_cgs)
 {
     if (opacity_model == (int)OpacityModel::ShocktubeConstant) {
         return shocktube_kappa_scat;
+    } else if (opacity_model == (int)OpacityModel::Bondi) {
+        // Thomson scattering, McKinney et al. 2014 eq. 92
+        const Real rho_cgs = rho * units_cgs.mass_cgs / m::pow(units_cgs.length_cgs, 3.0);
+        const Real kappa_sc_cgs = 0.4 * rho_cgs; 
+        return kappa_sc_cgs * units_cgs.length_cgs;
     }
     return 0.0;
 }

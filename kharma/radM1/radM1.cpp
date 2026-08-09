@@ -133,7 +133,7 @@ std::shared_ptr<KHARMAPackage> RadM1::Initialize(
     std::string default_opacity_model = "default";
     if (problem_id == "shock") {
         default_opacity_model = "shocktube_constant";
-    } else if (problem_id == "bondi") {
+    } else if (problem_id == "bondi_rad") {
         default_opacity_model = "bondi_opacs";
     }
 
@@ -428,6 +428,7 @@ TaskStatus RadM1::Step(MeshData<Real>* md_full_init, MeshData<Real>* md_sub_init
         const int opacity_model = params.Get<int>("opacity_model");
         const Real shocktube_sigma_rad = params.Get<Real>("shocktube_sigma_rad");
         const Real shocktube_kappa_rho = params.Get<Real>("shocktube_kappa_rho");
+        const Real shocktube_kappa_scat = params.Get<Real>("shocktube_kappa_scat");
         const UnitScales units_cgs = params.Get<UnitScales>("units_cgs");
         const auto& G = pmb->coords;
 
@@ -461,7 +462,7 @@ TaskStatus RadM1::Step(MeshData<Real>* md_full_init, MeshData<Real>* md_sub_init
                     solve_radiation_4d(G, U_init, P_init, P_new, U_new, m_p, m_u, k, j, i,
                         dt, gam, src_rootfind_eps, src_rootfind_tol, src_rootfind_maxiter,
                         opacity_model, shocktube_sigma_rad, shocktube_kappa_rho,
-                        units_cgs);
+                        shocktube_kappa_scat, units_cgs);
                 rflag(0, k, j, i) = rflagl;
             });
     }
