@@ -37,7 +37,7 @@
 #include "inverter.hpp"
 #include "kharma.hpp"
 #include "kharma_driver.hpp"
-#include "units.hpp"
+#include "phoebus_utils/unit_conversions.hpp"
 #include <limits>
 #include <stdexcept>
 
@@ -126,37 +126,49 @@ std::shared_ptr<KHARMAPackage> RadM1::Initialize(
     pkg->AllParams().Add("src_rootfind_maxiter", src_rootfind_maxiter);
 
     // Opacity model selector (see RadM1::OpacityModel in radM1.hpp).
-    // if the problem_id is "shock", then the default opacity model is
-    // "shocktube_constant", otherwise it is "default".
-    const std::string default_opacity_model =
-        (pin->GetString("parthenon/job", "problem_id") == "shock") ? "shocktube_constant"
-                                                                   : "default";
-    std::string opacity_model_str =
-        pin->GetOrAddString("radM1", "opacity_model", default_opacity_model);
-    int opacity_model = (int)OpacityModel::Default;
-    if (opacity_model_str == "shocktube_constant") {
-        opacity_model = (int)OpacityModel::ShocktubeConstant;
+    // Determine the problem ID
+    std::string problem_id = pin->GetString("parthenon/job", "problem_id");
+    
+    // Set the default opacity model based on the problem ID using an if/else chain
+    std::string default_opacity_model = "default";
+    if (problem_id == "shock") {
+        default_opacity_model = "shocktube_constant";
+    } else if (problem_id == "bondi") {
+        default_opacity_model = "bondi_opacs";
     }
-    // Constants for the shocktube opacity model. These are only used if the opacity model
-    // is set to "shocktube_constant".
+
+    // fallback to the default if no input
+    std::string opacity_model_str = pin->GetOrAddString("radM1", "opacity_model", default_opacity_model);
+    
+    int opacity_model = (int) OpacityModel::Default;
+    if (opacity_model_str == "shocktube_constant") {
+        opacity_model = (int) OpacityModel::ShocktubeConstant;
+    } else if (opacity_model_str == "bondi_opacs") {
+        opacity_model = (int) OpacityModel::Bondi; 
+    }
+
+    // Read Shocktube constants
     Real shocktube_sigma_rad = pin->GetOrAddReal("radM1", "sigma_rad", 3.470e7);
     Real shocktube_kappa_rho = pin->GetOrAddReal("radM1", "kappa_rho", 0.08);
     Real shocktube_kappa_scat = pin->GetOrAddReal("radM1", "kappa_scat", 0.0);
+
+    // Add everything to the package parameters
     pkg->AllParams().Add("opacity_model", opacity_model);
+    
     pkg->AllParams().Add("shocktube_sigma_rad", shocktube_sigma_rad);
     pkg->AllParams().Add("shocktube_kappa_rho", shocktube_kappa_rho);
     pkg->AllParams().Add("shocktube_kappa_scat", shocktube_kappa_scat);
 
-    // Right now, to execute the torus problem with radM1, we need to initialize the
-    // radiation primitives in fm_torus.cpp (this is stupid) (ASK Cora) I think this
-    // should be moved to RadM1 method, maybe call an initialization method like a task
-    // straight after initializing the torus? Especially because we'll want to initialize
-    // the radiation field for other problems.
+    // Initialize units needed for radm1
+    auto unit_conv = phoebus::UnitConversions(pin);
+    UnitScales units_cgs;
+    units_cgs.length_cgs      = unit_conv.GetLengthCodeToCGS();
+    units_cgs.time_cgs        = unit_conv.GetTimeCodeToCGS();
+    units_cgs.mass_cgs        = unit_conv.GetMassCodeToCGS();
+    units_cgs.energy_cgs      = unit_conv.GetEnergyCodeToCGS();
+    units_cgs.temperature_cgs = unit_conv.GetTemperatureCodeToCGS();
+    pkg->AllParams().Add("units_cgs", units_cgs);
 
-    // //This method should allow you to add source terms to both plasma and radiation
-    // variables separately. pkg->AddSource = RadM1::AddImplicitRadiationSourceTerms;
-
-    // Add inversion to the tasks
     pkg->BlockUtoP = RadM1::BlockUtoP;
 
     bool floors_on_default = true;
@@ -416,6 +428,7 @@ TaskStatus RadM1::Step(MeshData<Real>* md_full_init, MeshData<Real>* md_sub_init
         const int opacity_model = params.Get<int>("opacity_model");
         const Real shocktube_sigma_rad = params.Get<Real>("shocktube_sigma_rad");
         const Real shocktube_kappa_rho = params.Get<Real>("shocktube_kappa_rho");
+        const UnitScales units_cgs = params.Get<UnitScales>("units_cgs");
         const auto& G = pmb->coords;
 
         PackIndexMap prims_map, cons_map;
@@ -444,20 +457,11 @@ TaskStatus RadM1::Step(MeshData<Real>* md_full_init, MeshData<Real>* md_sub_init
         pmb->par_for("RadM1_Implicit_Solver4D", kb.s, kb.e, jb.s, jb.e, ib.s, ib.e,
             KOKKOS_LAMBDA (const int &k, const int &j, const int &i)
             {
-                // if (i == 110) {
-                //     printf("The initial set of U_init is [%.15e, %.15e, %.15e,
-                //     %.15e]\n", U_init(m_u.UU, k, j, i), U_init(m_u.U1, k, j, i),
-                //     U_init(m_u.U2, k, j, i), U_init(m_u.U3, k, j, i));
-                // }
                 int rflagl =
                     solve_radiation_4d(G, U_init, P_init, P_new, U_new, m_p, m_u, k, j, i,
                         dt, gam, src_rootfind_eps, src_rootfind_tol, src_rootfind_maxiter,
-                        opacity_model, shocktube_sigma_rad, shocktube_kappa_rho);
-                // if(i == 110) {
-                //     printf("The new set of U_new is [%.15e, %.15e, %.15e, %.15e]\n\n",
-                //     U_new(m_u.UU, k, j, i), U_new(m_u.U1, k, j, i), U_new(m_u.U2, k, j,
-                //     i), U_new(m_u.U3, k, j, i));
-                // }
+                        opacity_model, shocktube_sigma_rad, shocktube_kappa_rho,
+                        units_cgs);
                 rflag(0, k, j, i) = rflagl;
             });
     }

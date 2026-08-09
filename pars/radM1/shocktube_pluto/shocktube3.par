@@ -45,6 +45,11 @@ cfl = 0.25
 gamma = 2.
 reconstruction = weno5
 
+<eos>
+type = IdealGas
+Gamma = 2.
+Cv = 1.0
+
 <b_field>
 solver = none
 

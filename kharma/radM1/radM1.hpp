@@ -45,6 +45,14 @@
 namespace RadM1
 {
 
+struct UnitScales {
+    Real length_cgs;
+    Real time_cgs;
+    Real mass_cgs;
+    Real energy_cgs;
+    Real temperature_cgs;
+};
+
 // Denote implicit solve failures (rflags)
 // This enum should grow to cover any potential flags
 enum class StatusImplicitStep { success = 0, mhdsolve, radsolve, bothsolve, failure };
@@ -90,7 +98,7 @@ TaskStatus PostStepDiagnostics(const SimTime& tm, MeshData<Real>* md);
 // Opacity model selector for calc_kabs/calc_kscattering/ComputeCovariantFourForce.
 // Default is the eventual singularity-opac slot! Add new cases here as more
 // tests need their own opacity law, without causing issues with the default.
-enum class OpacityModel : int { Default = 0, ShocktubeConstant = 1 };
+enum class OpacityModel : int { Default = 0, ShocktubeConstant = 1, Bondi = 2};
 
 KOKKOS_INLINE_FUNCTION Real calc_kabs(
     Real rho, Real T, int opacity_model, Real shocktube_kappa_rho)

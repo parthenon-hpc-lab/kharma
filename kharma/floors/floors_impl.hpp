@@ -143,7 +143,7 @@ TaskStatus ApplyFloorsInFrame(MeshData<Real>* md, IndexDomain domain)
                 // P->U if we inverted *correctly* (or didn't invert)
                 if (pflag_l <= 0)
                     Flux::p_to_u_mhd(
-                        G, P(b), m_p, emhd_params, gam, k, j, i, U(b), m_u, Loci::center);
+                        G, P(b), m_p, emhd_params, eos, k, j, i, U(b), m_u, Loci::center);
             }
         });
 

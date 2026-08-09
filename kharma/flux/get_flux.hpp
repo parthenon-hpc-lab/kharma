@@ -347,7 +347,7 @@ inline TaskStatus GetFlux(MeshData<Real>* md)
                     // characteristic speeds.
                     if (use_rad) {
                         Real cmaxL_rad, cminL_rad;
-                        Flux::vchar_rad(G, Pl, m_p, Dtmp, gam, emhd_params, opacity_model,
+                        Flux::vchar_rad(G, Pl, m_p, Dtmp, eos, emhd_params, opacity_model,
                             shocktube_kappa_rho, shocktube_kappa_scat, k, j, i, loc, dir,
                             cmaxL_rad, cminL_rad);
                         cmax_rad(bl, dir - 1, k, j, i) = m::max(0., cmaxL_rad);
@@ -421,7 +421,7 @@ inline TaskStatus GetFlux(MeshData<Real>* md)
                     // characteristic speeds.
                     if (use_rad) {
                         Real cmaxR_rad, cminR_rad;
-                        Flux::vchar_rad(G, Pr, m_p, Dtmp, gam, emhd_params, opacity_model,
+                        Flux::vchar_rad(G, Pr, m_p, Dtmp, eos, emhd_params, opacity_model,
                             shocktube_kappa_rho, shocktube_kappa_scat, k, j, i, loc, dir,
                             cmaxR_rad, cminR_rad);
                         cmax_rad(bl, dir - 1, k, j, i) =
