@@ -293,23 +293,34 @@ KOKKOS_INLINE_FUNCTION int apply_floors<InjectionFrame::normal_kastaun>(FLOOR_ON
 {
     // Add the material in the normal observer frame.
     // 1. Calculate how much material we're adding.
-    const Real rho_add    = m::max(0., rhoflr_max - P(m_p.RHO, k, j, i));
-    const Real u_add      = m::max(0., uflr_max - P(m_p.UU, k, j, i));
+    // const Real rho_add    = m::max(0., rhoflr_max - P(m_p.RHO, k, j, i));
+    // const Real u_add      = m::max(0., uflr_max - P(m_p.UU, k, j, i));
     // We compute rho u^0 and T^00 using the existing velocities to determine Lorentz factor.
     // This is a guaranteed overestimate of the fluid contributions to these quantities
+    const Real rho = m::max(P(m_p.RHO, k, j, i), rhoflr_max);
+    const Real u = m::max(P(m_p.UU, k, j, i), uflr_max);
     const Real uvec[NVEC] = {P(m_p.U1, k, j, i), P(m_p.U2, k, j, i), P(m_p.U3, k, j, i)};
+    const Real B[NVEC] = {P(m_p.B1, k, j, i), P(m_p.B2, k, j, i), P(m_p.B3, k, j, i)};
     // Alternatively, add less than will produce our floored values
-    //const Real uvec[NVEC] = {0.};
-    const Real B[NVEC] = {0.};
+    // const Real uvec[NVEC] = {0.};
+    // const Real B[NVEC] = {0.};
 
     // 2. Calculate the increase in conserved mass/energy corresponding to the new material.
     Real rho_ut, T[GR_DIM];
-    GRMHD::p_to_u_mhd(G, rho_add, u_add, uvec, B, gam, k, j, i, rho_ut, T, Loci::center);
+    GRMHD::p_to_u_mhd(G, rho, u, uvec, B, gam, k, j, i, rho_ut, T, Loci::center);
 
     // 3. Add new conserved mass/energy to the current "conserved" state.
     // (no need to modify the guess for Kastaun, esp once we sync mu)
-    U(m_u.RHO, k, j, i) += rho_ut;
-    U(m_u.UU, k, j, i)  += T[0]; // Actually T^0_0 + rho u^t
+    U(m_u.RHO, k, j, i) = rho_ut;
+    U(m_u.UU, k, j, i)  = T[0]; // Actually T^0_0 + rho u^t
+
+    // 4. Set the new momentum *only if it would decrease the magnitude*
+    U(m_u.U1, k, j, i)  = (m::abs(T[1]) < m::abs(U(m_u.U1, k, j, i))) ?
+                        T[1] : U(m_u.U1, k, j, i);
+    U(m_u.U2, k, j, i)  = (m::abs(T[2]) < m::abs(U(m_u.U2, k, j, i))) ?
+                        T[2] : U(m_u.U2, k, j, i);
+    U(m_u.U3, k, j, i)  = (m::abs(T[3]) < m::abs(U(m_u.U3, k, j, i))) ?
+                        T[3] : U(m_u.U3, k, j, i);
 
     // Recover new primitive variables.  Use Kastaun with safe parameters so we don't fail often
     return Inverter::u_to_p<Inverter::Type::kastaun>(G, U, m_u, gam, k, j, i, P, m_p, Loci::center,
