@@ -13,8 +13,10 @@
 
 #include "bicgstab_solver.hpp"
 
-namespace parthenon {
-namespace solvers {
+namespace parthenon
+{
+namespace solvers
+{
 
 int BiCGStabCounter::global_num_bicgstab_solvers = 0;
 

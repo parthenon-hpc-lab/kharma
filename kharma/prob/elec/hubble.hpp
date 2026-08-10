@@ -1,25 +1,25 @@
-/* 
+/*
  *  File: hubble.hpp
- *  
+ *
  *  BSD 3-Clause License
- *  
+ *
  *  Copyright (c) 2020, AFD Group at UIUC
  *  All rights reserved.
- *  
+ *
  *  Redistribution and use in source and binary forms, with or without
  *  modification, are permitted provided that the following conditions are met:
- *  
+ *
  *  1. Redistributions of source code must retain the above copyright notice, this
  *     list of conditions and the following disclaimer.
- *  
+ *
  *  2. Redistributions in binary form must reproduce the above copyright notice,
  *     this list of conditions and the following disclaimer in the documentation
  *     and/or other materials provided with the distribution.
- *  
+ *
  *  3. Neither the name of the copyright holder nor the names of its
  *     contributors may be used to endorse or promote products derived from
  *     this software without specific prior written permission.
- *  
+ *
  *  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  *  AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  *  IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -47,23 +47,26 @@ using namespace parthenon;
  * Test of "Electrons" package
  * See Ressler+ 2015
  */
-TaskStatus InitializeHubble(std::shared_ptr<MeshBlockData<Real>>& rc, ParameterInput *pin);
+TaskStatus InitializeHubble(
+    std::shared_ptr<MeshBlockData<Real>>& rc, ParameterInput* pin);
 
 /**
  * Set all values on a given domain to the Hubble flow solution,
  * for both initialization and boundary conditions.
  * Use template version when posible, which just calls through to "impl" implementation
  */
-TaskStatus SetHubbleImpl(std::shared_ptr<MeshBlockData<Real>>& rc, IndexDomain domain, bool coarse);
+TaskStatus SetHubbleImpl(
+    std::shared_ptr<MeshBlockData<Real>>& rc, IndexDomain domain, bool coarse);
 
 template<IndexDomain domain>
-TaskStatus SetHubble(std::shared_ptr<MeshBlockData<Real>>& rc, bool coarse=false)
+TaskStatus SetHubble(std::shared_ptr<MeshBlockData<Real>>& rc, bool coarse = false)
 {
     return SetHubbleImpl(rc, domain, coarse);
 }
 
 /**
- * Apply the source term.  Registered as ApplyPrimSource to run at end of step, once per step operator-split
+ * Apply the source term.  Registered as ApplyPrimSource to run at end of step, once per
+ * step operator-split
  * TODO(BSP) NAMESPACE. Needs problems as packages?
  */
-void ApplyHubbleHeating(MeshBlockData<Real> *mbase);
+void ApplyHubbleHeating(MeshBlockData<Real>* mbase);

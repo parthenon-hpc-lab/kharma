@@ -43,36 +43,43 @@
 
 #include "floors.hpp"
 
-namespace Inverter {
+namespace Inverter
+{
 
 // Denote inverter types. Currently just one
-enum class Type{none=0, onedw, kastaun};
+enum class Type { none = 0, onedw, kastaun };
 
 // Denote inversion failures (pflags)
 // This enum should grow to cover any inversion algorithm
-enum class Status{success=0, neg_input, max_iter, bad_ut, bad_gamma,
-                  neg_rho, neg_u, neg_rhou, floor, bad_velocity};
-
-static const std::map<int, std::string> status_names = {
-    {(int) Status::neg_input, "Negative input"},
-    {(int) Status::max_iter, "Hit max iter"},
-    {(int) Status::bad_ut, "Velocity invalid"},
-    {(int) Status::bad_gamma, "Gamma invalid"},
-    {(int) Status::neg_rho, "Negative rho"},
-    {(int) Status::neg_u, "Negative U"},
-    {(int) Status::neg_rhou, "Negative rho & U"},
-    {(int) Status::floor, "Floor during inversion"},
-    {(int) Status::bad_velocity, "No velocity solution"}
+enum class Status {
+    success = 0,
+    neg_input,
+    max_iter,
+    bad_ut,
+    bad_gamma,
+    neg_rho,
+    neg_u,
+    neg_rhou,
+    floor,
+    bad_velocity
 };
 
-template <typename T>
+static const std::map<int, std::string> status_names = {
+    {(int)Status::neg_input, "Negative input"}, {(int)Status::max_iter, "Hit max iter"},
+    {(int)Status::bad_ut, "Velocity invalid"}, {(int)Status::bad_gamma, "Gamma invalid"},
+    {(int)Status::neg_rho, "Negative rho"}, {(int)Status::neg_u, "Negative U"},
+    {(int)Status::neg_rhou, "Negative rho & U"},
+    {(int)Status::floor, "Floor during inversion"},
+    {(int)Status::bad_velocity, "No velocity solution"}};
+
+template<typename T>
 KOKKOS_INLINE_FUNCTION bool failed(T status_flag)
 {
     // Return only values >0, among the failure flags
     return static_cast<int>(status_flag) > static_cast<int>(Status::success);
 }
 
-template <typename T>
+template<typename T>
 KOKKOS_INLINE_FUNCTION bool valid(T status_flag)
 {
     // Return only values >0, among the failure flags
@@ -80,24 +87,25 @@ KOKKOS_INLINE_FUNCTION bool valid(T status_flag)
 }
 
 /**
- * Recover local primitive variables, with a one-dimensional Newton-Raphson iterative solver.
- * Iteration starts from the current primitive values, and otherwse may *fail to converge*
+ * Recover local primitive variables, with a one-dimensional Newton-Raphson iterative
+ * solver. Iteration starts from the current primitive values, and otherwse may *fail to
+ * converge*
  *
  * Returns a code indicating whether the solver converged (success), failed (max_iter), or
- * indicating that the converged solution was unphysical (bad_ut, neg_rhou, neg_rho, neg_u)
+ * indicating that the converged solution was unphysical (bad_ut, neg_rhou, neg_rho,
+ * neg_u)
  *
- * On error, will not write replacement values, leaving the previous step's values in place
- * These are fixed later, in FixUtoP
+ * On error, will not write replacement values, leaving the previous step's values in
+ * place These are fixed later, in FixUtoP
  *
  * This is the function template: implementations are filled in in their own headers.
  * Be VERY CAREFUL to define any specializations by including those headers,
  * BEFORE you instantiate the template.
  */
- // TODO macro the arguments. Also can we set recover_velocity default false?
+// TODO macro the arguments. Also can we set recover_velocity default false?
 template<Type inverter>
-KOKKOS_INLINE_FUNCTION int u_to_p(const GRCoordinates& G, const VariablePack<Real>& U, const VarMap& m_u,
-                                              const Real& gam, const int& k, const int& j, const int& i,
-                                              const VariablePack<Real>& P, const VarMap& m_p,
-                                              const Loci& loc, const int& max_iterations, const Real& tol,
-                                              const bool recover_velocity);
+KOKKOS_INLINE_FUNCTION int u_to_p(const GRCoordinates& G, const VariablePack<Real>& U,
+    const VarMap& m_u, const Real& gam, const int& k, const int& j, const int& i,
+    const VariablePack<Real>& P, const VarMap& m_p, const Loci& loc,
+    const int& max_iterations, const Real& tol, const bool recover_velocity);
 } // namespace Inverter
