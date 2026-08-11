@@ -80,7 +80,7 @@ std::shared_ptr<KHARMAPackage> Initialize(
  * Perform the implicit solve for radiation and plasma coupled. For now, only 4D
  * implemented.
  */
-TaskStatus Step(MeshData<Real>* md_full_init, MeshData<Real>* md_sub_init,
+TaskStatus Step(MeshData<Real>* md_sub_init,
     MeshData<Real>* md_sub_final, const Real dt);
 
 /**
@@ -98,7 +98,7 @@ void ApplyRadM1Floors(MeshBlockData<Real>* rc, IndexDomain domain);
  */
 TaskStatus PostStepDiagnostics(const SimTime& tm, MeshData<Real>* md);
 
-// Opacity model selector for calc_kabs/calc_kscattering/ComputeCovariantFourForce.
+// Opacity model selector for calc_kabs/calc_kscattering/compute_covariant_fourforce.
 enum class OpacityModel : int { Default = 0, ShocktubeConstant = 1, Bondi = 2};
 
 
@@ -109,7 +109,7 @@ KOKKOS_INLINE_FUNCTION Real calc_kabs(Real rho, Real T, int opacity_model,
         return m::min(rho * shocktube_kappa_rho, 1.e5);
     } else if (opacity_model == (int)OpacityModel::Bondi) {
         // Thermal bremsstrahlung, McKinney et al. 2014 eq. 91.
-        const Real T_cgs = T * units_cgs.temperature_cgs;
+        const Real T_cgs = m::abs(T) * pc::mp * pc::c * pc::c / pc::kb;
         const Real rho_cgs = rho * units_cgs.mass_cgs / m::pow(units_cgs.length_cgs, 3.0); 
         const Real kappa_a_cgs =
             1.7e-25 * m::pow(T_cgs, -3.5) * m::pow(pc::mp, -2.0) * rho_cgs;

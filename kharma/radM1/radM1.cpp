@@ -49,48 +49,29 @@ std::shared_ptr<KHARMAPackage> RadM1::Initialize(
 
     auto& driver = packages->Get("Driver")->AllParams();
     auto driver_type = driver.Get<DriverType>("type");
-    // TODO follow GRMHD::implicit?
+    // TODO(PNM): Make it as an option to also add kharma driver eventually
     bool implicit_radm1 = (driver_type == DriverType::imex &&
                            pin->GetOrAddBoolean("RadM1", "implicit", true));
-    // CHANGE BACK PEDRO
-    //  bool implicit_radm1 = false;
 
     if (!implicit_radm1)
         PARTHENON_WARN("M1 implementation will be uncoupled unless ImEx driver is used!");
 
-    // Registers a new label called "RADM1" for the variables to be grouped together
-    // later?
     Metadata::AddUserFlag("RADM1");
-    // Properties of these new flags
-    // I believe Metadata::Cell means these variables are defined at cell centers, but I
-    // should ask Cora. We also add the "areWeImplicit" flag, which is either "Implicit"
-    // or "Explicit" based on the user's choice in the input file.
     std::vector<MetadataFlag> flags_radm1 = {Metadata::Cell,
         Metadata::GetUserFlag("Explicit"), Metadata::GetUserFlag("RADM1")};
-
-    // Retrieves the existing flags for the primitive and conserved variables, and adds
-    // the new radM1 flags to them. Then adds the new variables for the radiation
-    // primitives and conserved variables with these flags.
-    //  auto flags_prim = driver.Get<std::vector<MetadataFlag>>("prim_flags");
-    //  flags_prim.insert(flags_prim.end(), flags_radm1.begin(), flags_radm1.end());
 
     auto flags_prim = driver.Get<std::vector<MetadataFlag>>("prim_flags");
     flags_prim.insert(flags_prim.end(), flags_radm1.begin(), flags_radm1.end());
 
-    // Explicitly tag these as Primitive so your PackVariables call finds them!
-    flags_prim.push_back(Metadata::GetUserFlag("Primitive"));
-
-    // I think this will push this metadata to restart files
+    //Save primitive variables to restart files
+    //TODO (PNM): Is this really necessary? Kharma only restarts using conserved variables.
     flags_prim.push_back(Metadata::Restart);
 
-    // sync variables across boundaries (ASK CORA)
-    if (pin->GetOrAddBoolean("RadM1", "sync_utop_seed", true)) {
-        flags_prim.push_back(Metadata::FillGhost);
-    }
-    //
     auto flags_cons = driver.Get<std::vector<MetadataFlag>>("cons_flags");
     flags_cons.insert(flags_cons.end(), flags_radm1.begin(), flags_radm1.end());
 
+    //TODO (PNM): Eventually, just collapse all the conserved and prim variables on a single vector, instead of dividing t component
+    //from spatial components.
     auto m_prim_scalar = Metadata(flags_prim);
     pkg->AddField("prims.u_rad", m_prim_scalar);
 
@@ -138,6 +119,7 @@ std::shared_ptr<KHARMAPackage> RadM1::Initialize(
     }
 
     // fallback to the default if no input
+    // TODO (PNM): add a vector of strings as the last parameter here to yell at the user what the options are
     std::string opacity_model_str = pin->GetOrAddString("radM1", "opacity_model", default_opacity_model);
     
     int opacity_model = (int) OpacityModel::Default;
@@ -148,6 +130,7 @@ std::shared_ptr<KHARMAPackage> RadM1::Initialize(
     }
 
     // Read Shocktube constants
+    // TODO(PNM): Make these parameters part of the shocktube problem. Important!
     Real shocktube_sigma_rad = pin->GetOrAddReal("radM1", "sigma_rad", 3.470e7);
     Real shocktube_kappa_rho = pin->GetOrAddReal("radM1", "kappa_rho", 0.08);
     Real shocktube_kappa_scat = pin->GetOrAddReal("radM1", "kappa_scat", 0.0);
@@ -160,6 +143,7 @@ std::shared_ptr<KHARMAPackage> RadM1::Initialize(
     pkg->AllParams().Add("shocktube_kappa_scat", shocktube_kappa_scat);
 
     // Initialize units needed for radm1
+    // TODO (PNM): Use a proper units package to bundle these together.
     auto unit_conv = phoebus::UnitConversions(pin);
     UnitScales units_cgs;
     units_cgs.length_cgs      = unit_conv.GetLengthCodeToCGS();
@@ -169,8 +153,7 @@ std::shared_ptr<KHARMAPackage> RadM1::Initialize(
     units_cgs.temperature_cgs = unit_conv.GetTemperatureCodeToCGS();
     pkg->AllParams().Add("units_cgs", units_cgs);
 
-    pkg->BlockUtoP = RadM1::BlockUtoP;
-
+    // TODO (PNM): Currently attached to the floors package. Make this a separate option only for radiation package.
     bool floors_on_default = true;
     if (pin->DoesParameterExist("floors", "disable_floors")) {
         floors_on_default = !pin->GetBoolean("floors", "disable_floors");
@@ -267,152 +250,7 @@ TaskStatus RadM1::BlockPtoU(MeshBlockData<Real>* rc, IndexDomain domain, bool co
     return TaskStatus::complete;
 }
 
-TaskStatus RadM1::BlockUtoP(MeshBlockData<Real>* rc, IndexDomain domain, bool coarse)
-{
-    auto pmb = rc->GetBlockPointer();
-    const auto& G = pmb->coords;
-
-    // Pack Variables
-    auto U = rc->PackVariables(std::vector<std::string>{"cons.u_rad", "cons.uvec_rad"});
-
-    // Pack Primitive Variables
-    PackIndexMap prim_map;
-    auto P = rc->PackVariables(
-        std::vector<MetadataFlag>{Metadata::GetUserFlag("Primitive")}, prim_map);
-    const VarMap m_p(prim_map, false);
-
-    // Get Loop Bounds
-    IndexRange3 b = KDomain::GetRange(rc, domain, coarse);
-
-    auto& params = pmb->packages.Get("RadM1")->AllParams();
-    // TODO: FLOOR! CHANGE THIS
-    const Real min_erad = 10. * 1.e-80;
-
-    // Parallel Loop
-    pmb->par_for("RadM1_UtoP", b.ks, b.ke, b.js, b.je, b.is, b.ie,
-        KOKKOS_LAMBDA (const int &k, const int &j, const int &i)
-        {
-            Real gdet = G.gdet(Loci::center, j, i);
-
-            // Reconstruct Radiation Stress-Energy Tensor R^{mu, nu}
-            // For the M1 scheme, we assume the radiation is isotropic and satisfies the
-            // Eddington approximation (P^{ij} = (1/3) E delta^{ij} in the fluid frame)
-            // but in the radiation frame. Therefore, \bar{R}^{tt} = E, \bar{R}^{ii} =
-            // \bar{E}/3, and every other component is zero. So we have Equation 27 in
-            // Sadowski et al. 2013 in the radiation rest frame, but since it's covariant,
-            // it's valid for every other frame (including lab frame). The equation goes
-            // as follows: R^{mu nu} = (4/3) \bar{E} u_R^mu u_R^nu + (1/3) \bar{E} g^{mu
-            // nu}, \bar{E} is always in the radiation rest frame.
-
-            // Recover R^t_mu
-            //  U(0) is R^t_t, U(1..3) are R^t_i
-            Real R_t_cov[GR_DIM] = {U(0, k, j, i) / gdet, U(1, k, j, i) / gdet,
-                U(2, k, j, i) / gdet, U(3, k, j, i) / gdet};
-
-            // Get R^{t\mu} from R^t_\mu by doing R^{t\mu} = g^{t\nu} R_{\nu\mu}
-            // This is R^t_\mu
-            Real R_t_con[GR_DIM];
-            G.raise(R_t_cov, R_t_con, k, j, i, Loci::center);
-
-            // Calculate Invariant Scalar S = R^t_mu * R^{t\mu}
-            //  Real invariant_scalar = 0.0;
-            //  for(int mu=0; mu<4; ++mu) {
-            //       // Note: R_t_cov is R^t_mu (mixed), R_t_con is R^{t\mu} (upper).
-            //       // S = g_{mu nu} R^{t mu} R^{t nu}
-            //       for(int nu=0; nu<4; ++nu) {
-            //          invariant_scalar += G.gcov(Loci::center, j, i, mu, nu) *
-            //          R_t_con[mu] * R_t_con[nu];
-            //       }
-            //  }
-            Real invariant_scalar = 0.0;
-            for (int mu = 0; mu < 4; ++mu) {
-                invariant_scalar += R_t_cov[mu] * R_t_con[mu];
-            }
-
-            // From Sadowski et al. Eq 32 and 33
-            // Solving by isolating Isolaring u^t_R^2 results in a much better equation,
-            // but I think (and I could be wrong) that solving by isolating \bar{E}
-            // results in a much more numerical stable solution.
-
-            // Calculating u^t_R^2
-            Real gammarel2 = CalculateGammaRel2(G, R_t_cov, invariant_scalar, j, i);
-
-            // Pre-calculate alpha_sq so E_rf can use it
-            Real alpha_sq = -1.0 / G.gcon(Loci::center, j, i, 0, 0);
-            Real alpha = m::sqrt(alpha_sq);
-            Real E_rf = (3.0 * R_t_con[0] * alpha_sq) / (4.0 * gammarel2 - 1.0);
-
-            // TODO: FLOOR! CHANGE THIS
-            Real GAMMAMAX = 1000.;
-            int nonfailure = gammarel2 >= 1.0 && E_rf > min_erad &&
-                             gammarel2 <= (GAMMAMAX * GAMMAMAX) / (min_erad * min_erad);
-            Real uvec_radframe_con[4] = {0};
-
-            if (nonfailure) {
-                for (int mu = 0; mu < 4; ++mu) {
-                    uvec_radframe_con[mu] =
-                        alpha *
-                        (R_t_con[mu] + 1. / 3. * E_rf *
-                                           G.gcon(Loci::center, j, i, 0, mu) *
-                                           (4.0 * gammarel2 - 1.0)) /
-                        (4. / 3. * E_rf * m::sqrt(gammarel2));
-                }
-            } else {
-                // Attempt Cold Closure
-                Real gammarel2_slow =
-                    m::pow(1.0 + 10.0 * std::numeric_limits<double>::epsilon(), 2.0);
-                Real gammarel2_fast = GAMMAMAX * GAMMAMAX;
-
-                Real R_t_t_slow, Erf_slow;
-                ApplyColdClosureFix(
-                    G, R_t_cov, gammarel2_slow, j, i, R_t_t_slow, Erf_slow);
-
-                Real R_t_t_fast, Erf_fast;
-                ApplyColdClosureFix(
-                    G, R_t_cov, gammarel2_fast, j, i, R_t_t_fast, Erf_fast);
-
-                Real R_t_t_new, gammarel2_new;
-
-                if (m::abs(R_t_t_slow - R_t_cov[0]) > m::abs(R_t_t_fast - R_t_cov[0])) {
-                    R_t_t_new = R_t_t_fast;
-                    E_rf = Erf_fast;
-                    gammarel2_new = gammarel2_fast;
-                } else {
-                    R_t_t_new = R_t_t_slow;
-                    E_rf = Erf_slow;
-                    gammarel2_new = gammarel2_slow;
-                }
-
-                Real R_t_cov_new[GR_DIM] = {
-                    R_t_t_new, R_t_cov[1], R_t_cov[2], R_t_cov[3]};
-
-                Real R_t_con_new[GR_DIM];
-                G.raise(R_t_cov_new, R_t_con_new, k, j, i, Loci::center);
-
-                // Calculate primitive velocities with the new state
-                if (E_rf > 0.0) {
-                    for (int mu = 0; mu < 4; ++mu) {
-                        uvec_radframe_con[mu] =
-                            alpha *
-                            (R_t_con_new[mu] + 1. / 3. * E_rf *
-                                                   G.gcon(Loci::center, j, i, 0, mu) *
-                                                   (4.0 * gammarel2_new - 1.0)) /
-                            (4. / 3. * E_rf * m::sqrt(gammarel2_new));
-                    }
-                } else {
-                    for (int mu = 0; mu < 4; ++mu) uvec_radframe_con[mu] = 0.0;
-                }
-            }
-
-            P(m_p.UU_RAD, k, j, i) = E_rf;
-            P(m_p.U1_RAD, k, j, i) = uvec_radframe_con[1];
-            P(m_p.U2_RAD, k, j, i) = uvec_radframe_con[2];
-            P(m_p.U3_RAD, k, j, i) = uvec_radframe_con[3];
-        });
-    return TaskStatus::complete;
-}
-
-TaskStatus RadM1::Step(MeshData<Real>* md_full_init, MeshData<Real>* md_sub_init,
+TaskStatus RadM1::Step(MeshData<Real>* md_sub_init,
     MeshData<Real>* md_sub_final, const Real dt)
 {
     for (int b = 0; b < md_sub_final->NumBlocks(); ++b) {
@@ -436,7 +274,7 @@ TaskStatus RadM1::Step(MeshData<Real>* md_full_init, MeshData<Real>* md_sub_init
         auto P_new =
             pmb_data->PackVariables({Metadata::GetUserFlag("Primitive")}, prims_map);
         auto U_new =
-            pmb_data->PackVariables({Metadata::Conserved, Metadata::Cell}, cons_map);
+            pmb_data->PackVariables({Metadata::WithFluxes, Metadata::Cell}, cons_map);
         const VarMap m_p(prims_map, false);
         const VarMap m_u(cons_map, true);
 
@@ -444,17 +282,17 @@ TaskStatus RadM1::Step(MeshData<Real>* md_full_init, MeshData<Real>* md_sub_init
 
         auto pmb_init_data = md_sub_init->GetBlockData(b);
 
-        PackIndexMap dummy_map;
         auto P_init =
             pmb_init_data->PackVariables({Metadata::GetUserFlag("Primitive")}, prims_map);
         auto U_init =
-            pmb_init_data->PackVariables({Metadata::Conserved, Metadata::Cell}, cons_map);
+            pmb_init_data->PackVariables({Metadata::WithFluxes, Metadata::Cell}, cons_map);
 
         auto bounds = pmb->cellbounds;
         const IndexRange ib = bounds.GetBoundsI(IndexDomain::interior);
         const IndexRange jb = bounds.GetBoundsJ(IndexDomain::interior);
         const IndexRange kb = bounds.GetBoundsK(IndexDomain::interior);
 
+        //TODO (PNM): Split it, Cora thinks this is too large to be good. Probably too slow.
         pmb->par_for("RadM1_Implicit_Solver4D", kb.s, kb.e, jb.s, jb.e, ib.s, ib.e,
             KOKKOS_LAMBDA (const int &k, const int &j, const int &i)
             {
