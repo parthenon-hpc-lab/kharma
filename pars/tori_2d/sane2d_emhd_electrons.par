@@ -1,0 +1,123 @@
+# SANE model in "Extended" MHD, including some viscosity & heat
+# conduction effects via semi-implicit scheme. See
+# https://github.com/AFD-Illinois/kharma/wiki/Packages#important-packages
+
+<parthenon/job>
+archive_parameters_timestamp = true
+problem_id = torus
+
+<parthenon/mesh>
+nx1 = 128
+nx2 = 128
+nx3 = 1
+
+<parthenon/meshblock>
+nx1 = 128
+nx2 = 128
+nx3 = 1
+
+<coordinates>
+base = spherical_ks
+transform  = fmks
+r_out      = 1000
+a          = 0.9375
+hslope     = 0.3
+mks_smooth = 0.5
+poly_xt    = 0.82
+poly_alpha = 14.0
+
+<parthenon/time>
+tlim = 4000.0
+nlim = -1
+# Only supported integrator for semi-implicit solve
+# Set whenever solver is used
+integrator = vl2
+
+<driver>
+type     = imex
+two_sync = true
+
+<implicit>
+min_nonlinear_iter  = 1
+max_nonlinear_iter  = 3
+jacobian_delta      = 4.e-8
+rootfind_tol        = 1.e-3
+linesearch          = true
+max_linesearch_iter = 3
+linesearch_eps      = 1.e-4
+use_qr              = true
+
+# This block must be present and values filled in all EGRMHD simulations
+<emhd>
+on                 = true
+higher_order_terms = true
+feedback           = true
+stability_limits   = true
+
+closure_type     = torus
+conduction_alpha = 1.0
+viscosity_alpha  = 1.0
+
+<GRMHD>
+implicit       = true
+cfl            = 0.9
+gamma          = 1.666667
+
+<flux>
+type = llf
+reconstruction = weno5
+
+<b_field>
+solver = flux_ct
+implicit = false
+type = sane
+beta_min = 100.
+initial_cleanup = false
+
+<torus>
+rin  = 6.0
+rmax = 12.0
+
+<perturbation>
+u_jitter = 0.04
+
+<electrons>
+on = true
+emhd_dissipation = true
+howes = false
+kawazura = false
+werner = false
+rowan = false
+sharma = true
+
+<floors>
+frame        = drift
+rho_min_geom = 1e-4
+u_min_geom   = 1e-6
+bsq_over_rho_max = 100
+bsq_over_u_max   = 1000
+u_over_rho_max   = 10
+gamma_max        = 5
+temp_adjust_u    = true
+
+<debug>
+verbose            = 1
+extra_checks       = 1
+flag_verbose       = 0
+
+<parthenon/output0>
+file_type = hdf5
+write_xdmf = false
+dt = 5.0
+single_precision_output = true
+variables = prims, jcon, fflag, pflag, solve_norm, solve_fail, eflag
+
+<parthenon/output1>
+file_type = rst
+write_xdmf = false
+dt        = 100.0
+
+<parthenon/output2>
+file_type = hst
+dt        = 0.1
+variables = all_reductions

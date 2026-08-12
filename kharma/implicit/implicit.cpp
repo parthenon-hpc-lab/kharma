@@ -71,14 +71,14 @@ std::vector<std::string> Implicit::GetOrderedNames(
 {
     auto pmb0 = rc->GetBlockPointer();
     std::vector<std::string> out;
-    auto vars = rc->GetVariablesByFlag({Metadata::GetUserFlag("Implicit"), flag}).vars();
+    auto vars = rc->GetVariablesByFlag({Metadata::GetUserFlag("Implicit"), Metadata::GetUserFlag("MHD"), flag}).vars();
     for (int i = 0; i < vars.size(); ++i) {
         if (rc->Contains(vars[i]->label())) {
             out.push_back(vars[i]->label());
         }
     }
     if (!only_implicit) {
-        vars = rc->GetVariablesByFlag({Metadata::GetUserFlag("Explicit"), flag}).vars();
+        vars = rc->GetVariablesByFlag({Metadata::GetUserFlag("Explicit"), Metadata::GetUserFlag("MHD"), flag}).vars();
         for (int i = 0; i < vars.size(); ++i) {
             if (rc->Contains(vars[i]->label())) {
                 out.push_back(vars[i]->label());

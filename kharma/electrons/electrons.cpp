@@ -82,6 +82,11 @@ std::shared_ptr<KHARMAPackage> Initialize(
         pin->GetOrAddBoolean("electrons", "suppress_highb_heat", false);
     params.Add("suppress_highb_heat", suppress_highb_heat);
 
+    // Source the dissipation from EMHD (if available)
+    bool emhd_dissipation =
+        pin->GetOrAddBoolean("electrons", "emhd_dissipation", true);
+    params.Add("emhd_dissipation", emhd_dissipation);
+
     // Initialization
     bool init_to_fel_0 = pin->GetOrAddBoolean("electrons", "init_to_fel_0", true);
     params.Add("init_to_fel_0", init_to_fel_0);
@@ -334,6 +339,10 @@ TaskStatus ApplyElectronHeating(
     const bool enforce_positive_diss =
         pmb->packages.Get("Electrons")->Param<bool>("enforce_positive_dissipation");
     const bool limit_kel = pmb->packages.Get("Electrons")->Param<bool>("limit_kel");
+    const bool emhd_dissipation =
+        pmb->packages.Get("Electrons")->Param<bool>("emhd_dissipation");
+
+    const EMHD::EMHD_parameters& emhd_params = EMHD::GetEMHDParameters(pmb->packages);
 
     // This function (and any primitive-variable sources) needs to be run over the entire
     // domain, because the boundary zones have already been updated and so the same
@@ -353,20 +362,36 @@ TaskStatus ApplyElectronHeating(
             const Real k_energy_conserving = (gam - 1.) * P_new(m_p.UU, k, j, i) /
                                              m::pow(P_new(m_p.RHO, k, j, i), gam);
 
-            // Dissipation is the real entropy k_energy_conserving minus any advected
-            // entropy from the previous (sub-)step P_new(KTOT)
-            Real diss_tmp = (game - 1.) / (gam - 1.) *
-                            m::pow(P(m_p.RHO, k, j, i), gam - game) *
-                            (k_energy_conserving - P_new(m_p.KTOT, k, j, i));
-            // this is eq27                  ratio of heating: Qi/Qe advected entropy from
-            // prev step
-            //  ^ denotes the solution corresponding to entropy conservation
+            Real diss_tmp = 0.;
+            if (emhd_dissipation && m_p.Q >=0 && m_p.DP >= 0) {
+                Real rho = P(m_p.RHO, k, j, i);
+                Real uu = P(m_p.UU, k, j, i);
+                Real pg = (gam - 1.) * uu;
+                Real Theta = pg / rho;
+                Real cs2 = gam * pg / (rho + (gam * uu));
+                Real q, dP;
+                EMHD::convert_prims_to_q_dP(P(m_p.Q, k, j, i), P(m_p.DP, k, j, i),
+                                    rho, Theta, cs2, emhd_params, q, dP);
+                Real tau, chi_e, nu_e;
+                EMHD::set_parameters(G, P, m_p, emhd_params, gam, k, j, i, tau, chi_e, nu_e);
 
-            // Under the flag "suppress_highb_heat", we set all dissipation to zero at
-            // sigma > 1.
-            diss_tmp = (suppress_highb_heat && (bsq / P(m_p.RHO, k, j, i) > 1.))
-                           ? 0.0
-                           : diss_tmp;
+                diss_tmp = q*q / (chi_e * rho * Theta) + dP*dP / (3 * nu_e * rho);
+            } else {
+                // Dissipation is the real entropy k_energy_conserving minus any advected
+                // entropy from the previous (sub-)step P_new(KTOT)
+                diss_tmp = (game - 1.) / (gam - 1.) *
+                                m::pow(P(m_p.RHO, k, j, i), gam - game) *
+                                (k_energy_conserving - P_new(m_p.KTOT, k, j, i));
+                // this is eq27                  ratio of heating: Qi/Qe advected entropy from
+                // prev step
+                //  ^ denotes the solution corresponding to entropy conservation
+
+                // Under the flag "suppress_highb_heat", we set all dissipation to zero at
+                // sigma > 1.
+                diss_tmp = (suppress_highb_heat && (bsq / P(m_p.RHO, k, j, i) > 1.))
+                            ? 0.0
+                            : diss_tmp;
+            }
 
             // Default is True diss_sign == Enforce nonnegative
             // Due to floors we can end up with diss==0 or even *slightly* <0, so we
