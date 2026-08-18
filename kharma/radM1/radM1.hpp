@@ -58,7 +58,7 @@ struct UnitScales {
 
 // Denote implicit solve failures (rflags)
 // This enum should grow to cover any potential flags
-enum class StatusImplicitStep { success = 0, mhdsolve, radsolve, bothsolve, failure };
+enum class StatusImplicitStep { success = 0, mhdsolve, radsolve, bothsolve, failure, onedfallback };
 
 static const std::map<int, std::string> status_names = {
     {(int)StatusImplicitStep::mhdsolve,
@@ -67,7 +67,11 @@ static const std::map<int, std::string> status_names = {
     {(int)StatusImplicitStep::radsolve,
         "RadM1 Radiation Solve Failure"}, // flag that means that the radiation solve
                                           // failed (but mhd solve worked)
-    {(int)StatusImplicitStep::failure, "RadM1 Step Failure"}};
+    {(int)StatusImplicitStep::failure, "RadM1 Step Failure"},
+    {(int)StatusImplicitStep::onedfallback,
+        "RadM1 4D Solver Fell Back to 1D"}}; // flag that means the 4D Newton solve didn't
+                                              // converge/failed and the 1D fallback solver
+                                              // was used instead
 
 TaskStatus BlockPtoU(MeshBlockData<Real>* rc, IndexDomain domain, bool coarse = false);
 /**
@@ -109,11 +113,12 @@ KOKKOS_INLINE_FUNCTION Real calc_kabs(Real rho, Real T, int opacity_model,
         return m::min(rho * shocktube_kappa_rho, 1.e5);
     } else if (opacity_model == (int)OpacityModel::Bondi) {
         // Thermal bremsstrahlung, McKinney et al. 2014 eq. 91.
-        const Real T_cgs = m::abs(T) * pc::mp * pc::c * pc::c / pc::kb;
-        const Real rho_cgs = rho * units_cgs.mass_cgs / m::pow(units_cgs.length_cgs, 3.0); 
+        const Real T_cgs = m::abs(T) * units_cgs.temperature_cgs;
+        const Real rho_cgs = rho * units_cgs.mass_cgs / (units_cgs.length_cgs * units_cgs.length_cgs * units_cgs.length_cgs);
         const Real kappa_a_cgs =
-            1.7e-25 * m::pow(T_cgs, -3.5) * m::pow(pc::mp, -2.0) * rho_cgs;
-        return kappa_a_cgs * units_cgs.length_cgs; 
+            1.7e-25 * m::pow(T_cgs, -3.5) * m::pow(pc::mp, -2.0) * rho_cgs * rho_cgs;
+        //make it scale free
+        return kappa_a_cgs * units_cgs.length_cgs;
     } else {
         // TODO: singularity-opac
         return m::min(rho * 0.08, 1.e5);
@@ -126,9 +131,9 @@ KOKKOS_INLINE_FUNCTION Real calc_kscattering(Real rho, Real T, int opacity_model
     if (opacity_model == (int)OpacityModel::ShocktubeConstant) {
         return shocktube_kappa_scat;
     } else if (opacity_model == (int)OpacityModel::Bondi) {
-        // Thomson scattering, McKinney et al. 2014 eq. 92
-        const Real rho_cgs = rho * units_cgs.mass_cgs / m::pow(units_cgs.length_cgs, 3.0);
-        const Real kappa_sc_cgs = 0.4 * rho_cgs; 
+        const Real rho_cgs = rho * units_cgs.mass_cgs / (units_cgs.length_cgs * units_cgs.length_cgs * units_cgs.length_cgs);
+        const Real kappa_sc_cgs = 0.4 * rho_cgs;
+        //make it scale free
         return kappa_sc_cgs * units_cgs.length_cgs;
     }
     return 0.0;
@@ -284,62 +289,6 @@ KOKKOS_INLINE_FUNCTION void initialize_radiation_pressure(Real UU, Real& UU_rad)
     UU_rad = UU * 0.001;
 
     return;
-}
-
-// TODO import these from matrix.hpp
-KOKKOS_INLINE_FUNCTION
-void adjoint(Real m[16], Real adjOut[16])
-{
-    adjOut[0] = MINOR(m, 1, 2, 3, 1, 2, 3);
-    adjOut[1] = -MINOR(m, 0, 2, 3, 1, 2, 3);
-    adjOut[2] = MINOR(m, 0, 1, 3, 1, 2, 3);
-    adjOut[3] = -MINOR(m, 0, 1, 2, 1, 2, 3);
-
-    adjOut[4] = -MINOR(m, 1, 2, 3, 0, 2, 3);
-    adjOut[5] = MINOR(m, 0, 2, 3, 0, 2, 3);
-    adjOut[6] = -MINOR(m, 0, 1, 3, 0, 2, 3);
-    adjOut[7] = MINOR(m, 0, 1, 2, 0, 2, 3);
-
-    adjOut[8] = MINOR(m, 1, 2, 3, 0, 1, 3);
-    adjOut[9] = -MINOR(m, 0, 2, 3, 0, 1, 3);
-    adjOut[10] = MINOR(m, 0, 1, 3, 0, 1, 3);
-    adjOut[11] = -MINOR(m, 0, 1, 2, 0, 1, 3);
-
-    adjOut[12] = -MINOR(m, 1, 2, 3, 0, 1, 2);
-    adjOut[13] = MINOR(m, 0, 2, 3, 0, 1, 2);
-    adjOut[14] = -MINOR(m, 0, 1, 3, 0, 1, 2);
-    adjOut[15] = MINOR(m, 0, 1, 2, 0, 1, 2);
-}
-
-KOKKOS_INLINE_FUNCTION
-Real MINOR(Real m[16], int r0, int r1, int r2, int c0, int c1, int c2)
-{
-    return m[4 * r0 + c0] *
-               (m[4 * r1 + c1] * m[4 * r2 + c2] - m[4 * r2 + c1] * m[4 * r1 + c2]) -
-           m[4 * r0 + c1] *
-               (m[4 * r1 + c0] * m[4 * r2 + c2] - m[4 * r2 + c0] * m[4 * r1 + c2]) +
-           m[4 * r0 + c2] *
-               (m[4 * r1 + c0] * m[4 * r2 + c1] - m[4 * r2 + c0] * m[4 * r1 + c1]);
-}
-
-KOKKOS_INLINE_FUNCTION
-Real determinant(Real m[16])
-{
-    return m[0] * MINOR(m, 1, 2, 3, 1, 2, 3) - m[1] * MINOR(m, 1, 2, 3, 0, 2, 3) +
-           m[2] * MINOR(m, 1, 2, 3, 0, 1, 3) - m[3] * MINOR(m, 1, 2, 3, 0, 1, 2);
-}
-
-KOKKOS_INLINE_FUNCTION
-void matrixInverse4x4(Real mat[4][4], Real matinv[4][4])
-{
-    adjoint(&(mat[0][0]), &(matinv[0][0]));
-
-    Real det = determinant(&(mat[0][0]));
-    for (int i = 0; i < 4; i++) {
-        for (int j = 0; j < 4; j++) {
-            matinv[i][j] /= det;
-        }
-    }
 }
 
 }

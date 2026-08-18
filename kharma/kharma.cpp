@@ -332,7 +332,7 @@ void KHARMA::FixParameters(ParameterInput *pin, bool is_parthenon_restart)
         // Require units package
         pin->SetBoolean("units", "on", true);
         // Force corrected connection coeffs, they are necessary for M1
-        pin->SetBoolean("coordinates", "correct_connections", true);
+        // pin->SetBoolean("coordinates", "correct_connections", true);
         // Mark GRMHD variables as implicitly evolved if RadM1 interaction is enabled
         // (but note we're not using the Implicit package to do it!)
         // if (pin->GetOrAddBoolean("RadM1", "implicit", true)) {

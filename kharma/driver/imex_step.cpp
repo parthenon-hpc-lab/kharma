@@ -329,9 +329,8 @@ TaskCollection KHARMADriver::MakeImExTaskCollection(BlockList_t& blocks, int sta
         } else if (use_radm1) {
             // Out of the package modification for RADM1.
             t_implicit = t_explicit;
-            // print U_init values before radM1::step
 
-            t_implicit = tl.AddTask(t_explicit, RadM1::Step, md_full_step_init.get(),
+            t_implicit = tl.AddTask(t_explicit, RadM1::Step,
                 md_sub_step_init.get(), md_sub_step_final.get(),
                 integrator->beta[stage - 1] * integrator->dt);
         }

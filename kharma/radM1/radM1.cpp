@@ -147,10 +147,17 @@ std::shared_ptr<KHARMAPackage> RadM1::Initialize(
     auto unit_conv = phoebus::UnitConversions(pin);
     UnitScales units_cgs;
     units_cgs.length_cgs      = unit_conv.GetLengthCodeToCGS();
+    printf("RadM1: length_cgs = %e\n", units_cgs.length_cgs);
     units_cgs.time_cgs        = unit_conv.GetTimeCodeToCGS();
+    printf("RadM1: time_cgs = %e\n", units_cgs.time_cgs);
     units_cgs.mass_cgs        = unit_conv.GetMassCodeToCGS();
+    printf("RadM1: mass_cgs = %e\n", units_cgs.mass_cgs);
     units_cgs.energy_cgs      = unit_conv.GetEnergyCodeToCGS();
-    units_cgs.temperature_cgs = unit_conv.GetTemperatureCodeToCGS();
+    printf("RadM1: energy_cgs = %e\n", units_cgs.energy_cgs);
+
+    // Tg = mp * c^2 * 1/kb * 1/m_scale (gamma -1) * ug */(rho)
+    units_cgs.temperature_cgs = unit_conv.GetTemperatureCodeToCGS() * pc::mp * pc::c * pc::c;
+    printf("RadM1: temperature_cgs = %e\n", units_cgs.temperature_cgs);
     pkg->AllParams().Add("units_cgs", units_cgs);
 
     // TODO (PNM): Currently attached to the floors package. Make this a separate option only for radiation package.

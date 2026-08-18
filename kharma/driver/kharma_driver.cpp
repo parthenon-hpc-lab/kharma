@@ -61,6 +61,8 @@ std::shared_ptr<KHARMAPackage> KHARMADriver::Initialize(
     // option rather than the driver name
     std::vector<std::string> valid_drivers = {"harm", "kharma", "imex", "simple"};
     bool do_emhd = pin->GetOrAddBoolean("emhd", "on", false);
+
+    //Out of the package modification for RadM1.
     bool do_radM1 = pin->GetOrAddBoolean("radM1", "on", false);
     std::string driver_type_s = pin->GetOrAddString(
         "driver", "type", (do_emhd || do_radM1) ? "imex" : "kharma", valid_drivers);
