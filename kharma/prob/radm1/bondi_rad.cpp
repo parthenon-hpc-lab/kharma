@@ -1,4 +1,5 @@
 #include "bondi_rad.hpp"
+#include "floors.hpp"
 
 #include "boundaries.hpp"
 #include "utils/constants.hpp"
@@ -49,6 +50,9 @@ TaskStatus InitializeRadiativeBondi(
 
     //PostInitialize will fill all ghosts
     SetBondiRad<IndexDomain::interior>(rc);
+    const Real r_in = pin->GetReal("coordinates", "r_in");
+    const Real rin_bondi = pin->GetOrAddReal("bondi_rad", "r_in_bondi", 1.2 * r_in);
+    const bool fill_interior = pin->GetOrAddBoolean("bondi", "fill_interior", false);
 
     // The outer boundary is held fixed at its initial analytic value every step
     // (McKinney et al. 2014, sec. 5.10); the inner boundary uses outflow condition,
@@ -59,6 +63,7 @@ TaskStatus InitializeRadiativeBondi(
         bound_pkg->KBoundaries[BoundaryFace::outer_x1] =
             SetBondiRad<IndexDomain::outer_x1>;
     }
+
 
     return TaskStatus::complete;
 }
@@ -132,7 +137,22 @@ TaskStatus SetBondiRadImpl(
             }
 
             const Real ur = -m::sqrt(2. / r);
-            const Real rho0 = -mdot / (4. * M_PI * r * r * ur);
+            Real ucon_bl[GR_DIM] = {0, ur, 0, 0};
+
+            GReal gcov_bl[GR_DIM][GR_DIM];
+            SphBLCoords(G.coords.get_a()).gcov_embed(Xembed, gcov_bl);
+
+            set_ut(gcov_bl, ucon_bl);
+
+            auto gdet_bl = G.coords.gdet_embed(Xembed);
+
+            // Then transform that 4-vector to KS (or not, if we're using BL base coords)
+            Real ucon_base[GR_DIM];
+            mpark::get<SphKSCoords>(G.coords.base).vec_from_bl(Xembed, ucon_bl, ucon_base);
+
+            
+            //const Real rho0 = -mdot / (4. * M_PI * r * r * ucon_base[1]) * 1./1.5;
+            const Real rho0 = -mdot / (4. * M_PI * gdet_bl * ucon_base[1]);
 
             const Real T = T_out * m::pow(rho0 / rho0_out, gam - 1.);
             const Real u_internal = rho0 * T / (gam - 1.);
@@ -142,7 +162,6 @@ TaskStatus SetBondiRadImpl(
             u(k, j, i) = u_internal;
 
             // Convert the radial 4-velocity to the native primitive
-            const Real ucon_bl[GR_DIM] = {0, ur, 0, 0};
             Real ucon_native[GR_DIM];
             G.coords.bl_fourvel_to_native(Xnative, ucon_bl, ucon_native);
             Real gcon[GR_DIM][GR_DIM];

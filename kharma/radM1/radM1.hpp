@@ -103,7 +103,7 @@ void ApplyRadM1Floors(MeshBlockData<Real>* rc, IndexDomain domain);
 TaskStatus PostStepDiagnostics(const SimTime& tm, MeshData<Real>* md);
 
 // Opacity model selector for calc_kabs/calc_kscattering/compute_covariant_fourforce.
-enum class OpacityModel : int { Default = 0, ShocktubeConstant = 1, Bondi = 2};
+enum class OpacityModel : int { Default = 0, ShocktubeConstant = 1, Bondi = 2, BeamLight = 3};
 
 
 KOKKOS_INLINE_FUNCTION Real calc_kabs(Real rho, Real T, int opacity_model,
@@ -119,6 +119,9 @@ KOKKOS_INLINE_FUNCTION Real calc_kabs(Real rho, Real T, int opacity_model,
             1.7e-25 * m::pow(T_cgs, -3.5) * m::pow(pc::mp, -2.0) * rho_cgs * rho_cgs;
         //make it scale free
         return kappa_a_cgs * units_cgs.length_cgs;
+    } else if (opacity_model == (int)OpacityModel::BeamLight) {
+        return 0.0;
+    
     } else {
         // TODO: singularity-opac
         return m::min(rho * 0.08, 1.e5);
@@ -130,6 +133,8 @@ KOKKOS_INLINE_FUNCTION Real calc_kscattering(Real rho, Real T, int opacity_model
 {
     if (opacity_model == (int)OpacityModel::ShocktubeConstant) {
         return shocktube_kappa_scat;
+    } else if (opacity_model == (int)OpacityModel::BeamLight) {
+        return 0.0;
     } else if (opacity_model == (int)OpacityModel::Bondi) {
         const Real rho_cgs = rho * units_cgs.mass_cgs / (units_cgs.length_cgs * units_cgs.length_cgs * units_cgs.length_cgs);
         const Real kappa_sc_cgs = 0.4 * rho_cgs;

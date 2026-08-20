@@ -28,7 +28,7 @@ fill_interior = false
 
 
 <parthenon/time>
-tlim = 3.13e4
+tlim = 1.485e5
 
 <driver>
 type = imex
@@ -36,18 +36,18 @@ two_sync = false
 
 <GRMHD>
 cfl = 0.5
-gamma = 1.6665866858620597
+gamma = 1.6021505376344085
 reconstruction = mp5
 
 <eos>
 type = IdealGas
-Gamma = 1.6665866858620597
+Gamma = 1.6021505376344085
 Cv = 1.0
 
 <bondi_rad>
-mdot = 1.0
-T_out = 1.e6
-fp = 1.2e-4
+mdot = 10.0
+T_out = 1.e7
+fp = 1.2e-1
 r_in_bondi = 2.5
 
 <b_field>
@@ -85,13 +85,13 @@ fluid_mass_g =  6.203843e12
 
 <parthenon/output0>
 file_type = hdf5
-dt = 0.1
+dt = 1.0
 single_precision_output = true
 variables = prims, cons
 
 <parthenon/output1>
 file_type = hst
-dt = 0.1
+dt = 10.0
 variables = all_reductions
 
 <debug>

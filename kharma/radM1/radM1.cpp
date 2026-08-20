@@ -116,6 +116,8 @@ std::shared_ptr<KHARMAPackage> RadM1::Initialize(
         default_opacity_model = "shocktube_constant";
     } else if (problem_id == "bondi_rad") {
         default_opacity_model = "bondi_opacs";
+    }else if (problem_id == "beam_of_light") {
+        default_opacity_model = "beam_light_zero";
     }
 
     // fallback to the default if no input
@@ -127,6 +129,8 @@ std::shared_ptr<KHARMAPackage> RadM1::Initialize(
         opacity_model = (int) OpacityModel::ShocktubeConstant;
     } else if (opacity_model_str == "bondi_opacs") {
         opacity_model = (int) OpacityModel::Bondi; 
+    } else if (opacity_model_str == "beam_light_zero") {
+        opacity_model = (int) OpacityModel::BeamLight; 
     }
 
     // Read Shocktube constants

@@ -65,6 +65,7 @@
 // RadM1 problem headers
 #include "radm1/rad_pulse.hpp"
 #include "radm1/bondi_rad.hpp"
+#include "radm1/beam_of_light.hpp"
 
 // Electron problem headers
 #include "elec/driven_turbulence.hpp"
@@ -124,6 +125,8 @@ void KHARMA::ProblemGenerator(MeshBlock* pmb, ParameterInput* pin)
         status = InitializeRadiationPulse(rc, pin);
     } else if (prob == "bondi_rad") {
         status = InitializeRadiativeBondi(rc, pin);
+    } else if (prob == "beam_of_light") {
+        status = InitializeBeamOfLight(rc, pin);
         // Everything
     } else if (prob == "torus") {
         status = InitializeFMTorus(rc, pin);
