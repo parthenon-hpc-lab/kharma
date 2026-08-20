@@ -98,20 +98,21 @@ std::shared_ptr<KHARMAPackage> Inverter::Initialize(
     }
 
     // Fixup options
-    // Fix by averaging neighboring cells.  Enabled by default for 1Dw, but Kastaun
-    // failures are more dire
+    // Fix by averaging neighboring cells.  Enabled by default for 1Dw, but (magnetized!)
+    // Kastaun failures are more dire
+    const bool nob = pin->GetString("b_field", "solver") == "none";
     bool fix_average_neighbors =
-        pin->GetOrAddBoolean("inverter", "fix_average_neighbors", !use_kastaun);
+        pin->GetOrAddBoolean("inverter", "fix_average_neighbors", (!use_kastaun) || nob);
     params.Add("fix_average_neighbors", fix_average_neighbors);
-    // Fix by replacing with floors, uvec=0. Backstop for states which are just impossible
-    // to use
+    // Fix by replacing with floors, uvec=0. Last resort for impossible states
     bool fix_atmosphere =
         pin->GetOrAddBoolean("inverter", "fix_atmosphere", !use_kastaun);
     params.Add("fix_atmosphere", fix_atmosphere);
 
     // New "backstop" code: ensure positive internal energy by
     // stealing some or all KE and adding any shortfall
-    bool backstop = pin->GetOrAddBoolean("inverter", "backstop", use_kastaun);
+    // Not intended for unmagnetized flows/simulations, not very useful
+    bool backstop = pin->GetOrAddBoolean("inverter", "backstop", use_kastaun && !nob);
     params.Add("backstop", backstop);
     // Note these aren't called if the backstop isn't enabled!
     bool backstop_recover_vel =

@@ -12,17 +12,17 @@ exit_code=0
 # Set paths
 KHARMADIR=../..
 
-$KHARMADIR/run.sh -i ./orszag_tang_with_restarts.par >log_orig.txt 2>&1
+$KHARMADIR/run.sh -d . -i ./orszag_tang_with_restarts.par >log_orig.txt 2>&1
 
 mv orszag_tang.out0.final.phdf orszag_tang.out0.final.orig.phdf
 
 sleep 1
 
-pyharm-convert --to_restart orszag_tang.out1.00005.rhdf orszag_tang.out1.00009.rhdf
+pyharm-convert --to-restart orszag_tang.out1.00005.rhdf orszag_tang.out1.00009.rhdf
 
 sleep 1
 
-$KHARMADIR/run.sh -i ./regrid_orszag_tang.par >log_regrid.txt 2>&1
+$KHARMADIR/run.sh -d . -i ./regrid_orszag_tang.par >log_regrid.txt 2>&1
 
 mv resize_restart.out0.final.phdf resize_restart.out0.final.regrid.phdf
 
@@ -35,18 +35,19 @@ else
     echo Regrid test success
 fi
 
+# TODO(CEP) restore when solvers are back
 # Finally, test that we can sanely resize the dump, too
 # This won't output .phdf files, only restarts (.rhdf)
-$KHARMADIR/run.sh -i ./resize_orszag_tang.par >log_resize.txt 2>&1
+#$KHARMADIR/run.sh -d . -i ./resize_orszag_tang.par >log_resize.txt 2>&1
 
 # Check the final .rhdf file for sanity (i.e., divB small)
-check_code=0
-pyharm-check-basics resize_restart.out1.final.rhdf || check_code=$?
-if [[ $check_code != 0 ]]; then
-    echo Resize test FAIL: $check_code
-    exit_code=1
-else
-    echo Resize test success
-fi
+#check_code=0
+#pyharm-check-basics resize_restart.out1.final.rhdf || check_code=$?
+#if [[ $check_code != 0 ]]; then
+#    echo Resize test FAIL: $check_code
+#    exit_code=1
+#else
+#    echo Resize test success
+#fi
 
 exit $exit_code

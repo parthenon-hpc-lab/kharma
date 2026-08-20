@@ -104,8 +104,8 @@ TaskStatus SetHubbleImpl(
     // first time this is called in boundary conditions inside the time stepping cycle is
     // when counter == 0
     int counter = pmb->packages.Get("GRMHD")->Param<int>("counter");
-    const Real tt = pmb->packages.Get("Globals")->Param<Real>("time");
-    const Real dt = pmb->packages.Get("Globals")->Param<Real>("dt_last");
+    const double tt = pmb->packages.Get("Globals")->Param<double>("time");
+    const double dt = pmb->packages.Get("Globals")->Param<double>("dt_last");
 
     Real t = tt + 0.5 * dt;
     if ((counter % 4) > 1) t = tt + dt;
@@ -198,8 +198,8 @@ void ApplyHubbleHeating(MeshBlockData<Real>* mbase)
     const VarMap m_p(prims_map, false);
 
     Real Q = 0;
-    const Real dt =
-        pmb0->packages.Get("Globals")->Param<Real>("dt_last"); // Close enough?
+    const auto dt =
+        pmb0->packages.Get("Globals")->Param<double>("dt_last"); // Close enough?
     const Real t = pmb0->packages.Get("Globals")->Param<Real>("time") + 0.5 * dt;
     const Real v0 = pmb0->packages.Get("GRMHD")->Param<Real>("v0");
     const Real ug0 = pmb0->packages.Get("GRMHD")->Param<Real>("ug0");

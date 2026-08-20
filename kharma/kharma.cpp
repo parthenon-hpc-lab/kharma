@@ -83,7 +83,8 @@ std::shared_ptr<KHARMAPackage> KHARMA::InitializeGlobals(ParameterInput *pin, st
     // or preventing bad outcomes at known times
     params.Add("time", 0.0, true);
     // Last step's dt (Parthenon SimTime tm.dt), which must be preserved to output jcon
-    params.Add("dt_last", 0.0, true);
+    // Also sets max step increase, so we initialize it to max value to allow any first step size
+    params.Add("dt_last", std::numeric_limits<double>::max(), true);
     // Whether we are computing initial outputs/timestep, or versions in the execution loop
     params.Add("in_loop", false, true);
 
@@ -230,6 +231,7 @@ void KHARMA::FixParameters(ParameterInput *pin, bool is_parthenon_restart)
                     // then we want xeh = xin + 5.5 * (xout - xin) / N1TOT:
                     const GReal x1min = (nx1 * x1hor / 5.5 - x1max) / (-1. + nx1 / 5.5);
                     if (x1min < 0.0) {
+                        std::cout << std::endl; // flush messages in output buffer before we error
                         throw std::invalid_argument("Not enough radial zones were specified to put 5 zones inside EH!");
                     }
                     pin->GetOrAddReal("parthenon/mesh", "x1min", x1min);
@@ -417,6 +419,7 @@ Packages_t KHARMA::ProcessPackages(std::unique_ptr<ParameterInput> &pin)
         t_b_field = tl.AddTask(t_grmhd, KHARMA::AddPackage, packages, B_FluxCT::Initialize, pin.get());
         have_b_transport = true;
     } else {
+        std::cout << std::endl; // flush messages in output buffer before we error
         throw std::invalid_argument("Invalid solver! Must be e.g., flux_ct, face_ct, cd, cleanup...");
     }
     // Cleanup for the B field, using an elliptic solve for eliminating divB
@@ -481,10 +484,14 @@ Packages_t KHARMA::ProcessPackages(std::unique_ptr<ParameterInput> &pin)
     // There are some packages which must be loaded after all physics
     // Easier to load them separately than list dependencies
 
+    // Now we always load floors package -- "floors/on=false" and "floors/disable_floors=true" now map to "disable_call"!
+    KHARMA::AddPackage(packages, Floors::Initialize, pin.get());
+
     // Flux temporaries must be full size
     KHARMA::AddPackage(packages, Flux::Initialize, pin.get());
 
     // ISMR temporaries must be full size
+    // TODO(CEP) check nlevels > 0 -- better yet provenance, guarantee specific ismr/on=false ALWAYS disables
     if (pin->GetOrAddBoolean("ismr", "on", false) || pin->DoesParameterExist("ismr", "nlevels")) {
         pin->SetBoolean("ismr", "on", true);
         KHARMA::AddPackage(packages, ISMR::Initialize, pin.get());
@@ -493,9 +500,6 @@ Packages_t KHARMA::ProcessPackages(std::unique_ptr<ParameterInput> &pin)
     // And any dirichlet/constant boundaries
     // TODO avoid init if Parthenon will be handling all boundaries?
     KHARMA::AddPackage(packages, KBoundaries::Initialize, pin.get());
-
-    // Now we alsways load floors package -- "on=false" and "disable_floors" map to "disable_call"!
-    KHARMA::AddPackage(packages, Floors::Initialize, pin.get());
 
     // Load the implicit package last, if there are *any* variables that need implicit evolution
     // This lets us just count by flag, rather than checking all the possible parameters that would

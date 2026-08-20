@@ -231,8 +231,12 @@ TaskStatus Inverter::Backstop(MeshBlockData<Real>* rc)
                 // const Real u = P(m_p.UU, k, j, i);
                 const Real uvec[NVEC] = {
                     P(m_p.U1, k, j, i), P(m_p.U2, k, j, i), P(m_p.U3, k, j, i)};
-                const Real B_P[NVEC] = {
-                    P(m_p.B1, k, j, i), P(m_p.B2, k, j, i), P(m_p.B3, k, j, i)};
+                Real B_P[NVEC] = {0.};
+                if (m_p.B1 >= 0) {
+                    B_P[V1] = P(m_p.B1, k, j, i);
+                    B_P[V2] = P(m_p.B2, k, j, i);
+                    B_P[V3] = P(m_p.B3, k, j, i);
+                }
                 // Real rho_ut, T[GR_DIM];
                 // GRMHD::p_to_u_mhd(G, rho, u, uvec, B_P, gam, k, j, i, rho_ut, T);
 

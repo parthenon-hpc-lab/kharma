@@ -97,8 +97,8 @@ std::shared_ptr<KHARMAPackage> Initialize(
     params.Add("dt_min", dt_min);
     // Starting timestep: guaranteed step 1 timestep returned by EstimateTimestep,
     // usually matters most for restarts
-    double dt_start = pin->GetOrAddReal("parthenon/time", "dt", dt_min);
-    params.Add("dt_start", dt_start);
+    // double dt_start = pin->GetOrAddReal("parthenon/time", "dt", dt_min);
+    // params.Add("dt_start", dt_start);
     double max_dt_increase = pin->GetOrAddReal("parthenon/time", "max_dt_increase", 2.0);
     params.Add("max_dt_increase", max_dt_increase);
 
@@ -109,9 +109,6 @@ std::shared_ptr<KHARMAPackage> Initialize(
     params.Add("start_dt_light", start_dt_light);
     bool use_dt_light = pin->GetOrAddBoolean("parthenon/time", "use_dt_light", false);
     params.Add("use_dt_light", use_dt_light);
-    bool use_dt_light_phase_speed =
-        pin->GetOrAddBoolean("parthenon/time", "use_dt_light_phase_speed", false);
-    params.Add("use_dt_light_phase_speed", use_dt_light_phase_speed);
 
     // IMPLICIT PARAMETERS
     // The ImEx driver is necessary to evolve implicitly, but doesn't require it.  Using
@@ -377,42 +374,35 @@ Real EstimateTimestep(MeshData<Real>* md)
     Flag("EstimateTimestep");
     auto pmesh = md->GetMeshPointer();
     auto& globals = pmesh->packages.Get("Globals")->AllParams();
+    const int &verbose = globals.Get<int>("verbose");
     const auto& grmhd_pars = pmesh->packages.Get("GRMHD")->AllParams();
 
-    // If we have to recompute ctop anywhere, we do it now
-    // TODO only call if one of the reconnect_ or excised polar is enabled
-    UpdateAveragedCtop(md);
-
     // Other things we might have to return (light-crossing, pre-set timestep, etc.)
-    // TODO move these options to SetGlobalTimestep
+    // TODO option for user constant dt?
+    // On first step...
     if (!globals.Get<bool>("in_loop")) {
         if (grmhd_pars.Get<bool>("start_dt_light") ||
             grmhd_pars.Get<bool>("use_dt_light")) {
-            // Estimate based on light crossing time
-            double dt = EstimateRadiativeTimestep(md);
-            // This records a per-rank minimum,
-            // but Parthenon finds the global minimum anyway
-            if (globals.hasKey("dt_light")) {
-                if (dt < globals.Get<double>("dt_light"))
-                    globals.Update<double>("dt_light", dt);
-            } else {
-                globals.Add<double>("dt_light", dt);
-            }
-            EndFlag();
-            return dt;
+            // ...update signal speeds to be the light crossing, and calculate
+            UpdateCtopLight(md);
         } else {
-            // Or Just take from parameters
-            double dt = grmhd_pars.Get<double>("dt_start");
-            // Record this, since we'll use it to determine the max step increase
+            // ...or just take from parameters & return
+            double dt = grmhd_pars.Get<double>("dt_min");
+            // Record this, since we'll use it to calculate max increase for the next step
             globals.Update<double>("dt_last", dt);
             EndFlag();
             return dt;
         }
-    }
-    // If we're still using the light crossing time, skip the rest
-    if (grmhd_pars.Get<bool>("use_dt_light")) {
-        EndFlag();
-        return globals.Get<double>("dt_light");
+    } else {
+        // If we've cached the light crossing time, skip the rest
+        if (grmhd_pars.Get<bool>("use_dt_light")) {
+            EndFlag();
+            return globals.Get<double>("dt_light");
+        } else {
+            // If we have to recompute ctop anywhere, we do it now
+            // TODO only call if one of the reconnect_ or excised polar is enabled
+            UpdateAveragedCtop(md);
+        }
     }
 
     // Actually compute the timestep if we have to
@@ -483,11 +473,11 @@ Real EstimateTimestep(MeshData<Real>* md)
 
                 double ndt_zone =
                     courant_limit /
-                    (1 / (G.Dxc<1>(i) / m::max(cmax(V1, k, j, i), cmin(V1, k, j, i))) +
-                        1 / (G.Dxc<2>(j) * excise_factor /
-                                m::max(cmax(V2, k, j, i), cmin(V2, k, j, i))) +
-                        1 / (G.Dxc<3>(k) * ismr_factor /
-                                m::max(cmax(V3, k, j, i), cmin(V3, k, j, i))));
+                    ((m::max(cmax(V1, k, j, i), cmin(V1, k, j, i)) / G.Dxc<1>(i)) +
+                     (m::max(cmax(V2, k, j, i), cmin(V2, k, j, i)) /
+                        (G.Dxc<2>(j) * excise_factor)) +
+                     (m::max(cmax(V3, k, j, i), cmin(V3, k, j, i)) /
+                        (G.Dxc<3>(k) * ismr_factor)));
 
                 if (!m::isnan(ndt_zone) && (ndt_zone < local_result)) {
                     local_result = ndt_zone;
@@ -504,88 +494,73 @@ Real EstimateTimestep(MeshData<Real>* md)
     const double dt_min = grmhd_pars.Get<double>("dt_min");
     const double dt_last = globals.Get<double>("dt_last");
     const double dt_max = grmhd_pars.Get<double>("max_dt_increase") * dt_last;
+    if (verbose > 1) {
+        std::cerr << "Updating dt. min allowed: " << dt_min << "max allowed: " << dt_max
+                << "\nCalculated timestep (w/CFL factor!): " << min_ndt * cfl << std::endl;
+    }
     const double ndt = clip(min_ndt * cfl, dt_min, dt_max);
+
+    // If we're using radiative speed, cache it now
+    // This records a per-rank minimum,
+    // but Parthenon finds the global minimum anyway
+    if (grmhd_pars.Get<bool>("use_dt_light")) {
+        if (!globals.hasKey("dt_light")) {
+            globals.Add<double>("dt_light", ndt);
+            if (ndt < globals.Get<double>("dt_light"))
+                globals.Update<double>("dt_light", ndt);
+        } else if (ndt < globals.Get<double>("dt_light")) {
+            globals.Update<double>("dt_light", ndt);
+        }
+    }
 
     EndFlag();
     return ndt;
 }
 
-Real EstimateRadiativeTimestep(MeshData<Real>* md)
+TaskStatus UpdateCtopLight(MeshData<Real>* md)
 {
-    Flag("EstimateRadiativeTimestep");
+    Flag("UpdateCtopLight");
     auto pmb0 = md->GetBlockData(0)->GetBlockPointer();
 
-    const auto& grmhd_pars = pmb0->packages.Get("GRMHD")->AllParams();
-    const bool phase_speed = grmhd_pars.Get<bool>("use_dt_light_phase_speed");
-
-    // Doesn't actually matter what we pack here, we're just pulling G
-    const auto& dummy = md->PackVariables(std::vector<std::string>{});
+    const auto& cmax = md->PackVariables(std::vector<std::string>{"Flux.cmax"});
+    const auto& cmin = md->PackVariables(std::vector<std::string>{"Flux.cmin"});
 
     const IndexRange3 b = KDomain::GetRange(md, IndexDomain::interior);
-    const IndexRange block = IndexRange{0, dummy.GetDim(5) - 1};
+    const IndexRange block = IndexRange{0, cmin.GetDim(5) - 1};
 
-    // Leaving minmax in case the max phase speed is useful
-    typename Kokkos::MinMax<Real>::value_type minmax;
-    pmb0->par_reduce(
-        "ndt_min", block.s, block.e, b.ks, b.ke, b.js, b.je, b.is, b.ie,
-        KOKKOS_LAMBDA(const int& b, const int& k, const int& j, const int& i,
-            typename Kokkos::MinMax<Real>::value_type& lminmax)
+    pmb0->par_for(
+        "ctop_light", block.s, block.e, b.ks, b.ke, b.js, b.je, b.is, b.ie,
+        KOKKOS_LAMBDA(const int& bl, const int& k, const int& j, const int& i)
         {
-            const auto& G = dummy.GetCoords(b);
+            const auto& G = cmax.GetCoords(bl);
 
-            double light_phase_speed = SMALL_NUM;
-            double dt_light_local = 0.;
+            for (int mu = 1; mu < GR_DIM; mu++) {
+                if (SQR(G.gcon(Loci::center, j, i, 0, mu)) -
+                        G.gcon(Loci::center, j, i, mu, mu) *
+                            G.gcon(Loci::center, j, i, 0, 0) >=
+                    0.) {
+                    cmax(bl, mu-1, k, j, i) =
+                        m::abs((-G.gcon(Loci::center, j, i, 0, mu) +
+                                    m::sqrt(SQR(G.gcon(Loci::center, j, i, 0, mu)) -
+                                            G.gcon(Loci::center, j, i, mu, mu) *
+                                                G.gcon(Loci::center, j, i, 0, 0))) /
+                                G.gcon(Loci::center, j, i, 0, 0));
 
-            if (phase_speed) {
-                double local_phase_speed[GR_DIM];
-                for (int mu = 1; mu < GR_DIM; mu++) {
-                    if (SQR(G.gcon(Loci::center, j, i, 0, mu)) -
-                            G.gcon(Loci::center, j, i, mu, mu) *
-                                G.gcon(Loci::center, j, i, 0, 0) >=
-                        0.) {
-
-                        double cplus =
-                            m::abs((-G.gcon(Loci::center, j, i, 0, mu) +
-                                       m::sqrt(SQR(G.gcon(Loci::center, j, i, 0, mu)) -
-                                               G.gcon(Loci::center, j, i, mu, mu) *
-                                                   G.gcon(Loci::center, j, i, 0, 0))) /
-                                   G.gcon(Loci::center, j, i, 0, 0));
-
-                        double cminus =
-                            m::abs((-G.gcon(Loci::center, j, i, 0, mu) -
-                                       m::sqrt(SQR(G.gcon(Loci::center, j, i, 0, mu)) -
-                                               G.gcon(Loci::center, j, i, mu, mu) *
-                                                   G.gcon(Loci::center, j, i, 0, 0))) /
-                                   G.gcon(Loci::center, j, i, 0, 0));
-
-                        local_phase_speed[mu] = m::max(cplus, cminus);
-                    } else {
-                        local_phase_speed[mu] = SMALL_NUM;
-                    }
+                    cmin(bl, mu-1, k, j, i) =
+                        m::abs((-G.gcon(Loci::center, j, i, 0, mu) -
+                                    m::sqrt(SQR(G.gcon(Loci::center, j, i, 0, mu)) -
+                                            G.gcon(Loci::center, j, i, mu, mu) *
+                                                G.gcon(Loci::center, j, i, 0, 0))) /
+                                G.gcon(Loci::center, j, i, 0, 0));
+                } else {
+                    cmax(bl, mu-1, k, j, i) = SMALL_NUM;
+                    cmin(bl, mu-1, k, j, i) = SMALL_NUM;
                 }
-                dt_light_local = 1. / (G.Dxc<1>(0) / local_phase_speed[1]) +
-                                 1. / (G.Dxc<2>(0) / local_phase_speed[2]) +
-                                 1. / (G.Dxc<3>(0) / local_phase_speed[3]);
-                light_phase_speed = m::max(local_phase_speed[1],
-                    m::max(local_phase_speed[2], local_phase_speed[3]));
-            } else {
-                dt_light_local = 1. / G.Dxc<1>(0) + 1. / G.Dxc<2>(0) + 1. / G.Dxc<3>(0);
             }
-            dt_light_local = 1 / dt_light_local;
-
-            if (!m::isnan(dt_light_local) && (dt_light_local < lminmax.min_val))
-                lminmax.min_val = dt_light_local;
-            if (!m::isnan(light_phase_speed) && (light_phase_speed > lminmax.max_val))
-                lminmax.max_val = light_phase_speed;
-        },
-        Kokkos::MinMax<Real>(minmax));
-
-    // Just spit out dt
-    const double cfl = grmhd_pars.Get<double>("cfl");
-    const double ndt = minmax.min_val * cfl;
+        });
 
     EndFlag();
-    return ndt;
+    return TaskStatus::complete;
 }
 
 AmrTag CheckRefinement(MeshBlockData<Real>* rc)
