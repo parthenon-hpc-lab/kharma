@@ -47,6 +47,9 @@ type = imex
 implicit       = true
 cfl            = 0.9
 gamma          = 1.333333
+
+<flux>
+type = llf
 reconstruction = weno5
 
 <b_field>

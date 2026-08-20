@@ -1,0 +1,82 @@
+# Komissarov cylindrical explosion with magnetic field
+# see Komissarov (1999), section 7.3
+# Uses donor-cell reconstruction for stability and simplicity,
+# good for looking at code behavior in bad situations.
+# Compare to AthenaK algorithm/GRMHD blast wave test
+
+<parthenon/job>
+problem_id = explosion
+
+<parthenon/mesh>
+nx1 = 200
+x1min = -6.0
+x1max = 6.0
+
+nx2 = 200
+x2min = -6.0
+x2max = 6.0
+
+nx3 = 1
+x3min = -6.0
+x3max = 6.0
+
+<parthenon/meshblock>
+nx1 = 100
+nx2 = 100
+nx3 = 1
+
+<coordinates>
+base = cartesian_minkowski
+transform = null
+
+<parthenon/time>
+tlim = 4.0
+integrator = rk2
+dt_min = 0.0001
+
+<GRMHD>
+cfl = 0.4
+gamma = 1.333333
+
+<driver>
+type = kharma
+
+<flux>
+type = llf
+reconstruction = donor_cell
+
+<inverter>
+type = kastaun
+fix_average_neighbors = false
+fix_atmosphere = true
+
+<explosion>
+r_in = 0.8
+r_out = 1.0
+rho_out = 1e-4
+
+<floors>
+rho_min_const = 1e-10
+u_min_const = 1e-10
+
+<b_field>
+solver = face_ct
+ct_scheme = gs05_c
+type = constant
+B10 = 1.0
+
+<debug>
+verbose = 1
+flag_verbose = 2
+extra_checks = 2
+
+<parthenon/output0>
+file_type = hdf5
+write_xdmf = false
+dt = 0.1
+single_precision_output = true
+variables = prims, cons.fB, fflag, pflag
+
+<parthenon/output1>
+file_type = hst
+dt = 0.1

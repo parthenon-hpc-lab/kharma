@@ -5,74 +5,90 @@
 
 if [[ ($HOSTNAME == "cn"* || $HOSTNAME == "darwin"*) &&
       ("$PWD" == "/projects/jacamar-ci"* || "$PWD" == "/vast"*) ]]; then
-  #module purge # This messes things up on ARM nodes
+  #module purge
   module load cmake
 
   # Where we're going, we don't need system libraries
   ARGS="$ARGS hdf5"
-
-  # Help Darwin find the right modules in automated jobs
-  if [[ "$ARGS" == *"cuda"* && "$ARGS" == *"arm-"* ]]; then
-    export MODULEPATH="/projects/darwin-nv/modulefiles/rhel8/aarch64:/projects/darwin-nv/modulefiles/rhel8/aarch64"
+  if [[ "$ARGS" == *"clean"* ]]; then
+    ARGS="$ARGS cleanhdf5"
   fi
 
-  # Load compiler...
-  if [[ "$ARGS" == *"gcc12"* ]]; then
-    module load gcc/12.2.0 openmpi
-    C_NATIVE=gcc
-    CXX_NATIVE=g++
-  elif [[ "$ARGS" == *"gcc10"* ]]; then
-    module load gcc/10.4.0 openmpi
+  # 1. Load compiler stack
+  if [[ "$ARGS" == *"gcc10"* ]]; then
+    module load gcc/10.4.0
     C_NATIVE=gcc
     CXX_NATIVE=g++
   elif [[ "$ARGS" == *"gcc"* ]]; then
-    # Default GCC
-    #module load gcc/13.1.0 openmpi
+    if [[ "$ARGS" == *"cuda"* ]]; then
+      # Whatever GCC for CUDA
+      module load gcc
+    else
+      # Specifically latest+MPI on CPU
+      module load openmpi/4.1.5-gcc_12.2.0
+    fi
     C_NATIVE=gcc
     CXX_NATIVE=g++
   elif [[ "$ARGS" == *"aocc"* ]]; then
-    module load aocc openmpi
+    module load aocc
     C_NATIVE=clang
     CXX_NATIVE=clang++
   elif [[ "$ARGS" == *"nvhpc"* ]]; then
     module load nvhpc
     C_NATIVE="nvc"
     CXX_NATIVE="nvc++"
-    # New NVHPC doesn't like CUDA_HOME
-    export NVHPC_CUDA_HOME="$CUDA_HOME"
-    unset CUDA_HOME
   elif [[ "$ARGS" == *"icc"* ]]; then
-    module load intel-classic/2021.3.0 openmpi
+    module load intel-classic/2021.3.0
     C_NATIVE=icc
     CXX_NATIVE=icpc
   else
     # Default: NVHPC if cuda else IntelLLVM
     if [[ "$ARGS" == *"cuda"* ]]; then
-      module load nvhpc openmpi
+      module load nvhpc
       C_NATIVE="nvc"
       CXX_NATIVE="nvc++"
-      # New NVHPC doesn't like CUDA_HOME
-      export NVHPC_CUDA_HOME="$CUDA_HOME"
-      unset CUDA_HOME
     else
-      module load intel openmpi
+      module load intel
       C_NATIVE=icx
       CXX_NATIVE=icpx
     fi
   fi
 
-  # ...any accelerator libraries...
+  # 2. Load accelerator libraries
   if [[ "$ARGS" == *"cuda"* ]]; then
-    module load cuda/12.0.0
+    if [[ "$ARGS" == *"cuda11"* ]]; then
+      module load cuda/11.8.0
+    elif [[ "$ARGS" == *"cuda120"* ]]; then
+      module load cuda/12.0.0
+    else
+      module load cuda/12.3.1
+    fi
+    # Host MPI for CUDA w/o NVHPC
+    if [[ "$C_NATIVE" != "nvc" ]]; then
+      module load openmpi
+      EXTRA_FLAGS="-DPARTHENON_ENABLE_HOST_COMM_BUFFERS=ON $EXTRA_FLAGS"
+    fi
+    # Newer NVHPC wants us to leave it alone
+    #unset CUDA_HOME
+    # For manually exporting CUDA and COMM_LIBS
+    #export NVHPC_CUDA_HOME="$CUDA_HOME"
+    #export NVHPC_COMM_LIBS_HOME=/projects/darwin-nv/rhel8/aarch64/packages/nvhpc/Linux_aarch64/24.1/comm_libs
+    #PREFIX_PATH=$NVHPC_ROOT
   elif [[ "$ARGS" == *"hip"* ]]; then
-    module load rocm/5.4.3 #openmpi/5.0.0rc11-gcc_13.1.0
-    source ~/libs/env.sh
+    # No MPI or OpenMP -- No OFI OpenMPI on Darwin (right?) and HIP hates OpenMP
+    module load rocm
     C_NATIVE=hipcc
     CXX_NATIVE=hipcc
-    export CXXFLAGS="-fopenmp $CXXFLAGS"
+    # Disable MPI
+    ARGS="$ARGS nompi"
   fi
 
-  # ...and set architecture
+  # ... or if we force it (CI)
+  if [[ "$ARGS" == *"ompi"* ]]; then
+    module load openmpi
+  fi
+
+  # 3. Set architecture
   # These are orthogonal to above, so long as the hardware
   # supports the paradigm
   # Note this also specifies cores to use for compiling
@@ -130,8 +146,10 @@ if [[ ($HOSTNAME == "cn"* || $HOSTNAME == "darwin"*) &&
   fi
   MPI_NUM_PROCS=${MPI_NUM_PROCS:-$MPI_NUM_PROCS_D}
 
+  module list
+
   # Runtime
-  MPI_EXE="mpirun"
+  #MPI_EXE="mpirun"
   # Lead MPI to water
-  MPI_EXTRA_ARGS="--map-by ppr:${MPI_NUM_PROCS}:node:pe=$(($NPROC / $MPI_NUM_PROCS / $NODE_SLICE))"
+  #MPI_EXTRA_ARGS="--map-by ppr:${MPI_NUM_PROCS}:node:pe=$(($NPROC / $MPI_NUM_PROCS / $NODE_SLICE))"
 fi

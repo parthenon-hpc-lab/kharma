@@ -97,10 +97,11 @@ if __name__=='__main__':
         if not (dvar_cos[k] == 0 and dvar_sin[k] == 0):
             powerfits[k] = np.polyfit(np.log(RES), np.log(L1[:,k]), 1)[0]
             print("Power fit {}: {} {}".format(VARS[k], powerfits[k], L1[:,k]))
-            if powerfits[k] > -1.6 or powerfits[k] < -2.7:
+            if powerfits[k] > -1.6 or powerfits[k] < -3.3:
                 # Everything *should* converge at ~2, but we relax the reqt due to known behavior:
                 # 1. B field in WENO seems to lag, at ~1.7
                 # 2. Problems run under linear/MC seem to converge ~2.5 in most variables
+                # 3. EMHD modes with ideal guess has ~3 convergence for rho
                 fail = 1
 
     # plot

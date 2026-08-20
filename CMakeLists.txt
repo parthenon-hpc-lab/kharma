@@ -6,6 +6,8 @@
 cmake_minimum_required(VERSION 3.10)
 project(kharma LANGUAGES C CXX)
 
+option(KHARMA_BUILD_TESTS "Build unit tests" OFF)
+
 # We follow Parthenon in requiring C++17 going forward
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -16,6 +18,8 @@ set(PARTHENON_ENABLE_CPP17 ON CACHE BOOL "KHARMA Override")
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 
 # Parthenon options
+# Coordinates
+set(PARTHENON_COORDINATES "GRCoordinates" CACHE STRING "KHARMA Override")
 set(PARTHENON_DISABLE_EXAMPLES ON CACHE BOOL "KHARMA Override")
 set(PARTHENON_LINT_DEFAULT OFF CACHE BOOL "KHARMA Override")
 # Attempt HDF5 compression, requires recent/standard HDF5. YMMV
@@ -29,15 +33,18 @@ set(PARTHENON_ENABLE_HOST_COMM_BUFFERS OFF CACHE BOOL "KHARMA Override")
 # Parthenon internal build options
 set(BUILD_TESTING OFF CACHE BOOL "KHARMA Override")
 set(ENABLE_COMPILER_WARNINGS OFF CACHE BOOL "KHARMA Override")
-# Always use static HDF5
-set(HDF5_USE_STATIC_LIBRARIES ON CACHE BOOL "KHARMA Override")
+# Don't require static HDF5, as conda and other environments don't provide it
+set(HDF5_USE_STATIC_LIBRARIES OFF CACHE BOOL "KHARMA Override")
+
 
 # Kokkos options
 set(Kokkos_ENABLE_CUDA_LAMBDA ON CACHE BOOL "KHARMA Override")
 set(Kokkos_ENABLE_CUDA_CONSTEXPR ON CACHE BOOL "KHARMA Override")
-set(Kokkos_ENABLE_HWLOC OFF CACHE BOOL "KHARMA Override") # Possible speed improvement?
+# Set ON for possible speed improvement?
+set(Kokkos_ENABLE_HWLOC OFF CACHE BOOL "KHARMA Override")
 set(Kokkos_ENABLE_AGGRESSIVE_VECTORIZATION ON CACHE BOOL "KHARMA Override")
 
+# For including the current git revision in the exe
 include(GetGitRevisionDescription)
 get_git_head_revision(GIT_REFSPEC GIT_SHA1)
 git_describe_working_tree(GIT_VERSION --tags)
@@ -53,9 +60,11 @@ else()
   include_directories(SYSTEM ${MPI_INCLUDE_PATH})
 endif()
 
-# OpenMP is usually used host-side.  We're letting Parthenon/Kokkos
-# find it though, as sometimes we require disabling it fully
-#find_package(OpenMP REQUIRED)
+set(HDF5_PREFER_PARALLEL (NOT KHARMA_DISABLE_MPI))
+find_package(HDF5 COMPONENTS C HL)
+if (NOT HDF5_FOUND)
+  message(FATAL_ERROR "HDF5 is required but couldn't be found.")
+endif()
 
 # Build Parthenon
 add_subdirectory(external/parthenon)
@@ -65,5 +74,31 @@ include_directories(external/variant/include)
 # Our hacked-up version of the Kokkos kernels
 include_directories(external/kokkos-kernels)
 
-# Finally, build KHARMA
+
+# Needed for running singularity-eos tests
+set(SINGULARITY_USE_HDF5 ON CACHE BOOL "" FORCE)
+set(SINGULARITY_USE_SPINER ON CACHE BOOL "" FORCE)
+set(SINGULARITY_USE_SPINER_WITH_HDF5 ON CACHE BOOL "" FORCE)
+set(PARTHENON_DISABLE_HDF5 OFF CACHE BOOL "" FORCE)
+set(SINGULARITY_USE_STELLAR_COLLAPSE ON CACHE BOOL "" FORCE)
+set(SINGULARITY_FORCE_SUBMODULE_MODE ON CACHE BOOL "" FORCE)
+
+# Build Singularity-eos
+add_subdirectory(external/singularity-eos)
+
+# Build Singularity-opac
+add_subdirectory(external/singularity-opac)
+
+# Build KHARMA
 add_subdirectory(kharma)
+
+# Install scripts and stuff
+# run.sh as 'kharma' w/o suffix (for now?)
+install(PROGRAMS ${CMAKE_CURRENT_SOURCE_DIR}/run.sh TYPE BIN RENAME "kharma")
+# and our utilities, for fun
+install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/bin/ TYPE BIN)
+
+if (KHARMA_BUILD_TESTS)
+   enable_testing()
+   add_subdirectory(tests/unit)
+endif()

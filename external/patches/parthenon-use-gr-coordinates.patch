@@ -1,17 +1,19 @@
 diff --git a/src/CMakeLists.txt b/src/CMakeLists.txt
-index aaeabd8a..e354ef3d 100644
+index b5d275324..b648ea101 100644
 --- a/src/CMakeLists.txt
 +++ b/src/CMakeLists.txt
-@@ -90,7 +90,7 @@ set(COMPILED_WITH ${CMAKE_CXX_COMPILER})
+@@ -90,8 +90,8 @@ set(COMPILED_WITH ${CMAKE_CXX_COMPILER})
  set(COMPILER_COMMAND "<not-implemented>") # TODO: Put something more descriptive here
  set(COMPILER_FLAGS "<not-implemented>") # TODO: Put something more descriptive here
  
--set(COORDINATE_TYPE UniformCartesian) # TODO: Make this an option when more are available
-+set(COORDINATE_TYPE GRCoordinates) # TODO: Make this an option when more are available
- 
- configure_file(config.hpp.in generated/config.hpp @ONLY)
- 
-@@ -331,6 +331,8 @@ lint_target(parthenon)
+-set(COORDINATES_AVAILABLE UniformCartesian UniformCylindrical UniformSpherical)
+-set(PARTHENON_COORDINATES "UniformCartesian" CACHE STRING "Set the coordinate system from \{${COORDINATES_AVAILABLE}\} with UniformCartesian the default")
++set(COORDINATES_AVAILABLE UniformCartesian UniformCylindrical UniformSpherical GRCoordinates)
++set(PARTHENON_COORDINATES "GRCoordinates" CACHE STRING "Set the coordinate system from \{${COORDINATES_AVAILABLE}\} with UniformCartesian the default")
+ if (${PARTHENON_COORDINATES} IN_LIST COORDINATES_AVAILABLE)
+   set(COORDINATE_TYPE ${PARTHENON_COORDINATES})
+ else()
+@@ -386,6 +386,8 @@ lint_target(parthenon)
  target_include_directories(parthenon PUBLIC
    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
    $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/generated>
@@ -21,13 +23,13 @@ index aaeabd8a..e354ef3d 100644
    )
  
 diff --git a/src/coordinates/coordinates.hpp b/src/coordinates/coordinates.hpp
-index d1290dee..50bfc840 100644
+index 475232b86..88a422614 100644
 --- a/src/coordinates/coordinates.hpp
 +++ b/src/coordinates/coordinates.hpp
-@@ -16,6 +16,7 @@
- #include "config.hpp"
- 
+@@ -18,6 +18,7 @@
  #include "uniform_cartesian.hpp"
+ #include "uniform_cylindrical.hpp"
+ #include "uniform_spherical.hpp"
 +#include "coordinates/gr_coordinates.hpp"
  
  namespace parthenon {

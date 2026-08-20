@@ -1,30 +1,20 @@
-# GRMHD Modes problem
-# Try to propagate several analytically-amenable linear modes of the MHD equations
+# Hubble Flow problem, testing electron heating
 
 <parthenon/job>
 problem_id = hubble
 
 <parthenon/mesh>
-refinement = none
-numlevel = 1
-
 nx1 = 128
-x1min = -0.5
-x1max = 1.5
-ix1_bc = user
-ox1_bc = user
+x1min = 0.0
+x1max = 1.0
 
 nx2 = 1
 x2min = -0.01
 x2max = 0.01
-ix2_bc = periodic
-ox2_bc = periodic
 
 nx3 = 1
 x3min = -0.01
 x3max = 0.01
-ix3_bc = periodic
-ox3_bc = periodic
 
 <parthenon/meshblock>
 nx1 = 128
@@ -32,8 +22,9 @@ nx2 = 1
 nx3 = 1
 
 <boundaries>
-inner_x1 = dirichlet
-outer_x1 = dirichlet
+# The problem itself sets the boundary functions
+#inner_x1 = hubble
+#outer_x1 = hubble
 check_inflow_inner_x1 = false
 check_inflow_outer_x1 = false
 
@@ -51,8 +42,8 @@ gamma = 1.666667
 reconstruction = weno5
 
 <debug>
-verbose = 2
-flag_verbose = 1
+verbose = 1
+flag_verbose = 0
 extra_checks = 1
 
 <b_field>
@@ -73,14 +64,14 @@ gamma_e = 1.333333
 fel_constant = 1.0
 # To match the ratio eq40
 fel_0 = 0.5
-diss_sign = false
-kel_lim = false
+limit_kel = false
 
 <driver>
 type = imex
 
 <parthenon/output0>
 file_type = hdf5
-dt = 10
+write_xdmf = false
+dt = 10.0
 single_precision_output = true
 variables = prims.rho, prims.u, prims.uvec, prims.Ktot, prims.Kel_Constant, fflag

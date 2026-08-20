@@ -1,0 +1,104 @@
+# The Magnetically Arrested Disk (MAD) accretion flow
+# This is a normal large-disk (20/41 r_g) MAD with gamma=5/3,
+# tilted by 45 degrees with transmitting polar boundaries
+
+<parthenon/job>
+problem_id = torus
+archive_parameters = timestamp
+
+<parthenon/mesh>
+nx1 = 128
+nx2 = 64
+nx3 = 64
+
+<parthenon/meshblock>
+nx1 = 128
+nx2 = 64
+# Cannot break up phi with transmitting boundaries
+nx3 = 64
+
+<coordinates>
+base = spherical_ks
+transform = mks
+r_out = 1000
+a = 0.9375
+hslope = 0.3
+
+<ismr>
+on = true
+nlevels = 3
+
+<parthenon/time>
+tlim = 60000.0
+nlim = -1
+
+<torus>
+rin = 20.0
+rmax = 41.0
+# Tilt in degrees, rotates initial torus CC about +y
+tilt = 45.
+
+<perturbation>
+u_jitter = 0.04
+
+<b_field>
+solver = face_ct
+type = mad
+beta_min = 100.
+
+<GRMHD>
+cfl = 0.7
+gamma = 1.666667
+
+<flux>
+type = llf
+# WENO5 Adaptive Order "At Home" --
+# WENO5Z with fallback to linear recon in difficult regions
+reconstruction = weno5_linear
+
+<driver>
+type = kharma
+# Second sync at the end of each step
+# Can skip this with the robust inverter & face_ct B fields
+two_sync = false
+
+<boundaries>
+inner_x2 = transmitting
+outer_x2 = transmitting
+# This reduces the polar "wake," but shrinks the timestep,
+# and has caused instabilities. YMMV.
+excise_polar_flux = true
+# Reconnect phi component of B at the pole, as if it were one zone
+# Dramatically reduces instabilities
+reconnect_B3_inner_x2 = true
+reconnect_B3_outer_x2 = true
+
+<floors>
+# Minimal floors, applied in the default Normal Observer frame
+rho_min_geom = 1e-6
+u_min_geom   = 1e-8
+gamma_max    = 32
+
+<fofc>
+# FOFC is disabled by default because of tests but recommended
+# for most production runs
+on = true
+
+<debug>
+verbose = 1
+extra_checks = 1
+flag_verbose = 0
+
+<parthenon/output0>
+file_type = hdf5
+dt = 5.0
+single_precision_output = true
+variables = prims, divB, jcon, fflag, pflag, fofcflag
+
+<parthenon/output1>
+file_type = rst
+dt = 100.0
+
+<parthenon/output2>
+file_type = hst
+dt = 0.1

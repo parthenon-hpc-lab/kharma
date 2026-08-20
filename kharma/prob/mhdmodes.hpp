@@ -1,25 +1,25 @@
-/* 
+/*
  *  File: mhdmodes.hpp
- *  
+ *
  *  BSD 3-Clause License
- *  
+ *
  *  Copyright (c) 2020, AFD Group at UIUC
  *  All rights reserved.
- *  
+ *
  *  Redistribution and use in source and binary forms, with or without
  *  modification, are permitted provided that the following conditions are met:
- *  
+ *
  *  1. Redistributions of source code must retain the above copyright notice, this
  *     list of conditions and the following disclaimer.
- *  
+ *
  *  2. Redistributions in binary form must reproduce the above copyright notice,
  *     this list of conditions and the following disclaimer in the documentation
  *     and/or other materials provided with the distribution.
- *  
+ *
  *  3. Neither the name of the copyright holder nor the names of its
  *     contributors may be used to endorse or promote products derived from
  *     this software without specific prior written permission.
- *  
+ *
  *  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  *  AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  *  IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -37,27 +37,27 @@
 
 #include "decs.hpp"
 
-
 using namespace std::literals::complex_literals;
 using namespace parthenon;
 
 /**
  * Initialization for different analytic wave modes in magnetized plasma.
  * Note this assumes ideal EOS with gamma=4/3!
- * 
+ *
  * @param nmode: type of linear wave, from:
  * 0. Entropy, static mode
  * 1. Slow mode
  * 2. Alfven wave
  * 3. Fast mode
- * 
+ *
  * @param dir: direction of wave. 0 = components of each
  *
  * Note this SETS the stopping time corresponding to advection by 1 wavelength.
  * Generally this is what we want for tests (run by 1 cycle and compare).
  * Modify function or reset tlim after to override.
  */
-TaskStatus InitializeMHDModes(std::shared_ptr<MeshBlockData<Real>>& rc, ParameterInput *pin)
+TaskStatus InitializeMHDModes(
+    std::shared_ptr<MeshBlockData<Real>>& rc, ParameterInput* pin)
 {
     auto pmb = rc->GetBlockPointer();
     GridScalar rho = rc->Get("prims.rho").data;
@@ -89,9 +89,10 @@ TaskStatus InitializeMHDModes(std::shared_ptr<MeshBlockData<Real>>& rc, Paramete
     const Real k2 = pin->GetOrAddReal("mhdmodes", "k2", (dir == 2) ? 0. : 2. * M_PI);
     const Real k3 = pin->GetOrAddReal("mhdmodes", "k3", (dir == 3) ? 0. : 2. * M_PI);
     // Likewise
-    const Real B10 = pin->GetOrAddReal("mhdmodes", "B10", (dir == 0 || dir == 3) ? 1.0 : 0. );
-    const Real B20 = pin->GetOrAddReal("mhdmodes", "B20", (dir == 1) ? 1.0 : 0. );
-    const Real B30 = pin->GetOrAddReal("mhdmodes", "B30", (dir == 2) ? 1.0 : 0. );
+    const Real B10 =
+        pin->GetOrAddReal("mhdmodes", "B10", (dir == 0 || dir == 3) ? 1.0 : 0.);
+    const Real B20 = pin->GetOrAddReal("mhdmodes", "B20", (dir == 1) ? 1.0 : 0.);
+    const Real B30 = pin->GetOrAddReal("mhdmodes", "B30", (dir == 2) ? 1.0 : 0.);
 
     std::complex<Real> omega;
     Real drho = 0, du = 0;
@@ -129,9 +130,7 @@ TaskStatus InitializeMHDModes(std::shared_ptr<MeshBlockData<Real>>& rc, Paramete
             dB2 = -0.203190272838;
             dB3 = -0.203190272838;
         }
-    }
-    else
-    {
+    } else {
         // 2D (1,1,0), (1,0,1), (0,1,1) wave
         if (nmode == 0) { // Entropy
             drho = 1.;
@@ -208,9 +207,9 @@ TaskStatus InitializeMHDModes(std::shared_ptr<MeshBlockData<Real>>& rc, Paramete
     pin->GetOrAddReal("b_field", "B10", B10);
     pin->GetOrAddReal("b_field", "B20", B20);
     pin->GetOrAddReal("b_field", "B30", B30);
-    pin->GetOrAddReal("b_field", "amp_B1", amp*dB1);
-    pin->GetOrAddReal("b_field", "amp_B2", amp*dB2);
-    pin->GetOrAddReal("b_field", "amp_B3", amp*dB3);
+    pin->GetOrAddReal("b_field", "amp_B1", amp * dB1);
+    pin->GetOrAddReal("b_field", "amp_B2", amp * dB2);
+    pin->GetOrAddReal("b_field", "amp_B3", amp * dB3);
     pin->GetOrAddReal("b_field", "k1", k1);
     pin->GetOrAddReal("b_field", "k2", k2);
     pin->GetOrAddReal("b_field", "k3", k3);
@@ -221,7 +220,8 @@ TaskStatus InitializeMHDModes(std::shared_ptr<MeshBlockData<Real>>& rc, Paramete
     IndexRange jb = pmb->cellbounds.GetBoundsJ(domain);
     IndexRange kb = pmb->cellbounds.GetBoundsK(domain);
     pmb->par_for("mhdmodes_init", kb.s, kb.e, jb.s, jb.e, ib.s, ib.e,
-        KOKKOS_LAMBDA (const int &k, const int &j, const int &i) {
+                 KOKKOS_LAMBDA(const int& k, const int& j, const int& i)
+        {
             Real X[GR_DIM];
             G.coord_embed(k, j, i, Loci::center, X);
             Real mode = amp * m::cos(k1 * X[1] + k2 * X[2] + k3 * X[3]);
@@ -230,8 +230,7 @@ TaskStatus InitializeMHDModes(std::shared_ptr<MeshBlockData<Real>>& rc, Paramete
             uvec(V1, k, j, i) = u10 + du1 * mode;
             uvec(V2, k, j, i) = u20 + du2 * mode;
             uvec(V3, k, j, i) = u30 + du3 * mode;
-        }
-    );
+        });
 
     // Override end time to be exactly 1 period for moving modes, unless we set otherwise
     if (one_period) {

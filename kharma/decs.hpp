@@ -68,10 +68,10 @@ namespace m = std;
 #include <parthenon_arrays.hpp>
 #include <parthenon_mpi.hpp>
 #include <globals.hpp>
-#include <bvals/bvals_interfaces.hpp>
 #include <mesh/domain.hpp>
 
 // KHARMA DEFINITIONS
+#define DISABLE_GMG_CLEANUP 1
 
 // Parthenon stole our type names
 // Lots of work will need to be done for Real != double
@@ -79,7 +79,7 @@ using parthenon::Real;
 using GReal = double;
 
 // A small number, compared to the grid or problem scale
-#define SMALL 1e-20
+#define SMALL_NUM 1e-20
 
 // GEOMETRY
 // This stuff needs to be in decs.h as it's used by functions in coordinates/,
@@ -100,8 +100,8 @@ using GReal = double;
 // Useful enum to avoid lots of #defines
 // See following functions and coord() in gr_coordinates.hpp to
 // get an idea of these locations.  All faces/corner are *left* of center
-#define NLOC 5
-enum class Loci{face1=0, face2, face3, center, corner};
+#define NLOC 7
+enum class Loci{face1=0, face2, face3, center, corner, outer_half, inner_half};
 
 // Return the face location corresponding to the direction 'dir'
 KOKKOS_FORCEINLINE_FUNCTION Loci loc_of(const int& dir)
@@ -155,7 +155,11 @@ inline int MPIRank()
 }
 inline int MPIBarrier()
 {
+#if ENABLE_MPI
     return MPI_Barrier(MPI_COMM_WORLD);
+#else
+    return 0;
+#endif
 }
 
 // A few generic "NDArray" overloads for readability.

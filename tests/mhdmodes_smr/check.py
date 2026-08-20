@@ -100,6 +100,9 @@ else:
 dvar *= amp
 
 for m, res in enumerate(RES):
+    # TODO compare the analytic solution rather than cheating like this
+    # pyharm needs a 2o accurate interpolation, or else preserve original blocks
+    start = pyharm.load_dump("mhd_{}_{}_{}_start.phdf".format(DIM, SHORT, res))
     dump = pyharm.load_dump("mhd_{}_{}_{}_end.phdf".format(DIM, SHORT, res))
 
     X1 = dump['x']
@@ -107,27 +110,27 @@ for m, res in enumerate(RES):
     X3 = dump['z']
 
     dvar_code = []
-    dvar_code.append(dump['RHO'] - var0[0])
-    dvar_code.append(dump['UU'] - var0[1])
-    dvar_code.append(dump['U1'] - var0[2])
-    dvar_code.append(dump['U2'] - var0[3])
-    dvar_code.append(dump['U3'] - var0[4])
+    dvar_code.append(dump['RHO'] - start['RHO'])
+    dvar_code.append(dump['UU'] - start['UU'])
+    dvar_code.append(dump['U1'] - start['U1'])
+    dvar_code.append(dump['U2'] - start['U2'])
+    dvar_code.append(dump['U3'] - start['U3'])
     try:
-        dvar_code.append(dump['B1'] - var0[5])
-        dvar_code.append(dump['B2'] - var0[6])
-        dvar_code.append(dump['B3'] - var0[7])
+        dvar_code.append(dump['B1'] - start['B1'])
+        dvar_code.append(dump['B2'] - start['B2'])
+        dvar_code.append(dump['B3'] - start['B3'])
     except IOError:
         NVAR = 5
 
     dvar_sol = []
     L1.append([])
     for k in range(NVAR):
-      dvar_sol.append(np.real(dvar[k])*np.cos(k1*X1 + k2*X2 + k3*X3))
-      L1[m].append(np.mean(np.fabs(dvar_code[k] - dvar_sol[k])))
+      #dvar_sol.append(np.real(dvar[k])*np.cos(k1*X1 + k2*X2 + k3*X3))
+      L1[m].append(np.mean(np.fabs(dvar_code[k])))
 
       fig = plt.figure(figsize=(5,5))
       ax = fig.add_subplot(1,1,1)
-      pplt.plot_xz(ax, dump, dvar_code[k] - dvar_sol[k], native=True, window=[0,1,0,1])
+      pplt.plot_xz(ax, dump, dvar_code[k], native=True, window=[0,1,0,1])
       plt.savefig("compare_{}_{}_{}_{}.png".format(VARS[k], DIM, SHORT, res))
       
 

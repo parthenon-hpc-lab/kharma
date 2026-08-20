@@ -1,34 +1,28 @@
 # Komissarov cylindrical explosion with magnetic field
 # see Komissarov (1999), section 7.3
+# Basically a test of the first-order flux correction (FOFC) code,
+# which falls back to donor-cell reconstruction where zones would have hit floors
+# Compare to AthenaK algorithm/GRMHD blast wave test
 
 <parthenon/job>
 problem_id = explosion
 
 <parthenon/mesh>
-refinement = none
-numlevel = 1
-
 nx1 = 200
 x1min = -6.0
 x1max = 6.0
-ix1_bc = periodic
-ox1_bc = periodic
 
 nx2 = 200
 x2min = -6.0
 x2max = 6.0
-ix2_bc = periodic
-ox2_bc = periodic
 
 nx3 = 1
 x3min = -6.0
 x3max = 6.0
-ix3_bc = periodic
-ox3_bc = periodic
 
 <parthenon/meshblock>
 nx1 = 200
-nx2 = 100
+nx2 = 200
 nx3 = 1
 
 <coordinates>
@@ -41,29 +35,50 @@ integrator = rk2
 dt_min = 0.0001
 
 <GRMHD>
-cfl = 0.9
+cfl = 0.7
 gamma = 1.333333
+
+<driver>
+type = kharma
+
+<flux>
+type = llf
 reconstruction = weno5
+
+<inverter>
+type = kastaun
+err_tol = 1e-14
 
 <explosion>
 rho_out = 1e-4
 
 <floors>
-gamma_max = 10
-#rho_min_geom = 1e-12
-#u_min_geom = 1e-14
-#bsq_over_u_max = 1e20
-#bsq_over_rho_max = 1e20
+rho_min_const = 1e-10
+u_min_const = 1e-10
+
+<fofc>
+on = false
+#consistent_face_b = false
 
 <b_field>
+solver = face_ct
+ct_scheme = gs05_c
 type = constant
-b10 = 1.0
+# Balsara uses ~250
+B10 = 1.e4
+#B20 = 50.0
+
+<debug>
+verbose = 1
+flag_verbose = 2
+extra_checks = 2
 
 <parthenon/output0>
 file_type = hdf5
-dt = 0.2
+write_xdmf = false
+dt = 0.1
 single_precision_output = true
-variables = prims.rho, prims.u, prims.uvec, prims.B, fflag, pflag
+variables = prims, fflag, pflag
 
 <parthenon/output1>
 file_type = hst

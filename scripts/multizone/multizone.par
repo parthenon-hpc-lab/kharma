@@ -1,0 +1,125 @@
+# Multizone Bondi flow template
+# Many options are replaced by accompanying "run.py" script
+
+<parthenon/job>
+problem_id = bondi
+
+<parthenon/mesh>
+refinement = none
+numlevel = 1
+nx1 = 128
+nx2 = 128
+nx3 = 128
+
+<parthenon/meshblock>
+nx1 = 128
+nx2 = 64
+nx3 = 64
+
+<coordinates>
+base = ks
+transform = mks
+a = 0.0
+# w/B field, hslope=>0.3
+hslope = 1.0
+ext_g = false
+
+<parthenon/time>
+# Time set in run.py
+tlim = 5289680481
+nlim = -1
+dt_min = 0.00001
+
+<GRMHD>
+# w/B, cfl=>0.5
+cfl = 0.9
+gamma = 1.666667
+reconstruction = linear_vl
+add_jcon = false
+
+<bondi>
+mdot = 1.0
+# All these will be updated by run.py
+rs = 316.22776601683796
+r_in_bondi = 2.0
+diffinit = true
+use_gizmo = false
+
+<gizmo_shell>
+datfn = none
+
+<resize_restart>
+# All set in run.py
+fname = none
+fname_fill = none
+use_dt = false
+base = 8
+nzone = 7
+
+<floors>
+# disable by default -- enabling B field overrides
+disable_floors = true
+# This caused issues?
+# frame = drift
+# Usual geometric floors, no beta floor
+rho_min_geom = 1e-6
+u_min_geom = 1e-8
+bsq_over_u_max = 1e20
+u_over_rho_max = 100
+# Strict sigma, gamma
+bsq_over_rho_max = 100
+gamma_max = 10
+# Does not affect these floors
+adjust_k = 0
+
+<boundaries>
+# Inflow is allowed
+inner_x1 = dirichlet
+outer_x1 = dirichlet
+check_inflow = false
+check_inflow_outer_x1 = false
+check_inflow_inner_x1 = false
+# Otherwise defaults
+
+<perturbation>
+# overridden
+u_jitter=0
+
+<b_field>
+# No field by default
+# No cleanup by default as fix_flux_x1 preserves divB
+type = none
+solver = none
+fix_flux_x1 = true
+
+<debug>
+# Be very clear about errors
+verbose = 1
+flag_verbose = 2
+extra_checks = 1
+archive_parameters = 1
+
+<driver>
+type = harm
+two_sync = true
+
+<implicit>
+max_nonlinear_iter = 3
+
+# Output timings set in run.py
+<parthenon/output0>
+file_type = hdf5
+dt = 528968040
+single_precision_output = false
+variables = prims.rho, prims.u, prims.uvec, prims.B, fflag, pflag, divB
+ghost_zones = true
+
+<parthenon/output1>
+file_type = rst
+dt = 2644840240
+ghost_zones = true
+
+<parthenon/output2>
+file_type = hst
+dt = 52896800
+

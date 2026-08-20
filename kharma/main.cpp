@@ -1,25 +1,25 @@
-/* 
+/*
  *  File: main.cpp
- *  
+ *
  *  BSD 3-Clause License
- *  
+ *
  *  Copyright (c) 2020, AFD Group at UIUC
  *  All rights reserved.
- *  
+ *
  *  Redistribution and use in source and binary forms, with or without
  *  modification, are permitted provided that the following conditions are met:
- *  
+ *
  *  1. Redistributions of source code must retain the above copyright notice, this
  *     list of conditions and the following disclaimer.
- *  
+ *
  *  2. Redistributions in binary form must reproduce the above copyright notice,
  *     this list of conditions and the following disclaimer in the documentation
  *     and/or other materials provided with the distribution.
- *  
+ *
  *  3. Neither the name of the copyright holder nor the names of its
  *     contributors may be used to endorse or promote products derived from
  *     this software without specific prior written permission.
- *  
+ *
  *  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  *  AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  *  IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -86,19 +86,11 @@ int kharma_debug_trace_mutex = 0;
 using namespace parthenon;
 
 /**
- * Main function for KHARMA.  Basically a wrapper calling a particular driver class to
- * handle fluid evolution.
+ * Main function for KHARMA.  Parses parameters, prints basics,
+ * constructs the `Mesh`, calls the Driver.
  *
- * Different driver classes can be switched out to implement different algorithms or
- * sets of physical processes, while re-using particular physics packages to mix and match
- *
- * Currently available drivers:
- * HARM: GRMHD using LLF with zone-centered fields, conserved variables are synchronized
- * Imex: same functionality HARM but primitive variables are synchronized,
- *       optionally uses per-zone implicit solve for some variables, for e.g. Extended GRMHD
- *
- * Future drivers?
- * bhlight: GRMHD with Monte Carlo particle transport
+ * Most physics functionality is in the `KHARMADriver` class, over
+ * in the `driver/` folder.
  */
 int main(int argc, char *argv[])
 {
@@ -107,7 +99,7 @@ int main(int argc, char *argv[])
     // A couple of callbacks are KHARMA-wide single functions
     pman.app_input->ProcessPackages = KHARMA::ProcessPackages;
     pman.app_input->ProblemGenerator = KHARMA::ProblemGenerator;
-    // A few are passed on to be implemented by packages as they see fit
+    // Most are passed on to be implemented by packages as they see fit
     pman.app_input->MeshBlockUserWorkBeforeOutput = Packages::UserWorkBeforeOutput;
     pman.app_input->PreStepMeshUserWorkInLoop = Packages::PreStepWork;
     pman.app_input->PostStepMeshUserWorkInLoop = Packages::PostStepWork;
@@ -116,13 +108,12 @@ int main(int argc, char *argv[])
     // Registering KHARMA's boundary functions here doesn't mean they will *always* run:
     // periodic & internal boundary conditions are handled by Parthenon.
     // KHARMA sets what will run in boundaries.cpp
-    pman.app_input->boundary_conditions[parthenon::BoundaryFace::inner_x1] = KBoundaries::ApplyBoundaryTemplate<IndexDomain::inner_x1>;
-    pman.app_input->boundary_conditions[parthenon::BoundaryFace::outer_x1] = KBoundaries::ApplyBoundaryTemplate<IndexDomain::outer_x1>;
-    pman.app_input->boundary_conditions[parthenon::BoundaryFace::inner_x2] = KBoundaries::ApplyBoundaryTemplate<IndexDomain::inner_x2>;
-    pman.app_input->boundary_conditions[parthenon::BoundaryFace::outer_x2] = KBoundaries::ApplyBoundaryTemplate<IndexDomain::outer_x2>;
-    pman.app_input->boundary_conditions[parthenon::BoundaryFace::inner_x3] = KBoundaries::ApplyBoundaryTemplate<IndexDomain::inner_x3>;
-    pman.app_input->boundary_conditions[parthenon::BoundaryFace::outer_x3] = KBoundaries::ApplyBoundaryTemplate<IndexDomain::outer_x3>;
-
+    pman.app_input->RegisterBoundaryCondition(parthenon::BoundaryFace::inner_x1, "user", KBoundaries::ApplyBoundaryTemplate<IndexDomain::inner_x1>);
+    pman.app_input->RegisterBoundaryCondition(parthenon::BoundaryFace::outer_x1, "user", KBoundaries::ApplyBoundaryTemplate<IndexDomain::outer_x1>);
+    pman.app_input->RegisterBoundaryCondition(parthenon::BoundaryFace::inner_x2, "user", KBoundaries::ApplyBoundaryTemplate<IndexDomain::inner_x2>);
+    pman.app_input->RegisterBoundaryCondition(parthenon::BoundaryFace::outer_x2, "user", KBoundaries::ApplyBoundaryTemplate<IndexDomain::outer_x2>);
+    pman.app_input->RegisterBoundaryCondition(parthenon::BoundaryFace::inner_x3, "user", KBoundaries::ApplyBoundaryTemplate<IndexDomain::inner_x3>);
+    pman.app_input->RegisterBoundaryCondition(parthenon::BoundaryFace::outer_x3, "user", KBoundaries::ApplyBoundaryTemplate<IndexDomain::outer_x3>);
     // Initialize Parthenon for MPI (also Kokkos, parses command line, etc.)
     Flag("ParthenonInit");
     auto manager_status = pman.ParthenonInitEnv(argc, argv);
@@ -130,7 +121,7 @@ int main(int argc, char *argv[])
 
     if(MPIRank0()) {
         // Always print the version header, because it's fun
-        // TODO(BSP) proper banner w/refs, names
+        // TODO(CEP) proper banner w/refs, names
         const std::string &version = KHARMA::Version::GIT_VERSION;
         const std::string &branch = KHARMA::Version::GIT_REFSPEC;
         const std::string &sha1 = KHARMA::Version::GIT_SHA1;
@@ -154,8 +145,9 @@ int main(int argc, char *argv[])
         return 1;
     }
     auto pin = pman.pinput.get(); // All parameters in the input file or command line
-    // Modify input parameters as we need
-    KHARMA::FixParameters(pin);
+    // Modify input parameters as we need. Needs to know if Parthenon set parameters
+    // from our restart file, or whether we need to read them from a file here
+    KHARMA::FixParameters(pin, Globals::is_restart);
     // InitPackagesEtc calls ProcessPackages, then constructs the Mesh
     pman.ParthenonInitPackagesAndMesh();
     // Now pull out the mesh and app_input as well for below
@@ -196,7 +188,7 @@ int main(int argc, char *argv[])
         std::cout << "Running with " << pmesh->nbtotal << " total meshblocks, " << MPINumRanks() << " MPI ranks." << std::endl;
         std::cout << "Blocks on rank " << MPIRank() << ": " << pmesh->block_list.size() << "\n" << std::endl;
     }
-    // If very verbose, print # meshblocks on every rank
+    // If very verbose, print # meshblocks on *every* rank, not just rank 0
     if (verbose > 1) {
         //MPIBarrier();
         if (MPIRank() > 0)
@@ -207,9 +199,9 @@ int main(int argc, char *argv[])
     // PostInitialize: Add magnetic field to the problem, initialize ghost zones.
     // Any init which may be run even when restarting, or requires all
     // MeshBlocks to be initialized already.
-    // TODO(BSP) split to package hooks
+    // TODO(CEP) split to package hooks
     auto prob = pin->GetString("parthenon/job", "problem_id");
-    bool is_restart = (prob == "resize_restart") || (prob == "resize_restart_kharma") || pman.IsRestart();
+    bool is_restart = (prob == "resize_restart") || Globals::is_restart;
     if(MPIRank0() && verbose > 0) {
         if (is_restart) {
             std::cout << "Running post-restart tasks..." << std::endl;
@@ -217,6 +209,7 @@ int main(int argc, char *argv[])
             std::cout << "Running post-initialization tasks..." << std::endl;
         }
     }
+
     Flag("PostInitialize");
     KHARMA::PostInitialize(pin, pmesh, is_restart);
     EndFlag();
@@ -244,6 +237,9 @@ int main(int argc, char *argv[])
         //MPIBarrier();
         auto driver_status = driver.Execute();
         EndFlag();
+
+        // TODO(CEP) Figure this out instead of circumventing
+        exit(0);
     }
 
     // Parthenon cleanup includes Kokkos, MPI

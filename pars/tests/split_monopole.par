@@ -1,0 +1,72 @@
+# Monopole in vacuum
+# Useful for testing floor values, since the whole domain will be
+# set to whatever the floor values are
+
+# The current values are very conservative, try it with `fofc/on=true`
+# and remove the ceiling on sigma to exercise KHARMA a bit more.
+# Hard mode: gamma=5/3, weno5 reconstruction
+
+<parthenon/job>
+problem_id = bz_monopole
+
+<parthenon/mesh>
+nx1 = 2048
+nx2 = 2048
+nx3 = 1
+
+<parthenon/meshblock>
+nx1 = 512
+nx2 = 512
+nx3 = 1
+
+<coordinates>
+base = spherical_ks
+transform = mks
+r_out = 100.
+a = 0.9375
+hslope = 0.3
+mks_smooth = 0.5
+poly_xt = 0.82
+poly_alpha = 14.0
+correct_connections = true
+
+<parthenon/time>
+tlim = 3000.0
+nlim = -1
+
+<debug>
+verbose = 1
+extra_checks = 1
+flag_verbose = 2
+
+<GRMHD>
+cfl = 0.7
+gamma = 1.666667
+
+<flux>
+type = llf
+reconstruction = weno5
+
+<fofc>
+on = false
+pcp = false
+
+<b_field>
+type = split_monopole
+norm = false
+B10 = 1
+phase = 1.5707963267948966
+
+<floors>
+rho_min_geom = 1e-6
+u_min_geom = 1e-8
+
+<parthenon/output0>
+file_type = hdf5
+dt = 1.0
+single_precision_output = true
+variables = prims, jcon, fflag, pflag, divB
+
+<parthenon/output1>
+file_type = hst
+dt = 0.1

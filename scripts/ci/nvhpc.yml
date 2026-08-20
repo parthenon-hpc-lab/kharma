@@ -4,7 +4,9 @@
 # Build on Nvidia image.
 # Can pretty easily change this out, with changes to build
 # Someday we'll build & push a KHARMA image, then test that
-image: nvcr.io/nvidia/nvhpc:23.5-devel-cuda12.1-rockylinux8
+# Kokkos 4 has issues w/CUDA 13, and CI has issues updating it
+#image: nvcr.io/nvidia/nvhpc:26.1-devel-cuda13.1-rockylinux9
+image: nvcr.io/nvidia/nvhpc:25.7-devel-cuda12.9-rockylinux9
 
 variables:
   OMP_NUM_THREADS: 8
@@ -13,6 +15,7 @@ variables:
   MPI_NUM_PROCS: 2
   OMPI_ALLOW_RUN_AS_ROOT: 1
   OMPI_ALLOW_RUN_AS_ROOT_CONFIRM: 1
+  GIT_STRATEGY: clone
   GIT_SUBMODULE_STRATEGY: recursive
   MAMBA_ROOT_PREFIX: /mamba
   MAMBA_URL: https://micro.mamba.pm/api/micromamba/linux-64/latest
@@ -30,7 +33,7 @@ default:
     - git clone -b dev https://github.com/AFD-Illinois/pyharm.git /pyharm
     - micromamba create -y -f /pyharm/environment.yml
     - micromamba activate pyharm
-    - cd /pyharm && ./install.sh    
+    - cd /pyharm && ./install.sh
     - cd -
   # Always keep logs and plots.  Results should be printed to console!
   artifacts:
@@ -52,6 +55,7 @@ build:
     NPROC: 8
     HOST_ARCH: NATIVE
   before_script:
+    - nvidia-smi
     - curl -Ls $MAMBA_URL | tar -xvj bin/micromamba
   script:
     - export PREFIX_PATH=$PWD/external/hdf5
@@ -70,4 +74,8 @@ tests:
     - ./run.sh
   parallel:
     matrix:
-      - TEST: [bondi, bondi_viscous, bz_monopole, emhdmodes, mhdmodes, noh, regrid, reinit, restart, tilt_init, torus_sanity]
+      # This should mirror the CPU tests *except* no driven turbulence test!
+      # However, NVC++ mis-compiles our EMHD kernels so we do not test the following:
+      # anisotropic_conduction, bondi_viscous, conducting_atmosphere, emhdmodes,
+      - TEST: [all_pars, bondi, bz_monopole, mhdmodes, mhdmodes_smr, noh,
+               regrid, reinit, resize, restart, tilt_init, torus_sanity]

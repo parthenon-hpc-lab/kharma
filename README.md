@@ -1,17 +1,24 @@
 # KHARMA
-KHARMA is an implementation of the HARM scheme for gerneral relativistic magnetohydrodynamics (GRMHD) in C++.  It is based on the Parthenon AMR infrastructure, using Kokkos for parallelism and GPU support.  It is composed of modular "packages," which in theory make it easy to add or swap components representing different physical processes.
+KHARMA is an implementation of the HARM scheme for general relativistic magnetohydrodynamics (GRMHD) in C++.  It is based on the Parthenon AMR framework, using Kokkos for parallelism and GPU support.  It is composed of modular "packages," which in theory make it easy to add or swap components representing different algorithmic components or physics processes.
 
-The project is capable of the same GRMHD functions found in e.g. [iharm3d](https://github.com/AFD-Illinois/iharm3d). Support for adaptive mesh refinement is planned, but not yet working for runs involving magnetic field transport.
+KHARMA is capable of closely matching other HARM implementations, e.g. [iharm3d](https://github.com/AFD-Illinois/iharm3d). However, it also updates the scheme to support static and adaptive mesh refinement, new methods for primitive variable recovery, new boundary conditions, and new stability features for running difficult simulations at high resolutions reliably.
 
-## Prerequisites
-KHARMA requires that the system have a C++17-compliant compiler, MPI, and parallel HDF5.  All other dependencies are included as submodules, and can be checked out with `git` by running
+There is a bunch of documentation on the [wiki](https://github.com/parthenon-hpc-lab/kharma/wiki).  If you have a basic question, it might be answered there!  There is also a Slack workspace for users of KHARMA and the associated imaging and analysis codes -- message or email @c-prather on GitHub for the link.
+
+## Getting KHARMA
+KHARMA requires that the system have:
+* a C++17-compliant compiler
+* HDF5 (optional)
+* MPI (optional)
+
+KHARMA can be cloned from this repository by running
 ```bash
-$ git submodule update --init --recursive
+git clone --recursive https://github.com/parthenon-hpc-lab/kharma.git
 ```
 
-When updating the KHARMA source code, you may also have to update the submodules with
+This will automatically pull all of KHARMA's internal dependenices, or "submodules." Submodules can be updated by running
 ```bash
-$ git submodule update --recursive
+git submodule update --recursive
 ```
 Old submodules are a common cause of compile errors!
 
@@ -20,34 +27,42 @@ On directly supported systems, or systems with standard install locations, you m
 ```bash
 ./make.sh clean
 ```
-And (possibly) the following to compile for GPU with CUDA:
+or if you're compiling for Nvidia GPUs,
 ```bash
 ./make.sh clean cuda
 ```
-after a *successful* compile, subsequent invocations can omit `clean`.
+(KHARMA can also be compiled for AMD and Intel GPUs, see the [wiki page](https://github.com/parthenon-hpc-lab/kharma/wiki/Building-KHARMA))
 
-If (when) these fail, take a look at the [wiki page](https://github.com/AFD-Illinois/kharma/wiki/Building-KHARMA), and the `make.sh` source code.  At worst this should involve running something like
+If you're on Mac, you will have to use `zsh` because the MacOS version of `bash` is too old:
 ```bash
-PREFIX_PATH="/absolute/path/to/phdf5;/absolute/path/to/cuda" HOST_ARCH=CPUVER DEVICE_ARCH=GPUVER ./make.sh clean cuda
+zsh ./make.sh <arguments>
 ```
-Where `CPUVER` and `GPUVER` are the strings used by Kokkos to denote a particular architecture & set of compile flags (Note `make.sh` needs only the portion of the flag *after* `Kokkos_ARCH_`).
+
+If your system does not have HDF5, KHARMA can attempt to compile it for you -- just add `hdf5` when you run `make.sh`.  If you want to omit MPI, you can add `nompi` (the resulting binary can still be run on multiple CPU cores!  Just not multiple GPUs, or multiple nodes of a cluster).
+
+After a successful configuration (after you see `-- Generating done (X.Ys)`), subsequent invocations can omit `clean`.  If `./make.sh` is not working on a supported machine (those with a file in `machines/`), please open an issue.  Broken builds aren't uncommon, as HPC machines change software all the time.
+
+If you're having trouble or need more options, check out the [wiki page](https://github.com/parthenon-hpc-lab/kharma/wiki/Building-KHARMA) describing the build system.
 
 ## Running
 Run a particular problem with e.g.
 ```bash
-$ ./kharma.host -i pars/orszag_tang.par
+./run.sh -i pars/tests/orszag_tang.par
 ```
+note that *all* options are runtime.  The single KHARMA binary can run any of the parameter files in `pars/`, and indeed this is checked as a part of the regression tests.  Note you can still disable some sub-systems manually at compile time, and of course in that case the accompanying problems will crash.
 
-KHARMA benefits from certain runtime environment variables and CPU pinning, included in a short wrapper script `run.sh`.  Note that some MPI implementations require that KHARMA be run using `mpirun`, even for a single process, and may cause errors or hangs otherwise.
+As a broad and capable code, KHARMA has quite a lot of configuration parameters.  Most are documented [here](https://github.com/parthenon-hpc-lab/kharma/wiki/Parameters), with specific problem setups described [here](https://github.com/parthenon-hpc-lab/kharma/wiki/Problems).
 
-Except for performance tuning, KHARMA has no compile time parameters: all of the parameters specifying a simulation are listed in the input "deck" `problem_name.par`.  Several sample inputs corresponding to standard tests and astrophysical systems are included in `pars/`.  Further information can be found on the [wiki page](https://github.com/AFD-Illinois/kharma/wiki/Running-KHARMA).
+If you need more control of where and how KHARMA runs, you can use the binary, e.g. `kharma.host` or `kharma.cuda`, directly.  `run.sh` is provided mostly to load any modules or environment variables a machine needs (again, soruced from the file in `machines/`), regardless of whether you're running interactively or as part of a batch script.
+
+Further information can be found on the [wiki page](https://github.com/parthenon-hpc-lab/kharma/wiki/Running-KHARMA).
 
 ## Hacking
-KHARMA has some preliminary documentation for developers, hosted in its GitHub [wiki](https://github.com/AFD-Illinois/kharma/wiki).
+KHARMA has some documentation for developers on the [wiki](https://github.com/parthenon-hpc-lab/kharma/wiki).  The docs cover some quirks of coding in C++, in particular with Kokkos/GPU programming, and in particular with Parthenon.
 
 ## Licenses
 KHARMA is made available under the BSD 3-clause license included in each file and in the file LICENSE at the root of this repository.
 
-This repository also carries a substantial portion of the [Kokkos Kernels](https://github.com/kokkos/kokkos-kernels), in the directory `kharma/implicit/kokkos-kernels-pivoted`, which is provided under the license included in that directory.
+This repository also carries a substantial portion of the [Kokkos Kernels](https://github.com/kokkos/kokkos-kernels), in the directory `external/kokkos-kernels`, which is provided under the license included in that directory.
 
-Submodules of this repository, [Parthenon](https://github.com/parthenon-hpc-lab/parthenon) and [mpark::variant](https://github.com/mpark/variant) are made available under their own licenses.
+Submodules of this repository are subject to their own licenses -- universally BSD-style permissive terms.

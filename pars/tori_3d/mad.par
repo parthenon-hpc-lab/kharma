@@ -1,22 +1,21 @@
-# MAD model mirroring the simulation library
-# See EHT MAD GRMHD Code Comparison for problem
-# setup details
+# The Magnetically Arrested Disk (MAD) accretion flow
+# This is a normal large-disk (20/41 r_g) MAD with gamma=5/3,
+# like the "Illinois v5" simulation library.
+# Very low floors now that we have good recovery
 
 <parthenon/job>
-archive_parameters_timestamp = true
 problem_id = torus
-torus_type = fishbone_moncrief
+archive_parameters = timestamp
 
 <parthenon/mesh>
-refinement = none
-numlevel = 1
-nx1 = 256
-nx2 = 128
-nx3 = 128
+nx1 = 128
+nx2 = 64
+nx3 = 64
 
 <parthenon/meshblock>
 nx1 = 128
-nx2 = 128
+nx2 = 64
+# Many boundaries options are incompatible with multiple phi blocks
 nx3 = 64
 
 <coordinates>
@@ -25,60 +24,81 @@ transform = fmks
 r_out = 1000
 a = 0.9375
 hslope = 0.3
-mks_smooth = 0.5
-poly_xt = 0.82
-poly_alpha = 14.0
 
 <parthenon/time>
-tlim = 10000.0
-
-<GRMHD>
-cfl = 0.7
-gamma = 1.666667
-reconstruction = weno5
-
-<driver>
-type = imex
-two_sync = true
+tlim = 60000.0
+nlim = -1
 
 <torus>
+type = fishbone_moncrief
 rin = 20.0
 rmax = 41.0
 
 <perturbation>
-u_jitter = 0.1
+u_jitter = 0.04
 
 <b_field>
+solver = face_ct
 type = mad
 beta_min = 100.
 
+<GRMHD>
+cfl = 0.7
+gamma = 1.666667
+
+<flux>
+type = llf
+# WENO5 Adaptive Order "At Home" --
+# WENO5Z with fallback to linear recon in difficult regions
+reconstruction = weno5_linear
+
+<driver>
+type = kharma
+# Second sync at the end of each step
+# Can skip this with the robust inverter & face_ct B fields
+two_sync = false
+
+<boundaries>
+inner_x2 = reflecting
+outer_x2 = reflecting
+
 <floors>
+# Minimal floors, leveraging inversion recovery.
+# Normal frame is now the only supported injection frame --
+# material added is so minimal that drag effects are negligible
+frame = normal
 rho_min_geom = 1e-6
-u_min_geom = 1e-8
-bsq_over_rho_max = 100
-u_over_rho_max = 2
+u_min_geom   = 1e-8
+# Enable to preserve momentum in all cases at the cost of much more
+# density injection
+use_rho_to_slow = false
+# Note there is a hard cap on Lorentz factor at 50 in the source code,
+# but in practice simulations do not reproduce fast enough gamma for
+# this to matter
+
+<fofc>
+# FOFC is disabled by default because of tests but recommended
+# for most production runs
+on = true
 
 <debug>
 verbose = 1
 extra_checks = 1
 flag_verbose = 0
 
-<wind>
-on = false
-ne = 1.e-4
-Tp = 10
-
 <parthenon/output0>
 file_type = hdf5
+write_xdmf = false
 dt = 5.0
 single_precision_output = true
-variables = prims.rho, prims.u, prims.uvec, prims.B, jcon, fflag, pflag
+variables = prims, divB, jcon, fflag, pflag, fofcflag
 
 <parthenon/output1>
 file_type = rst
+write_xdmf = false
 dt = 100.0
-ghost_zones = true
 
 <parthenon/output2>
 file_type = hst
 dt = 0.1
+variables = all_reductions

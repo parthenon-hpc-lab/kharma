@@ -1,82 +1,99 @@
-# SANE model mirroring the simulation library
-# Quite small to run for more than 10kM, 6M/12M F-M torus,
-# Overall simulation size 1000M
+# SANE ("Standard and Normal Evolution" i.e. not Magnetically Arrested).
+# Similar to "v5" library parameters w/adiabatic index 5/3,
+# and a larger disk (rin=10/rmax=20)
+# Updated for low floors and appropriate floor frame for Kastaun inverter
+
 
 <parthenon/job>
 problem_id = torus
+archive_parameters = timestamp
 
 <parthenon/mesh>
-refinement = none
-numlevel = 1
 nx1 = 128
 nx2 = 64
 nx3 = 64
 
 <parthenon/meshblock>
-nx1 = 64
+nx1 = 128
 nx2 = 64
-nx3 = 32
+# Many boundaries options are incompatible with multiple phi blocks
+nx3 = 64
 
 <coordinates>
 base = spherical_ks
 transform = fmks
-r_out = 100
+r_out = 1000
 a = 0.9375
 hslope = 0.3
-mks_smooth = 0.5
-poly_xt = 0.82
-poly_alpha = 14.0
 
 <parthenon/time>
-tlim = 10000.0
+tlim = 60000.0
 nlim = -1
 
-<GRMHD>
-cfl = 0.9
-gamma = 1.666667
-
-<driver>
-type = kharma
-two_sync = true
-reconstruction = weno5
-
 <torus>
-rin = 6.0
-rmax = 12.0
+rin = 10.0
+rmax = 20.0
+# Tilt in degrees. YMMV.
+tilt = 0.
 
 <perturbation>
 u_jitter = 0.04
 
 <b_field>
+solver = face_ct
 type = sane
 beta_min = 100.
 
+<GRMHD>
+cfl = 0.7
+gamma = 1.666667
+
+<flux>
+type = llf
+# WENO5 Adaptive Order "At Home" --
+# WENO5Z with fallback to linear recon in difficult regions
+reconstruction = weno5_linear
+
+<driver>
+type = kharma
+# Second sync at the end of each step
+# Can skip this with the robust inverter & face_ct B fields
+two_sync = false
+
+<boundaries>
+inner_x2 = reflecting
+outer_x2 = reflecting
+
 <floors>
+# Minimal floors, leveraging inversion recovery.
+# Normal frame is now the only supported injection frame --
+# material added is so minimal that drag effects are negligible
 rho_min_geom = 1e-6
-u_min_geom = 1e-8
-bsq_over_rho_max = 100
-u_over_rho_max = 2
+u_min_geom   = 1e-8
+
+<fofc>
+# FOFC is disabled by default because of tests but recommended
+# for most production runs
+on = true
 
 <debug>
 verbose = 1
 extra_checks = 1
-flag_verbose = 2
-
-<wind>
-on = false
-ne = 1.e-4
-Tp = 10
+flag_verbose = 0
 
 <parthenon/output0>
 file_type = hdf5
+write_xdmf = false
 dt = 5.0
 single_precision_output = true
-variables = prims, jcon, divB
+variables = prims, divB, jcon, fflag, pflag, fofcflag
 
 <parthenon/output1>
 file_type = rst
+write_xdmf = false
 dt = 100.0
 
 <parthenon/output2>
 file_type = hst
 dt = 0.1
+variables = all_reductions

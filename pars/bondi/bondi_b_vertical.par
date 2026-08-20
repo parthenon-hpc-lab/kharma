@@ -1,6 +1,9 @@
-# Bondi flow problem
-# Model a spherically symmetric, unmagnetized inflow
-# Uses more MeshBlocks than necessary, for debugging
+# Bondi flow problem, with vertical B
+# Structured more like physics than a test, with:
+# (low-res) 3D grid
+# Floors, flux-corrections when floors are hit
+# Transmitting boundary conditions
+# Simulation restart files
 
 <parthenon/job>
 problem_id = bondi
@@ -15,19 +18,20 @@ nx3 = 32
 
 <parthenon/meshblock>
 # Split mesh into blocks of this size
+# Note you can't split in x3 and still use transmitting boundaries!
 nx1 = 64
 nx2 = 64
 nx3 = 32
 
 <coordinates>
 base = ks
-transform = fmks
+transform = mks
 a = 0.0
 hslope = 0.3
 r_out = 30
 
 <parthenon/time>
-tlim = 2000.0
+tlim = 5000.0
 
 <GRMHD>
 cfl = 0.9
@@ -38,18 +42,31 @@ reconstruction = weno5
 mdot = 1.0
 rs = 8.0
 
-# Disable floors
 <floors>
-disable_floors = true
+bsq_over_rho_max = 1e3
+bsq_over_u_max = 1e4
+rho_min_geom = 1e-6
+u_min_geom = 1e-8
 
-# We'll be adding material, and that's okay
+<fofc>
+on = true
+
 <boundaries>
+# Transmitting boundaries, since there will be material at the pole
+inner_x2 = transmitting
+outer_x2 = transmitting
+# This might additionally help, but the option is unstable
+#excise_polar_flux = true
+
+# Allow in material from boundary
 check_inflow_outer_x1 = false
 
 <b_field>
+solver = face_ct
 # Constant pure-vertical field
 type = vertical
-bz = 0.1
+A0 = 0.1
+norm = false
 
 <debug>
 verbose = 1
@@ -57,16 +74,22 @@ flag_verbose = 0
 extra_checks = 1
 
 <driver>
-type = imex
+type = kharma
 two_sync = true
 
 <parthenon/output0>
 file_type = hdf5
+write_xdmf = false
 dt = 5.0
 single_precision_output = false
 # Fields not present are silently ignored
-variables = prims.rho, prims.u, prims.uvec, prims.B, pflag, divB
+variables = prims, pflag, divB, cons.fB
 
 <parthenon/output1>
+file_type = rst
+write_xdmf = false
+dt = 100.0
+
+<parthenon/output2>
 file_type = hst
 dt = 0.1

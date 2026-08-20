@@ -1,0 +1,28 @@
+#!/bin/bash
+# Admin stuff
+#SBATCH -A w25_bh_images_g
+#SBATCH -J KHARMA
+#SBATCH -t 12:00:00
+#SBATCH -N 1
+#SBATCH -o "out-%j.txt"
+
+# Partition
+##SBATCH -p gpu_debug --reservation gpu_debug --qos debug
+#SBATCH -p gpu
+
+# Node options: full, all CPU
+# Note we could do 32 if HT is faster
+#SBATCH --tasks-per-node=4
+#SBATCH --cpus-per-task=16
+#SBATCH --exclusive
+#SBATCH --mem=0
+
+# All options/environment are taken care of in run.sh now
+# However, breaking this script whenever run.sh breaks is a pain
+
+if [ "$SLURM_NTASKS" == "" ]; then
+  SLURM_NTASKS=4
+fi
+
+KHARMA_DIR=$HOME/Code/kharma
+$KHARMA_DIR/run.sh -n $SLURM_NTASKS -t 11:50:00 "$@"

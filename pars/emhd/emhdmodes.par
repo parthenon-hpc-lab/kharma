@@ -6,26 +6,17 @@
 problem_id = emhdmodes
 
 <parthenon/mesh>
-refinement = none
-numlevel = 1
-
 nx1 = 128
 x1min = 0.0
 x1max = 1.0
-ix1_bc = periodic
-ox1_bc = periodic
 
 nx2 = 128
 x2min = 0.0
 x2max = 1.0
-ix2_bc = periodic
-ox2_bc = periodic
 
 nx3 = 1
 x3min = 0.0
 x3max = 1.0
-ix3_bc = periodic
-ox3_bc = periodic
 
 <parthenon/meshblock>
 nx1 = 64
@@ -44,6 +35,8 @@ nlim = -1
 <GRMHD>
 cfl = 0.9
 gamma = 1.333333
+
+<flux>
 reconstruction = linear_mc
 
 # Default is to evolve B explicitly,
@@ -98,11 +91,12 @@ viscosity_alpha  = 1.0
 
 <parthenon/output0>
 file_type = hdf5
+write_xdmf = false
 # Output only final state
 dt = 0.2
 # Output in double due to low amplitude
 single_precision_output = false
-variables = prims.rho, prims.u, prims.uvec, prims.B, prims.q, prims.dP, solve_norm, solve_fail
+variables = prims, solve_norm, solve_fail
 
 <parthenon/output1>
 file_type = hst

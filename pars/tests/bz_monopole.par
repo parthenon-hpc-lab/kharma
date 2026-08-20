@@ -1,11 +1,15 @@
 # Monopole in vacuum
+# Useful for testing floor values, since the whole domain will be
+# set to whatever the floor values are
+
+# The current values are very conservative, try it with `fofc/on=true`
+# and remove the ceiling on sigma to exercise KHARMA a bit more.
+# Hard mode: gamma=5/3, weno5 reconstruction
 
 <parthenon/job>
 problem_id = bz_monopole
 
 <parthenon/mesh>
-refinement = none
-numlevel = 1
 nx1 = 128
 nx2 = 128
 nx3 = 1
@@ -37,6 +41,9 @@ flag_verbose = 0
 <GRMHD>
 cfl = 0.7
 gamma = 1.444444
+
+<flux>
+type = llf
 reconstruction = linear_mc
 
 <b_field>
@@ -51,6 +58,8 @@ u_min_geom = 1e-20
 gamma_max = 5
 
 <wind>
+# This adds a small source term of hot material,
+# ideally preventing floor hits in the funnel
 on = false
 ne = 1.e-4
 Tp = 100
@@ -59,10 +68,10 @@ power = 40
 
 <parthenon/output0>
 file_type = hdf5
+write_xdmf = false
 dt = 5.0
 single_precision_output = true
 variables = prims, fflag, pflag
-ghost_zones = true
 
 <parthenon/output1>
 file_type = hst

@@ -9,6 +9,7 @@ variables:
   MPI_NUM_PROCS: 2
   OMPI_ALLOW_RUN_AS_ROOT: 1
   OMPI_ALLOW_RUN_AS_ROOT_CONFIRM: 1
+  GIT_STRATEGY: clone
   GIT_SUBMODULE_STRATEGY: recursive
   MAMBA_ROOT_PREFIX: /mamba
   MAMBA_URL: https://micro.mamba.pm/api/micromamba/linux-64/latest
@@ -50,6 +51,7 @@ build:
     HOST_ARCH: HSW
     C_NATIVE: gcc
     CXX_NATIVE: g++
+    CXXFLAGS: -flto=auto
   before_script:
     - dnf -y groupinstall "Development Tools"
     - dnf -y install hostname environment-modules cmake mpich-devel fftw-devel
@@ -73,4 +75,4 @@ tests:
   parallel:
     matrix:
       - TEST: [all_pars, anisotropic_conduction, bondi, bondi_viscous, bz_monopole, conducting_atmosphere,
-               emhdmodes, mhdmodes, noh, regrid, reinit, resize, restart, tilt_init, torus_sanity]
+               emhdmodes, mhdmodes, mhdmodes_smr, noh, regrid, reinit, resize, restart, tilt_init, torus_sanity]

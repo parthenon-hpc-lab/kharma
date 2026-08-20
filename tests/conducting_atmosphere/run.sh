@@ -13,7 +13,7 @@ conv_2d() {
     for res in "${RES_LIST[@]}"
     do
         cp conducting_atmosphere_${res}_default/atmosphere_soln_*.txt .
-        $BASE/run.sh -n 1 -i ./conducting_atmosphere.par debug/verbose=1 \
+        $BASE/run.sh -d . -i ./conducting_atmosphere.par debug/verbose=1 \
             parthenon/time/tlim=200 parthenon/output0/dt=1000000 \
             parthenon/mesh/nx1=$res parthenon/mesh/nx2=$res parthenon/mesh/nx3=1 \
             parthenon/meshblock/nx1=$res parthenon/meshblock/nx2=$res parthenon/meshblock/nx3=1 \
@@ -25,7 +25,7 @@ conv_2d() {
     done
     check_code=0
     pyharm-convert --double *.phdf
-    python check.py $ALL_RES $1 2d || check_code=$?
+    python3 check.py $ALL_RES $1 2d || check_code=$?
     if [[ $check_code != 0 ]]; then
         echo Conducting atmosphere test $3 FAIL: $check_code
         exit_code=1
@@ -36,5 +36,7 @@ conv_2d() {
 
 ALL_RES="64,128,256,512"
 conv_2d emhd2d_weno driver/reconstruction=weno5 "in 2D, WENO5"
+# Test if it works with ideal solution as guess
+conv_2d emhd2d_weno_ideal_guess emhd/ideal_guess=true "in 2D, WENO5, Ideal guess"
 
 exit $exit_code

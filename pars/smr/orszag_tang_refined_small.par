@@ -1,0 +1,81 @@
+# An Orszag-Tang vortex designed to trigger
+# an old Parthenon bug, or any bugs related
+# to SMR interacting with periodic boundaries
+
+<parthenon/job>
+problem_id = orszag_tang
+
+<parthenon/mesh>
+refinement = static
+numlevel = 2
+nx1 = 64
+x1min = -3.141592653589793
+x1max = 3.141592653589793
+
+nx2 = 64
+x2min = -3.141592653589793
+x2max = 3.141592653589793
+
+nx3 = 1
+x3min = -0.01
+x3max = 0.01
+
+<parthenon/meshblock>
+nx1 = 32
+nx2 = 32
+nx3 = 1
+
+<parthenon/static_refinement0>
+# Refinement is expressed as an N-dimensional convex box,
+# with each coordinate given as a proportion 0.0-1.0 of its dimension
+# Any meshblock intersecting the box gets refined to the given level
+# e.g. this is the bottom left corner, for testing
+x1min = 0.0
+x1max = 0.1
+x2min = 0.0
+x2max = 0.1
+level = 1
+
+# Set boring box coordinates. Explanations in bondi.par
+<coordinates>
+base = cartesian_minkowski
+transform = null
+
+<parthenon/time>
+# tlim will be overridden depending on the problem
+tlim = 100.0
+integrator = rk2
+
+<GRMHD>
+cfl = 0.9
+gamma = 1.666667
+
+<b_field>
+solver = face_ct
+ct_scheme = gs05_c
+
+<floors>
+# Disable all floor applications in this problem
+disable_floors = true
+
+<debug>
+verbose = 1
+extra_checks = 2
+flag_verbose = 0
+
+<driver>
+type = kharma
+reconstruction = weno5
+
+# Primary HDF5 output enabled in most problems
+<parthenon/output0>
+file_type = hdf5
+write_xdmf = false
+dt = 1.0
+variables = prims, divB
+
+# Text file with statistics (e.g. fluxes, floors hit)
+<parthenon/output1>
+file_type = hst
+dt = 0.1
+

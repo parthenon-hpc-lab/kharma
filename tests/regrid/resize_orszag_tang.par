@@ -44,6 +44,9 @@ cfl = 0.9
 <driver>
 type = imex
 
+<b_field>
+solver = flux_ct
+
 <resize_restart>
 fname = orszag_tang.out1.00009.h5
 use_tf = false
@@ -65,7 +68,7 @@ extra_checks = 0
 #file_type = hdf5
 #dt = 1000.0
 #single_precision_output = true
-#variables = prims.rho, prims.u, prims.uvec, prims.B, jcon, fflag, pflag
+#variables = prims, jcon, fflag, pflag
 
 # We only need to check the last restart file, specifically divB
 <parthenon/output1>

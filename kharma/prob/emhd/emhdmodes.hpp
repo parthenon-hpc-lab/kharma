@@ -1,25 +1,25 @@
-/* 
+/*
  *  File: emhdmodes.hpp
- *  
+ *
  *  BSD 3-Clause License
- *  
+ *
  *  Copyright (c) 2020, AFD Group at UIUC
  *  All rights reserved.
- *  
+ *
  *  Redistribution and use in source and binary forms, with or without
  *  modification, are permitted provided that the following conditions are met:
- *  
+ *
  *  1. Redistributions of source code must retain the above copyright notice, this
  *     list of conditions and the following disclaimer.
- *  
+ *
  *  2. Redistributions in binary form must reproduce the above copyright notice,
  *     this list of conditions and the following disclaimer in the documentation
  *     and/or other materials provided with the distribution.
- *  
+ *
  *  3. Neither the name of the copyright holder nor the names of its
  *     contributors may be used to endorse or promote products derived from
  *     this software without specific prior written permission.
- *  
+ *
  *  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  *  AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  *  IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -37,25 +37,26 @@
 
 #include "decs.hpp"
 
-
 using namespace std::literals::complex_literals;
 using namespace parthenon;
 
 /**
- * Initialization of analytic wave modes in magnetized plasma w/viscosity and heat conduction
- * 
+ * Initialization of analytic wave modes in magnetized plasma w/viscosity and heat
+ * conduction
+ *
  * Note the end time is not set -- even after exactly 1 period, EMHD modes will
  * have lost amplitude due to having viscosity, which is kind of the point
  */
-TaskStatus InitializeEMHDModes(std::shared_ptr<MeshBlockData<Real>>& rc, ParameterInput *pin)
+TaskStatus InitializeEMHDModes(
+    std::shared_ptr<MeshBlockData<Real>>& rc, ParameterInput* pin)
 {
     auto pmb = rc->GetBlockPointer();
-    GridScalar rho  = rc->Get("prims.rho").data;
-    GridScalar u    = rc->Get("prims.u").data;
+    GridScalar rho = rc->Get("prims.rho").data;
+    GridScalar u = rc->Get("prims.u").data;
     GridVector uvec = rc->Get("prims.uvec").data;
     // It is well and good this problem should cry if EMHD is disabled.
-    GridVector q   = rc->Get("prims.q").data;
-    GridVector dP  = rc->Get("prims.dP").data;
+    GridVector q = rc->Get("prims.q").data;
+    GridVector dP = rc->Get("prims.dP").data;
 
     const auto& G = pmb->coords;
 
@@ -66,8 +67,10 @@ TaskStatus InitializeEMHDModes(std::shared_ptr<MeshBlockData<Real>>& rc, Paramet
     const Real& gam = grmhd_pars.Get<Real>("gamma");
 
     // TODO actually calculate the mode?  Figure something out
-    const Real omega_real = pin->GetOrAddReal("emhdmodes", "omega_real", -0.5533585207638141);
-    const Real omega_imag = pin->GetOrAddReal("emhdmodes", "omega_imag", -3.6262571286888425);
+    const Real omega_real =
+        pin->GetOrAddReal("emhdmodes", "omega_real", -0.5533585207638141);
+    const Real omega_imag =
+        pin->GetOrAddReal("emhdmodes", "omega_imag", -3.6262571286888425);
 
     // START POSSIBLE ARGS: take all these as parameters in pin?
     // Also note this is 2D only for now
@@ -80,7 +83,7 @@ TaskStatus InitializeEMHDModes(std::shared_ptr<MeshBlockData<Real>>& rc, Paramet
     const Real B10 = 0.1;
     const Real B20 = 0.3;
     const Real B30 = 0.;
-    const Real q0   = 0.;
+    const Real q0 = 0.;
     const Real delta_p0 = 0.;
 
     // Wavevector
@@ -107,20 +110,26 @@ TaskStatus InitializeEMHDModes(std::shared_ptr<MeshBlockData<Real>>& rc, Paramet
     IndexRange jb = pmb->cellbounds.GetBoundsJ(domain);
     IndexRange kb = pmb->cellbounds.GetBoundsK(domain);
     pmb->par_for("emhdmodes_init", kb.s, kb.e, jb.s, jb.e, ib.s, ib.e,
-        KOKKOS_LAMBDA (const int &k, const int &j, const int &i) {
+                 KOKKOS_LAMBDA(const int& k, const int& j, const int& i)
+        {
             Real X[GR_DIM];
             G.coord_embed(k, j, i, Loci::center, X);
-            const Real cos_phi = m::cos(k1*X[1] + k2*X[2]);
-            const Real sin_phi = m::sin(k1*X[1] + k2*X[2]);
+            const Real cos_phi = m::cos(k1 * X[1] + k2 * X[2]);
+            const Real sin_phi = m::sin(k1 * X[1] + k2 * X[2]);
 
             // Perturbations: no higher-order terms
-            const Real drho     = amp * (((-0.518522524082246)*cos_phi) + ((0.1792647678001878)*sin_phi));
-            const Real du       = amp * ((0.5516170736393813)*cos_phi);
-            const Real du1      = amp * (((0.008463122479547856)*cos_phi) + ((-0.011862022608466367)*sin_phi));
-            const Real du2      = amp * (((-0.16175466371870734)*cos_phi) + ((0.034828080823603294)*sin_phi));
-            const Real du3      = 0.;
-            const Real dq       = amp * (((0.5233486841539436)*cos_phi) - ((0.04767672501939603)*sin_phi));
-            const Real ddelta_p = amp * (((0.2909106062057657)*cos_phi) - ((0.02159452055336572)*sin_phi));
+            const Real drho = amp * (((-0.518522524082246) * cos_phi) +
+                                        ((0.1792647678001878) * sin_phi));
+            const Real du = amp * ((0.5516170736393813) * cos_phi);
+            const Real du1 = amp * (((0.008463122479547856) * cos_phi) +
+                                       ((-0.011862022608466367) * sin_phi));
+            const Real du2 = amp * (((-0.16175466371870734) * cos_phi) +
+                                       ((0.034828080823603294) * sin_phi));
+            const Real du3 = 0.;
+            const Real dq = amp * (((0.5233486841539436) * cos_phi) -
+                                      ((0.04767672501939603) * sin_phi));
+            const Real ddelta_p = amp * (((0.2909106062057657) * cos_phi) -
+                                            ((0.02159452055336572) * sin_phi));
 
             // Initialize primitives
             rho(k, j, i) = rho0 + drho;
@@ -134,13 +143,16 @@ TaskStatus InitializeEMHDModes(std::shared_ptr<MeshBlockData<Real>>& rc, Paramet
             if (emhd_params.higher_order_terms) {
                 Real tau, chi_e, nu_e;
                 // Zeros are q, dP, and bsq, only needed for torus closure
-                EMHD::set_parameters(G, rho(k, j, i), u(k, j, i), 0., 0., 0., emhd_params, gam, j, i, tau, chi_e, nu_e);
+                EMHD::set_parameters(G, rho(k, j, i), u(k, j, i), 0., 0., 0., emhd_params,
+                    gam, j, i, tau, chi_e, nu_e);
                 Real Theta = (gam - 1) * u(k, j, i) / rho(k, j, i);
-                q(k, j, i)  *= (chi_e != 0) ? m::sqrt(tau / (chi_e * rho(k, j, i) * Theta * Theta)) : 0.;
-                dP(k, j, i) *= (nu_e  != 0) ? m::sqrt(tau / (nu_e * rho(k, j, i) * Theta)) : 0.;
+                q(k, j, i) *= (chi_e != 0)
+                                  ? m::sqrt(tau / (chi_e * rho(k, j, i) * Theta * Theta))
+                                  : 0.;
+                dP(k, j, i) *=
+                    (nu_e != 0) ? m::sqrt(tau / (nu_e * rho(k, j, i) * Theta)) : 0.;
             }
-        }
-    );
+        });
 
     Flux::BlockPtoU(rc.get(), IndexDomain::interior, false);
 

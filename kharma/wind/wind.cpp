@@ -1,25 +1,25 @@
-/* 
+/*
  *  File: wind.cpp
- *  
+ *
  *  BSD 3-Clause License
- *  
+ *
  *  Copyright (c) 2020, AFD Group at UIUC
  *  All rights reserved.
- *  
+ *
  *  Redistribution and use in source and binary forms, with or without
  *  modification, are permitted provided that the following conditions are met:
- *  
+ *
  *  1. Redistributions of source code must retain the above copyright notice, this
  *     list of conditions and the following disclaimer.
- *  
+ *
  *  2. Redistributions in binary form must reproduce the above copyright notice,
  *     this list of conditions and the following disclaimer in the documentation
  *     and/or other materials provided with the distribution.
- *  
+ *
  *  3. Neither the name of the copyright holder nor the names of its
  *     contributors may be used to endorse or promote products derived from
  *     this software without specific prior written permission.
- *  
+ *
  *  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  *  AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  *  IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -33,10 +33,11 @@
  */
 #include "wind.hpp"
 
-std::shared_ptr<KHARMAPackage> Wind::Initialize(ParameterInput *pin, std::shared_ptr<Packages_t>& packages)
+std::shared_ptr<KHARMAPackage> Wind::Initialize(
+    ParameterInput* pin, std::shared_ptr<Packages_t>& packages)
 {
     auto pkg = std::make_shared<KHARMAPackage>("Wind");
-    Params &params = pkg->AllParams();
+    Params& params = pkg->AllParams();
 
     // Wind term in funnel
     Real n = pin->GetOrAddReal("wind", "ne", 2.e-4);
@@ -59,7 +60,7 @@ std::shared_ptr<KHARMAPackage> Wind::Initialize(ParameterInput *pin, std::shared
     return pkg;
 }
 
-TaskStatus Wind::AddSource(MeshData<Real> *md, MeshData<Real> *mdudt)
+TaskStatus Wind::AddSource(MeshData<Real>* md, MeshData<Real>* mdudt, IndexDomain domain)
 {
     // Pointers
     auto pmesh = mdudt->GetMeshPointer();
@@ -79,7 +80,8 @@ TaskStatus Wind::AddSource(MeshData<Real> *md, MeshData<Real> *mdudt)
 
     // Pack variables
     PackIndexMap cons_map;
-    auto dUdt = mdudt->PackVariables(std::vector<MetadataFlag>{Metadata::Conserved}, cons_map);
+    auto dUdt =
+        mdudt->PackVariables(std::vector<MetadataFlag>{Metadata::Conserved}, cons_map);
     const VarMap m_u(cons_map, true);
     // Get sizes
     const IndexRange ib = mdudt->GetBoundsI(IndexDomain::interior);
@@ -88,10 +90,14 @@ TaskStatus Wind::AddSource(MeshData<Real> *md, MeshData<Real> *mdudt)
     const IndexRange block = IndexRange{0, dUdt.GetDim(5) - 1};
 
     // Set the wind via linear ramp-up with time, if enabled
-    const Real current_n = (ramp_end > 0.0) ? m::min(m::max(time - ramp_start, 0.0) / (ramp_end - ramp_start), 1.0) * n : n;
+    const Real current_n =
+        (ramp_end > 0.0)
+            ? m::min(m::max(time - ramp_start, 0.0) / (ramp_end - ramp_start), 1.0) * n
+            : n;
 
     pmb0->par_for("add_wind", block.s, block.e, kb.s, kb.e, jb.s, jb.e, ib.s, ib.e,
-        KOKKOS_LAMBDA (const int& b, const int &k, const int &j, const int &i) {
+        KOKKOS_LAMBDA(const int& b, const int& k, const int& j, const int& i)
+        {
             const auto& G = dUdt.GetCoords(b);
             // Need coordinates to evaluate particle addtn rate
             // Note that makes the wind spherical-only, TODO ensure this
@@ -110,15 +116,15 @@ TaskStatus Wind::AddSource(MeshData<Real> *md, MeshData<Real> *mdudt)
             // Add plasma to the T^t_a component of the stress-energy tensor
             // Notice that U already contains a factor of sqrt{-g}
             Real rho_ut, T[GR_DIM];
-            GRMHD::p_to_u_mhd(G, drhopdt, drhopdt * Tp * 3., uvec, B_P, gam, k, j, i, rho_ut, T);
+            GRMHD::p_to_u_mhd(
+                G, drhopdt, drhopdt * Tp * 3., uvec, B_P, gam, k, j, i, rho_ut, T);
 
             dUdt(b, m_u.RHO, k, j, i) += rho_ut;
             dUdt(b, m_u.UU, k, j, i) += T[0];
             dUdt(b, m_u.U1, k, j, i) += T[1];
             dUdt(b, m_u.U2, k, j, i) += T[2];
             dUdt(b, m_u.U3, k, j, i) += T[3];
-        }
-    );
+        });
 
     return TaskStatus::complete;
 }

@@ -1,0 +1,28 @@
+name: Check Formatting
+
+on:
+  push:
+    branches: [ stable, dev ]
+  pull_request:
+    branches: [ stable, dev ]
+
+jobs:
+    formatting:
+      name: Check Formatting
+      runs-on: ubuntu-latest
+
+      steps:      
+        - name: Checkout code
+          uses: actions/checkout@v2
+        - name: Set system to non-interactive mode
+          run: export DEBIAN_FRONTEND=noninteractive
+        - name: install dependencies
+          run: |
+            sudo apt-get install -y --force-yes -qq git
+        - name: Install pip, clang-format
+          uses: BSFishy/pip-action@v1
+          with:
+            packages: |
+               clang-format==19.1.7
+        - name: check formatting
+          run: git ls-files -z 'kharma/**/*.cpp' 'kharma/**/*.hpp' 'tests/**/*.cpp' 'tests/**/*.hpp' | xargs clang-format -style=file -i && git diff --exit-code --ignore-submodules

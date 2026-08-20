@@ -5,26 +5,17 @@
 problem_id = shock
 
 <parthenon/mesh>
-refinement = none
-numlevel = 1
-
 nx1 = 400
 x1min = -2.0
 x1max = 2.0
-ix1_bc = periodic
-ox1_bc = periodic
 
 nx2 = 1
 x2min = 0.0
 x2max = 1.0
-ix2_bc = periodic
-ox2_bc = periodic
 
 nx3 = 1
 x3min = 0.0
 x3max = 1.0
-ix3_bc = periodic
-ox3_bc = periodic
 
 <parthenon/meshblock>
 nx1 = 400
@@ -44,6 +35,9 @@ dt_min = 0.0001
 cfl = 0.5
 gamma = 1.333333
 reconstruction = linear_mc
+
+<b_field>
+solver = flux_ct
 
 <shock>
 rhoL = 1.
@@ -68,10 +62,11 @@ disable_floors = true
 
 <parthenon/output0>
 file_type = hdf5
+write_xdmf = false
 # This is to output only the final state
 dt = 100.
 single_precision_output = true
-variables = prims.rho, prims.u, prims.uvec, prims.B
+variables = prims
 
 <parthenon/output1>
 file_type = hst

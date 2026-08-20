@@ -62,9 +62,10 @@ max_nonlinear_iter = 3
 
 <parthenon/output0>
 file_type = hdf5
+write_xdmf = false
 dt = 0.1
 single_precision_output = true
-variables = prims.rho, prims.u, prims.uvec, prims.B, prims.q, prims.dP
+variables = prims
 
 <parthenon/output1>
 file_type = hst

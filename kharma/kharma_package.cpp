@@ -1,25 +1,25 @@
-/* 
+/*
  *  File: kharma_package.cpp
- *  
+ *
  *  BSD 3-Clause License
- *  
+ *
  *  Copyright (c) 2020, AFD Group at UIUC
  *  All rights reserved.
- *  
+ *
  *  Redistribution and use in source and binary forms, with or without
  *  modification, are permitted provided that the following conditions are met:
- *  
+ *
  *  1. Redistributions of source code must retain the above copyright notice, this
  *     list of conditions and the following disclaimer.
- *  
+ *
  *  2. Redistributions in binary form must reproduce the above copyright notice,
  *     this list of conditions and the following disclaimer in the documentation
  *     and/or other materials provided with the distribution.
- *  
+ *
  *  3. Neither the name of the copyright holder nor the names of its
  *     contributors may be used to endorse or promote products derived from
  *     this software without specific prior written permission.
- *  
+ *
  *  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  *  AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  *  IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -128,24 +128,24 @@ TaskStatus Packages::BoundaryPtoUElseUtoP(MeshBlockData<Real> *rc, IndexDomain d
     auto pmb = rc->GetBlockPointer();
     auto kpackages = rc->GetBlockPointer()->packages.AllPackagesOfType<KHARMAPackage>();
     // Some downstream UtoP rely on GRMHD prims, some cons
-    if (kpackages.count("GRMHD")) {
-        KHARMAPackage *pkpackage = pmb->packages.Get<KHARMAPackage>("GRMHD");
+    if (kpackages.count("Inverter")) {
+        KHARMAPackage *pkpackage = pmb->packages.Get<KHARMAPackage>("Inverter");
         if (pkpackage->DomainBoundaryPtoU != nullptr) {
-            Flag("DomainBoundaryPtoU_GRMHD");
+            Flag("DomainBoundaryPtoU_Inverter");
             pkpackage->DomainBoundaryPtoU(rc, domain, coarse);
             EndFlag();
         } else if (pkpackage->BoundaryUtoP != nullptr) { // This won't be called
-            Flag("DomainBoundaryUtoP_GRMHD");
+            Flag("DomainBoundaryUtoP_Inverter");
             pkpackage->BoundaryUtoP(rc, domain, coarse);
             EndFlag();
         }
     }
     for (auto kpackage : kpackages) {
-        if (kpackage.second->DomainBoundaryPtoU != nullptr && kpackage.first != "GRMHD") {
+        if (kpackage.second->DomainBoundaryPtoU != nullptr && kpackage.first != "Inverter") {
             Flag("DomainBoundaryPtoU_"+kpackage.first);
             kpackage.second->DomainBoundaryPtoU(rc, domain, coarse);
             EndFlag();
-        } else if (kpackage.second->BoundaryUtoP != nullptr && kpackage.first != "GRMHD") {
+        } else if (kpackage.second->BoundaryUtoP != nullptr && kpackage.first != "Inverter") {
             Flag("DomainBoundaryUtoP_"+kpackage.first);
             kpackage.second->BoundaryUtoP(rc, domain, coarse);
             EndFlag();
@@ -155,14 +155,23 @@ TaskStatus Packages::BoundaryPtoUElseUtoP(MeshBlockData<Real> *rc, IndexDomain d
     return TaskStatus::complete;
 }
 
-TaskStatus Packages::AddSource(MeshData<Real> *md, MeshData<Real> *mdudt)
+TaskStatus Packages::AddSource(MeshData<Real> *md, MeshData<Real> *mdudt, IndexDomain domain)
 {
     Flag("AddSource");
-    auto kpackages = md->GetMeshPointer()->packages.AllPackagesOfType<KHARMAPackage>();
+    auto pmesh = md->GetMeshPointer();
+    auto kpackages = pmesh->packages.AllPackagesOfType<KHARMAPackage>();
+    if (kpackages.count("Boundaries")) {
+        KHARMAPackage *pkpackage = pmesh->packages.Get<KHARMAPackage>("Boundaries");
+        if (pkpackage->AddSource != nullptr) {
+            Flag("AddSource_Boundaries");
+            pkpackage->AddSource(md, mdudt, domain);
+            EndFlag();
+        }
+    }
     for (auto kpackage : kpackages) {
-        if (kpackage.second->AddSource != nullptr) {
+        if (kpackage.second->AddSource != nullptr && kpackage.first != "Boundaries") {
             Flag("AddSource_"+kpackage.first);
-            kpackage.second->AddSource(md, mdudt);
+            kpackage.second->AddSource(md, mdudt, domain);
             EndFlag();
         }
     }
@@ -170,70 +179,60 @@ TaskStatus Packages::AddSource(MeshData<Real> *md, MeshData<Real> *mdudt)
     return TaskStatus::complete;
 }
 
-TaskStatus Packages::BlockApplyPrimSource(MeshBlockData<Real> *rc)
-{
-    // TODO print only if there's calls inside?
-    Flag("BlockApplyPrimSource");
-    auto kpackages = rc->GetBlockPointer()->packages.AllPackagesOfType<KHARMAPackage>();
-    for (auto kpackage : kpackages) {
-        if (kpackage.second->BlockApplyPrimSource != nullptr) {
-            kpackage.second->BlockApplyPrimSource(rc);
-        }
-    }
-    EndFlag();
-    return TaskStatus::complete;
-}
 TaskStatus Packages::MeshApplyPrimSource(MeshData<Real> *md)
 {
     Flag("MeshApplyPrimSource");
-    for (int i=0; i < md->NumBlocks(); ++i)
-        BlockApplyPrimSource(md->GetBlockData(i).get());
-    EndFlag();
-    return TaskStatus::complete;
-}
-
-TaskStatus Packages::BlockApplyFloors(MeshBlockData<Real> *mbd, IndexDomain domain)
-{
-    Flag("BlockApplyFloors");
-    auto pmb = mbd->GetBlockPointer();
-    auto pkgs = pmb->packages.AllPackages();
-
-    // Apply the version from "Floors" package first
-    if (pkgs.count("Floors")) {
-        KHARMAPackage *pkpackage = pmb->packages.Get<KHARMAPackage>("Floors");
-        if (pkpackage->BlockApplyFloors != nullptr) {
-            Flag("BlockApplyFloors_Floors");
-            pkpackage->BlockApplyFloors(mbd, domain);
-            EndFlag();
-        }
-    }
-    // Then anything else
-    auto kpackages = pmb->packages.AllPackagesOfType<KHARMAPackage>();
-    for (auto kpackage : kpackages) {
-        if (kpackage.first != "Floors") {
-            if (kpackage.second->BlockApplyFloors != nullptr) {
-                Flag("BlockApplyFloors_"+kpackage.first);
-                kpackage.second->BlockApplyFloors(mbd, domain);
-                EndFlag();
+    for (int i=0; i < md->NumBlocks(); ++i) {
+        auto rc = md->GetBlockData(i).get();
+        auto kpackages = rc->GetBlockPointer()->packages.AllPackagesOfType<KHARMAPackage>();
+        for (auto kpackage : kpackages) {
+            if (kpackage.second->BlockApplyPrimSource != nullptr) {
+                kpackage.second->BlockApplyPrimSource(rc);
             }
         }
     }
     EndFlag();
-
     return TaskStatus::complete;
 }
+
 TaskStatus Packages::MeshApplyFloors(MeshData<Real> *md, IndexDomain domain)
 {
     Flag("MeshApplyFloors");
-    for (int i=0; i < md->NumBlocks(); ++i)
-        BlockApplyFloors(md->GetBlockData(i).get(), domain);
+
+    // Apply the version from "Floors" package first
+    auto pmesh = md->GetMeshPointer();
+    auto pkgs = pmesh->packages.AllPackages();
+    if (pkgs.count("Floors")) {
+        KHARMAPackage *pkpackage = pmesh->packages.Get<KHARMAPackage>("Floors");
+        if (pkpackage->MeshApplyFloors != nullptr) {
+            Flag("MeshApplyFloors_Floors");
+            pkpackage->MeshApplyFloors(md, domain);
+            EndFlag();
+        }
+    }
+    // Then everything else i.e. block versions
+    // TODO(CEP) allow Mesh versions and fallback
+    for (int i=0; i < md->NumBlocks(); ++i) {
+        auto mbd = md->GetBlockData(i).get();
+        auto pmb = mbd->GetBlockPointer();
+        auto kpackages = pmb->packages.AllPackagesOfType<KHARMAPackage>();
+        for (auto kpackage : kpackages) {
+            if (kpackage.first != "Floors") {
+                if (kpackage.second->BlockApplyFloors != nullptr) {
+                    Flag("BlockApplyFloors_"+kpackage.first);
+                    kpackage.second->BlockApplyFloors(mbd, domain);
+                    EndFlag();
+                }
+            }
+        }
+    }
     EndFlag();
     return TaskStatus::complete;
 }
 
 // GENERAL CALLBACKS
 // TODO this will need to be mesh'd too
-void Packages::UserWorkBeforeOutput(MeshBlock *pmb, ParameterInput *pin)
+void Packages::UserWorkBeforeOutput(MeshBlock *pmb, ParameterInput *pin, const SimTime& unused)
 {
     Flag("UserWorkBeforeOutput");
     auto kpackages = pmb->packages.AllPackagesOfType<KHARMAPackage>();

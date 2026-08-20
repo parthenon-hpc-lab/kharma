@@ -1,0 +1,32 @@
+diff --git a/src/interface/swarm_device_context.hpp b/src/interface/swarm_device_context.hpp
+index e438dcf53..389a4df2b 100644
+--- a/src/interface/swarm_device_context.hpp
++++ b/src/interface/swarm_device_context.hpp
+@@ -65,10 +65,12 @@ class SwarmDeviceContext {
+     // Particle is on neither this block nor a neighboring block
+     if (i < 0 || i > 3 || ((j < 0 || j > 3) && ndim_ > 1) ||
+         ((k < 0 || k > 3) && ndim_ > 2)) {
++#ifndef KOKKOS_ENABLE_SYCL
+       printf("[%i] k = %i j = %i i = %i\n", n, k, j, i);
+       printf("x = %e [%e %e]\n", x, x_min_, x_max_);
+       printf("y = %e [%e %e]\n", y, y_min_, y_max_);
+       printf("z = %e [%e %e]\n", z, z_min_, z_max_);
++#endif
+       PARTHENON_FAIL("Particle neighbor indices out of bounds; particle has somehow "
+                      "moved beyond the halo of adjacent blocks which is not permitted.");
+     }
+diff --git a/src/utils/error_checking.hpp b/src/utils/error_checking.hpp
+index eec8dd5b7..890cd3c85 100644
+--- a/src/utils/error_checking.hpp
++++ b/src/utils/error_checking.hpp
+@@ -151,8 +151,10 @@ inline void require_throws(const char *const condition, std::stringstream const
+ 
+ [[noreturn]] KOKKOS_INLINE_FUNCTION void
+ fail(const char *const message, const char *const filename, int const linenumber) {
++#ifndef KOKKOS_ENABLE_SYCL
+   printf("### PARTHENON ERROR\n  Message:     %s\n  File:        %s\n  Line number: %i\n",
+          message, filename, linenumber);
++#endif
+   Kokkos::abort(message);
+   // Kokkos::abort ends control flow, but is not marked as `[[noreturn]]`, so we need this
+   // loop to supress a warning that the function does not return.

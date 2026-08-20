@@ -1,5 +1,6 @@
 # SANE model, but refined
-# Needs new B field init
+# Included to show example of a mesh
+# refinement prescription
 
 <parthenon/job>
 problem_id = torus
@@ -7,33 +8,42 @@ problem_id = torus
 <parthenon/mesh>
 refinement = static
 numlevel = 2
-nx1 = 256
-nx2 = 160
-nx3 = 128
+nx1 = 128
+nx2 = 96
+nx3 = 64
 
 <parthenon/meshblock>
-nx1 = 128
+nx1 = 32
 nx2 = 32
-nx3 = 128
+nx3 = 32
 
 <parthenon/static_refinement0>
-x1min = 1.0
-x1max = 2.0
+# Refinement is expressed as an N-dimensional convex box,
+# with each coordinate given as a proportion 0.0-1.0 of its dimension
+# Any meshblock intersecting the box gets refined to the given level
+# This refines the inner two radial belts of blocks --
+# 4*2*3 base + 2*1*2*7 additional from refinement = 52 blocks total
+x1min = 0.0
+x1max = 0.49
 x2min = 0.49
 x2max = 0.51
 x3min = 0.0
-x3max = 6.28
+x3max = 1.0
 level = 1
 
 <coordinates>
 base = spherical_ks
-transform = mks
-r_out = 20
+transform = fmks
+r_out = 100
 a = 0.9375
 
 <parthenon/time>
 tlim = 3000.0
 nlim = -1
+
+<driver>
+#type = imex
+type = kharma
 
 <debug>
 verbose = 1
@@ -48,12 +58,10 @@ reconstruction = weno5
 <torus>
 rin = 6.0
 rmax = 12.0
+#tilt = 20
 
 <perturbation>
 u_jitter = 0.04
-
-<boundaries>
-fix_corner = false
 
 <b_field>
 solver = face_ct
@@ -69,17 +77,17 @@ bsq_over_rho_max = 100
 
 <parthenon/output0>
 file_type = hdf5
-dt = 0.0
+write_xdmf = false
+dt = 5.0
 single_precision_output = true
-variables = prims, divB
-#ghost_zones = true
+variables = prims, divB, fflag, pflag
 
-# Can't until face field output is enabled
-#<parthenon/output1>
-#file_type = rst
-#dt = 100.0
-#ghost_zones = true
+<parthenon/output1>
+file_type = rst
+write_xdmf = false
+dt = 100.0
 
 <parthenon/output2>
 file_type = hst
 dt = 0.1
+variables = all_reductions

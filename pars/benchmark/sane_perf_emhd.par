@@ -11,16 +11,14 @@ problem_id = torus
 # Pretty representative size for a long simulation
 # Larger simulations have smaller in-simulation timesteps
 <parthenon/mesh>
-refinement = none
-numlevel = 1
 nx1 = 256
 nx2 = 128
 nx3 = 256
 
 <parthenon/meshblock>
 nx1 = 128
-nx2 = 32
-nx3 = 128
+nx2 = 128
+nx3 = 256
 
 <coordinates>
 base = spherical_ks
@@ -33,16 +31,45 @@ tlim = 10000.0
 # Limit to 1k steps
 nlim = 1000
 
+<driver>
+type = imex
+two_sync = true
+
+<implicit>
+min_nonlinear_iter  = 1
+max_nonlinear_iter  = 3
+jacobian_delta      = 4.e-8
+rootfind_tol        = 1.e-3
+linesearch          = true
+max_linesearch_iter = 3
+linesearch_eps      = 1.e-4
+use_qr              = true
+
 <GRMHD>
 cfl = 0.8
 gamma = 1.666667
 reconstruction = weno5
 
+<b_field>
+type = sane
+beta_min = 100.
 
+<b_field>
+implicit        = false
+type            = sane
+beta_min        = 100.
+initial_cleanup = false
 
-<driver>
-type = kharma
-two_sync = true
+# This block must be present and values filled in all EGRMHD simulations
+<emhd>
+on                 = true
+higher_order_terms = true
+feedback           = true
+stability_limits   = true
+
+closure_type     = torus
+conduction_alpha = 1.0
+viscosity_alpha  = 1.0
 
 <torus>
 rin = 6.0
@@ -50,10 +77,6 @@ rmax = 12.0
 
 <perturbation>
 u_jitter = 0.04
-
-<b_field>
-type = sane
-beta_min = 100.
 
 <floors>
 rho_min_geom = 1e-6

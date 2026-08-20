@@ -24,12 +24,19 @@ kharma_parsed_*.par
 log_*.txt
 bondi_analytic_*.txt
 atmosphere_soln_*.txt
+shock_soln_*.txt
+parthinput.*
+
+# Downloaded/bins
+bin/clang-format-19
 
 # Editor documents
 .project
 .cproject
 .ptp-sync
 .vscode/
+.cache/
+*~
 
 # C++ excludes
 # Build directory
@@ -42,6 +49,8 @@ external/hdf5*
 *.d
 make_args
 
+# Mac trash
+.DS_Store
 
 # Compiled Object files
 *.slo

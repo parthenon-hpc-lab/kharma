@@ -1,60 +1,28 @@
 # Kelvin-Helmholtz instability
 # Basic K-H problem, usually used to test AMR
 # since it gets refined in predictable places
+# See pars/smr/kelvin_helmholtz*, pars/amr/kelvin_helmholtz*
 
 <parthenon/job>
 problem_id = kelvin_helmholtz
 
 <parthenon/mesh>
-refinement = static
-numlevel = 3
-
 nx1 = 128
 x1min = 0.0
 x1max = 1.0
-ix1_bc = periodic
-ox1_bc = periodic
 
 nx2 = 192
 x2min = 0.0
 x2max = 2.0
-ix2_bc = periodic
-ox2_bc = periodic
 
 nx3 = 1
 x3min = -0.01
 x3max = 0.01
-ix3_bc = periodic
-ox3_bc = periodic
 
 <parthenon/meshblock>
 nx1 = 64
 nx2 = 64
 nx3 = 1
-
-#<parthenon/refinement0>
-#method = derivative_order_1
-#field = prims.rho
-#refine_tol = 0.01
-#derefine_tol = 0.001
-
-<parthenon/static_refinement0>
-x1min = 0.4
-x1max = 0.6
-x2min = 0.9
-x2max = 1.1
-x3min = 0.0
-x3max = 0.0
-level = 1
-
-<parthenon/static_refinement1>
-x1min = 0.2
-x1max = 0.3
-x2min = 0.0
-x2max = 0.1
-x3min = 0.0
-x3max = 0.0
-level = 2
 
 <coordinates>
 base = cartesian_minkowski
@@ -77,15 +45,13 @@ type = kharma
 <GRMHD>
 cfl = 0.9
 gamma = 1.666667
+
+<flux>
+type = llf
 reconstruction = linear_mc
 
 <b_field>
-type = constant
-b10 = 1
-b20 = 1
-solver = face_ct
-kill_on_large_divb = true
-ct_scheme = bs99
+solver = none
 
 <debug>
 verbose = 1
@@ -94,6 +60,7 @@ extra_checks = 0
 
 <parthenon/output0>
 file_type = hdf5
-dt = 0.0
-variables = prims.rho, prims.u, prims.uvec, prims.B, divB
+write_xdmf = false
+dt = 0.1
+variables = prims, divB
 

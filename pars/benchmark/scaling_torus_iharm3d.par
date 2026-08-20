@@ -1,0 +1,57 @@
+# Torus problem parameters for use in scaling benchmark scripts
+# Hence default size/mesh guaranteed to error unless overridden
+
+<parthenon/job>
+problem_id = torus
+
+# Mesh is defined at runtime!
+<parthenon/mesh>
+nx1 = 1
+nx2 = 1
+nx3 = 1
+
+<parthenon/meshblock>
+nx1 = 1
+nx2 = 1
+nx3 = 1
+
+<coordinates>
+base = spherical_ks
+transform = fmks
+r_out = 1000
+a = 0.9375
+hslope = 0.3
+mks_smooth = 0.5
+poly_xt = 0.82
+poly_alpha = 14.0
+
+#Usually set at runtime. tlim is hard limit
+<parthenon/time>
+tlim = 10.0
+nlim = 102
+
+<GRMHD>
+cfl = 0.9
+gamma = 1.666667
+reconstruction = weno5
+
+<torus>
+rin = 10.0
+rmax = 20.0
+
+<perturbation>
+u_jitter = 0.04
+
+<b_field>
+solver = flux_ct
+type = sane
+beta_min = 100.
+
+<inverter>
+type = onedw
+
+<floors>
+rho_min_geom = 1e-6
+u_min_geom = 1e-8
+bsq_over_rho_max = 100
+u_over_rho_max = 1

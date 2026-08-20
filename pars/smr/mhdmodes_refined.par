@@ -1,7 +1,6 @@
-# GRMHD Modes problem
-# Try to propagate several analytically-amenable linear modes
-# of the MHD equations
-# Heavily commented as a likely first problem for new users
+# SMR version of the GRMHD modes
+# Used to test SMR scheme converges at 2o
+# see mhdmodes.par for problem details
 
 <parthenon/job>
 problem_id = mhdmodes
@@ -17,34 +16,25 @@ numlevel = 2
 nx1 = 96
 x1min = 0.0
 x1max = 1.0
-ix1_bc = periodic
-ox1_bc = periodic
 
 nx2 = 96
 x2min = 0.0
 x2max = 1.0
-ix2_bc = periodic
-ox2_bc = periodic
 
 nx3 = 1
 x3min = 0.0
 x3max = 1.0
-ix3_bc = periodic
-ox3_bc = periodic
 
-# Size of a mesh block
-# # of meshblocks must be >= the number of MPI ranks,
-# however there may be multiple blocks per rank
 <parthenon/meshblock>
 nx1 = 32
 nx2 = 32
 nx3 = 1
 
 <parthenon/static_refinement0>
-x1min = 0.5
-x1max = 0.5
-x2min = 0.5
-x2max = 0.5
+x1min = 0.49
+x1max = 0.51
+x2min = 0.49
+x2max = 0.51
 level = 1
 
 <coordinates>
@@ -63,7 +53,7 @@ implicit = false
 
 <b_field>
 solver = face_ct
-lazy_prolongation = true
+ct_scheme = bs99
 implicit = false
 
 <floors>
@@ -80,11 +70,11 @@ reconstruction = weno5
 
 <parthenon/output0>
 file_type = hdf5
+write_xdmf = false
 dt = 0.05
 single_precision_output = true
-variables = prims.rho, prims.u, prims.uvec, prims.B, divB
+variables = prims, divB
 
 <parthenon/output1>
 file_type = hst
 dt = 0.1
-

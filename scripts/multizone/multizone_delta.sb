@@ -1,0 +1,62 @@
+#!/bin/bash
+# Admin stuff
+#SBATCH -J n8_bflux
+#SBATCH -t 48:00:00
+#SBATCH -N 1
+#SBATCH -n 4
+#SBATCH --gres=gpu:4
+#SBATCH --mem=0
+#SBATCH -o "out-%j.txt"
+
+# Partition
+#SBATCH --account=bbul-delta-gpu
+#SBATCH -p gpuA100x4
+
+#SBATCH --mail-type=ALL
+#SBATCH --mail-user=hyerin.cho@cfa.harvard.edu
+
+PROB=bflux
+RES=64
+DIM=3
+NZONES=8
+BASE=8
+NRUNS=1
+RESTART=false #true
+ONEZONE=false #true
+
+args=()
+
+# meshblocks
+args+=(" --nx1=$RES --nx2=$RES --nx1_mb=$RES")
+if [[ $DIM -gt 2 ]]; then
+  args+=(" --nx2_mb=$(($RES/2)) --nx3=$RES --nx3_mb=$(($RES/2))")
+else
+  args+=(" --nx2_mb=$RES --nx3=1 --nx3_mb=1")
+fi
+
+# common things
+args+=(" --nzones=$NZONES --base=$BASE --nruns=$NRUNS --spin=0.0 --nlim=$((100000*$RES*$RES/64/64))")
+
+if [[ "$PROB" == *"bflux"* ]]; then
+  if [[ $NZONES -eq 8 ]]; then
+    bz=2e-8
+  elif [[ $NZONES -eq 4 ]]; then
+    bz=1e-8
+  elif [[ $NZONES -eq 3 ]]; then
+    bz=1e-4
+  else
+    bz=2e-8
+  fi
+  args+=(" --bz=$bz --kharma_bin=../kharma.cuda")
+fi
+
+if [[ $RESTART == "true" ]]; then
+  args+=(" --restart")
+fi
+
+source ~/venv3/bin/activate
+KHARMA_DIR=/u/hcho1/kharma
+
+# Everything is called from the supervising python script
+# No point in setting a walltime limit, this invokes KHARMA many times
+exec $KHARMA_DIR/scripts/batch/multizone/run.py ${args[@]}

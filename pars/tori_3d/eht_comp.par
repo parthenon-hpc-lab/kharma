@@ -5,8 +5,6 @@
 problem_id = torus
 
 <parthenon/mesh>
-refinement = none
-numlevel = 1
 nx1 = 192
 nx2 = 192
 nx3 = 192
@@ -50,6 +48,9 @@ rho_min_geom = 1e-6
 u_min_geom = 1e-8
 bsq_over_rho_max = 200
 
+<fofc>
+on = true
+
 <debug>
 verbose = 0
 flag_verbose = 0
@@ -57,15 +58,17 @@ extra_checks = 0
 
 <parthenon/output0>
 file_type = hdf5
+write_xdmf = false
 dt = 10.0
 single_precision_output = true
-variables = prims.rho, prims.u, prims.uvec, prims.B, fflag, pflag
+variables = prims, fflag, pflag
 
 <parthenon/output1>
 file_type = rst
+write_xdmf = false
 dt = 100.0
-ghost_zones = true
 
 <parthenon/output2>
 file_type = hst
 dt = 0.1
+variables = all_reductions
