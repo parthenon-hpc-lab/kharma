@@ -42,8 +42,7 @@
 
 #if DISABLE_EMHD
 
-TaskStatus Implicit::FixSolve(MeshBlockData<Real>* mbd)
-{ return TaskStatus::complete; }
+TaskStatus Implicit::FixSolve(MeshBlockData<Real>* mbd) { return TaskStatus::complete; }
 
 #else
 

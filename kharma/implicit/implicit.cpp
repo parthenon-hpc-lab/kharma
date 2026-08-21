@@ -54,7 +54,9 @@ std::shared_ptr<KHARMAPackage> Implicit::Initialize(
 TaskStatus Implicit::Step(MeshData<Real>* md_full_step_init,
     MeshData<Real>* md_sub_step_init, MeshData<Real>* md_flux_src,
     MeshData<Real>* md_linesearch, MeshData<Real>* md_solver, const Real& dt)
-{ return TaskStatus::complete; }
+{
+    return TaskStatus::complete;
+}
 
 #else
 
