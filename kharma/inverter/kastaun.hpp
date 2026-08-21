@@ -186,9 +186,11 @@ KOKKOS_INLINE_FUNCTION int u_to_p<Type::kastaun>(const GRCoordinates& G,
     // static_cast<int>(Status::neg_input);
 
     // This exists only to keep the math stable on first call,
-    // so we can add floors instead of failing outright
-    if (U(m_u.RHO, k, j, i) < 1e-20) {
-        U(m_u.RHO, k, j, i) = 1e-20;
+    // so we can add floors instead of failing completely
+    int returncode = static_cast<int>(Status::success);
+    if (U(m_u.RHO, k, j, i) < 0.) {
+        U(m_u.RHO, k, j, i) = 0.;
+        returncode = static_cast<int>(Status::neg_input);
     }
 
     // Transform GRMHD variables for the SRMHD Kastaun solver
@@ -364,17 +366,18 @@ KOKKOS_INLINE_FUNCTION int u_to_p<Type::kastaun>(const GRCoordinates& G,
     SPACELOOP(ii)
     P(m_p.U1 + ii, k, j, i) = std::max(mag_vel, 0.) * (rcon[ii] + mu * bdotr * bu[ii]);
 
+    // Mark for fix if the solution is obviously unusable
     if (rho <= 0.) {
         return static_cast<int>(Status::neg_rho);
     } else if (u <= 0.) {
         return static_cast<int>(Status::neg_u);
-    } else if (mag_vel <= 0.) {
+    } else if (mag_vel <= 0.) { // TODO or gamma > 50?  Currently we solve that with floors
         return static_cast<int>(Status::bad_gamma);
+    } else if (returncode) {
+        return returncode;
+    } else {
+        return static_cast<int>(Status::success);
     }
-
-    // Mark for fix only if convergence is not established within max_iterations (should
-    // be *extremely* rare)
-    return static_cast<int>(Status::success);
 }
 
 }

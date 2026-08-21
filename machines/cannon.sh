@@ -1,13 +1,20 @@
 # Harvard Cannon
 
 if [[ $HOST == *"rc.fas.harvard.edu" ]]; then
-    if [[ $HOST == *"login"* ]]; then
-      echo "Processes on head nodes are killed. Compile on a compute node!"
-      exit
+    if [[ "$ARGS" != *"login"* ]]; then
+      if [[ $HOST == *"login"* ]]; then
+        echo "Processes on head nodes are killed. Compile on a compute node!"
+        exit
+      fi
+
+      # Use all of the compute node, we're impatient
+      NPROC=48
+
+    else
+      # Stay out of the way on login nodes
+      NPROC=1
     fi
 
-    # Use all of the compute node, we're impatient
-    NPROC=48
     #rm -rf /tmp/kharma
     #cp -r $SOURCE_DIR /tmp/kharma
     #cd /tmp/kharma
