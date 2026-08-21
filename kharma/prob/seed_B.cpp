@@ -350,10 +350,8 @@ TaskStatus SeedBFieldType(MeshBlockData<Real>* rc, ParameterInput* pin,
                     }
                 }
 
-                Real Aphi = seed_a<Seed>(Xmidplane, dxc, rho_av, rin, min_A, A0, arg1, in_torus, rho_max,\
+                Real Aphi = seed_a<Seed>(Xmidplane, dxc, rho_av, rin, min_A, A0, arg1, rb, in_torus, rho_max,
                                         potential_rho_pow, potential_falloff, potential_r_pow);
-                // Real Aphi =
-                //     seed_a<Seed>(Xmidplane, dxc, rho_av, rin, min_A, A0, arg1, rb);
 
                 if (tilt != 0.0) {
                     // This is *covariant* A_mu of an untilted disk
