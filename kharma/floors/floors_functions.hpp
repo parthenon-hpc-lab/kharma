@@ -106,7 +106,7 @@ KOKKOS_INLINE_FUNCTION int determine_floors(const GRCoordinates& G,
 
     // Calculate the different floor values in play:
     // 1. Geometric hard floors, not based on fluid relationships
-    // TODO(BSP) can this be cached if it's slow?
+    // TODO(CEP) can this be cached if it's slow?
     Real rhoflr_geom, uflr_geom;
     if (G.coords.is_spherical()) {
         const GReal r = G.r(k, j, i);
@@ -459,8 +459,8 @@ KOKKOS_INLINE_FUNCTION int apply_floors<InjectionFrame::mixed_normal_drift>(
 
 //         SPACELOOP(ii) P(m_p.U1+ii, k, j, i) = z * (Spar[ii] / (rhoh_min * z * z) +
 //                                                 Sperp[ii] / (rhoh_min * z * z + Bsq));
-//         // TODO(BSP) record when solve fails?
-//         // TODO(BSP) Fallthrough
+//         // TODO(CEP) record when solve fails?
+//         // TODO(CEP) Fallthrough
 //     }
 // }
 

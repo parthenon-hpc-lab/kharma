@@ -369,7 +369,7 @@ Real EstimateTimestep(MeshData<Real>* md)
     Flag("EstimateTimestep");
     auto pmesh = md->GetMeshPointer();
     auto& globals = pmesh->packages.Get("Globals")->AllParams();
-    const int &verbose = globals.Get<int>("verbose");
+    const int& verbose = globals.Get<int>("verbose");
     const auto& grmhd_pars = pmesh->packages.Get("GRMHD")->AllParams();
 
     // Other things we might have to return (light-crossing, pre-set timestep, etc.)
@@ -457,10 +457,10 @@ Real EstimateTimestep(MeshData<Real>* md)
                 double ndt_zone =
                     courant_limit /
                     ((m::max(cmax(V1, k, j, i), cmin(V1, k, j, i)) / G.Dxc<1>(i)) +
-                     (m::max(cmax(V2, k, j, i), cmin(V2, k, j, i)) /
-                        (G.Dxc<2>(j) * excise_factor)) +
-                     (m::max(cmax(V3, k, j, i), cmin(V3, k, j, i)) /
-                        (G.Dxc<3>(k) * ismr_factor)));
+                        (m::max(cmax(V2, k, j, i), cmin(V2, k, j, i)) /
+                            (G.Dxc<2>(j) * excise_factor)) +
+                        (m::max(cmax(V3, k, j, i), cmin(V3, k, j, i)) /
+                            (G.Dxc<3>(k) * ismr_factor)));
 
                 if (!m::isnan(ndt_zone) && (ndt_zone < local_result)) {
                     local_result = ndt_zone;
@@ -479,7 +479,8 @@ Real EstimateTimestep(MeshData<Real>* md)
     const double dt_max = grmhd_pars.Get<double>("max_dt_increase") * dt_last;
     if (verbose > 1) {
         std::cerr << "Updating dt. min allowed: " << dt_min << "max allowed: " << dt_max
-                << "\nCalculated timestep (w/CFL factor!): " << min_ndt * cfl << std::endl;
+                  << "\nCalculated timestep (w/CFL factor!): " << min_ndt * cfl
+                  << std::endl;
     }
     const double ndt = clip(min_ndt * cfl, dt_min, dt_max);
 
@@ -511,8 +512,7 @@ TaskStatus UpdateCtopLight(MeshData<Real>* md)
     const IndexRange3 b = KDomain::GetRange(md, IndexDomain::interior);
     const IndexRange block = IndexRange{0, cmin.GetDim(5) - 1};
 
-    pmb0->par_for(
-        "ctop_light", block.s, block.e, b.ks, b.ke, b.js, b.je, b.is, b.ie,
+    pmb0->par_for("ctop_light", block.s, block.e, b.ks, b.ke, b.js, b.je, b.is, b.ie,
         KOKKOS_LAMBDA(const int& bl, const int& k, const int& j, const int& i)
         {
             const auto& G = cmax.GetCoords(bl);
@@ -522,22 +522,22 @@ TaskStatus UpdateCtopLight(MeshData<Real>* md)
                         G.gcon(Loci::center, j, i, mu, mu) *
                             G.gcon(Loci::center, j, i, 0, 0) >=
                     0.) {
-                    cmax(bl, mu-1, k, j, i) =
+                    cmax(bl, mu - 1, k, j, i) =
                         m::abs((-G.gcon(Loci::center, j, i, 0, mu) +
-                                    m::sqrt(SQR(G.gcon(Loci::center, j, i, 0, mu)) -
-                                            G.gcon(Loci::center, j, i, mu, mu) *
-                                                G.gcon(Loci::center, j, i, 0, 0))) /
-                                G.gcon(Loci::center, j, i, 0, 0));
+                                   m::sqrt(SQR(G.gcon(Loci::center, j, i, 0, mu)) -
+                                           G.gcon(Loci::center, j, i, mu, mu) *
+                                               G.gcon(Loci::center, j, i, 0, 0))) /
+                               G.gcon(Loci::center, j, i, 0, 0));
 
-                    cmin(bl, mu-1, k, j, i) =
+                    cmin(bl, mu - 1, k, j, i) =
                         m::abs((-G.gcon(Loci::center, j, i, 0, mu) -
-                                    m::sqrt(SQR(G.gcon(Loci::center, j, i, 0, mu)) -
-                                            G.gcon(Loci::center, j, i, mu, mu) *
-                                                G.gcon(Loci::center, j, i, 0, 0))) /
-                                G.gcon(Loci::center, j, i, 0, 0));
+                                   m::sqrt(SQR(G.gcon(Loci::center, j, i, 0, mu)) -
+                                           G.gcon(Loci::center, j, i, mu, mu) *
+                                               G.gcon(Loci::center, j, i, 0, 0))) /
+                               G.gcon(Loci::center, j, i, 0, 0));
                 } else {
-                    cmax(bl, mu-1, k, j, i) = SMALL_NUM;
-                    cmin(bl, mu-1, k, j, i) = SMALL_NUM;
+                    cmax(bl, mu - 1, k, j, i) = SMALL_NUM;
+                    cmin(bl, mu - 1, k, j, i) = SMALL_NUM;
                 }
             }
         });

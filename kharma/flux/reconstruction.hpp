@@ -47,7 +47,6 @@ constexpr Real EPS = 1.e-26;
 // Enum for all supported reconstruction types.
 enum class Type {
     donor_cell = 0,
-    donor_cell_c,
     linear_mc,
     linear_vl,
     ppm,
@@ -107,19 +106,19 @@ KOKKOS_FORCEINLINE_FUNCTION void reconstruct_right(RECONSTRUCT_ONE_RIGHT_ARGS)
 
 // Donor-cell
 template<>
-KOKKOS_FORCEINLINE_FUNCTION void reconstruct<Type::donor_cell_c>(RECONSTRUCT_ONE_ARGS)
+KOKKOS_FORCEINLINE_FUNCTION void reconstruct<Type::donor_cell>(RECONSTRUCT_ONE_ARGS)
 {
     rout = x3;
     lout = x3;
 }
 template<>
-KOKKOS_FORCEINLINE_FUNCTION void reconstruct_left<Type::donor_cell_c>(
+KOKKOS_FORCEINLINE_FUNCTION void reconstruct_left<Type::donor_cell>(
     RECONSTRUCT_ONE_LEFT_ARGS)
 {
     lout = x3;
 }
 template<>
-KOKKOS_FORCEINLINE_FUNCTION void reconstruct_right<Type::donor_cell_c>(
+KOKKOS_FORCEINLINE_FUNCTION void reconstruct_right<Type::donor_cell>(
     RECONSTRUCT_ONE_RIGHT_ARGS)
 {
     rout = x3;
@@ -549,6 +548,20 @@ KOKKOS_FORCEINLINE_FUNCTION void reconstruct_right<Type::ppmx>(RECONSTRUCT_ONE_R
 {
     Real null;
     reconstruct<Type::ppmx>(x1, x2, x3, x4, x5, null, rout);
+}
+
+template<>
+KOKKOS_FORCEINLINE_FUNCTION void reconstruct<Type::linear_vl>(RECONSTRUCT_ONE_ARGS)
+{
+    // Apply simplified van Leer (VL) limiter expression for a Cartesian-like coordinate
+    // with uniform mesh spacing
+    const Real dq2 = (x3 - x2) * (x4 - x3); // L/R slopes
+    const Real dqm = (dq2 <= 0.0) ? 0.0 : 2.0 * dq2 / (x4 - x2);
+
+    // compute ql_(i+1/2) and qr_(i-1/2) using limited slopes
+    // Mignone equation 30
+    rout = x3 + 0.5 * dqm;
+    lout = x3 - 0.5 * dqm;
 }
 
 // Row-wise implementations

@@ -56,7 +56,7 @@ TaskStatus Inverter::FixUtoP(MeshBlockData<Real>* rc)
         pmb->packages.Get("Inverter")->Param<bool>("fix_average_neighbors");
     const bool fix_atmo = pmb->packages.Get("Inverter")->Param<bool>("fix_atmosphere");
     const bool backstop = pmb->packages.Get("Inverter")->Param<bool>("backstop");
-    // Velocity recovery replaces other fixups (TODO(BSP) should it always?)
+    // Velocity recovery replaces other fixups (TODO(CEP) should it always?)
     if (backstop) return Inverter::Backstop(rc);
     if (!fix_average && !fix_atmo) return TaskStatus::complete;
 

@@ -251,14 +251,6 @@ TaskID KHARMADriver::AddFluxCalculations(
             t_calculate_flux3 =
                 tl.AddTask(t_start_fluxes, Flux::GetFlux<RType::donor_cell, X3DIR>, md);
             break;
-        case RType::donor_cell_c:
-            t_calculate_flux1 =
-                tl.AddTask(t_start_fluxes, Flux::GetFlux<RType::donor_cell_c, X1DIR>, md);
-            t_calculate_flux2 =
-                tl.AddTask(t_start_fluxes, Flux::GetFlux<RType::donor_cell_c, X2DIR>, md);
-            t_calculate_flux3 =
-                tl.AddTask(t_start_fluxes, Flux::GetFlux<RType::donor_cell_c, X3DIR>, md);
-            break;
         case RType::linear_vl:
             t_calculate_flux1 =
                 tl.AddTask(t_start_fluxes, Flux::GetFlux<RType::linear_vl, X1DIR>, md);
@@ -523,13 +515,14 @@ void KHARMADriver::SetGlobalTimeStep()
         }
         pmb->SetAllowedDt(big);
     }
-    const int &verbose = pmesh->packages.Get("Globals")->Param<int>("verbose");
+    const int& verbose = pmesh->packages.Get("Globals")->Param<int>("verbose");
     if (verbose > 1) {
         if (set_block) {
             fprintf(stderr, "Dt set by %d w/range X1 %g %g, X2 %g %g, X3 %g %g\n",
-                pmb_dt->gid, pmb_dt->block_size.xmin(X1DIR), pmb_dt->block_size.xmax(X1DIR),
-                pmb_dt->block_size.xmin(X2DIR), pmb_dt->block_size.xmax(X2DIR),
-                pmb_dt->block_size.xmin(X3DIR), pmb_dt->block_size.xmax(X3DIR));
+                pmb_dt->gid, pmb_dt->block_size.xmin(X1DIR),
+                pmb_dt->block_size.xmax(X1DIR), pmb_dt->block_size.xmin(X2DIR),
+                pmb_dt->block_size.xmax(X2DIR), pmb_dt->block_size.xmin(X3DIR),
+                pmb_dt->block_size.xmax(X3DIR));
         } else {
             fprintf(stderr, "Dt set by doubling\n");
         }

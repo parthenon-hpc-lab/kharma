@@ -33,7 +33,7 @@ if [[ $HOST == *".polaris.alcf.anl.gov" ]]; then
   
   # Ensure the Cray compiler wrappers explicitly target the host architecture
   export CRAY_CPU_TARGET=x86-64
-  # TODO(BSP) need to set CRAYPE_LINK_TYPE=dynamic long-term?
+  # TODO(CEP) need to set CRAYPE_LINK_TYPE=dynamic long-term?
 
   EXTRA_FLAGS="-DPARTHENON_DISABLE_HDF5_COMPRESSION=ON $EXTRA_FLAGS"
 fi

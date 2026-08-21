@@ -63,7 +63,9 @@ enum BSeedType {
     sane,
     mad,
     mad_quadrupole,
+    mcaf,
     r3s3,
+    r3s3_min_rho,
     r5s5,
     gaussian,
     bz_monopole,
@@ -126,11 +128,27 @@ KOKKOS_INLINE_FUNCTION Real seed_a<BSeedType::mad_quadrupole>(SEEDA_ARGS)
            m::cos(x[2]);
 }
 
+// Magnetically "choked" from McKinney+2012 (when paired with 10/100 torus)
+// Just an r^2 sin^2 th term, but cut off subtly differently
+// Also technically should be pegged to u, not rho
+template<>
+KOKKOS_INLINE_FUNCTION Real seed_a<BSeedType::mcaf>(SEEDA_ARGS)
+{
+    return m::max(m::pow(x[1] / rin, 2) * m::pow(m::sin(x[2]), 2) * (rho - min_A), 0.);
+}
+
 // Just the r^3 sin^3 th term
 template<>
 KOKKOS_INLINE_FUNCTION Real seed_a<BSeedType::r3s3>(SEEDA_ARGS)
 {
     return m::max(m::pow(x[1] / rin, 3) * m::pow(m::sin(x[2]), 3) * rho - min_A, 0.);
+}
+
+// Just the r^3 sin^3 th term, but cut on rho > 0.2 rather than A_phi > 0.2
+template<>
+KOKKOS_INLINE_FUNCTION Real seed_a<BSeedType::r3s3_min_rho>(SEEDA_ARGS)
+{
+    return m::max(m::pow(x[1] / rin, 3) * m::pow(m::sin(x[2]), 3) * (rho - min_A), 0.);
 }
 
 // Bump power to r^5 sin^5 th term, quieter MAD

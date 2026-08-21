@@ -274,7 +274,7 @@ if option "hdf5" && option "clean" && ! option "dryrun"; then
 
   export CFLAGS="-fPIC $CFLAGS"
   CC=$HDF_CC sh configure -C $HDF_EXTRA --prefix=$SOURCE_DIR/external/hdf5 --enable-build-mode=production \
-  --disable-dependency-tracking --disable-hl --disable-tests --disable-tools --disable-shared --disable-deprecated-symbols > build-hdf5.log
+  --disable-dependency-tracking --disable-tests --disable-tools --disable-shared --disable-deprecated-symbols > build-hdf5.log
   sleep 1
 
   echo "Building HDF5 (probably 30s-2min)"

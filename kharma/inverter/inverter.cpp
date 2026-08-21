@@ -38,13 +38,8 @@
 #include "domain.hpp"
 #include "floors_functions.hpp"
 #include "flux.hpp"
+#include "kharma_driver.hpp"
 #include "reductions.hpp"
-
-int Inverter::CountPFlags(MeshData<Real>* md)
-{
-    return Reductions::CountFlags(
-        md, "pflag", Inverter::status_names, IndexDomain::interior, false)[0];
-}
 
 std::shared_ptr<KHARMAPackage> Inverter::Initialize(
     ParameterInput* pin, std::shared_ptr<Packages_t>& packages)
@@ -160,6 +155,8 @@ std::shared_ptr<KHARMAPackage> Inverter::Initialize(
         pkg->DomainBoundaryPtoU = Flux::BlockPtoUMHD;
     }
 
+    // But always handle and print the flag
+    pkg->PreStepWork = Inverter::PreStepWork;
     pkg->PostStepDiagnosticsMesh = Inverter::PostStepDiagnostics;
 
     // List (vector) of HistoryOutputVars that will all be enrolled as output variables
@@ -248,6 +245,19 @@ void Inverter::BlockUtoP(MeshBlockData<Real>* rc, IndexDomain domain, bool coars
     // later.
     // Reductions::StartFlagReduce(md, "pflag", Inverter::status_names,
     // IndexDomain::interior, false, 1);
+}
+
+int Inverter::CountPFlags(MeshData<Real>* md)
+{
+    return Reductions::CountFlags(
+        md, "pflag", Inverter::status_names, IndexDomain::interior, false)[0];
+}
+
+void Inverter::PreStepWork(Mesh* pmesh, ParameterInput* pin, const SimTime& tm)
+{
+    // Clear all floor flags before each step
+    auto md = pmesh->mesh_data.Get().get();
+    KHARMADriver::Scale(std::vector<std::string>{"pflag"}, md, 0.);
 }
 
 TaskStatus Inverter::PostStepDiagnostics(const SimTime& tm, MeshData<Real>* md)
