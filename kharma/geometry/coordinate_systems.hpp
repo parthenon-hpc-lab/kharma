@@ -19,6 +19,8 @@
 #include <limits>
 #include <utility>
 
+#include <ports-of-call/variant.hpp>
+
 // Parthenon includes
 #include <coordinates/coordinates.hpp>
 #include <kokkos_abstraction.hpp>
@@ -26,7 +28,7 @@
 #include <utils/error_checking.hpp>
 
 // phoebus includes
-//#include "compile_constants.hpp"
+// #include "compile_constants.hpp"
 #include "geometry/geometry_utils.hpp"
 #include "phoebus_utils/cell_locations.hpp"
 #include "phoebus_utils/linear_algebra.hpp"
@@ -43,12 +45,60 @@
 #include "geometry/mckinney_gammie_ryan.hpp"
 #include "geometry/minkowski.hpp"
 #include "geometry/modified_system.hpp"
-//#include "geometry/monopole.hpp"
+// #include "geometry/monopole.hpp"
 #include "geometry/snake.hpp"
 #include "geometry/spherical_kerr_schild.hpp"
 #include "geometry/spherical_minkowski.hpp"
 
-namespace Geometry {
+namespace Geometry
+{
+
+// TODO(JMM): THis should have some concepts to ensure these are PortsOfCall::Variants
+template<typename BaseCoordinatesVariant_t, typename TransformsVariant_t>
+class CoordinateEmbedding
+{
+  public:
+    BaseCoordinatesVariant_t base;
+    TransformsVariant_t transform;
+
+    CoordinateEmbedding() = default;
+
+    // TODO(JMM): THis should have some concepts to ensure these are in the variants
+    template<typename CoordsChoice, typename TransformChoice>
+    CoordinateEmbedding(const CoordsChoice& base_, const TransformChoice& transform_)
+        : base(base_)
+        , transform(transform_)
+    {}
+
+    // Tells yt that this isn't a UniformCartesian Parthenon
+    // coordinate system (unless it is)
+    bool is_spherical() const
+    {
+        return PortsOfCall::visit(
+            [](const auto& c)
+            {
+                return c.is_spherical();
+            },
+            base);
+    }
+
+    bool is_transformed() const
+    {
+        return (transform.template holds_alternative<NullTransform>() ||
+                transform.template holds_alternative<SphNullTransform>());
+    }
+
+    const char* Name() const
+    {
+        if (is_spherical()) {
+            return "TransformedSpherical";
+        } else if (is_transformed()) {
+            return "TransformedCartesian";
+        } else {
+            return "UniformCartesian";
+        }
+    }
+};
 
 // Coordinate system choices
 using CoordSysMeshBlock = MinkowskiMeshBlock;
