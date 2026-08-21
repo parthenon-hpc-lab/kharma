@@ -76,9 +76,10 @@ enum BSeedType {
     r1s2
 };
 
-#define SEEDA_ARGS GReal *x, const GReal *dxc, double rho, double rin, double min_A, double A0, double arg1, double rb,\
-                            bool in_torus, double rho_max, double potential_rho_pow, double potential_falloff, double potential_r_pow
-
+#define SEEDA_ARGS                                                                       \
+    GReal *x, const GReal *dxc, double rho, double rin, double min_A, double A0,         \
+        double arg1, double rb, bool in_torus, double rho_max, double potential_rho_pow, \
+        double potential_falloff, double potential_r_pow
 
 // This will also act as the default implementation for unspecified types,
 // which should all be filled as B field by seed_b below.
@@ -191,24 +192,24 @@ KOKKOS_INLINE_FUNCTION Real seed_a<BSeedType::orszag_tang_a>(SEEDA_ARGS)
 template<>
 KOKKOS_INLINE_FUNCTION Real seed_a<BSeedType::vertical_chakrabarti>(SEEDA_ARGS)
 {
-    Real r      = x[1];
-    Real th     = x[2];
-    Real sth    = sin(x[2]);
+    Real r = x[1];
+    Real th = x[2];
+    Real sth = sin(x[2]);
     Real svarth = std::fabs(sin(th));
-    
-    Real cyl_radius   = r * svarth;
-    Real rcyl_in      = rin;
+
+    Real cyl_radius = r * svarth;
+    Real rcyl_in = rin;
     Real rcyl_falloff = potential_falloff;
 
     Real Aphi = m::pow(cyl_radius / rcyl_in, potential_r_pow);
     if (potential_falloff != 0) {
         Aphi *= m::exp(-cyl_radius / rcyl_falloff);
     }
-    Real Aphi_offset = exp(-rcyl_in/rcyl_falloff);
+    Real Aphi_offset = exp(-rcyl_in / rcyl_falloff);
     if (cyl_radius < rcyl_in) {
-      Aphi = 0.0;
+        Aphi = 0.0;
     } else {
-      Aphi -= Aphi_offset;
+        Aphi -= Aphi_offset;
     }
     if (potential_rho_pow != 0.0) {
         if (in_torus) {

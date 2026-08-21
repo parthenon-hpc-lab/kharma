@@ -46,11 +46,9 @@
 
 // Problem initialization headers
 #include "bondi.hpp"
+#include "chakrabarti_torus.hpp"
 #include "explosion.hpp"
 #include "fm_torus.hpp"
-#include "chakrabarti_torus.hpp"
-#include "resize_restart.hpp"
-#include "resize_restart_kharma.hpp"
 #include "gizmo.hpp"
 #include "kelvin_helmholtz.hpp"
 #include "mhdmodes.hpp"
@@ -76,7 +74,8 @@ void KHARMA::ProblemGenerator(MeshBlock* pmb, ParameterInput* pin)
     auto prob = pin->GetString("parthenon/job", "problem_id"); // Required parameter
     Flag("ProblemGenerator_" + prob);
 
-    //auto torus_type = pin->GetOrAddString("parthenon/job", "torus_type", "fishbone_moncrief");
+    // auto torus_type = pin->GetOrAddString("parthenon/job", "torus_type",
+    // "fishbone_moncrief");
 
     // Also just print this, it's important
     if (MPIRank0()) {

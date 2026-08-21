@@ -37,11 +37,11 @@
 #include "b_flux_ct.hpp"
 
 #include "boundaries.hpp"
+#include "chakrabarti_torus.hpp"
 #include "coordinate_utils.hpp"
 #include "domain.hpp"
 #include "flux.hpp"
 #include "fm_torus.hpp"
-#include "chakrabarti_torus.hpp"
 #include "grmhd_functions.hpp"
 
 using namespace parthenon;
@@ -224,7 +224,7 @@ TaskStatus SeedBFieldType(MeshBlockData<Real>* rc, ParameterInput* pin,
         // Chakrabarti-specific variables
         const Real rho_max = pin->GetOrAddReal("torus", "rho_max", 1.0);
         Real gm1, lnh_in, lnh_peak, pgas_over_rho_peak, rho_peak;
-        GReal cc, nn; 
+        GReal cc, nn;
         Real potential_rho_pow, potential_falloff, potential_r_pow;
         switch (Seed) {
             case BSeedType::sane:
@@ -246,26 +246,28 @@ TaskStatus SeedBFieldType(MeshBlockData<Real>* rc, ParameterInput* pin,
                 a = G.coords.get_a();
                 break;
             case BSeedType::vertical_chakrabarti:
-                // A separate case for the vertical field initialized for the Chakrabarti torus
-                // Fluid parameters
+                // A separate case for the vertical field initialized for the Chakrabarti
+                // torus Fluid parameters
                 gam = pmb->packages.Get("GRMHD")->Param<Real>("gamma");
                 gm1 = gam - 1.;
                 // Field init parameters
-                potential_rho_pow = pin->GetOrAddReal("b_field", "potential_rho_pow", 1.0);
-                potential_falloff = pin->GetOrAddReal("b_field", "potential_falloff", 0.0);
-                potential_r_pow   = pin->GetOrAddReal("b_field", "potential_r_pow", 0.0);
+                potential_rho_pow =
+                    pin->GetOrAddReal("b_field", "potential_rho_pow", 1.0);
+                potential_falloff =
+                    pin->GetOrAddReal("b_field", "potential_falloff", 0.0);
+                potential_r_pow = pin->GetOrAddReal("b_field", "potential_r_pow", 0.0);
                 // Torus parameters
-                rin  = pin->GetReal("torus", "rin");
+                rin = pin->GetReal("torus", "rin");
                 rmax = pin->GetReal("torus", "rmax");
                 tilt = pin->GetReal("torus", "tilt") / 180. * M_PI;
                 // Spacetime geometry parameters
                 a = G.coords.get_a();
                 // Now compute relevant parameters
                 cn_calc(a, rin, rmax, &cc, &nn);
-                lnh_in             = lnh_calc(a, rin, rin, 1.0, cc, nn);
-                lnh_peak           = lnh_calc(a, rin, rmax, 1.0, cc, nn) - lnh_in;
-                pgas_over_rho_peak = gm1/gam * (m::exp(lnh_peak) - 1.0);
-                rho_peak           = m::pow(pgas_over_rho_peak, 1.0 / gm1) / rho_max;
+                lnh_in = lnh_calc(a, rin, rin, 1.0, cc, nn);
+                lnh_peak = lnh_calc(a, rin, rmax, 1.0, cc, nn) - lnh_in;
+                pgas_over_rho_peak = gm1 / gam * (m::exp(lnh_peak) - 1.0);
+                rho_peak = m::pow(pgas_over_rho_peak, 1.0 / gm1) / rho_max;
                 break;
             case BSeedType::orszag_tang_a:
                 A0 = pin->GetReal("orszag_tang", "tscale");
@@ -350,8 +352,9 @@ TaskStatus SeedBFieldType(MeshBlockData<Real>* rc, ParameterInput* pin,
                     }
                 }
 
-                Real Aphi = seed_a<Seed>(Xmidplane, dxc, rho_av, rin, min_A, A0, arg1, rb, in_torus, rho_max,
-                                        potential_rho_pow, potential_falloff, potential_r_pow);
+                Real Aphi = seed_a<Seed>(Xmidplane, dxc, rho_av, rin, min_A, A0, arg1, rb,
+                    in_torus, rho_max, potential_rho_pow, potential_falloff,
+                    potential_r_pow);
 
                 if (tilt != 0.0) {
                     // This is *covariant* A_mu of an untilted disk
