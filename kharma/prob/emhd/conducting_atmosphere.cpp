@@ -97,11 +97,13 @@ TaskStatus InitializeAtmosphere(
     fp_rho = fopen(fode_rho, "r");
     fp_u = fopen(fode_u, "r");
     if (fp_r == NULL || fp_rho == NULL || fp_u == NULL) {
+        std::cout << std::endl; // flush messages in output buffer before we error
         throw std::runtime_error("Could not open conducting atmosphere solution!");
     }
     if (use_emhd) {
         fp_q = fopen(fode_q, "r");
         if (fp_q == NULL) {
+            std::cout << std::endl; // flush messages in output buffer before we error
             throw std::runtime_error("Could not open conducting atmosphere solution!");
         }
     }

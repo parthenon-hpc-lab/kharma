@@ -5,7 +5,7 @@
 export MPI_NUM_PROCS=${MPI_NUM_PROCS:-2}
 
 echo
-echo "Unfinished tests expected to fail: emhdshock, multizone"
+echo "Tests expected to fail: regrid, resize"
 echo
 
 for dir in */

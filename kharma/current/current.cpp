@@ -141,7 +141,7 @@ void Current::FillOutput(MeshBlock* pmb, ParameterInput* pin)
 
     // Get the duration of the last timestep from the "Globals" package
     // (see kharma.cpp)
-    Real dt_last = pmb->packages.Get("Globals")->Param<Real>("dt_last");
+    double dt_last = pmb->packages.Get("Globals")->Param<double>("dt_last");
 
     Current::CalculateCurrent(rc0.get(), rc1.get(), dt_last);
 }

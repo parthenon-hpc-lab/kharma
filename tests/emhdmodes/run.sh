@@ -13,7 +13,7 @@ conv_2d() {
     do
       # Four blocks
       half=$(( $res / 2 ))
-      $BASE/run.sh -i $BASE/pars/emhd/emhdmodes.par debug/verbose=1 debug/flag_verbose=2 \
+      $BASE/run.sh -d . -i $BASE/pars/emhd/emhdmodes.par debug/verbose=1 debug/flag_verbose=2 \
                       parthenon/mesh/nx1=$res parthenon/mesh/nx2=$res parthenon/mesh/nx3=1 \
                       parthenon/meshblock/nx1=$half parthenon/meshblock/nx2=$half parthenon/meshblock/nx3=1 \
                       $2 >log_${1}_${res}.txt 2>&1

@@ -13,7 +13,7 @@ noh_test() {
     for res in 512
     do
         eighth=$(($res / 8))
-        $KHARMADIR/run.sh -i $KHARMADIR/pars/electrons/hubble.par debug/verbose=1 parthenon/output0/dt=1000 \
+        $KHARMADIR/run.sh -d . -i $KHARMADIR/pars/electrons/hubble.par debug/verbose=1 parthenon/output0/dt=1000 \
                             parthenon/mesh/nx1=$res parthenon/meshblock/nx1=$eighth \
                             >log_hubble_${res}.txt 2>&1
 

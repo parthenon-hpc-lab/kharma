@@ -71,6 +71,7 @@ namespace m = std;
 #include <mesh/domain.hpp>
 
 // KHARMA DEFINITIONS
+#define DISABLE_GMG_CLEANUP 1
 
 // Parthenon stole our type names
 // Lots of work will need to be done for Real != double

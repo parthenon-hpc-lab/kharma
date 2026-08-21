@@ -59,8 +59,10 @@ std::shared_ptr<KHARMAPackage> Initialize(
  */
 Real EstimateTimestep(MeshData<Real>* md);
 
-// Internal version for the light phase speed crossing time of smallest zone
-Real EstimateRadiativeTimestep(MeshData<Real>* md);
+/**
+ * Set cmax/cmin to light (phase) speed in the coordinate system
+ */
+TaskStatus UpdateCtopLight(MeshData<Real>* md);
 
 /**
  * Return a tag per-block indicating whether to refine it

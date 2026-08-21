@@ -13,15 +13,21 @@ TEST_CASE("Kokkos is initialized for KHARMA unit tests", "[kokkos]")
 
 TEST_CASE("Kokkos parallel reductions run in unit tests", "[kokkos]")
 {
-    Kokkos::View<int *> values("values", 4);
+    Kokkos::View<int*> values("values", 4);
 
-    Kokkos::parallel_for(
-        "fill_smoke_view", 4, KOKKOS_LAMBDA(const int i) { values(i) = i + 1; });
+    Kokkos::parallel_for("fill_smoke_view", 4, KOKKOS_LAMBDA(const int i)
+        {
+            values(i) = i + 1;
+        });
 
     int sum = 0;
     Kokkos::parallel_reduce(
         "sum_smoke_view", 4,
-        KOKKOS_LAMBDA(const int i, int &local_sum) { local_sum += values(i); }, sum);
+        KOKKOS_LAMBDA(const int i, int& local_sum)
+        {
+            local_sum += values(i);
+        },
+        sum);
     Kokkos::fence();
 
     REQUIRE(sum == 10);

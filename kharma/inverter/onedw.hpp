@@ -96,7 +96,7 @@ KOKKOS_INLINE_FUNCTION int u_to_p<Type::onedw>(const GRCoordinates& G,
 {
     // TODO try inline floors in the old 1Dw?  Probably not relevant anymore
     // Catch negative density
-    // TODO(BSP) if we start to see this hit, fix it here by returning P=P_floors
+    // TODO(CEP) if we start to see this hit, fix it here by returning P=P_floors
     if (U(m_u.RHO, k, j, i) <= 0.) {
         return static_cast<int>(Status::neg_input);
     }
@@ -130,7 +130,7 @@ KOKKOS_INLINE_FUNCTION int u_to_p<Type::onedw>(const GRCoordinates& G,
     const Real QdB = dot(Bcon, Qcov);
     const Real Qdotn = dot(Qcon, ncov);
 
-    // TODO(BSP) check, test if this gets hit unlike above
+    // TODO(CEP) check, test if this gets hit unlike above
     // if (U(m_u.UU, k, j, i) <= gdet*(1e-8) + gdet*Bsq/2) {
 
     // }

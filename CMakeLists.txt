@@ -25,7 +25,7 @@ set(PARTHENON_LINT_DEFAULT OFF CACHE BOOL "KHARMA Override")
 # Attempt HDF5 compression, requires recent/standard HDF5. YMMV
 set(PARTHENON_DISABLE_HDF5_COMPRESSION OFF CACHE BOOL "KHARMA Override")
 # Don't build sparse (selectively-allocated) variable support
-set(PARTHENON_DISABLE_SPARSE ON CACHE BOOL "KHARMA Override")
+set(PARTHENON_DISABLE_SPARSE OFF CACHE BOOL "KHARMA Override")
 # Set to move MPI buffers to host; slower but less crashy
 # Favor setting this per-machine in machines/
 set(PARTHENON_ENABLE_HOST_COMM_BUFFERS OFF CACHE BOOL "KHARMA Override")
@@ -60,6 +60,12 @@ else()
   include_directories(SYSTEM ${MPI_INCLUDE_PATH})
 endif()
 
+set(HDF5_PREFER_PARALLEL (NOT KHARMA_DISABLE_MPI))
+find_package(HDF5 COMPONENTS C HL)
+if (NOT HDF5_FOUND)
+  message(FATAL_ERROR "HDF5 is required but couldn't be found.")
+endif()
+
 # Build Parthenon
 add_subdirectory(external/parthenon)
 include_directories(external/parthenon/src)
@@ -75,6 +81,7 @@ set(SINGULARITY_USE_SPINER ON CACHE BOOL "" FORCE)
 set(SINGULARITY_USE_SPINER_WITH_HDF5 ON CACHE BOOL "" FORCE)
 set(PARTHENON_DISABLE_HDF5 OFF CACHE BOOL "" FORCE)
 set(SINGULARITY_USE_STELLAR_COLLAPSE ON CACHE BOOL "" FORCE)
+set(SINGULARITY_FORCE_SUBMODULE_MODE ON CACHE BOOL "" FORCE)
 
 # Build Singularity-eos
 add_subdirectory(external/singularity-eos)

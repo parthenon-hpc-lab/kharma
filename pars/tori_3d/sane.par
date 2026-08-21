@@ -1,6 +1,7 @@
 # SANE ("Standard and Normal Evolution" i.e. not Magnetically Arrested).
 # Similar to "v5" library parameters w/adiabatic index 5/3,
 # and a larger disk (rin=10/rmax=20)
+# Updated for low floors and appropriate floor frame for Kastaun inverter
 
 
 <parthenon/job>
@@ -64,7 +65,9 @@ inner_x2 = reflecting
 outer_x2 = reflecting
 
 <floors>
-# Minimal floors, applied in the default Normal Observer frame
+# Minimal floors, leveraging inversion recovery.
+# Normal frame is now the only supported injection frame --
+# material added is so minimal that drag effects are negligible
 rho_min_geom = 1e-6
 u_min_geom   = 1e-8
 

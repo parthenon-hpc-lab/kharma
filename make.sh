@@ -41,9 +41,10 @@ SOURCE_DIR=$(dirname "$(readlink -f "$0")")
 # Parse options in a slightly less insane way than before
 # At least this checks for the full space-separated word as a flag
 args_array=( "$@" )
-option () {
+option() {
   printf '%s\0' "${args_array[@]}" | grep -Fxqz -- $1
 }
+export -f option
 
 # A machine config in .config overrides our defaults
 if [ -f $HOME/.config/kharma.sh ]; then
@@ -273,7 +274,7 @@ if option "hdf5" && option "clean" && ! option "dryrun"; then
 
   export CFLAGS="-fPIC $CFLAGS"
   CC=$HDF_CC sh configure -C $HDF_EXTRA --prefix=$SOURCE_DIR/external/hdf5 --enable-build-mode=production \
-  --disable-dependency-tracking --disable-hl --disable-tests --disable-tools --disable-shared --disable-deprecated-symbols > build-hdf5.log
+  --disable-dependency-tracking --disable-tests --disable-tools --disable-shared --disable-deprecated-symbols > build-hdf5.log
   sleep 1
 
   echo "Building HDF5 (probably 30s-2min)"
@@ -300,7 +301,8 @@ fi
 if option "clean"; then
 
   # Should do this manually when compiling on backend nodes!
-  if [ ! -f external/parthenon/CMakeLists.txt ]; then
+  if [ ! -f external/parthenon/CMakeLists.txt -o \
+       ! -f external/singularity-eos/CMakeLists.txt ]; then
     git submodule update --recursive --init
   fi
 

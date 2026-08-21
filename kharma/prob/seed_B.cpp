@@ -116,6 +116,7 @@ TaskStatus SeedBFieldType(MeshBlockData<Real>* rc, ParameterInput* pin,
 
     // Shortcut to field values for easy fields
     if constexpr (Seed == BSeedType::constant || Seed == BSeedType::monopole ||
+                  Seed == BSeedType::split_monopole_const ||
                   Seed == BSeedType::orszag_tang || Seed == BSeedType::wave ||
                   Seed == BSeedType::shock_tube) {
         // All custom B fields should set what they need of these.
@@ -211,7 +212,9 @@ TaskStatus SeedBFieldType(MeshBlockData<Real>* rc, ParameterInput* pin,
             case BSeedType::sane:
             case BSeedType::mad:
             case BSeedType::mad_quadrupole:
+            case BSeedType::mcaf:
             case BSeedType::r3s3:
+            case BSeedType::r3s3_min_rho:
             case BSeedType::r5s5:
             case BSeedType::gaussian:
                 // Torus parameters
@@ -415,7 +418,6 @@ TaskStatus SeedBField(MeshData<Real>* md, ParameterInput* pin)
         // I could make this a map or something,
         // but this is the only place I decode it.
         // TODO could also save it to a package...
-        // TODO accumulate TaskStatus properly?
         if (b_field_type == "constant") {
             status = SeedBFieldType<BSeedType::constant>(rc, pin);
         } else if (b_field_type == "monopole") {
@@ -429,14 +431,22 @@ TaskStatus SeedBField(MeshData<Real>* md, ParameterInput* pin)
             status = SeedBFieldType<BSeedType::mad>(rc, pin);
         } else if (b_field_type == "mad_quadrupole") {
             status = SeedBFieldType<BSeedType::mad_quadrupole>(rc, pin);
+        } else if (b_field_type == "mcaf") {
+            status = SeedBFieldType<BSeedType::mcaf>(rc, pin);
         } else if (b_field_type == "r3s3") {
             status = SeedBFieldType<BSeedType::r3s3>(rc, pin);
+        } else if (b_field_type == "r3s3_min_rho") {
+            status = SeedBFieldType<BSeedType::r3s3_min_rho>(rc, pin);
         } else if (b_field_type == "steep" || b_field_type == "r5s5") {
             status = SeedBFieldType<BSeedType::r5s5>(rc, pin);
         } else if (b_field_type == "gaussian") {
             status = SeedBFieldType<BSeedType::gaussian>(rc, pin);
         } else if (b_field_type == "bz_monopole") {
             status = SeedBFieldType<BSeedType::bz_monopole>(rc, pin);
+        } else if (b_field_type == "split_monopole") {
+            status = SeedBFieldType<BSeedType::split_monopole>(rc, pin);
+        } else if (b_field_type == "split_monopole_const") {
+            status = SeedBFieldType<BSeedType::split_monopole_const>(rc, pin);
         } else if (b_field_type == "vertical") {
             status = SeedBFieldType<BSeedType::vertical>(rc, pin);
         } else if (b_field_type == "r1s2") {

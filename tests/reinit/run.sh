@@ -4,12 +4,12 @@ set -euo pipefail
 # Bash script testing determinism of problem initialization and first steps
 
 # TODO figure out why I need the following.  Sure smells like a Parthenon bug
-export MPI_NUM_PROCS=1
+#export MPI_NUM_PROCS=1
 
 # Set paths
 KHARMADIR=../..
 
-$KHARMADIR/run.sh -i $KHARMADIR/pars/tori_3d/sane.par perturbation/u_jitter=0 driver/two_sync=true \
+$KHARMADIR/run.sh -d . -i $KHARMADIR/pars/tori_3d/sane.par perturbation/u_jitter=0 driver/two_sync=true \
                      parthenon/time/nlim=5 parthenon/job/archive_parameters=false \
                      parthenon/mesh/nx1=128 parthenon/mesh/nx2=64 parthenon/mesh/nx3=64 \
                      parthenon/meshblock/nx1=128 parthenon/meshblock/nx2=32 parthenon/meshblock/nx3=64 \
@@ -17,7 +17,7 @@ $KHARMADIR/run.sh -i $KHARMADIR/pars/tori_3d/sane.par perturbation/u_jitter=0 dr
 
 mv torus.out1.final.rhdf torus.out1.final.first.rhdf
 
-$KHARMADIR/run.sh -i $KHARMADIR/pars/tori_3d/sane.par perturbation/u_jitter=0 driver/two_sync=true \
+$KHARMADIR/run.sh -d . -i $KHARMADIR/pars/tori_3d/sane.par perturbation/u_jitter=0 driver/two_sync=true \
                      parthenon/time/nlim=5 parthenon/job/archive_parameters=false \
                      parthenon/mesh/nx1=128 parthenon/mesh/nx2=64 parthenon/mesh/nx3=64 \
                      parthenon/meshblock/nx1=128 parthenon/meshblock/nx2=32 parthenon/meshblock/nx3=64 \
