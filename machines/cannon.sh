@@ -6,11 +6,8 @@ if [[ $HOST == *"rc.fas.harvard.edu" ]]; then
       exit
     fi
 
-    # Use all of the compute node, we're impatient
+    # Use all of our usual compute job
     NPROC=48
-    #rm -rf /tmp/kharma
-    #cp -r $SOURCE_DIR /tmp/kharma
-    #cd /tmp/kharma
 
     HOST_ARCH=SKX
     EXTRA_FLAGS="-DPARTHENON_DISABLE_HDF5_COMPRESSION=ON" # -DPARTHENON_ENABLE_HOST_COMM_BUFFERS=ON"
