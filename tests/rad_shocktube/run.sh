@@ -21,7 +21,7 @@ rad_shocktube_test() {
                             parthenon/mesh/nx1=$res parthenon/meshblock/nx1=$res \
                             >log_radshock_test${test_num}_${res}.txt 2>&1
 
-        cp shock.out0.final.phdf shock_test${test_num}.out0.final.res${res}.phdf
+        cp dumps_kharma/shock.out0.final.phdf shock_test${test_num}.out0.final.res${res}.phdf
     done
 
     check_code=0

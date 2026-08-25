@@ -46,7 +46,6 @@ reconstruction = weno5
 
 <eos>
 type = IdealGas
-Gamma = 1.666667
 Cv = 1.0
 
 <b_field>

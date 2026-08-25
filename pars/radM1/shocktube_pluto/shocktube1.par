@@ -46,7 +46,6 @@ reconstruction = weno5
 
 <eos>
 type = IdealGas
-Gamma = 1.666667
 Cv = 1.0
 
 <b_field>
@@ -57,6 +56,7 @@ inner_x1 = outflow
 outer_x1 = outflow
 allow_inflow_inner_x1 = true
 allow_inflow_outer_x1 = true
+
 
 <shock>
 rhoL = 1.

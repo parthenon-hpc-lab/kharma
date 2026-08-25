@@ -552,7 +552,7 @@ KOKKOS_INLINE_FUNCTION int solve_radiation_4d(const GRCoordinates& G,
     int niter = 0;
     bool bad_guess = false;
 
-    while(err > src_rootfind_tol && niter < src_rootfind_maxiter){
+    do {
         Real P_rad_m[4];
         Real P_rad_p[4];
         Real U_mhd_m[4];
@@ -875,7 +875,7 @@ KOKKOS_INLINE_FUNCTION int solve_radiation_4d(const GRCoordinates& G,
         }
 
         niter++;
-    }
+    } while (err > src_rootfind_tol && niter < src_rootfind_maxiter);
 
 
     // isnan is no-ops for GPU code and for fast-math cpu code (default intel compiler). Careful, these isnans might not trigger.

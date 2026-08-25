@@ -41,7 +41,6 @@ reconstruction = mp5
 
 <eos>
 type = IdealGas
-Gamma = 1.6665866858620597
 Cv = 1.0
 
 <bondi_rad>
