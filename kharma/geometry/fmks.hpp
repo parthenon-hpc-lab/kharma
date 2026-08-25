@@ -33,7 +33,8 @@ using namespace parthenon::package::prelude;
 #include "geometry/spherical_kerr_schild.hpp"
 #include "phoebus_utils/linear_algebra.hpp"
 
-namespace Geometry {
+namespace Geometry
+{
 
 // Further Modified Kerr-Schild
 // first presented in McKinney and Gammie, ApJ 611:977-995, 2004,
@@ -47,10 +48,10 @@ using FMKSMeshBlock = Analytic<FMKS, IndexerMeshBlock>;
 using CFMKSMesh = CachedOverMesh<Analytic<FMKS, IndexerMesh>>;
 using CFMKSMeshBlock = CachedOverMeshBlock<Analytic<FMKS, IndexerMeshBlock>>;
 
-template <>
-void Initialize<FMKSMeshBlock>(ParameterInput *pin, StateDescriptor *geometry);
-template <>
-void Initialize<CFMKSMeshBlock>(ParameterInput *pin, StateDescriptor *geometry);
+template<>
+void Initialize<FMKSMeshBlock>(ParameterInput* pin, StateDescriptor* geometry);
+template<>
+void Initialize<CFMKSMeshBlock>(ParameterInput* pin, StateDescriptor* geometry);
 
 } // namespace Geometry
 

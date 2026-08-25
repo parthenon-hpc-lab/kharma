@@ -139,7 +139,8 @@ class VarMap {
         int8_t RHOADD, T0ADD, T1ADD, T2ADD, T3ADD;
         // Total struct size ~20 bytes, < 1 vector of 4 doubles
 
-        VarMap(parthenon::PackIndexMap& name_map, bool is_cons)
+        template<typename T>
+        VarMap(T& name_map, bool is_cons)
         {
             if (is_cons) {
                 // HD

@@ -27,11 +27,13 @@ using namespace parthenon::package::prelude;
 
 #include "geometry/sph2cart.hpp"
 
-namespace Geometry {
+namespace Geometry
+{
 
-template <>
-SphericalToCartesian GetTransformation<SphericalToCartesian>(StateDescriptor *pkg) {
-  return SphericalToCartesian();
+template<>
+SphericalToCartesian GetTransformation<SphericalToCartesian>(StateDescriptor* pkg)
+{
+    return SphericalToCartesian();
 }
 
 } // namespace Geometry

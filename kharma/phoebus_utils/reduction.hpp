@@ -14,35 +14,39 @@
 #ifndef PHOEBUS_UTILS_REDUCTION_HPP_
 #define PHOEBUS_UTILS_REDUCTION_HPP_
 
-namespace reduction {
+namespace reduction
+{
 
 #ifdef MPI_PARALLEL
 
 #include <mpi.h>
 
-Real inline Max(const Real &x) {
-  Real xmax;
-  MPI_Allreduce(&x, &xmax, 1, MPI_DOUBLE, MPI_MAX, MPI_COMM_WORLD);
-  return xmax;
+Real inline Max(const Real& x)
+{
+    Real xmax;
+    MPI_Allreduce(&x, &xmax, 1, MPI_DOUBLE, MPI_MAX, MPI_COMM_WORLD);
+    return xmax;
 }
 
-Real inline Min(const Real &x) {
-  Real xmin;
-  MPI_Allreduce(&x, &xmin, 1, MPI_DOUBLE, MPI_MIN, MPI_COMM_WORLD);
-  return xmin;
+Real inline Min(const Real& x)
+{
+    Real xmin;
+    MPI_Allreduce(&x, &xmin, 1, MPI_DOUBLE, MPI_MIN, MPI_COMM_WORLD);
+    return xmin;
 }
 
-Real inline Sum(const Real &x) {
-  Real xsum;
-  MPI_Allreduce(&x, &xsum, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
-  return xsum;
+Real inline Sum(const Real& x)
+{
+    Real xsum;
+    MPI_Allreduce(&x, &xsum, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+    return xsum;
 }
 
 #else
 
-Real inline Max(const Real &x) { return x; }
-Real inline Min(const Real &x) { return x; }
-Real inline Sum(const Real &x) { return x; }
+Real inline Max(const Real& x) { return x; }
+Real inline Min(const Real& x) { return x; }
+Real inline Sum(const Real& x) { return x; }
 
 #endif // MPI_PARALLEL
 

@@ -27,76 +27,87 @@ using namespace parthenon::package::prelude;
 // FLRW
 #include "geometry/flrw.hpp"
 
-namespace Geometry {
+namespace Geometry
+{
 
-template <>
-void Initialize<FLRWMeshBlock>(ParameterInput *pin, StateDescriptor *geometry) {
-  Params &params = geometry->AllParams();
+template<>
+void Initialize<FLRWMeshBlock>(ParameterInput* pin, StateDescriptor* geometry)
+{
+    Params& params = geometry->AllParams();
 
-  Real a0 = pin->GetOrAddReal("coordinates", "a0", 1);
-  PARTHENON_REQUIRE_THROWS(a0 > 0, "Scale factor must not be singular");
-  params.Add("a0", a0);
+    Real a0 = pin->GetOrAddReal("coordinates", "a0", 1);
+    PARTHENON_REQUIRE_THROWS(a0 > 0, "Scale factor must not be singular");
+    params.Add("a0", a0);
 
-  Real dadt = pin->GetOrAddReal("coordinates", "dadt", 1);
-  params.Add("dadt", dadt);
+    Real dadt = pin->GetOrAddReal("coordinates", "dadt", 1);
+    params.Add("dadt", dadt);
 
-  Real t = 0;
-  params.Add("time", t, true); // Will need updates from simulation
+    Real t = 0;
+    params.Add("time", t, true); // Will need updates from simulation
 
-  // Registers with the caching machinery that the metric evolves in time
-  bool time_dependent = true;
-  params.Add("time_dependent", time_dependent);
+    // Registers with the caching machinery that the metric evolves in time
+    bool time_dependent = true;
+    params.Add("time_dependent", time_dependent);
 }
 
-template <>
-void Initialize<CFLRWMeshBlock>(ParameterInput *pin, StateDescriptor *geometry) {
-  InitializeCachedCoordinateSystem<FLRWMeshBlock>(pin, geometry);
+template<>
+void Initialize<CFLRWMeshBlock>(ParameterInput* pin, StateDescriptor* geometry)
+{
+    InitializeCachedCoordinateSystem<FLRWMeshBlock>(pin, geometry);
 }
 
-template <>
-FLRWMeshBlock GetCoordinateSystem<FLRWMeshBlock>(MeshBlockData<Real> *rc) {
-  auto &pkg = rc->GetMeshPointer()->packages.Get("geometry");
-  auto indexer = GetIndexer(rc);
-  Real a0 = pkg->Param<Real>("a0");
-  Real dadt = pkg->Param<Real>("dadt");
-  Real t = pkg->Param<Real>("time");
-  return FLRWMeshBlock(t, indexer, a0, dadt);
+template<>
+FLRWMeshBlock GetCoordinateSystem<FLRWMeshBlock>(MeshBlockData<Real>* rc)
+{
+    auto& pkg = rc->GetMeshPointer()->packages.Get("geometry");
+    auto indexer = GetIndexer(rc);
+    Real a0 = pkg->Param<Real>("a0");
+    Real dadt = pkg->Param<Real>("dadt");
+    Real t = pkg->Param<Real>("time");
+    return FLRWMeshBlock(t, indexer, a0, dadt);
 }
 
-template <>
-FLRWMesh GetCoordinateSystem<FLRWMesh>(MeshData<Real> *rc) {
-  auto &pkg = rc->GetMeshPointer()->packages.Get("geometry");
-  auto indexer = GetIndexer(rc);
-  Real a0 = pkg->Param<Real>("a0");
-  Real dadt = pkg->Param<Real>("dadt");
-  Real t = pkg->Param<Real>("time");
-  return FLRWMesh(t, indexer, a0, dadt);
+template<>
+FLRWMesh GetCoordinateSystem<FLRWMesh>(MeshData<Real>* rc)
+{
+    auto& pkg = rc->GetMeshPointer()->packages.Get("geometry");
+    auto indexer = GetIndexer(rc);
+    Real a0 = pkg->Param<Real>("a0");
+    Real dadt = pkg->Param<Real>("dadt");
+    Real t = pkg->Param<Real>("time");
+    return FLRWMesh(t, indexer, a0, dadt);
 }
 
-template <>
-CFLRWMeshBlock GetCoordinateSystem<CFLRWMeshBlock>(MeshBlockData<Real> *rc) {
-  return GetCachedCoordinateSystem<FLRWMeshBlock>(rc);
+template<>
+CFLRWMeshBlock GetCoordinateSystem<CFLRWMeshBlock>(MeshBlockData<Real>* rc)
+{
+    return GetCachedCoordinateSystem<FLRWMeshBlock>(rc);
 }
 
-template <>
-CFLRWMesh GetCoordinateSystem<CFLRWMesh>(MeshData<Real> *rc) {
-  return GetCachedCoordinateSystem<FLRWMesh>(rc);
+template<>
+CFLRWMesh GetCoordinateSystem<CFLRWMesh>(MeshData<Real>* rc)
+{
+    return GetCachedCoordinateSystem<FLRWMesh>(rc);
 }
 
-template <>
-void SetGeometry<FLRWMeshBlock>(MeshBlockData<Real> *rc) {}
+template<>
+void SetGeometry<FLRWMeshBlock>(MeshBlockData<Real>* rc)
+{}
 
-template <>
-void SetGeometry<FLRWMesh>(MeshData<Real> *rc) {}
+template<>
+void SetGeometry<FLRWMesh>(MeshData<Real>* rc)
+{}
 
-template <>
-void SetGeometry<CFLRWMeshBlock>(MeshBlockData<Real> *rc) {
-  SetCachedCoordinateSystem<FLRWMeshBlock>(rc);
+template<>
+void SetGeometry<CFLRWMeshBlock>(MeshBlockData<Real>* rc)
+{
+    SetCachedCoordinateSystem<FLRWMeshBlock>(rc);
 }
 
-template <>
-void SetGeometry<CFLRWMesh>(MeshData<Real> *rc) {
-  SetCachedCoordinateSystem<FLRWMesh>(rc);
+template<>
+void SetGeometry<CFLRWMesh>(MeshData<Real>* rc)
+{
+    SetCachedCoordinateSystem<FLRWMesh>(rc);
 }
 
 } // namespace Geometry

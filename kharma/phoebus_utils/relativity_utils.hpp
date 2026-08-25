@@ -24,7 +24,8 @@
 #include "geometry/geometry_utils.hpp"
 #include "phoebus_utils/robust.hpp"
 
-namespace phoebus {
+namespace phoebus
+{
 
 /*
  * Calculate the normal observer Lorentz factor from primitive three-velocity
@@ -34,12 +35,12 @@ namespace phoebus {
  *
  * RETURN - Lorentz factor in normal observer frame
  */
-KOKKOS_INLINE_FUNCTION Real
-GetLorentzFactor(const Real vcon[Geometry::NDSPACE],
-                 const Real gammacov[Geometry::NDSPACE][Geometry::NDSPACE]) {
-  Real vsq = 0.;
-  SPACELOOP2(ii, jj) { vsq += gammacov[ii][jj] * vcon[ii] * vcon[jj]; }
-  return std::sqrt(1. + vsq);
+KOKKOS_INLINE_FUNCTION Real GetLorentzFactor(const Real vcon[Geometry::NDSPACE],
+    const Real gammacov[Geometry::NDSPACE][Geometry::NDSPACE])
+{
+    Real vsq = 0.;
+    SPACELOOP2(ii, jj) { vsq += gammacov[ii][jj] * vcon[ii] * vcon[jj]; }
+    return std::sqrt(1. + vsq);
 }
 
 /*
@@ -50,12 +51,12 @@ GetLorentzFactor(const Real vcon[Geometry::NDSPACE],
  *
  * RETURN - Lorentz factor in normal observer frame
  */
-KOKKOS_INLINE_FUNCTION Real
-GetLorentzFactor(const Real vcon[Geometry::NDSPACE],
-                 const Real gcov[Geometry::NDFULL][Geometry::NDFULL]) {
-  Real vsq = 0.;
-  SPACELOOP2(ii, jj) { vsq += gcov[ii + 1][jj + 1] * vcon[ii] * vcon[jj]; }
-  return std::sqrt(1. + vsq);
+KOKKOS_INLINE_FUNCTION Real GetLorentzFactor(const Real vcon[Geometry::NDSPACE],
+    const Real gcov[Geometry::NDFULL][Geometry::NDFULL])
+{
+    Real vsq = 0.;
+    SPACELOOP2(ii, jj) { vsq += gcov[ii + 1][jj + 1] * vcon[ii] * vcon[jj]; }
+    return std::sqrt(1. + vsq);
 }
 
 /*
@@ -70,21 +71,21 @@ GetLorentzFactor(const Real vcon[Geometry::NDSPACE],
  *
  * RETURN - Lorentz factor in normal observer frame
  */
-template <typename CoordinateSystem_t>
+template<typename CoordinateSystem_t>
 KOKKOS_INLINE_FUNCTION Real GetLorentzFactor(const Real vcon[Geometry::NDSPACE],
-                                             const CoordinateSystem_t &system,
-                                             CellLocation loc, const int b, const int k,
-                                             const int j, const int i) {
-  Real gamma[Geometry::NDSPACE][Geometry::NDSPACE];
-  system.Metric(loc, b, k, j, i, gamma);
-  return GetLorentzFactor(vcon, gamma);
+    const CoordinateSystem_t& system, CellLocation loc, const int b, const int k,
+    const int j, const int i)
+{
+    Real gamma[Geometry::NDSPACE][Geometry::NDSPACE];
+    system.Metric(loc, b, k, j, i, gamma);
+    return GetLorentzFactor(vcon, gamma);
 }
-template <typename CoordinateSystem_t>
+template<typename CoordinateSystem_t>
 KOKKOS_INLINE_FUNCTION Real GetLorentzFactor(const Real vcon[Geometry::NDSPACE],
-                                             const CoordinateSystem_t &system,
-                                             CellLocation loc, const int k, const int j,
-                                             const int i) {
-  return GetLorentzFactor(vcon, system, loc, 0, k, j, i);
+    const CoordinateSystem_t& system, CellLocation loc, const int k, const int j,
+    const int i)
+{
+    return GetLorentzFactor(vcon, system, loc, 0, k, j, i);
 }
 
 /*
@@ -98,26 +99,27 @@ KOKKOS_INLINE_FUNCTION Real GetLorentzFactor(const Real vcon[Geometry::NDSPACE],
  * PARAM[IN] - i - X1 index of meshblock cell
  * PARAM[OUT] - u - Coordinate frame contravariant four-velocity
  */
-template <typename CoordinateSystem_t>
-KOKKOS_INLINE_FUNCTION void
-GetFourVelocity(const Real v[3], const CoordinateSystem_t &system, CellLocation loc,
-                const int b, const int k, const int j, const int i,
-                Real u[Geometry::NDFULL]) {
-  Real beta[Geometry::NDSPACE];
-  Real W = GetLorentzFactor(v, system, loc, b, k, j, i);
-  Real alpha = system.Lapse(loc, b, k, j, i);
-  system.ContravariantShift(loc, b, k, j, i, beta);
-  u[0] = robust::ratio(W, std::abs(alpha));
-  for (int l = 1; l < Geometry::NDFULL; ++l) {
-    u[l] = v[l - 1] - u[0] * beta[l - 1];
-  }
+template<typename CoordinateSystem_t>
+KOKKOS_INLINE_FUNCTION void GetFourVelocity(const Real v[3],
+    const CoordinateSystem_t& system, CellLocation loc, const int b, const int k,
+    const int j, const int i, Real u[Geometry::NDFULL])
+{
+    Real beta[Geometry::NDSPACE];
+    Real W = GetLorentzFactor(v, system, loc, b, k, j, i);
+    Real alpha = system.Lapse(loc, b, k, j, i);
+    system.ContravariantShift(loc, b, k, j, i, beta);
+    u[0] = robust::ratio(W, std::abs(alpha));
+    for (int l = 1; l < Geometry::NDFULL; ++l) {
+        u[l] = v[l - 1] - u[0] * beta[l - 1];
+    }
 }
 
-template <typename CoordinateSystem_t>
-KOKKOS_INLINE_FUNCTION void
-GetFourVelocity(const Real v[3], const CoordinateSystem_t &system, CellLocation loc,
-                const int k, const int j, const int i, Real u[Geometry::NDFULL]) {
-  GetFourVelocity(v, system, loc, 0, k, j, i, u);
+template<typename CoordinateSystem_t>
+KOKKOS_INLINE_FUNCTION void GetFourVelocity(const Real v[3],
+    const CoordinateSystem_t& system, CellLocation loc, const int k, const int j,
+    const int i, Real u[Geometry::NDFULL])
+{
+    GetFourVelocity(v, system, loc, 0, k, j, i, u);
 }
 
 /*
@@ -130,14 +132,16 @@ GetFourVelocity(const Real v[3], const CoordinateSystem_t &system, CellLocation 
  */
 KOKKOS_INLINE_FUNCTION Real GetMagneticFieldSquared(
     const Real gcov[Geometry::NDSPACE][Geometry::NDSPACE],
-    const Real vp[Geometry::NDSPACE], const Real Bp[Geometry::NDSPACE], const Real W) {
-  Real Bsq = 0;
-  Real Bdotv = 0;
-  SPACELOOP2(m, n) {
-    Bdotv += gcov[m][n] * robust::ratio(vp[m], W) * Bp[n];
-    Bsq += gcov[m][n] * Bp[m] * Bp[n];
-  }
-  return robust::ratio(Bsq, W * W) + Bdotv * Bdotv;
+    const Real vp[Geometry::NDSPACE], const Real Bp[Geometry::NDSPACE], const Real W)
+{
+    Real Bsq = 0;
+    Real Bdotv = 0;
+    SPACELOOP2(m, n)
+    {
+        Bdotv += gcov[m][n] * robust::ratio(vp[m], W) * Bp[n];
+        Bsq += gcov[m][n] * Bp[m] * Bp[n];
+    }
+    return robust::ratio(Bsq, W * W) + Bdotv * Bdotv;
 }
 
 /*
@@ -150,17 +154,17 @@ KOKKOS_INLINE_FUNCTION Real GetMagneticFieldSquared(
  * PARAM[IN] - ivlo  The index in the pack of the primitive velocicty
  * PARAM[IN] - iblo  The index in the pack of the primitive magnetic field
  */
-template <typename Pack, typename Geometry>
+template<typename Pack, typename Geometry>
 KOKKOS_INLINE_FUNCTION Real GetMagneticFieldSquared(const CellLocation loc, const int b,
-                                                    const int k, const int j, const int i,
-                                                    Geometry &geom, Pack &v,
-                                                    const int ivlo, const int iblo) {
-  Real gcov[3][3];
-  geom.Metric(loc, b, k, j, i, gcov);
-  Real vp[] = {v(b, ivlo, k, j, i), v(b, ivlo + 1, k, j, i), v(b, ivlo + 2, k, j, i)};
-  Real Bp[] = {v(b, iblo, k, j, i), v(b, iblo + 1, k, j, i), v(b, iblo + 2, k, j, i)};
-  const Real W = GetLorentzFactor(vp, gcov);
-  return GetMagneticFieldSquared(gcov, vp, Bp, W);
+    const int k, const int j, const int i, Geometry& geom, Pack& v, const int ivlo,
+    const int iblo)
+{
+    Real gcov[3][3];
+    geom.Metric(loc, b, k, j, i, gcov);
+    Real vp[] = {v(b, ivlo, k, j, i), v(b, ivlo + 1, k, j, i), v(b, ivlo + 2, k, j, i)};
+    Real Bp[] = {v(b, iblo, k, j, i), v(b, iblo + 1, k, j, i), v(b, iblo + 2, k, j, i)};
+    const Real W = GetLorentzFactor(vp, gcov);
+    return GetMagneticFieldSquared(gcov, vp, Bp, W);
 }
 
 /*
@@ -173,12 +177,11 @@ KOKKOS_INLINE_FUNCTION Real GetMagneticFieldSquared(const CellLocation loc, cons
  * PARAM[IN] - ivlo  The index in the pack of the primitive velocicty
  * PARAM[IN] - iblo  The index in the pack of the primitive magnetic field
  */
-template <typename Pack, typename Geometry>
+template<typename Pack, typename Geometry>
 KOKKOS_INLINE_FUNCTION Real GetMagneticFieldSquared(const CellLocation loc, const int k,
-                                                    const int j, const int i,
-                                                    Geometry &geom, Pack &v,
-                                                    const int ivlo, const int iblo) {
-  return GetMagneticFieldSquared(loc, 0, k, j, i, geom, v, ivlo, iblo);
+    const int j, const int i, Geometry& geom, Pack& v, const int ivlo, const int iblo)
+{
+    return GetMagneticFieldSquared(loc, 0, k, j, i, geom, v, ivlo, iblo);
 }
 
 } // namespace phoebus

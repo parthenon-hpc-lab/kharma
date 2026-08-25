@@ -29,47 +29,56 @@ using namespace parthenon::package::prelude;
 
 #include "geometry/spherical_minkowski.hpp"
 
-namespace Geometry {
+namespace Geometry
+{
 
-template <>
-SphMinkowskiMeshBlock
-GetCoordinateSystem<SphMinkowskiMeshBlock>(MeshBlockData<Real> *rc) {
-  auto indexer = GetIndexer(rc);
-  return SphMinkowskiMeshBlock(indexer);
-}
-
-template <>
-void SetGeometry<SphMinkowskiMeshBlock>(MeshBlockData<Real> *rc) {}
-
-template <>
-SphMinkowskiMesh GetCoordinateSystem<SphMinkowskiMesh>(MeshData<Real> *rc) {
-  auto indexer = GetIndexer(rc);
-  return SphMinkowskiMesh(indexer);
+template<>
+SphMinkowskiMeshBlock GetCoordinateSystem<SphMinkowskiMeshBlock>(MeshBlockData<Real>* rc)
+{
+    auto indexer = GetIndexer(rc);
+    return SphMinkowskiMeshBlock(indexer);
 }
 
-template <>
-void SetGeometry<SphMinkowskiMesh>(MeshData<Real> *rc) {}
+template<>
+void SetGeometry<SphMinkowskiMeshBlock>(MeshBlockData<Real>* rc)
+{}
 
-template <>
-void Initialize<CSphMinkowskiMeshBlock>(ParameterInput *pin, StateDescriptor *geometry) {
-  InitializeCachedCoordinateSystem<SphMinkowskiMeshBlock>(pin, geometry);
+template<>
+SphMinkowskiMesh GetCoordinateSystem<SphMinkowskiMesh>(MeshData<Real>* rc)
+{
+    auto indexer = GetIndexer(rc);
+    return SphMinkowskiMesh(indexer);
 }
-template <>
-CSphMinkowskiMeshBlock
-GetCoordinateSystem<CSphMinkowskiMeshBlock>(MeshBlockData<Real> *rc) {
-  return GetCachedCoordinateSystem<SphMinkowskiMeshBlock>(rc);
+
+template<>
+void SetGeometry<SphMinkowskiMesh>(MeshData<Real>* rc)
+{}
+
+template<>
+void Initialize<CSphMinkowskiMeshBlock>(ParameterInput* pin, StateDescriptor* geometry)
+{
+    InitializeCachedCoordinateSystem<SphMinkowskiMeshBlock>(pin, geometry);
 }
-template <>
-CSphMinkowskiMesh GetCoordinateSystem<CSphMinkowskiMesh>(MeshData<Real> *rc) {
-  return GetCachedCoordinateSystem<SphMinkowskiMesh>(rc);
+template<>
+CSphMinkowskiMeshBlock GetCoordinateSystem<CSphMinkowskiMeshBlock>(
+    MeshBlockData<Real>* rc)
+{
+    return GetCachedCoordinateSystem<SphMinkowskiMeshBlock>(rc);
 }
-template <>
-void SetGeometry<CSphMinkowskiMeshBlock>(MeshBlockData<Real> *rc) {
-  SetCachedCoordinateSystem<SphMinkowskiMeshBlock>(rc);
+template<>
+CSphMinkowskiMesh GetCoordinateSystem<CSphMinkowskiMesh>(MeshData<Real>* rc)
+{
+    return GetCachedCoordinateSystem<SphMinkowskiMesh>(rc);
 }
-template <>
-void SetGeometry<CSphMinkowskiMesh>(MeshData<Real> *rc) {
-  SetCachedCoordinateSystem<SphMinkowskiMesh>(rc);
+template<>
+void SetGeometry<CSphMinkowskiMeshBlock>(MeshBlockData<Real>* rc)
+{
+    SetCachedCoordinateSystem<SphMinkowskiMeshBlock>(rc);
+}
+template<>
+void SetGeometry<CSphMinkowskiMesh>(MeshData<Real>* rc)
+{
+    SetCachedCoordinateSystem<SphMinkowskiMesh>(rc);
 }
 
 } // namespace Geometry

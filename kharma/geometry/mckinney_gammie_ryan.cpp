@@ -27,21 +27,23 @@ using namespace parthenon::package::prelude;
 
 #include "geometry/mckinney_gammie_ryan.hpp"
 
-namespace Geometry {
+namespace Geometry
+{
 
-template <>
-McKinneyGammieRyan GetTransformation<McKinneyGammieRyan>(StateDescriptor *pkg) {
-  bool derefine_poles = pkg->Param<bool>("derefine_poles");
-  Real h = pkg->Param<Real>("h");
-  Real xt = pkg->Param<Real>("xt");
-  Real alpha = pkg->Param<Real>("alpha");
-  Real x0 = pkg->Param<Real>("x0");
-  Real smooth = pkg->Param<Real>("smooth");
-  Real hexp_br = pkg->Param<Real>("hexp_br");
-  Real hexp_nsq = pkg->Param<Real>("hexp_nsq");
-  Real hexp_csq = pkg->Param<Real>("hexp_csq");
-  return McKinneyGammieRyan(derefine_poles, h, xt, alpha, x0, smooth, hexp_br, hexp_nsq,
-                            hexp_csq);
+template<>
+McKinneyGammieRyan GetTransformation<McKinneyGammieRyan>(StateDescriptor* pkg)
+{
+    bool derefine_poles = pkg->Param<bool>("derefine_poles");
+    Real h = pkg->Param<Real>("h");
+    Real xt = pkg->Param<Real>("xt");
+    Real alpha = pkg->Param<Real>("alpha");
+    Real x0 = pkg->Param<Real>("x0");
+    Real smooth = pkg->Param<Real>("smooth");
+    Real hexp_br = pkg->Param<Real>("hexp_br");
+    Real hexp_nsq = pkg->Param<Real>("hexp_nsq");
+    Real hexp_csq = pkg->Param<Real>("hexp_csq");
+    return McKinneyGammieRyan(
+        derefine_poles, h, xt, alpha, x0, smooth, hexp_br, hexp_nsq, hexp_csq);
 }
 
 } // namespace Geometry

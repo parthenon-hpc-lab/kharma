@@ -20,50 +20,57 @@
 #include <parthenon/package.hpp>
 #include <utils/error_checking.hpp>
 
-namespace Coordinates {
+namespace Coordinates
+{
 
 using namespace parthenon::package::prelude;
 using parthenon::Coordinates_t;
 
-template <int dir>
-KOKKOS_FORCEINLINE_FUNCTION Real GetXv(const int i, const Coordinates_t &coord);
-template <>
-KOKKOS_FORCEINLINE_FUNCTION Real GetXv<X1DIR>(const int i, const Coordinates_t &coord) {
-  return coord.Xc<1>(i);
+template<int dir>
+KOKKOS_FORCEINLINE_FUNCTION Real GetXv(const int i, const Coordinates_t& coord);
+template<>
+KOKKOS_FORCEINLINE_FUNCTION Real GetXv<X1DIR>(const int i, const Coordinates_t& coord)
+{
+    return coord.Xc<1>(i);
 }
-template <>
-KOKKOS_FORCEINLINE_FUNCTION Real GetXv<X2DIR>(const int i, const Coordinates_t &coord) {
-  return coord.Xc<2>(i);
+template<>
+KOKKOS_FORCEINLINE_FUNCTION Real GetXv<X2DIR>(const int i, const Coordinates_t& coord)
+{
+    return coord.Xc<2>(i);
 }
-template <>
-KOKKOS_FORCEINLINE_FUNCTION Real GetXv<X3DIR>(const int i, const Coordinates_t &coord) {
-  return coord.Xc<3>(i);
+template<>
+KOKKOS_FORCEINLINE_FUNCTION Real GetXv<X3DIR>(const int i, const Coordinates_t& coord)
+{
+    return coord.Xc<3>(i);
 }
-KOKKOS_FORCEINLINE_FUNCTION Real GetXv(const int i, const int dir,
-                                       const Coordinates_t &coord) {
-  switch (dir) {
-  case X1DIR:
-    return GetXv<X1DIR>(i, coord);
-  case X2DIR:
-    return GetXv<X2DIR>(i, coord);
-  case X3DIR:
-    return GetXv<X3DIR>(i, coord);
-  default:
-    PARTHENON_FAIL("Invalid coordinate direction");
-  }
+KOKKOS_FORCEINLINE_FUNCTION Real GetXv(
+    const int i, const int dir, const Coordinates_t& coord)
+{
+    switch (dir) {
+        case X1DIR:
+            return GetXv<X1DIR>(i, coord);
+        case X2DIR:
+            return GetXv<X2DIR>(i, coord);
+        case X3DIR:
+            return GetXv<X3DIR>(i, coord);
+        default:
+            PARTHENON_FAIL("Invalid coordinate direction");
+    }
 }
 
 } // namespace Coordinates
 
-namespace PhoebusUtils {
-inline Real GetRegionVolume(const parthenon::RegionSize &reg) {
-  using parthenon::CoordinateDirection;
-  Real vol = 1;
-  for (int d = X1DIR; d <= X3DIR; ++d) {
-    CoordinateDirection dir = static_cast<CoordinateDirection>(d);
-    vol *= (reg.xmax(dir) - reg.xmin(dir));
-  }
-  return vol;
+namespace PhoebusUtils
+{
+inline Real GetRegionVolume(const parthenon::RegionSize& reg)
+{
+    using parthenon::CoordinateDirection;
+    Real vol = 1;
+    for (int d = X1DIR; d <= X3DIR; ++d) {
+        CoordinateDirection dir = static_cast<CoordinateDirection>(d);
+        vol *= (reg.xmax(dir) - reg.xmin(dir));
+    }
+    return vol;
 }
 } // namespace PhoebusUtils
 

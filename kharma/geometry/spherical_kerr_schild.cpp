@@ -29,55 +29,65 @@ using namespace parthenon::package::prelude;
 
 #include "geometry/spherical_kerr_schild.hpp"
 
-namespace Geometry {
+namespace Geometry
+{
 
-template <>
-void Initialize<SphericalKSMeshBlock>(ParameterInput *pin, StateDescriptor *geometry) {
-  Params &params = geometry->AllParams();
-  Real a = pin->GetOrAddReal("geometry", "a", 0);
-  params.Add("a", a);
-}
-
-template <>
-void SetGeometry<SphericalKSMeshBlock>(MeshBlockData<Real> *rc) {}
-template <>
-void SetGeometry<SphericalKSMesh>(MeshData<Real> *rc) {}
-
-template <>
-SphericalKSMeshBlock GetCoordinateSystem<SphericalKSMeshBlock>(MeshBlockData<Real> *rc) {
-  auto &pkg = rc->GetMeshPointer()->packages.Get("geometry");
-  auto indexer = GetIndexer(rc);
-  Real a = pkg->Param<Real>("a");
-  return SphericalKSMeshBlock(indexer, a);
-}
-template <>
-SphericalKSMesh GetCoordinateSystem<SphericalKSMesh>(MeshData<Real> *rc) {
-  auto &pkg = rc->GetMeshPointer()->packages.Get("geometry");
-  auto indexer = GetIndexer(rc);
-  Real a = pkg->Param<Real>("a");
-  return SphericalKSMesh(indexer, a);
+template<>
+void Initialize<SphericalKSMeshBlock>(ParameterInput* pin, StateDescriptor* geometry)
+{
+    Params& params = geometry->AllParams();
+    Real a = pin->GetOrAddReal("geometry", "a", 0);
+    params.Add("a", a);
 }
 
-template <>
-void Initialize<CSphericalKSMeshBlock>(ParameterInput *pin, StateDescriptor *geometry) {
-  InitializeCachedCoordinateSystem<SphericalKSMeshBlock>(pin, geometry);
+template<>
+void SetGeometry<SphericalKSMeshBlock>(MeshBlockData<Real>* rc)
+{}
+template<>
+void SetGeometry<SphericalKSMesh>(MeshData<Real>* rc)
+{}
+
+template<>
+SphericalKSMeshBlock GetCoordinateSystem<SphericalKSMeshBlock>(MeshBlockData<Real>* rc)
+{
+    auto& pkg = rc->GetMeshPointer()->packages.Get("geometry");
+    auto indexer = GetIndexer(rc);
+    Real a = pkg->Param<Real>("a");
+    return SphericalKSMeshBlock(indexer, a);
 }
-template <>
-CSphericalKSMeshBlock
-GetCoordinateSystem<CSphericalKSMeshBlock>(MeshBlockData<Real> *rc) {
-  return GetCachedCoordinateSystem<SphericalKSMeshBlock>(rc);
+template<>
+SphericalKSMesh GetCoordinateSystem<SphericalKSMesh>(MeshData<Real>* rc)
+{
+    auto& pkg = rc->GetMeshPointer()->packages.Get("geometry");
+    auto indexer = GetIndexer(rc);
+    Real a = pkg->Param<Real>("a");
+    return SphericalKSMesh(indexer, a);
 }
-template <>
-CSphericalKSMesh GetCoordinateSystem<CSphericalKSMesh>(MeshData<Real> *rc) {
-  return GetCachedCoordinateSystem<SphericalKSMesh>(rc);
+
+template<>
+void Initialize<CSphericalKSMeshBlock>(ParameterInput* pin, StateDescriptor* geometry)
+{
+    InitializeCachedCoordinateSystem<SphericalKSMeshBlock>(pin, geometry);
 }
-template <>
-void SetGeometry<CSphericalKSMeshBlock>(MeshBlockData<Real> *rc) {
-  SetCachedCoordinateSystem<SphericalKSMeshBlock>(rc);
+template<>
+CSphericalKSMeshBlock GetCoordinateSystem<CSphericalKSMeshBlock>(MeshBlockData<Real>* rc)
+{
+    return GetCachedCoordinateSystem<SphericalKSMeshBlock>(rc);
 }
-template <>
-void SetGeometry<CSphericalKSMesh>(MeshData<Real> *rc) {
-  SetCachedCoordinateSystem<SphericalKSMesh>(rc);
+template<>
+CSphericalKSMesh GetCoordinateSystem<CSphericalKSMesh>(MeshData<Real>* rc)
+{
+    return GetCachedCoordinateSystem<SphericalKSMesh>(rc);
+}
+template<>
+void SetGeometry<CSphericalKSMeshBlock>(MeshBlockData<Real>* rc)
+{
+    SetCachedCoordinateSystem<SphericalKSMeshBlock>(rc);
+}
+template<>
+void SetGeometry<CSphericalKSMesh>(MeshData<Real>* rc)
+{
+    SetCachedCoordinateSystem<SphericalKSMesh>(rc);
 }
 
 } // namespace Geometry
