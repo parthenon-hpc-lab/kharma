@@ -1,0 +1,103 @@
+# Turner & Stone (2001)(Pluto's section 4.3): Equilibrium test.
+#
+# Every cell independently reproduces the single-cell test.
+#
+# Units chosen so rho_code = 1 exactly:
+# kappa_rho = kappa_cgs * rho_cgs * length_cgs = 0.4 * 1e-7 * 1.0 = 4e-8
+# sigma_rad = (sigma_SB/c) * temperature_cgs^4 / energy_density_scale ~= 2.958e23
+
+<parthenon/job>
+problem_id = thermal_equilibrium
+
+<parthenon/mesh>
+nx1 = 4
+nx2 = 4
+nx3 = 1
+x1min = 0.0
+x1max = 1.0
+x2min = 0.0
+x2max = 1.0
+x3min = 0.0
+x3max = 1.0
+
+<parthenon/meshblock>
+nx1 = 4
+nx2 = 4
+nx3 = 1
+
+<coordinates>
+base = cartesian_minkowski
+transform = null
+
+<parthenon/time>
+tlim = 3000
+start_time = 3.0
+dt_factor = 1.2
+
+
+<driver>
+type = imex
+two_sync = false
+
+<GRMHD>
+cfl = 0.5
+gamma = 1.6666666666666667
+reconstruction = weno5
+
+<eos>
+type = IdealGas
+Cv = 1.0
+
+<thermal_equilibrium>
+rho_cgs = 1.e-7
+Er_cgs = 1.0095878e12
+u_gas_cgs = 4.1182959e8
+
+<units>
+scale_free = false
+geom_length_cm = 1.0
+fluid_density_cgs = 1.e-7
+
+<b_field>
+solver = none
+
+<boundaries>
+inner_x1 = periodic
+outer_x1 = periodic
+inner_x2 = periodic
+outer_x2 = periodic
+inner_x3 = periodic
+outer_x3 = periodic
+
+<floors>
+disable_floors = true
+
+<inverter>
+backstop = false
+fix_average_neighbors = true
+
+<radM1>
+on = true
+opacity_model = shocktube_constant
+sigma_rad = 3.833e22
+kappa_rho = 4.e-8
+kappa_scat = 0.0
+src_rootfind_eps = 1e-8
+src_rootfind_tol = 1e-8
+src_rootfind_maxiter = 50
+
+<parthenon/output0>
+file_type = hdf5
+dt = 10.0
+single_precision_output = true
+variables = prims, cons
+
+<parthenon/output1>
+file_type = hst
+dt = 3.0
+variables = all_reductions
+
+<debug>
+verbose = 1
+extra_checks = 1
+flag_verbose = 2
