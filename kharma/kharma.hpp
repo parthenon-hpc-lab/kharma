@@ -95,16 +95,18 @@ Packages_t ProcessPackages(std::unique_ptr<ParameterInput>& pin);
  */
 inline bool FieldIsOutput(ParameterInput *pin, std::string name)
 {
-    // auto block_names = pin->GetBlockNamesWithPrefix("parthenon/output");
-    // for (auto block_name : block_names) {
-    //     // For every output block with a 'variables' entry...
-    //     if (pin->DoesParameterExist(block_name, "variables")) {
-    //         std::string allvars = pin->GetString(block_name, "variables");
-    //         if (allvars.find(name) != std::string::npos) {
-    //             return true;
-    //         }
-    //     }
-    // }
+    auto block_names = pin->GetBlockNamesWithPrefix("parthenon/output");
+    for (auto block_name : block_names) {
+        // For every output block with a 'variables' entry...
+        if (pin->DoesParameterExist(block_name, "variables")) {
+            std::vector<std::string> allvars = pin->GetVector<std::string>(block_name, "variables");
+            for (std::string var : allvars) {
+                if (var.find(name) != std::string::npos) {
+                    return true;
+                }
+            }
+        }
+    }
     return true;
 }
 

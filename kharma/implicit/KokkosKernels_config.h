@@ -1,0 +1,185 @@
+#ifndef KOKKOSKERNELS_CONFIG_H
+#define KOKKOSKERNELS_CONFIG_H
+
+/* Define Fortran mangle from Trilinos macro definition */
+// clang-format off
+// #ifndef F77_BLAS_MANGLE
+// #define F77_BLAS_MANGLE@F77_BLAS_MANGLE@
+// #endif
+// clang-format on
+
+/* Define the current version of Kokkos Kernels */
+// #define KOKKOSKERNELS_VERSION @KOKKOSKERNELS_VERSION@
+// #define KOKKOSKERNELS_VERSION_MAJOR @KOKKOSKERNELS_VERSION_MAJOR@
+// #define KOKKOSKERNELS_VERSION_MINOR @KOKKOSKERNELS_VERSION_MINOR@
+// #define KOKKOSKERNELS_VERSION_PATCH @KOKKOSKERNELS_VERSION_PATCH@
+
+
+/* Define if fortran blas 1 function can return complex type */
+//#cmakedefine KOKKOSKERNELS_TPL_BLAS_RETURN_COMPLEX
+
+/* Define if building in debug mode */
+//#cmakedefine HAVE_KOKKOSKERNELS_DEBUG
+
+/* Define this macro if the quadmath TPL is enabled */
+//#cmakedefine HAVE_KOKKOSKERNELS_QUADMATH
+
+/* Define this macro if the MKL TPL is enabled.  This is different
+   than just linking against the MKL to get the BLAS and LAPACK; it
+   requires (a) header file(s) as well, and may use functions other
+   than just BLAS and LAPACK functions.  */
+//#cmakedefine HAVE_KOKKOSKERNELS_MKL
+
+//#cmakedefine KOKKOSKERNELS_ENABLE_TESTS_AND_PERFSUITE
+//#cmakedefine KOKKOSKERNELS_ENABLE_BENCHMARK
+
+/* Define this macro if experimental features of Kokkoskernels are enabled */
+//#cmakedefine HAVE_KOKKOSKERNELS_EXPERIMENTAL
+
+/* Define this macro if we have SuperLU API version 5 */
+//#cmakedefine HAVE_KOKKOSKERNELS_SUPERLU5_API
+
+/* Define this macro to disallow instantiations of kernels which are not covered
+ * by ETI */
+//#cmakedefine KOKKOSKERNELS_ETI_ONLY
+/* Define this macro to only test ETI types */
+//#cmakedefine KOKKOSKERNELS_TEST_ETI_ONLY
+
+/* Whether to build kernels for execution space Kokkos::Cuda */
+//#cmakedefine KOKKOSKERNELS_INST_EXECSPACE_CUDA
+//#cmakedefine KOKKOSKERNELS_INST_MEMSPACE_CUDASPACE
+//#cmakedefine KOKKOSKERNELS_INST_MEMSPACE_CUDAUVMSPACE
+/* Whether to build kernels for execution space Kokkos::HIP */
+//#cmakedefine KOKKOSKERNELS_INST_EXECSPACE_HIP
+//#cmakedefine KOKKOSKERNELS_INST_MEMSPACE_HIPSPACE
+//#cmakedefine KOKKOSKERNELS_INST_MEMSPACE_HIPMANAGEDSPACE
+/* Whether to build kernels for execution space Kokkos::Experimental::SYCL */
+//#cmakedefine KOKKOSKERNELS_INST_EXECSPACE_SYCL
+//#cmakedefine KOKKOSKERNELS_INST_MEMSPACE_SYCLSPACE
+//#cmakedefine KOKKOSKERNELS_INST_MEMSPACE_SYCLSHAREDSPACE
+/* Whether to build kernels for execution space Kokkos::Experimental::OpenMPTarget */
+//#cmakedefine KOKKOSKERNELS_INST_EXECSPACE_OPENMPTARGET
+//#cmakedefine KOKKOSKERNELS_INST_MEMSPACE_OPENMPTARGETSPACE
+/* Whether to build kernels for execution space Kokkos::OpenMP */
+//#cmakedefine KOKKOSKERNELS_INST_EXECSPACE_OPENMP
+/* Whether to build kernels for execution space Kokkos::Threads */
+//#cmakedefine KOKKOSKERNELS_INST_EXECSPACE_THREADS
+/* Whether to build kernels for execution space Kokkos::Serial */
+//#cmakedefine KOKKOSKERNELS_INST_EXECSPACE_SERIAL
+
+/* Whether to build kernels for memory space Kokkos::HostSpace */
+//#cmakedefine KOKKOSKERNELS_INST_MEMSPACE_HOSTSPACE
+
+/* Whether to build kernels for scalar type double */
+//#cmakedefine KOKKOSKERNELS_INST_DOUBLE
+/* Whether to build kernels for scalar type float */
+//#cmakedefine KOKKOSKERNELS_INST_FLOAT
+/* Whether to build kernels for scalar type Kokkos::Experimental::half_t */
+//#cmakedefine KOKKOSKERNELS_INST_HALF
+/* Whether to build kernels for scalar type Kokkos::Experimental::bhalf_t */
+//#cmakedefine KOKKOSKERNELS_INST_BHALF
+/* Whether to build kernels for scalar type complex<double> */
+//#cmakedefine KOKKOSKERNELS_INST_COMPLEX_DOUBLE
+/* Whether to build kernels for scalar type complex<float> */
+//#cmakedefine KOKKOSKERNELS_INST_COMPLEX_FLOAT
+#if defined KOKKOSKERNELS_INST_COMPLEX_DOUBLE
+#define KOKKOSKERNELS_INST_KOKKOS_COMPLEX_DOUBLE_
+#endif
+#if defined KOKKOSKERNELS_INST_COMPLEX_FLOAT
+#define KOKKOSKERNELS_INST_KOKKOS_COMPLEX_FLOAT_
+#endif
+
+/* Whether to build kernels for multivectors of LayoutLeft */
+//#cmakedefine KOKKOSKERNELS_INST_LAYOUTLEFT
+/* Whether to build kernels for multivectors of LayoutRight */
+//#cmakedefine KOKKOSKERNELS_INST_LAYOUTRIGHT
+
+/* Whether to build kernels for ordinal type int */
+//#cmakedefine KOKKOSKERNELS_INST_ORDINAL_INT
+/* Whether to build kernels for ordinal type int64_t */
+//#cmakedefine KOKKOSKERNELS_INST_ORDINAL_INT64_T
+
+/* Whether to build kernels for offset type int */
+//#cmakedefine KOKKOSKERNELS_INST_OFFSET_INT
+/* Whether to build kernels for offset type size_t */
+//#cmakedefine KOKKOSKERNELS_INST_OFFSET_SIZE_T
+
+/*
+ * Third Party Libraries
+ */
+
+/* BLAS library */
+//#cmakedefine KOKKOSKERNELS_ENABLE_TPL_BLAS
+/* LAPACK */
+//#cmakedefine KOKKOSKERNELS_ENABLE_TPL_LAPACK
+/* MKL library */
+//#cmakedefine KOKKOSKERNELS_ENABLE_TPL_MKL
+/* CUBLAS */
+//#cmakedefine KOKKOSKERNELS_ENABLE_TPL_CUBLAS
+/* CUSPARSE */
+//#cmakedefine KOKKOSKERNELS_ENABLE_TPL_CUSPARSE
+/* CUSOLVER */
+//#cmakedefine KOKKOSKERNELS_ENABLE_TPL_CUSOLVER
+/* MAGMA */
+//#cmakedefine KOKKOSKERNELS_ENABLE_TPL_MAGMA
+/* SuperLU */
+//#cmakedefine KOKKOSKERNELS_ENABLE_TPL_SUPERLU
+//#cmakedefine KOKKOSKERNELS_ENABLE_TPL_SuperLU  // For Trilinos
+/* CHOLMOD */
+//#cmakedefine KOKKOSKERNELS_ENABLE_TPL_CHOLMOD
+/* CBLAS */
+//#cmakedefine KOKKOSKERNELS_ENABLE_TPL_CBLAS
+/* LAPACKE */
+//#cmakedefine KOKKOSKERNELS_ENABLE_TPL_LAPACKE
+/* METIS */
+//#cmakedefine KOKKOSKERNELS_ENABLE_TPL_METIS
+/* ARMPL */
+//#cmakedefine KOKKOSKERNELS_ENABLE_TPL_ARMPL
+//#cmakedefine ARMPL_BUILD @ARMPL_BUILD@
+/* ROCBLAS */
+//#cmakedefine KOKKOSKERNELS_ENABLE_TPL_ROCBLAS
+/* ROCSPARSE */
+//#cmakedefine KOKKOSKERNELS_ENABLE_TPL_ROCSPARSE
+/* ROCSOLVER */
+//#cmakedefine KOKKOSKERNELS_ENABLE_TPL_ROCSOLVER
+
+//#cmakedefine KOKKOSKERNELS_ENABLE_SUPERNODAL_SPTRSV
+
+/* if MKL or ARMPL, BLAS is also defined */
+#if defined(KOKKOSKERNELS_ENABLE_TPL_MKL) || \
+    defined(KOKKOSKERNELS_ENABLE_TPL_ARMPL)
+#if !defined(KOKKOSKERNELS_ENABLE_TPL_BLAS)
+#define KOKKOSKERNELS_ENABLE_TPL_BLAS
+#endif
+#endif
+
+/* Whether MKL is providing the BLAS and LAPACK implementation */
+//#cmakedefine MKL_PROVIDES_BLAS_LAPACK
+
+#if !defined(KOKKOS_ENABLE_CUDA) && !defined(KOKKOS_ENABLE_HIP) && \
+    !defined(KOKKOS_ENABLE_SYCL) && !defined(KOKKOS_ENABLE_OPENMPTARGET)
+#define KOKKOSKERNELS_ENABLE_HOST_ONLY
+#endif
+
+/*
+ * "Optimization level" for computational kernels in this subpackage.
+ * The higher the level, the more code variants get generated, and
+ * thus the longer the compile times.  However, more code variants
+ * mean both better performance overall, and more uniform performance
+ * for corner cases.
+ */
+#define KOKKOSLINALG_OPT_LEVEL @KokkosLinAlg_Opt_Level @
+
+#ifndef KOKKOSKERNELS_IMPL_COMPILE_LIBRARY
+#define KOKKOSKERNELS_IMPL_COMPILE_LIBRARY false
+#endif
+
+/* Enabled components */
+//#cmakedefine KOKKOSKERNELS_ENABLE_COMPONENT_BATCHED
+//#cmakedefine KOKKOSKERNELS_ENABLE_COMPONENT_BLAS
+//#cmakedefine KOKKOSKERNELS_ENABLE_COMPONENT_LAPACK
+//#cmakedefine KOKKOSKERNELS_ENABLE_COMPONENT_SPARSE
+//#cmakedefine KOKKOSKERNELS_ENABLE_COMPONENT_GRAPH
+//#cmakedefine KOKKOSKERNELS_ENABLE_COMPONENT_ODE
+
+#endif  // KOKKOSKERNELS_CONFIG_H

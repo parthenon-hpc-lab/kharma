@@ -71,9 +71,17 @@ add_subdirectory(external/parthenon)
 include_directories(external/parthenon/src)
 # mpark::variant is header only, don't build anything
 include_directories(external/variant/include)
-# Our hacked-up version of the Kokkos kernels
-include_directories(external/kokkos-kernels)
+# Inherit pristine kokkos-kernels (mistake?)
+include_directories(external/singularity-eos/utils/kokkos-kernels)
 
+# kokkos-kernels want to import from their own directories
+include_directories(external/singularity-eos/utils/kokkos-kernels/batched)
+include_directories(external/singularity-eos/utils/kokkos-kernels/batched/dense)
+include_directories(external/singularity-eos/utils/kokkos-kernels/batched/dense/src)
+include_directories(external/singularity-eos/utils/kokkos-kernels/batched/dense/impl)
+include_directories(external/singularity-eos/utils/kokkos-kernels/blas/src)
+include_directories(external/singularity-eos/utils/kokkos-kernels/blas/impl)
+include_directories(external/singularity-eos/utils/kokkos-kernels/common/src)
 
 # Needed for running singularity-eos tests
 set(SINGULARITY_USE_HDF5 ON CACHE BOOL "" FORCE)
