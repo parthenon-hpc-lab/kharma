@@ -38,6 +38,12 @@
 #include "gr_coordinates.hpp"
 #include "kharma_utils.hpp"
 #include "types.hpp"
+// phoebus includes
+#include "microphysics/eos_kharma/eos_kharma.hpp"
+#include "phoebus_utils/unit_conversions.hpp"
+#include "phoebus_utils/variables.hpp"
+
+using namespace singularity;
 
 /**
  * This namespace is solely for calc_tensor.

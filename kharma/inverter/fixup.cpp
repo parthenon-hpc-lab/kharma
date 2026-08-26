@@ -40,6 +40,12 @@
 #include "flux_functions.hpp"
 #include "pack.hpp"
 
+// phoebus includes
+#include "microphysics/eos_kharma/eos_kharma.hpp"
+#include "phoebus_utils/unit_conversions.hpp"
+#include "phoebus_utils/variables.hpp"
+
+
 // Version of "PLOOP" guaranteeing specifically the 5 GRMHD fixup-amenable primitive vars
 #define NPRIM 5
 #define PRIMLOOP for (int p = 0; p < NPRIM; ++p)
@@ -67,7 +73,10 @@ TaskStatus Inverter::FixUtoP(MeshBlockData<Real>* rc)
     GridScalar pflag = rc->Get("pflag").data;
 
     const auto& pars = pmb->packages.Get("GRMHD")->AllParams();
-    const Real gam = pars.Get<Real>("gamma");
+    //const Real gam = pars.Get<Real>("gamma");
+        
+    const auto& eos_params = pmb->packages.Get("eos")->AllParams();
+    auto eos = eos_params.Get<Microphysics::EOS::EOS>("d.EOS");
 
     // Only yell about neighbors on extreme verbosity.
     const int flag_verbose = pmb->packages.Get("Globals")->Param<int>("flag_verbose");
@@ -156,12 +165,12 @@ TaskStatus Inverter::FixUtoP(MeshBlockData<Real>* rc)
                 // TODO Full floors instead of just geo?
                 int fflagl = fflag(0, k, j, i);
                 fflagl |= Floors::apply_geo_floors(
-                    G, P, m_p, gam, k, j, i, floors, floors_inner);
+                    G, P, m_p, eos, k, j, i, floors, floors_inner);
                 fflag(0, k, j, i) = fflagl;
 
                 // Make sure to keep lockstep
                 // This will only be run for GRMHD, so we can call its p_to_u
-                GRMHD::p_to_u(G, P, m_p, gam, k, j, i, U, m_u);
+                GRMHD::p_to_u(G, P, m_p, eos, k, j, i, U, m_u);
             }
         });
 

@@ -62,6 +62,15 @@ std::shared_ptr<KHARMAPackage> Inverter::Initialize(
         params.Add("inverter_type", Type::none);
     }
 
+
+    // An option that exits when someone use onedw with an equation of state that is not ideal gas.
+    if (inverter_name == "onedw") {
+        const std::string eos_name = pin->GetOrAddString("eos", "type", "ideal");
+        if (eos_name != "ideal") {
+            throw std::invalid_argument("onedw inverter only works with ideal gas equation of state");
+        }
+    }
+
     // Solver options
     // Any other Noble et al. implemented for fun should use lower tol/iter count, see
     // Noble+06

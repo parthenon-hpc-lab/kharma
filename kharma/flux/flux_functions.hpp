@@ -367,13 +367,13 @@ KOKKOS_FORCEINLINE_FUNCTION void prim_to_flux_mhd(const GRCoordinates& G, const 
  */
 template<typename Local>
 KOKKOS_FORCEINLINE_FUNCTION void p_to_u(const GRCoordinates& G, const Local& P,
-    const VarMap& m_p, const EMHD::EMHD_parameters& emhd_params, const Real& gam,
+    const VarMap& m_p, const EMHD::EMHD_parameters& emhd_params, const Microphysics::EOS::EOS& eos,
     const int& j, const int& i, const Local& U, const VarMap& m_u,
     const Loci& loc = Loci::center)
 {
     FourVectors Dtmp;
     GRMHD::calc_4vecs(G, P, m_p, j, i, loc, Dtmp);
-    prim_to_flux(G, P, m_p, Dtmp, emhd_params, gam, j, i, 0, U, m_u, loc);
+    prim_to_flux(G, P, m_p, Dtmp, emhd_params, eos, j, i, 0, U, m_u, loc);
 }
 
 template<typename Global>

@@ -25,7 +25,6 @@
 #include "phoebus_utils/unit_conversions.hpp"
 #include "phoebus_utils/variables.hpp"
 
-using namespace singularity;
 
 namespace Microphysics {
 namespace EOS {

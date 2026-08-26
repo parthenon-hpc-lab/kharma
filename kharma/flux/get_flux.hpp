@@ -40,8 +40,6 @@
 #include "phoebus_utils/unit_conversions.hpp"
 #include "phoebus_utils/variables.hpp"
 
-using namespace singularity;
-
 #include "domain.hpp"
 #include "floors_functions.hpp"
 
@@ -348,14 +346,14 @@ inline TaskStatus GetFlux(MeshData<Real>* md)
 
             // Left
             GRMHD::calc_4vecs(G, Pl_all(bl), m_p, k, j, i, loc, Dtmp);
-            Flux::prim_to_flux(G, Pl_all(bl), m_p, Dtmp, emhd_params, gam, k, j, i, 0,
+            Flux::prim_to_flux(G, Pl_all(bl), m_p, Dtmp, emhd_params, eos, k, j, i, 0,
                 Ul_all(bl), m_u, loc);
-            Flux::prim_to_flux(G, Pl_all(bl), m_p, Dtmp, emhd_params, gam, k, j, i, dir,
+            Flux::prim_to_flux(G, Pl_all(bl), m_p, Dtmp, emhd_params, eos, k, j, i, dir,
                 Fl_all(bl), m_u, loc);
 
             // Magnetosonic speeds
             Real cmaxL, cminL;
-            Flux::vchar_global(G, Pl_all(bl), m_p, Dtmp, gam, emhd_params, k, j, i, loc,
+            Flux::vchar_global(G, Pl_all(bl), m_p, Dtmp, eos, emhd_params, k, j, i, loc,
                 dir, cmaxL, cminL);
 
             // Record speeds
