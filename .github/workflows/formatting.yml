@@ -2,9 +2,9 @@ name: Check Formatting
 
 on:
   push:
-    branches: [ main ]
+    branches: [ stable, dev ]
   pull_request:
-    branches: [ main ]
+    branches: [ stable, dev ]
 
 jobs:
     formatting:
@@ -25,4 +25,4 @@ jobs:
             packages: |
                clang-format==19.1.7
         - name: check formatting
-          run: find . -regex '.*\.\(cpp\|hpp\)' | xargs clang-format -style=file -i && git diff --exit-code --ignore-submodules
+          run: git ls-files -z 'kharma/**/*.cpp' 'kharma/**/*.hpp' 'tests/**/*.cpp' 'tests/**/*.hpp' | xargs -0 clang-format -style=file -i && git diff --exit-code --ignore-submodules

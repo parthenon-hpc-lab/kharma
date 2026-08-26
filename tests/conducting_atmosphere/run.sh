@@ -13,7 +13,7 @@ conv_2d() {
     for res in "${RES_LIST[@]}"
     do
         cp conducting_atmosphere_${res}_default/atmosphere_soln_*.txt .
-        $BASE/run.sh -n 1 -i ./conducting_atmosphere.par debug/verbose=1 \
+        $BASE/run.sh -d . -i ./conducting_atmosphere.par debug/verbose=1 \
             parthenon/time/tlim=200 parthenon/output0/dt=1000000 \
             parthenon/mesh/nx1=$res parthenon/mesh/nx2=$res parthenon/mesh/nx3=1 \
             parthenon/meshblock/nx1=$res parthenon/meshblock/nx2=$res parthenon/meshblock/nx3=1 \

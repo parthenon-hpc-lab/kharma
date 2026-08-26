@@ -35,6 +35,7 @@
 #include "flux.hpp"
 
 #include "domain.hpp"
+#include "floors_functions.hpp"
 #include "inverter.hpp"
 
 // phoebus includes
@@ -57,6 +58,30 @@ TaskStatus Flux::MarkFOFC(MeshData<Real>* guess)
     auto pflag = guess->PackVariables(std::vector<std::string>{"pflag"});
     auto fofcflag = guess->PackVariables(std::vector<std::string>{"fofcflag"});
 
+    PackIndexMap cons_map, prims_map;
+    std::vector<MetadataFlag> prims_flags = {
+        Metadata::GetUserFlag("Primitive"), Metadata::Cell};
+    std::vector<MetadataFlag> cons_flags = {Metadata::WithFluxes, Metadata::Cell};
+    const auto& P = guess->PackVariables(prims_flags, prims_map);
+    const auto& U = guess->PackVariablesAndFluxes(cons_flags, cons_map);
+    const VarMap m_u(cons_map, true), m_p(prims_map, false);
+
+    const Real gam = pmb0->packages.Get("GRMHD")->Param<Real>("gamma");
+
+    // Use values from floors package if it's enabled, otherwise any we've been asked to
+    // apply
+    const Floors::Prescription floors =
+        pmb0->packages.AllPackages().count("Floors")
+            ? pmb0->packages.Get("Floors")->Param<Floors::Prescription>("prescription")
+            : pmb0->packages.Get("Inverter")
+                  ->Param<Floors::Prescription>("inverter_prescription");
+    const Floors::Prescription floors_inner =
+        pmb0->packages.AllPackages().count("Floors")
+            ? pmb0->packages.Get("Floors")->Param<Floors::Prescription>(
+                  "prescription_inner")
+            : pmb0->packages.Get("Inverter")
+                  ->Param<Floors::Prescription>("inverter_prescription");
+
     // Parameters
     const auto& pars = pmb0->packages.Get("Fluxes")->AllParams();
     const bool spherical = pmb0->coords.coords.is_spherical();
@@ -73,17 +98,22 @@ TaskStatus Flux::MarkFOFC(MeshData<Real>* guess)
     const IndexRange3 b = KDomain::GetRange(guess, IndexDomain::entire);
     const IndexRange block = IndexRange{0, fofcflag.GetDim(5) - 1};
     pmb0->par_for("fofc_mark", block.s, block.e, b.ks, b.ke, b.js, b.je, b.is, b.ie,
-        KOKKOS_LAMBDA(const int& b, const int& k, const int& j, const int& i)
+        KOKKOS_LAMBDA (const int &bl, const int &k, const int &j, const int &i)
         {
-            const auto& G = fofcflag.GetCoords(b);
+            const auto& G = fofcflag.GetCoords(bl);
             // if cell failed to invert or would call floors...
             // TODO preserve cause in the fofcflag
-            if (static_cast<int>(
-                    fflag(b, 0, k, j, i)) || // Inverter::failed(pflag(b, 0, k, j, i)) ||
-                (spherical && G.r(k, j, i) < fofc_radius)) {
-                fofcflag(b, 0, k, j, i) = 1;
+            // If the solve failed, because we reconstructed a
+            // negative or zero internal energy (even after floors!)
+            Real rhomin_geom, umin_geom;
+            determine_geo_floors(G, P(bl), m_p, gam, k, j, i, floors, floors_inner,
+                rhomin_geom, umin_geom);
+            const Real umin = umin_geom;
+            if (Inverter::failed(pflag(bl, 0, k, j, i)) &&
+                (P(bl, m_p.UU, k, j, i) < umin)) {
+                fofcflag(bl, 0, k, j, i) = 1;
             } else {
-                fofcflag(b, 0, k, j, i) = 0;
+                fofcflag(bl, 0, k, j, i) = 0;
             }
         });
 
@@ -154,7 +184,7 @@ TaskStatus Flux::FOFC(MeshData<Real>* md, MeshData<Real>* guess)
     PackIndexMap cons_map, prims_map;
     std::vector<MetadataFlag> prims_flags = {
         Metadata::GetUserFlag("Primitive"), Metadata::Cell};
-    std::vector<MetadataFlag> cons_flags = {Metadata::Conserved, Metadata::Cell};
+    std::vector<MetadataFlag> cons_flags = {Metadata::WithFluxes, Metadata::Cell};
     const auto& P_all = md->PackVariables(prims_flags, prims_map);
     const auto& U_all = md->PackVariablesAndFluxes(cons_flags, cons_map);
     const VarMap m_u(cons_map, true), m_p(prims_map, false);

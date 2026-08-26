@@ -39,15 +39,10 @@
 #include "grmhd.hpp"
 #include "grmhd_functions.hpp"
 #include "inverter.hpp"
+#include "kharma_driver.hpp"
 #include "pack.hpp"
 
 // Floors.  Apply limits to fluid values to maintain integrable state
-
-int Floors::CountFFlags(MeshData<Real>* md)
-{
-    return Reductions::CountFlags(
-        md, "fflag", FFlag::flag_names, IndexDomain::interior, true)[0];
-}
 
 std::shared_ptr<KHARMAPackage> Floors::Initialize(
     ParameterInput* pin, std::shared_ptr<Packages_t>& packages)
@@ -64,7 +59,7 @@ std::shared_ptr<KHARMAPackage> Floors::Initialize(
     // less reliable but velocity reconstructions potentially more robust.
     // Drift frame floors are now available and preferred when using
     // the implicit solver to avoid UtoP calls.
-    // TODO(BSP) automate/standardize parsing enums like this: classes w/tables like the
+    // TODO(CEP) automate/standardize parsing enums like this: classes w/tables like the
     // flags?
     std::vector<std::string> allowed_floor_frames = {
         "normal", "fluid", "mixed", "mixed_fluid_normal", "mixed_normal_drift", "drift"};
@@ -91,21 +86,20 @@ std::shared_ptr<KHARMAPackage> Floors::Initialize(
     params.Add("frame", frame);
 
     // New inverter w/recovery only supports normal frame floors. Yell about it, but allow
-    // overriding
-    if (pin->DoesBlockExist("inverter") &&
-        pin->GetString("inverter", "type") == "kastaun" &&
-        frame != InjectionFrame::normal_kastaun) {
-        if (!pin->GetOrAddBoolean("floors", "allow_unsafe", false)) {
-            std::cout
-                << "With version 2025.10, KHARMA dramatically changed how floors are "
-                   "applied.\n"
-                << "The resulting algorithm is much more stable, but requires that "
-                   "floors be applied in the normal observer frame.\n"
-                << "Consider using the <floors> parameters from pars/tori_3d/mad.par.\n"
-                << "If you know what you're doing, set floors/allow_unsafe=true";
-            throw std::runtime_error("Unsafe floors requested without override");
-        }
-    }
+    // overriding if (pin->DoesBlockExist("inverter") &&
+    //     pin->GetString("inverter", "type") == "kastaun" &&
+    //     frame != InjectionFrame::normal_kastaun) {
+    //     if (!pin->GetOrAddBoolean("floors", "allow_unsafe", false)) {
+    //         std::cerr << "With version 2025.10, KHARMA dramatically changed how floors
+    //         are applied.\n"
+    //                   << "The resulting algorithm is much more stable, but requires
+    //                   that floors be applied in the normal observer frame.\n"
+    //                   << "Consider using the <floors> parameters from
+    //                   pars/tori_3d/mad.par.\n"
+    //                   << "If you know what you're doing, set floors/allow_unsafe=true";
+    //         throw std::runtime_error("Unsafe floors requested without override");
+    //     }
+    // }
 
     // Switch points for "mixed" frames
     // TODO no-ops under new floors
@@ -130,9 +124,18 @@ std::shared_ptr<KHARMAPackage> Floors::Initialize(
         params.Add("prescription_inner",
             MakePrescriptionInner(pin, MakePrescription(pin)), "floors");
 
+    // All of these are now the same option: disable the *call* only.
+    // This lets us assume that the floors package is loaded, which is convenient many
+    // places
+    bool floors_on_default = !pin->GetOrAddBoolean("floors", "disable_floors", false);
+    bool floors_on = pin->GetOrAddBoolean("floors", "on", floors_on_default);
     // Sometimes we want the floors package, but don't want to apply anything, for tests
-    bool disable_call = pin->GetOrAddBoolean("floors", "disable_call", false);
+    bool disable_call = pin->GetOrAddBoolean("floors", "disable_call", !floors_on);
     params.Add("disable_call", disable_call);
+
+    // Track all conserved variable changes not produced by fluxes
+    bool track_additions = pin->GetOrAddBoolean("floors", "track_additions", false);
+    params.Add("track_additions", track_additions);
 
     // These preserve floor values between the "mark" pass and the actual floor
     // application We need them even if floors are disabled, to apply initial values based
@@ -143,7 +146,7 @@ std::shared_ptr<KHARMAPackage> Floors::Initialize(
     pkg->AddField("Floors.u_floor", m);
 
     // Flag for which floor conditions were violated.  Used for diagnostics
-    // TODO(BSP) Should switch these to "Integer" fields when Parthenon supports it
+    // TODO(CEP) Should switch these to "Integer" fields when Parthenon supports it
     pkg->AddField("fflag", m);
     // When not using UtoP, we still need a "dummy" copy of pflag to write the
     // post-flooring flag to
@@ -151,14 +154,33 @@ std::shared_ptr<KHARMAPackage> Floors::Initialize(
         Metadata::Overridable});
     pkg->AddField("pflag", m);
 
+    if (track_additions) {
+        // Track total additions to conserved variables
+        // TODO add primitive versions, advect as passives
+        m = Metadata(
+            {Metadata::Real, Metadata::Cell, Metadata::Derived, Metadata::Conserved});
+        pkg->AddField("Floors.rhou0add", m);
+        std::vector<int> s_4v({4});
+        m = Metadata(
+            {Metadata::Real, Metadata::Cell, Metadata::Derived, Metadata::Conserved},
+            s_4v);
+        pkg->AddField("Floors.Tadd", m);
+        // TODO(CEP) Maybe also want Floors.floorUadd, etc etc, for understanding the
+        // breakdown...
+    }
+
     // Don't actually call the usual floor function if we're using normal frame w/Kastaun,
     // floors will be applied during the inversion call.
     // Also allow manually disabling the call, for testing
     if (!disable_call) {
-        // TODO(BSP) THIS IS THE ONLY MeshApplyFloors.  Any others will NOT BE CALLED.
+        // TODO(CEP) THIS IS THE ONLY MeshApplyFloors.  Any others will NOT BE CALLED.
         // Use BlockApplyFloors in your packages or fix Packages::MeshApplyFloors
         pkg->MeshApplyFloors = Floors::ApplyGRMHDFloors;
     }
+    pkg->PostStepDiagnosticsMesh = Floors::PostStepDiagnostics;
+
+    // We still need to look after the fflag, even if we're not adding to it
+    pkg->PreStepWork = Floors::PreStepWork;
     pkg->PostStepDiagnosticsMesh = Floors::PostStepDiagnostics;
 
     // List (vector) of HistoryOutputVars that will all be enrolled as output variables
@@ -168,6 +190,29 @@ std::shared_ptr<KHARMAPackage> Floors::Initialize(
         parthenon::HistoryOutputVar(UserHistoryOperation::sum, CountFFlags, "FFlags"));
     // TODO Domain::entire version?
     // TODO entries for each individual flag?
+    if (track_additions) {
+        hst_vars.emplace_back(parthenon::HistoryOutputVar(UserHistoryOperation::sum,
+            Reductions::Total<Reductions::Var::rhou0add>, "rhou0add"));
+        hst_vars.emplace_back(parthenon::HistoryOutputVar(UserHistoryOperation::sum,
+            Reductions::Total<Reductions::Var::T00add>, "T00add"));
+        hst_vars.emplace_back(parthenon::HistoryOutputVar(UserHistoryOperation::sum,
+            Reductions::Total<Reductions::Var::T01add>, "T01add"));
+        hst_vars.emplace_back(parthenon::HistoryOutputVar(UserHistoryOperation::sum,
+            Reductions::Total<Reductions::Var::T02add>, "T02add"));
+        hst_vars.emplace_back(parthenon::HistoryOutputVar(UserHistoryOperation::sum,
+            Reductions::Total<Reductions::Var::T03add>, "T03add"));
+
+        hst_vars.emplace_back(parthenon::HistoryOutputVar(UserHistoryOperation::sum,
+            Reductions::Total<Reductions::Var::rhou0sub>, "rhou0sub"));
+        hst_vars.emplace_back(parthenon::HistoryOutputVar(UserHistoryOperation::sum,
+            Reductions::Total<Reductions::Var::T00sub>, "T00sub"));
+        hst_vars.emplace_back(parthenon::HistoryOutputVar(UserHistoryOperation::sum,
+            Reductions::Total<Reductions::Var::T01sub>, "T01sub"));
+        hst_vars.emplace_back(parthenon::HistoryOutputVar(UserHistoryOperation::sum,
+            Reductions::Total<Reductions::Var::T02sub>, "T02sub"));
+        hst_vars.emplace_back(parthenon::HistoryOutputVar(UserHistoryOperation::sum,
+            Reductions::Total<Reductions::Var::T03sub>, "T03sub"));
+    }
     // add callbacks for HST output to the Params struct, identified by the
     // `hist_param_key`
     pkg->AddParam<>(parthenon::hist_param_key, hst_vars);
@@ -276,12 +321,13 @@ TaskStatus Floors::DetermineGRMHDFloors(MeshData<Real>* md, IndexDomain domain,
             const auto& G = P.GetCoords(b);
             // The inverter might have set some floor flags, so we add to that
             // non-destructively
-            fflag(b, 0, k, j, i) = static_cast<int>(
+            fflag(b, 0, k, j, i) =
+                static_cast<int>(fflag(b, 0, k, j, i)) |
                 determine_floors(G, P(b), m_p, gam, k, j, i, floors, floors_inner,
-                    floor_vals(b, rhofi, k, j, i), floor_vals(b, ufi, k, j, i)));
+                    floor_vals(b, rhofi, k, j, i), floor_vals(b, ufi, k, j, i));
         });
 
-    // TODO(BSP) if we can somehow guarantee one call/rank we can start the reduction here
+    // TODO(CEP) if we can somehow guarantee one call/rank we can start the reduction here
     // Reductions::StartFlagReduce(md, "fflag", FFlag::flag_names, IndexDomain::interior,
     // true, 0);
 
@@ -314,6 +360,48 @@ TaskStatus Floors::ApplyGRMHDFloors(MeshData<Real>* md, IndexDomain domain)
     } else {
         throw std::invalid_argument("Floors for requested frame not implemented!");
     }
+}
+
+TaskStatus Floors::TrackAdditions(MeshData<Real>* md, MeshData<Real>* md_save)
+{
+    Kokkos::Profiling::pushRegion("Task_TrackAdditions");
+    PackIndexMap cons_map, tracks_map;
+    const auto& U =
+        md->PackVariables(std::vector<MetadataFlag>{Metadata::Conserved}, cons_map);
+    const auto& U_save =
+        md_save->PackVariables(std::vector<MetadataFlag>{Metadata::Conserved});
+    const VarMap m_u(cons_map, true);
+
+    const auto& tU = md->PackVariables(
+        std::vector<std::string>{"Floors.rhou0add", "Floors.Tadd"}, tracks_map);
+    const int rhou0i = tracks_map["Floors.rhou0add"].first;
+    const int Ti = tracks_map["Floors.Tadd"].first;
+
+    parthenon::par_for(DEFAULT_LOOP_PATTERN, "TrackAdditions", DevExecSpace(), 0,
+        U.GetDim(5) - 1, 0, U.GetDim(3) - 1, 0, U.GetDim(2) - 1, 0, U.GetDim(1) - 1,
+        KOKKOS_LAMBDA(const int b, const int k, const int j, const int i)
+        {
+            tU(b, rhou0i, k, j, i) = U(b, m_u.RHO, k, j, i) - U_save(b, m_u.RHO, k, j, i);
+            tU(b, Ti + 0, k, j, i) = U(b, m_u.UU, k, j, i) - U_save(b, m_u.UU, k, j, i);
+            tU(b, Ti + 1, k, j, i) = U(b, m_u.U1, k, j, i) - U_save(b, m_u.U1, k, j, i);
+            tU(b, Ti + 2, k, j, i) = U(b, m_u.U2, k, j, i) - U_save(b, m_u.U2, k, j, i);
+            tU(b, Ti + 3, k, j, i) = U(b, m_u.U3, k, j, i) - U_save(b, m_u.U3, k, j, i);
+        });
+    Kokkos::Profiling::popRegion(); // Task_TrackAdditions
+    return TaskStatus::complete;
+}
+
+int Floors::CountFFlags(MeshData<Real>* md)
+{
+    return Reductions::CountFlags(
+        md, "fflag", FFlag::flag_names, IndexDomain::interior, true)[0];
+}
+
+void Floors::PreStepWork(Mesh* pmesh, ParameterInput* pin, const SimTime& tm)
+{
+    // Clear all floor flags before each step
+    auto md = pmesh->mesh_data.Get().get();
+    KHARMADriver::Scale(std::vector<std::string>{"fflag"}, md, 0.);
 }
 
 TaskStatus Floors::PostStepDiagnostics(const SimTime& tm, MeshData<Real>* md)

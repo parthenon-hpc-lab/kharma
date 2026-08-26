@@ -237,6 +237,9 @@ int main(int argc, char *argv[])
         //MPIBarrier();
         auto driver_status = driver.Execute();
         EndFlag();
+
+        // TODO(CEP) Figure this out instead of circumventing
+        exit(0);
     }
 
     // Parthenon cleanup includes Kokkos, MPI

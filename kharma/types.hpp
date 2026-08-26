@@ -70,8 +70,9 @@ constexpr TE E2 = TE::E2;
 constexpr TE E3 = TE::E3;
 constexpr TE NN = TE::NN;
 
-// Any basic type manips, see LocOf in decs etc etc
+// Any basic type manips, see loc_of in decs etc etc
 // Host-only because the templating/types are weird on device
+// TODO(CEP) make host/device?
 template<typename T>
 inline TE FaceOf(const T& dir) {
     return (dir == X1DIR) ? F1 : ((dir == X2DIR) ? F2 : F3);
@@ -134,6 +135,8 @@ class VarMap {
         int8_t KTOT, K_CONSTANT, K_HOWES, K_KAWAZURA, K_WERNER, K_ROWAN, K_SHARMA;
         // Implicit-solver variables: constraint damping, EGRMHD
         int8_t PSI, Q, DP;
+        // Added material
+        int8_t RHOADD, T0ADD, T1ADD, T2ADD, T3ADD;
         // Total struct size ~20 bytes, < 1 vector of 4 doubles
 
         VarMap(parthenon::PackIndexMap& name_map, bool is_cons)
@@ -161,6 +164,11 @@ class VarMap {
                 // Extended MHD
                 Q = name_map["cons.q"].first;
                 DP = name_map["cons.dP"].first;
+
+                // Added material
+                RHOADD = name_map["Floors.rhou0add"].first;
+                T0ADD = name_map["Floors.Tadd"].first;
+
             } else {
                 // HD
                 RHO = name_map["prims.rho"].first;
@@ -205,6 +213,15 @@ class VarMap {
             } else {
                 Bf2 = -1;
                 Bf3 = -1;
+            }
+            if (T0ADD >= 0) {
+                T1ADD = T0ADD + 1;
+                T2ADD = T0ADD + 2;
+                T3ADD = T0ADD + 3;
+            } else {
+                T1ADD = -1;
+                T2ADD = -1;
+                T3ADD = -1;
             }
         }
 

@@ -20,7 +20,7 @@ conv_3d() {
     do
       # Eight blocks
       half=$(( $res / 2 ))
-      $BASE/run.sh -i $BASE/pars/tests/mhdmodes.par debug/verbose=2 mhdmodes/dir=0 \
+      $BASE/run.sh -d . -i $BASE/pars/tests/mhdmodes.par debug/verbose=2 mhdmodes/dir=0 \
                       parthenon/output0/single_precision_output=false parthenon/output0/dt=100. \
                       parthenon/mesh/nx1=$res parthenon/mesh/nx2=$res parthenon/mesh/nx3=$res \
                       parthenon/meshblock/nx1=$half parthenon/meshblock/nx2=$half parthenon/meshblock/nx3=$half \
@@ -43,7 +43,7 @@ conv_2d() {
     do
       # Four blocks
       half=$(( $res / 2 ))
-      $BASE/run.sh -i $BASE/pars/tests/mhdmodes.par debug/verbose=2 mhdmodes/dir=3 \
+      $BASE/run.sh -d . -i $BASE/pars/tests/mhdmodes.par debug/verbose=2 mhdmodes/dir=3 \
                       parthenon/output0/single_precision_output=false parthenon/output0/dt=100. \
                       parthenon/mesh/nx1=$res parthenon/mesh/nx2=$res parthenon/mesh/nx3=1 \
                       parthenon/meshblock/nx1=$half parthenon/meshblock/nx2=$half parthenon/meshblock/nx3=1 \
@@ -62,6 +62,7 @@ conv_2d() {
 }
 
 ALL_RES="16,24,32,48,64"
+
 # Normal MHD modes, 2D, defaults
 conv_2d slow   mhdmodes/nmode=1 "slow mode in 2D"
 conv_2d alfven mhdmodes/nmode=2 "Alfven mode in 2D"
@@ -118,9 +119,9 @@ conv_2d alfven_kharma_ct_gs05_c "mhdmodes/nmode=2 driver/type=kharma b_field/sol
 conv_2d fast_kharma_ct_gs05_c   "mhdmodes/nmode=3 driver/type=kharma b_field/solver=face_ct b_field/ct_scheme=gs05_c" "fast mode in 2D, KHARMA driver w/epsilon_c flux"
 
 # Test old 1Dw primitive recovery
-conv_2d slow_onedw   "mhdmodes/nmode=1 inverter/type=onedw" "slow mode in 2D, 1Dw inversion"
-conv_2d alfven_onedw "mhdmodes/nmode=2 inverter/type=onedw" "Alfven mode in 2D, 1Dw inversion"
-conv_2d fast_onedw   "mhdmodes/nmode=3 inverter/type=onedw" "fast mode in 2D, 1Dw inversion"
+conv_2d slow_onedw   "mhdmodes/nmode=1 inverter/type=onedw driver/type=imex" "slow mode in 2D, 1Dw inversion"
+conv_2d alfven_onedw "mhdmodes/nmode=2 inverter/type=onedw driver/type=imex" "Alfven mode in 2D, 1Dw inversion"
+conv_2d fast_onedw   "mhdmodes/nmode=3 inverter/type=onedw driver/type=imex" "fast mode in 2D, 1Dw inversion"
 
 
 # simple driver, high res
@@ -135,7 +136,7 @@ conv_2d fast_highres   "mhdmodes/nmode=3 driver/type=simple" "fast mode in 2D, h
 # conv_2d alfven_ln "mhdmodes/nmode=2 driver/type=kharma driver/flux=hlle driver/reconstruction=weno5 b_field/solver=face_ct" "Alfven mode in 2D"
 # conv_2d fast_ln "mhdmodes/nmode=3 driver/type=kharma driver/flux=hlle driver/reconstruction=weno5 b_field/solver=face_ct" "fast mode in 2D"
 
-# Mimicry 
+# Mimicry
 #ALL_RES="16,24,32,48,64"
 # TODO PPM and PPMX behave badly here, but would be more "authentic"
 #OPTS="driver/type=kharma inverter/type=kastaun flux/type=hlle flux/reconstruction=weno5 b_field/solver=face_ct b_field/ct_scheme=gs05_c"

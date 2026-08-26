@@ -20,7 +20,17 @@
 
 if ! command -v ${CFM} &> /dev/null; then
     >&2 echo "Error: No clang format found! Looked for ${CFM}"
-    exit 1
+    >&2 echo "Download? [Y/n]: "
+    read do_download
+    echo $do_download
+    if [[ "$do_download" == "Y" || "$do_download" == "y" || "$do_download" == "" ]]; then
+      wget https://github.com/muttleyxd/clang-tools-static-binaries/releases/download/master-796e77c/clang-format-19_linux-amd64
+      mv clang-format-19_linux-amd64 bin/clang-format-19
+      chmod +x bin/clang-format-19
+      CFM=$PWD/bin/clang-format-19
+    else
+      exit 1
+    fi
 else
     CFM=$(command -v ${CFM})
     echo "Clang format found: ${CFM}"
@@ -34,5 +44,5 @@ echo "You are using ${CF_VRSN}."
 echo "If these differ, results may not be stable."
 
 echo "Formatting..."
-git ls-files -z 'kharma/**/*.cpp' 'kharma/**/*.hpp' | xargs -0 ${CFM} -style=file -i
+git ls-files -z 'kharma/**/*.cpp' 'kharma/**/*.hpp' 'tests/**/*.cpp' 'tests/**/*.hpp' | xargs -0 ${CFM} -style=file -i
 echo "...Done"
