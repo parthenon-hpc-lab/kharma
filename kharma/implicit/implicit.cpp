@@ -62,12 +62,12 @@ TaskStatus Implicit::Step(MeshData<Real>* md_full_step_init,
 
 // Implicit nonlinear solve requires several linear solves per-zone
 // Use Kokkos-kernels QR decomposition & triangular solve, they're fast.
-//#include <batched/dense/src/KokkosBatched_ApplyPivot_Decl.hpp>
+// #include <batched/dense/src/KokkosBatched_ApplyPivot_Decl.hpp>
 #include <batched/dense/src/KokkosBatched_ApplyQ_Decl.hpp>
 #include <batched/dense/src/KokkosBatched_LU_Decl.hpp>
-//#include <batched/dense/src/KokkosBatched_QR_Decl.hpp>
-#include <batched/dense/src/KokkosBatched_Trsv_Decl.hpp>
+// #include <batched/dense/src/KokkosBatched_QR_Decl.hpp>
 #include "KokkosKernels_PivotedQR.hpp"
+#include <batched/dense/src/KokkosBatched_Trsv_Decl.hpp>
 
 std::vector<std::string> Implicit::GetOrderedNames(
     MeshBlockData<Real>* rc, const MetadataFlag& flag, bool only_implicit)
@@ -430,8 +430,8 @@ TaskStatus Implicit::Step(MeshData<Real>* md_full_step_init,
                             // Solver variables
                             auto jacobian = Kokkos::subview(
                                 jacobian_s, i, Kokkos::ALL(), Kokkos::ALL());
-                            auto delta_prim =
-                                Kokkos::subview(delta_prim_s, i, Kokkos::ALL(), Kokkos::ALL());
+                            auto delta_prim = Kokkos::subview(
+                                delta_prim_s, i, Kokkos::ALL(), Kokkos::ALL());
                             auto delta_prim_one =
                                 Kokkos::subview(delta_prim_s, i, 0, Kokkos::ALL());
                             auto pivot = Kokkos::subview(pivot_s, i, Kokkos::ALL());
