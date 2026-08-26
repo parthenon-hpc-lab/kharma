@@ -45,7 +45,7 @@
 // patched to never throw exceptions.
 // Because who needs those?
 // TODO(CEP) try to switch to std:: unless using SYCL
-#include <mpark/variant.hpp>
+#include <ports-of-call/variant.hpp>
 // #include <variant>
 // namespace mpark = std;
 
@@ -75,7 +75,7 @@
  * * dxdX_to_embed
  * * dxdX_to_native
  *
- * Each possible class is added to a couple of mpark::variant containers, and then to the
+ * Each possible class is added to a couple of PortsOfCall::variant containers, and then to the
  * chains of if statements below.
  *
  * TODO convenience functions.  Intelligent r/th/phi, x/y/z, KS and BL, a, etc by
@@ -94,35 +94,35 @@ class CoordinateEmbedding
     {
         // Isn't there some more elegant way to say "yeah the types are fine just copy da
         // bits"?
-        if (mpark::holds_alternative<SphMinkowskiCoords>(base_in)) {
-            base.emplace<SphMinkowskiCoords>(mpark::get<SphMinkowskiCoords>(base_in));
-        } else if (mpark::holds_alternative<CartMinkowskiCoords>(base_in)) {
-            base.emplace<CartMinkowskiCoords>(mpark::get<CartMinkowskiCoords>(base_in));
-        } else if (mpark::holds_alternative<SphBLCoords>(base_in)) {
-            base.emplace<SphBLCoords>(mpark::get<SphBLCoords>(base_in));
-        } else if (mpark::holds_alternative<SphKSCoords>(base_in)) {
-            base.emplace<SphKSCoords>(mpark::get<SphKSCoords>(base_in));
-        } else if (mpark::holds_alternative<SphKSExtG>(base_in)) {
-            base.emplace<SphKSExtG>(mpark::get<SphKSExtG>(base_in));
-        } else if (mpark::holds_alternative<SphBLExtG>(base_in)) {
-            base.emplace<SphBLExtG>(mpark::get<SphBLExtG>(base_in));
+        if (PortsOfCall::holds_alternative<SphMinkowskiCoords>(base_in)) {
+            base.emplace<SphMinkowskiCoords>(PortsOfCall::get<SphMinkowskiCoords>(base_in));
+        } else if (PortsOfCall::holds_alternative<CartMinkowskiCoords>(base_in)) {
+            base.emplace<CartMinkowskiCoords>(PortsOfCall::get<CartMinkowskiCoords>(base_in));
+        } else if (PortsOfCall::holds_alternative<SphBLCoords>(base_in)) {
+            base.emplace<SphBLCoords>(PortsOfCall::get<SphBLCoords>(base_in));
+        } else if (PortsOfCall::holds_alternative<SphKSCoords>(base_in)) {
+            base.emplace<SphKSCoords>(PortsOfCall::get<SphKSCoords>(base_in));
+        } else if (PortsOfCall::holds_alternative<SphKSExtG>(base_in)) {
+            base.emplace<SphKSExtG>(PortsOfCall::get<SphKSExtG>(base_in));
+        } else if (PortsOfCall::holds_alternative<SphBLExtG>(base_in)) {
+            base.emplace<SphBLExtG>(PortsOfCall::get<SphBLExtG>(base_in));
         }
 
-        if (mpark::holds_alternative<NullTransform>(transform_in)) {
-            transform.emplace<NullTransform>(mpark::get<NullTransform>(transform_in));
-        } else if (mpark::holds_alternative<ExponentialTransform>(transform_in)) {
+        if (PortsOfCall::holds_alternative<NullTransform>(transform_in)) {
+            transform.emplace<NullTransform>(PortsOfCall::get<NullTransform>(transform_in));
+        } else if (PortsOfCall::holds_alternative<ExponentialTransform>(transform_in)) {
             transform.emplace<ExponentialTransform>(
-                mpark::get<ExponentialTransform>(transform_in));
-        } else if (mpark::holds_alternative<SuperExponentialTransform>(transform_in)) {
+                PortsOfCall::get<ExponentialTransform>(transform_in));
+        } else if (PortsOfCall::holds_alternative<SuperExponentialTransform>(transform_in)) {
             transform.emplace<SuperExponentialTransform>(
-                mpark::get<SuperExponentialTransform>(transform_in));
-        } else if (mpark::holds_alternative<ModifyTransform>(transform_in)) {
-            transform.emplace<ModifyTransform>(mpark::get<ModifyTransform>(transform_in));
-        } else if (mpark::holds_alternative<FunkyTransform>(transform_in)) {
-            transform.emplace<FunkyTransform>(mpark::get<FunkyTransform>(transform_in));
-        } else if (mpark::holds_alternative<WidepoleTransform>(transform_in)) {
+                PortsOfCall::get<SuperExponentialTransform>(transform_in));
+        } else if (PortsOfCall::holds_alternative<ModifyTransform>(transform_in)) {
+            transform.emplace<ModifyTransform>(PortsOfCall::get<ModifyTransform>(transform_in));
+        } else if (PortsOfCall::holds_alternative<FunkyTransform>(transform_in)) {
+            transform.emplace<FunkyTransform>(PortsOfCall::get<FunkyTransform>(transform_in));
+        } else if (PortsOfCall::holds_alternative<WidepoleTransform>(transform_in)) {
             transform.emplace<WidepoleTransform>(
-                mpark::get<WidepoleTransform>(transform_in));
+                PortsOfCall::get<WidepoleTransform>(transform_in));
         }
     }
 
@@ -256,14 +256,14 @@ class CoordinateEmbedding
 #pragma hd_warning_disable
     KOKKOS_INLINE_FUNCTION std::string variant_names() const
     {
-        std::string basename(mpark::visit(
+        std::string basename(PortsOfCall::visit(
             [&](const auto& self)
             {
                 return self.name;
             },
             base));
 
-        std::string transformname(mpark::visit(
+        std::string transformname(PortsOfCall::visit(
             [&](const auto& self)
             {
                 return self.name;
@@ -276,7 +276,7 @@ class CoordinateEmbedding
     // Properties (host or device)
     KOKKOS_INLINE_FUNCTION bool is_spherical() const
     {
-        return mpark::visit(
+        return PortsOfCall::visit(
             [&](const auto& self)
             {
                 return self.spherical;
@@ -285,14 +285,14 @@ class CoordinateEmbedding
     }
     KOKKOS_INLINE_FUNCTION bool is_transformed() const
     {
-        return !mpark::holds_alternative<NullTransform>(transform);
+        return !PortsOfCall::holds_alternative<NullTransform>(transform);
     }
     KOKKOS_INLINE_FUNCTION GReal get_horizon() const
     {
-        if (mpark::holds_alternative<SphKSCoords>(base) ||
-            mpark::holds_alternative<SphBLCoords>(base) ||
-            mpark::holds_alternative<SphKSExtG>(base) ||
-            mpark::holds_alternative<SphBLExtG>(base)) {
+        if (PortsOfCall::holds_alternative<SphKSCoords>(base) ||
+            PortsOfCall::holds_alternative<SphBLCoords>(base) ||
+            PortsOfCall::holds_alternative<SphKSExtG>(base) ||
+            PortsOfCall::holds_alternative<SphBLExtG>(base)) {
             const GReal a = get_a();
             return 1 + m::sqrt(1 - a * a);
         } else {
@@ -301,7 +301,7 @@ class CoordinateEmbedding
     }
     KOKKOS_INLINE_FUNCTION GReal get_a() const
     {
-        return mpark::visit(
+        return PortsOfCall::visit(
             [&](const auto& self)
             {
                 return self.a;
@@ -310,7 +310,7 @@ class CoordinateEmbedding
     }
     GReal startx(int dir) const
     {
-        return mpark::visit(
+        return PortsOfCall::visit(
             [&](const auto& self)
             {
                 return self.startx[dir - 1];
@@ -319,7 +319,7 @@ class CoordinateEmbedding
     }
     GReal stopx(int dir) const
     {
-        return mpark::visit(
+        return PortsOfCall::visit(
             [&](const auto& self)
             {
                 return self.stopx[dir - 1];
@@ -329,19 +329,19 @@ class CoordinateEmbedding
 
     KOKKOS_INLINE_FUNCTION bool is_ks() const
     {
-        return mpark::holds_alternative<SphKSCoords>(base);
+        return PortsOfCall::holds_alternative<SphKSCoords>(base);
     }
     KOKKOS_INLINE_FUNCTION bool is_cart_minkowski() const
     {
-        return mpark::holds_alternative<CartMinkowskiCoords>(base) &&
-               mpark::holds_alternative<NullTransform>(transform);
+        return PortsOfCall::holds_alternative<CartMinkowskiCoords>(base) &&
+               PortsOfCall::holds_alternative<NullTransform>(transform);
     }
 
     // Note this is the one thing we need from BaseCoords
     KOKKOS_INLINE_FUNCTION void gcov_embed(
         const GReal Xembed[GR_DIM], Real gcov[GR_DIM][GR_DIM]) const
     {
-        mpark::visit(
+        PortsOfCall::visit(
             [&Xembed, &gcov](const auto& self)
             {
                 self.gcov_embed(Xembed, gcov);
@@ -372,7 +372,7 @@ class CoordinateEmbedding
     KOKKOS_INLINE_FUNCTION void coord_to_embed(
         const GReal Xnative[GR_DIM], GReal Xembed[GR_DIM]) const
     {
-        mpark::visit(
+        PortsOfCall::visit(
             [&Xnative, &Xembed](const auto& self)
             {
                 self.coord_to_embed(Xnative, Xembed);
@@ -382,7 +382,7 @@ class CoordinateEmbedding
     KOKKOS_INLINE_FUNCTION void coord_to_native(
         const GReal Xembed[GR_DIM], GReal Xnative[GR_DIM]) const
     {
-        mpark::visit(
+        PortsOfCall::visit(
             [&Xnative, &Xembed](const auto& self)
             {
                 self.coord_to_native(Xembed, Xnative);
@@ -392,7 +392,7 @@ class CoordinateEmbedding
     KOKKOS_INLINE_FUNCTION void dxdX(
         const GReal Xnative[GR_DIM], Real dxdX[GR_DIM][GR_DIM]) const
     {
-        mpark::visit(
+        PortsOfCall::visit(
             [&Xnative, &dxdX](const auto& self)
             {
                 self.dxdX(Xnative, dxdX);
@@ -402,7 +402,7 @@ class CoordinateEmbedding
     KOKKOS_INLINE_FUNCTION void dXdx(
         const GReal Xnative[GR_DIM], Real dXdx[GR_DIM][GR_DIM]) const
     {
-        mpark::visit(
+        PortsOfCall::visit(
             [&Xnative, &dXdx](const auto& self)
             {
                 self.dXdx(Xnative, dXdx);
@@ -417,7 +417,7 @@ class CoordinateEmbedding
     {
         const GReal Xembed[GR_DIM] = {0., r, 0., 0.};
         GReal Xnative[GR_DIM];
-        mpark::visit(
+        PortsOfCall::visit(
             [&Xembed, &Xnative](const auto& self)
             {
                 self.coord_to_native(Xembed, Xnative);
@@ -429,7 +429,7 @@ class CoordinateEmbedding
     {
         const GReal Xnative[GR_DIM] = {0., X1, 0., 0.};
         GReal Xembed[GR_DIM];
-        mpark::visit(
+        PortsOfCall::visit(
             [&Xnative, &Xembed](const auto& self)
             {
                 self.coord_to_embed(Xnative, Xembed);
@@ -443,7 +443,7 @@ class CoordinateEmbedding
     KOKKOS_INLINE_FUNCTION GReal r_of(const GReal Xnative[GR_DIM]) const
     {
         GReal Xembed[GR_DIM];
-        mpark::visit(
+        PortsOfCall::visit(
             [&Xnative, &Xembed](const auto& self)
             {
                 self.coord_to_embed(Xnative, Xembed);
@@ -458,7 +458,7 @@ class CoordinateEmbedding
     KOKKOS_INLINE_FUNCTION GReal th_of(const GReal Xnative[GR_DIM]) const
     {
         GReal Xembed[GR_DIM];
-        mpark::visit(
+        PortsOfCall::visit(
             [&Xnative, &Xembed](const auto& self)
             {
                 self.coord_to_embed(Xnative, Xembed);
@@ -473,7 +473,7 @@ class CoordinateEmbedding
     KOKKOS_INLINE_FUNCTION GReal phi_of(const GReal Xnative[GR_DIM]) const
     {
         GReal Xembed[GR_DIM];
-        mpark::visit(
+        PortsOfCall::visit(
             [&Xnative, &Xembed](const auto& self)
             {
                 self.coord_to_embed(Xnative, Xembed);
@@ -488,7 +488,7 @@ class CoordinateEmbedding
     KOKKOS_INLINE_FUNCTION GReal x_of(const GReal Xnative[GR_DIM]) const
     {
         GReal Xembed[GR_DIM];
-        mpark::visit(
+        PortsOfCall::visit(
             [&Xnative, &Xembed](const auto& self)
             {
                 self.coord_to_embed(Xnative, Xembed);
@@ -503,7 +503,7 @@ class CoordinateEmbedding
     KOKKOS_INLINE_FUNCTION GReal y_of(const GReal Xnative[GR_DIM]) const
     {
         GReal Xembed[GR_DIM];
-        mpark::visit(
+        PortsOfCall::visit(
             [&Xnative, &Xembed](const auto& self)
             {
                 self.coord_to_embed(Xnative, Xembed);
@@ -518,7 +518,7 @@ class CoordinateEmbedding
     KOKKOS_INLINE_FUNCTION GReal z_of(const GReal Xnative[GR_DIM]) const
     {
         GReal Xembed[GR_DIM];
-        mpark::visit(
+        PortsOfCall::visit(
             [&Xnative, &Xembed](const auto& self)
             {
                 self.coord_to_embed(Xnative, Xembed);
@@ -704,11 +704,11 @@ class CoordinateEmbedding
 
         // Set u^t to make u a velocity 4-vector in BL
         GReal gcov_bl[GR_DIM][GR_DIM];
-        if (mpark::holds_alternative<SphKSCoords>(base) ||
-            mpark::holds_alternative<SphBLCoords>(base)) {
+        if (PortsOfCall::holds_alternative<SphKSCoords>(base) ||
+            PortsOfCall::holds_alternative<SphBLCoords>(base)) {
             SphBLCoords(get_a()).gcov_embed(Xembed, gcov_bl);
-        } else if (mpark::holds_alternative<SphKSExtG>(base) ||
-                   mpark::holds_alternative<SphBLExtG>(base)) {
+        } else if (PortsOfCall::holds_alternative<SphKSExtG>(base) ||
+                   PortsOfCall::holds_alternative<SphBLExtG>(base)) {
             SphBLExtG(get_a()).gcov_embed(Xembed, gcov_bl);
         }
 
@@ -719,12 +719,12 @@ class CoordinateEmbedding
 
         // Then transform that 4-vector to KS (or not, if we're using BL base coords)
         Real ucon_base[GR_DIM];
-        if (mpark::holds_alternative<SphKSCoords>(base)) {
-            mpark::get<SphKSCoords>(base).vec_from_bl(Xembed, ucon_bl_fourv, ucon_base);
-        } else if (mpark::holds_alternative<SphKSExtG>(base)) {
-            mpark::get<SphKSExtG>(base).vec_from_bl(Xembed, ucon_bl_fourv, ucon_base);
-        } else if (mpark::holds_alternative<SphBLCoords>(base) ||
-                   mpark::holds_alternative<SphBLExtG>(base)) {
+        if (PortsOfCall::holds_alternative<SphKSCoords>(base)) {
+            PortsOfCall::get<SphKSCoords>(base).vec_from_bl(Xembed, ucon_bl_fourv, ucon_base);
+        } else if (PortsOfCall::holds_alternative<SphKSExtG>(base)) {
+            PortsOfCall::get<SphKSExtG>(base).vec_from_bl(Xembed, ucon_bl_fourv, ucon_base);
+        } else if (PortsOfCall::holds_alternative<SphBLCoords>(base) ||
+                   PortsOfCall::holds_alternative<SphBLExtG>(base)) {
             DLOOP1
                 ucon_base[mu] = ucon_bl_fourv[mu];
         }

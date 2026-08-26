@@ -69,8 +69,8 @@ endif()
 # Build Parthenon
 add_subdirectory(external/parthenon)
 include_directories(external/parthenon/src)
-# mpark::variant is header only, don't build anything
-include_directories(external/variant/include)
+# variant is header only, don't build anything
+include_directories(external/singularity-eos/utils/ports-of-call)
 # Inherit pristine kokkos-kernels (mistake?)
 include_directories(external/singularity-eos/utils/kokkos-kernels)
 

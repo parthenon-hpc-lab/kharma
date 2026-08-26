@@ -196,7 +196,7 @@ void KHARMA::FixParameters(ParameterInput *pin, bool is_parthenon_restart)
             GReal x1max = tmp_coords.r_to_native(Rout);
             pin->GetOrAddReal("parthenon/mesh", "x1max", x1max);
 
-            if (mpark::holds_alternative<SphMinkowskiCoords>(tmp_coords.base)) {
+            if (PortsOfCall::holds_alternative<SphMinkowskiCoords>(tmp_coords.base)) {
                 // In Minkowski coordinates, require Rin so the singularity is at user option
                 GReal Rin = pin->GetReal("coordinates", "r_in");
                 GReal x1min = tmp_coords.r_to_native(Rin);
