@@ -316,16 +316,15 @@ if option "clean"; then
   fi
   cd -
 
-  # HIP requires device-capable variant functions
-  if  ! ((! option "hip") && (! option "sycl")); then
-    cd external/variant
-    if [[ $(( $(git --version | cut -d '.' -f 2) > 35 )) == "1" ]]; then
-      git apply --quiet ../patches/variant-hip.patch
-    else
-      git apply ../patches/variant-hip.patch
-    fi
-    cd -
+  # Patches for ports-of-call
+  cd external/singularity-eos/utils/ports-of-call
+  if [[ $(( $(git --version | cut -d '.' -f 2) > 35 )) == "1" ]]; then
+    git apply --quiet ../../../patches/ports-of-call-*.patch
+  else
+    echo "make.sh note: You may see errors applying patches below. These are normal."
+    git apply ../../../patches/ports-of-call-*.patch
   fi
+  cd -
 
   rm -rf build
 fi
