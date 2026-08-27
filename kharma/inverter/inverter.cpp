@@ -201,7 +201,8 @@ inline void BlockPerformInversion(
 
     if (U.GetDim(4) == 0 || pflag.GetDim(4) == 0) return;
 
-    const Real gam = pmb->packages.Get("GRMHD")->Param<Real>("gamma");
+    const auto& eos_params = pmb->packages.Get("eos")->AllParams();
+    auto eos = eos_params.Get<Microphysics::EOS::EOS>("d.EOS");
 
     auto& pars = pmb->packages.Get("Inverter")->AllParams();
     const Real err_tol = pars.Get<Real>("err_tol");
@@ -229,7 +230,7 @@ inline void BlockPerformInversion(
         KOKKOS_LAMBDA (const int &k, const int &j, const int &i)
         {
             int pflagl = Inverter::u_to_p<inverter>(
-                G, U, m_u, gam, k, j, i, P, m_p, Loci::center, iter_max, err_tol);
+                G, U, m_u, eos, k, j, i, P, m_p, Loci::center, iter_max, err_tol);
             pflag(0, k, j, i) = pflagl;
         });
 }

@@ -58,6 +58,9 @@ TaskStatus Flux::MarkFOFC(MeshData<Real>* guess)
     auto pflag = guess->PackVariables(std::vector<std::string>{"pflag"});
     auto fofcflag = guess->PackVariables(std::vector<std::string>{"fofcflag"});
 
+    const auto& eos_params = pmb0->packages.Get("eos")->AllParams();
+    auto eos = eos_params.Get<Microphysics::EOS::EOS>("d.EOS");
+
     PackIndexMap cons_map, prims_map;
     std::vector<MetadataFlag> prims_flags = {
         Metadata::GetUserFlag("Primitive"), Metadata::Cell};
@@ -106,7 +109,7 @@ TaskStatus Flux::MarkFOFC(MeshData<Real>* guess)
             // If the solve failed, because we reconstructed a
             // negative or zero internal energy (even after floors!)
             Real rhomin_geom, umin_geom;
-            determine_geo_floors(G, P(bl), m_p, gam, k, j, i, floors, floors_inner,
+            determine_geo_floors(G, P(bl), m_p, eos, k, j, i, floors, floors_inner,
                 rhomin_geom, umin_geom);
             const Real umin = umin_geom;
             if (Inverter::failed(pflag(bl, 0, k, j, i)) &&

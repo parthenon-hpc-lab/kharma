@@ -647,9 +647,6 @@ void CancelBoundaryU3(MeshBlockData<Real>* rc, IndexDomain domain, bool coarse)
     const VarMap m_u(cons_map, true), m_p(prims_map, false);
 
     const auto& G = pmb->coords;
-
-    const Real gam = pmb->packages.Get("GRMHD")->Param<Real>("gamma");
-
     const auto& eos_params = pmb->packages.Get("eos")->AllParams();
     auto eos = eos_params.Get<Microphysics::EOS::EOS>("d.EOS");
 
@@ -673,7 +670,7 @@ void CancelBoundaryU3(MeshBlockData<Real>* rc, IndexDomain domain, bool coarse)
                     [&](const int& k)
                     {
                         Inverter::u_to_p<Inverter::Type::kastaun>(
-                            G, U, m_u, gam, k, jf, i, P, m_p, Loci::center, 25, 1e-12);
+                            G, U, m_u, eos, k, jf, i, P, m_p, Loci::center, 25, 1e-12);
                     });
             }
             member.team_barrier();
@@ -735,7 +732,7 @@ void CancelBoundaryT3(MeshBlockData<Real>* rc, IndexDomain domain, bool coarse)
 
     const auto& G = pmb->coords;
 
-    const auto& eos_params = packages.Get("eos")->AllParams();
+    const auto& eos_params = pmb->packages.Get("eos")->AllParams();
     auto eos = eos_params.Get<Microphysics::EOS::EOS>("d.EOS");
     const bool sync_prims = pmb->packages.Get("Driver")->Param<bool>("sync_prims");
 
@@ -756,7 +753,7 @@ void CancelBoundaryT3(MeshBlockData<Real>* rc, IndexDomain domain, bool coarse)
                 parthenon::par_for_inner(member, bi.ks, bi.ke,
                     [&](const int& k)
                     {
-                        p_to_u(G, P, m_p, gam, k, jf, i, U, m_u, Loci::center);
+                        p_to_u(G, P, m_p, eos, k, jf, i, U, m_u, Loci::center);
                     });
             }
             member.team_barrier();
@@ -831,7 +828,6 @@ void UpdateAveragedCtop(MeshData<Real>* md)
                         rc->PackVariables(std::vector<std::string>{"Flux.cmin"});
 
                     const auto& G = pmb->coords;
-                    const Real gam = pmb->packages.Get("GRMHD")->Param<Real>("gamma");
                     const Floors::Prescription floors =
                         pmb->packages.Get("Floors")->Param<Floors::Prescription>(
                             "prescription");
