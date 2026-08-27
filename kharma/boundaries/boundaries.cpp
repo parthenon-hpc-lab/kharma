@@ -351,8 +351,8 @@ std::shared_ptr<KHARMAPackage> KBoundaries::Initialize(
                 }
                 if (pin->GetString("coordinates", "transform") == "fmks" ||
                     pin->GetString("coordinates", "transform") == "funky") {
-                    std::cout
-                        << std::endl; // flush messages in output buffer before we error
+                    // flush messages in output buffer before we error
+                    std::cout << std::endl;
                     throw std::runtime_error(
                         "Transmitting polar boundary conditions require coordinates "
                         "symmetric about theta=0!");
@@ -791,8 +791,8 @@ TaskStatus KBoundaries::FixFlux(MeshData<Real>* md)
                 // ...and if this face of the block corresponds to a global boundary...
                 if (IsPhysicalBoundary(pmb, bface)) {
                     if (bdir != 2) {
-                        std::cout << std::endl; // flush messages in output buffer before
-                                                // we error
+                        // flush messages in output buffer before we error
+                        std::cout << std::endl;
                         throw std::runtime_error(
                             "Excised polar fluxes only fully implemented in X2!");
                     }
@@ -1042,8 +1042,8 @@ void KBoundaries::AddSource(MeshData<Real>* md, MeshData<Real>* mdudt, IndexDoma
                 // ...and if this face of the block corresponds to a global boundary...
                 if (IsPhysicalBoundary(pmb, bface)) {
                     if (bdir != 2) {
-                        std::cout << std::endl; // flush messages in output buffer before
-                                                // we error
+                        // flush messages in output buffer before we error
+                        std::cout << std::endl;
                         throw std::runtime_error(
                             "Excised polar fluxes only fully implemented in X2!");
                     }
