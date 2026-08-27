@@ -79,9 +79,9 @@ KOKKOS_INLINE_FUNCTION int apply_instability_limits(const GRCoordinates& G,
 
     //Real pg = (gam - 1.) * uu;
     Real pg = eos.PressureFromDensityInternalEnergy(rho, uu/rho);
+
+    //TODO_EOS: check theta here, might be temperature and need to be calculated accordingly.
     Real Theta = pg / rho;
-    //Real cs = m::sqrt(gam * pg / (rho + (gam * uu)));
-    Real bulk = eos.BulkModulusFromDensityInternalEnergy(rho, uu/rho);
     const Real ef = rho + pg + uu; // \rho * h = rho + u + P.
     Real cs = m::sqrt(bulk / ef);
     FourVectors D;
@@ -91,8 +91,7 @@ KOKKOS_INLINE_FUNCTION int apply_instability_limits(const GRCoordinates& G,
     Real tau, chi_e, nu_e;
     //TODO_EOS: This might need to be changed for general eos.
     //TODO_EOS: for now, I'll calculate gamma
-    Real gam = bulk / pg;
-    EMHD::set_parameters(G, P, m_p, emhd_params, gam, k, j, i, tau, chi_e, nu_e);
+    EMHD::set_parameters(G, P, m_p, emhd_params, eos, k, j, i, tau, chi_e, nu_e);
 
     Real q, dP;
     EMHD::convert_prims_to_q_dP(qtilde, dPtilde, rho, Theta, cs * cs, emhd_params, q, dP);

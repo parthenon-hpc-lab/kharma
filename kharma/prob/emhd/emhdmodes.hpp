@@ -37,6 +37,11 @@
 
 #include "decs.hpp"
 
+// phoebus includes
+#include "microphysics/eos_kharma/eos_kharma.hpp"
+#include "phoebus_utils/unit_conversions.hpp"
+#include "phoebus_utils/variables.hpp"
+
 using namespace std::literals::complex_literals;
 using namespace parthenon;
 
@@ -64,7 +69,10 @@ TaskStatus InitializeEMHDModes(
 
     const EMHD::EMHD_parameters& emhd_params = EMHD::GetEMHDParameters(pmb->packages);
     const auto& grmhd_pars = pmb->packages.Get("GRMHD")->AllParams();
-    const Real& gam = grmhd_pars.Get<Real>("gamma");
+    // const Real& gam = grmhd_pars.Get<Real>("gamma");
+
+    const auto& eos_params = pmb->packages.Get("eos")->AllParams();
+    auto eos = eos_params.Get<Microphysics::EOS::EOS>("d.EOS");
 
     // TODO actually calculate the mode?  Figure something out
     const Real omega_real =
@@ -144,8 +152,13 @@ TaskStatus InitializeEMHDModes(
                 Real tau, chi_e, nu_e;
                 // Zeros are q, dP, and bsq, only needed for torus closure
                 EMHD::set_parameters(G, rho(k, j, i), u(k, j, i), 0., 0., 0., emhd_params,
-                    gam, j, i, tau, chi_e, nu_e);
-                Real Theta = (gam - 1) * u(k, j, i) / rho(k, j, i);
+                    eos, j, i, tau, chi_e, nu_e);
+
+                RReal sie = u(k, j, i) / rho(k, j, i);
+                Real gamma1 = eos.BulkModulusFromDensityInternalEnergy(rho(k,j,i),sie)/eos.PressureFromDensityInternalEnergy(rho(k,j,i),sie);
+                //TODO_EOS: This function uses a definition of temperature that is only valid for ideal gas case. Should probably be modified to work with general EOS.
+
+                Real Theta = (gamma1 - 1) * u(k, j, i) / rho(k, j, i);
                 q(k, j, i) *= (chi_e != 0)
                                   ? m::sqrt(tau / (chi_e * rho(k, j, i) * Theta * Theta))
                                   : 0.;

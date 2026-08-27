@@ -52,7 +52,7 @@ namespace EMHD
  */
 template<typename Global>
 KOKKOS_INLINE_FUNCTION void implicit_sources(const GRCoordinates& G, const Global& P,
-    const VarMap& m_p, const Real& gam, const Real& tau, const int& k, const int& j,
+    const VarMap& m_p, const Microphysics::EOS::EOS& eos, const Real& tau, const int& k, const int& j,
     const int& i, Real& dUq, Real& dUdP)
 {
     // These are intentionally the tilde versions!
@@ -89,6 +89,7 @@ KOKKOS_INLINE_FUNCTION void time_derivative_sources(const GRCoordinates& G,
     DLOOP1
         div_ucon += G.gcon(Loci::center, j, i, 0, mu) * dt_ucov[mu];
     // dTheta/dt
+    // TODO_EOS: For other eos other than ideal, this is not the right definition for temperature.
     const Real Theta_new =
         m::max((gam - 1) * P_new(m_p.UU, k, j, i) / P_new(m_p.RHO, k, j, i), SMALL_NUM);
     const Real Theta_old =

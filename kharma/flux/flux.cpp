@@ -291,8 +291,6 @@ TaskStatus Flux::BlockPtoUMHD(MeshBlockData<Real>* rc, IndexDomain domain, bool 
     // Pointers
     auto pmb = rc->GetBlockPointer();
     // Options
-    const auto& pars = pmb->packages.Get("GRMHD")->AllParams();
-    const Real gam = pars.Get<Real>("gamma");
 
     const auto& eos_params = pmb->packages.Get("eos")->AllParams();
     auto eos = eos_params.Get<Microphysics::EOS::EOS>("d.EOS");
@@ -326,9 +324,6 @@ TaskStatus Flux::BlockPtoU(MeshBlockData<Real>* rc, IndexDomain domain, bool coa
     // Pointers
     auto pmb = rc->GetBlockPointer();
     // Options
-    const auto& pars = pmb->packages.Get("GRMHD")->AllParams();
-    const Real gam = pars.Get<Real>("gamma");
-
     const auto& eos_params = pmb->packages.Get("eos")->AllParams();
     auto eos = eos_params.Get<Microphysics::EOS::EOS>("d.EOS");
 
@@ -377,8 +372,7 @@ TaskStatus Flux::BlockPtoU_Send(MeshBlockData<Real>* rc, IndexDomain domain, boo
     auto pmb = rc->GetBlockPointer();
     const int ndim = pmb->pmy_mesh->ndim;
     // Options
-    const auto& pars = pmb->packages.Get("GRMHD")->AllParams();
-    const Real gam = pars.Get<Real>("gamma");
+
 
     const auto& eos_params = pmb->packages.Get("eos")->AllParams();
     auto eos = eos_params.Get<Microphysics::EOS::EOS>("d.EOS");
@@ -455,8 +449,6 @@ void Flux::AddGeoSource(MeshData<Real>* md, MeshData<Real>* mdudt, IndexDomain d
     auto pmb0 = md->GetBlockData(0)->GetBlockPointer();
     auto pkgs = pmb0->packages;
     // Options
-    const auto& pars = pkgs.Get("GRMHD")->AllParams();
-    const Real gam = pars.Get<Real>("gamma");
     const auto& eos_params = pkgs.Get("eos")->AllParams();
     auto eos = eos_params.Get<Microphysics::EOS::EOS>("d.EOS");
 

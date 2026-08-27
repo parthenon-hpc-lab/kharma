@@ -63,16 +63,16 @@ KOKKOS_FORCEINLINE_FUNCTION void calc_tensor(const Local& P, const VarMap& m_p,
 {
     // calc pressure
     Real sie = P(m_p.UU)/P(m_p.RHO); //specific internal energy
-    Real pressure = eos.PressureFromDensityInternalEnergy(P(m_p.RHO), sie);
+    Real pg = eos.PressureFromDensityInternalEnergy(P(m_p.RHO), sie);
     if ((m_p.Q >= 0 || m_p.DP >= 0) && emhd_params.feedback) {
         // Apply higher-order terms conversion if necessary
         Real qtilde = 0., dPtilde = 0.;
         if (m_p.Q >= 0) qtilde = P(m_p.Q);
         if (m_p.DP >= 0) dPtilde = P(m_p.DP);
-        const Real ef = P(m_p.RHO) + P(m_p.UU) + pressure; // \rho * h = rho + u + P.
+        const Real ef = P(m_p.RHO) + P(m_p.UU) + pg; // \rho * h = rho + u + P.
         const Real cs2 = eos.BulkModulusFromDensityInternalEnergy(P(m_p.RHO),sie)/ef;
         //TODO_EOS: Is this actually what's needed here?
-        const Real Theta = pressure/P(m_p.RHO);
+        const Real Theta = pg/P(m_p.RHO);
         
         // const Real Theta = (gam - 1) * P(m_p.UU) / P(m_p.RHO); //dimensionless temperature ? Check with cora
         // const Real cs2 = gam * (gam - 1) * P(m_p.UU) / (P(m_p.RHO) + gam * P(m_p.UU));
@@ -80,13 +80,13 @@ KOKKOS_FORCEINLINE_FUNCTION void calc_tensor(const Local& P, const VarMap& m_p,
         EMHD::convert_prims_to_q_dP(
             qtilde, dPtilde, P(m_p.RHO), Theta, cs2, emhd_params, q, dP);
         // Then calculate the tensor
-        EMHD::calc_tensor(P(m_p.RHO), P(m_p.UU), pressure, q, dP, D, dir, T);
+        EMHD::calc_tensor(P(m_p.RHO), P(m_p.UU), pg, q, dP, D, dir, T);
     } else if (m_p.B1 >= 0) {
         // GRMHD stress-energy tensor w/ first index up, second index down
-        GRMHD::calc_tensor(P(m_p.RHO), P(m_p.UU), pressure, D, dir, T);
+        GRMHD::calc_tensor(P(m_p.RHO), P(m_p.UU), pg, D, dir, T);
     } else {
         // GRHD stress-energy tensor
-        GRHD::calc_tensor(P(m_p.RHO), P(m_p.UU), pressure, D, dir, T);
+        GRHD::calc_tensor(P(m_p.RHO), P(m_p.UU), pg, D, dir, T);
     }
 }
 template<typename Global>
@@ -96,17 +96,17 @@ KOKKOS_FORCEINLINE_FUNCTION void calc_tensor(const Global& P, const VarMap& m_p,
 {
     // calc pressure
     Real sie = P(m_p.UU, k, j, i)/P(m_p.RHO, k, j, i); //specific internal energy
-    Real pressure = eos.PressureFromDensityInternalEnergy(P(m_p.RHO, k, j, i), sie);
+    Real pg = eos.PressureFromDensityInternalEnergy(P(m_p.RHO, k, j, i), sie);
     if ((m_p.Q >= 0 || m_p.DP >= 0) && emhd_params.feedback) {
         // Apply higher-order terms conversion if necessary
         Real qtilde = 0., dPtilde = 0.;
         if (m_p.Q >= 0) qtilde = P(m_p.Q, k, j, i);
         if (m_p.DP >= 0) dPtilde = P(m_p.DP, k, j, i);
 
-        const Real ef = P(m_p.RHO, k, j, i) + P(m_p.UU, k, j, i) + pressure; // \rho * h = rho + u + P.
+        const Real ef = P(m_p.RHO, k, j, i) + P(m_p.UU, k, j, i) + pg; // \rho * h = rho + u + P.
         const Real cs2 = eos.BulkModulusFromDensityInternalEnergy(P(m_p.RHO, k, j, i), sie)/ef;
         //TODO_EOS: Is this actually what's needed here?
-        const Real Theta = pressure/P(m_p.RHO, k, j, i);
+        const Real Theta = pg/P(m_p.RHO, k, j, i);
         // const Real Theta = (gam - 1) * P(m_p.UU, k, j, i) / P(m_p.RHO, k, j, i);
         // const Real cs2 = gam * (gam - 1) * P(m_p.UU, k, j, i) /
         //                  (P(m_p.RHO, k, j, i) + gam * P(m_p.UU, k, j, i));
@@ -116,15 +116,15 @@ KOKKOS_FORCEINLINE_FUNCTION void calc_tensor(const Global& P, const VarMap& m_p,
 
         // Then calculate the tensor
         EMHD::calc_tensor(P(m_p.RHO, k, j, i), P(m_p.UU, k, j, i),
-            pressure, q, dP, D, dir, T);
+            pg, q, dP, D, dir, T);
     } else if (m_p.B1 >= 0) {
         // GRMHD stress-energy tensor w/ first index up, second index down
         GRMHD::calc_tensor(P(m_p.RHO, k, j, i), P(m_p.UU, k, j, i),
-            pressure, D, dir, T);
+            pg, D, dir, T);
     } else {
         // GRHD stress-energy tensor w/ first index up, second index down
         GRHD::calc_tensor(P(m_p.RHO, k, j, i), P(m_p.UU, k, j, i),
-            pressure, D, dir, T);
+            pg, D, dir, T);
     }
 }
 
@@ -412,10 +412,10 @@ KOKKOS_FORCEINLINE_FUNCTION void vchar(const GRCoordinates& G, const Local& P,
     //TODO_EOS: apparently singularity-eos has a relativistic EOS constructor that will take care of making sure the sound speed is less than c.
     // Check it out later https://lanl.github.io/singularity-eos/main/src/modifiers.html
     const Real sie = P(m.UU)/P(m.RHO);
-    const Real pressure = eos.PressureFromDensityInternalEnergy(P(m.RHO),sie);
+    const Real pg = eos.PressureFromDensityInternalEnergy(P(m.RHO),sie);
     const Real bulk = eos.BulkModulusFromDensityInternalEnergy(P(m.RHO), sie);
-    const Real ef = P(m.RHO) + pressure + P(m.UU);
-    const Real gam = bulk / pressure;
+    const Real ef = P(m.RHO) + pg + P(m.UU);
+    const Real gam = bulk / pg;
 
     // The fluid sound speed should be at most sqrt(gam-1) for a relativistic fluid
     // TODO_EOS: Is that the right limit for a general eos?
@@ -425,7 +425,7 @@ KOKKOS_FORCEINLINE_FUNCTION void vchar(const GRCoordinates& G, const Local& P,
         // Get the EGRMHD parameters
         Real tau, chi_e, nu_e;
         // TODO_EOS: This might need to be changed for general eos.
-        EMHD::set_parameters(G, P, m, emhd_params, gam, j, i, tau, chi_e, nu_e);
+        EMHD::set_parameters(G, P, m, emhd_params, eos, j, i, tau, chi_e, nu_e);
 
         // Find fast magnetosonic speed
         const Real bsq = dot(D.bcon, D.bcov);
@@ -502,10 +502,10 @@ KOKKOS_FORCEINLINE_FUNCTION void vchar_global(const GRCoordinates& G, const Glob
     //TODO_EOS: apparently singularity-eos has a relativistic EOS constructor that will take care of making sure the sound speed is less than c.
     //Check it out later https://lanl.github.io/singularity-eos/main/src/modifiers.html
     const Real sie = P(m.UU, k, j, i)/P(m.RHO, k, j, i);
-    const Real pressure = eos.PressureFromDensityInternalEnergy(P(m.RHO, k, j, i), sie);
+    const Real pg = eos.PressureFromDensityInternalEnergy(P(m.RHO, k, j, i), sie);
     const Real bulk = eos.BulkModulusFromDensityInternalEnergy(P(m.RHO, k, j, i), sie);
-    const Real ef = P(m.RHO, k, j, i) + pressure + P(m.UU, k, j, i);
-    const Real gam = bulk / pressure;
+    const Real ef = P(m.RHO, k, j, i) + pg + P(m.UU, k, j, i);
+    const Real gam = bulk / pg;
 
     // The fluid sound speed should be at most sqrt(gam-1) for a relativistic fluid
     // TODO_EOS: Is that the right limit for a general eos?
@@ -515,7 +515,7 @@ KOKKOS_FORCEINLINE_FUNCTION void vchar_global(const GRCoordinates& G, const Glob
         // Get the EGRMHD parameters
         Real tau, chi_e, nu_e;
         //TODO_EOS: This might need to be changed for general eos.
-        EMHD::set_parameters(G, P, m, emhd_params, gam, k, j, i, tau, chi_e, nu_e);
+        EMHD::set_parameters(G, P, m, emhd_params, eos, k, j, i, tau, chi_e, nu_e);
 
         // Find fast magnetosonic speed
         const Real bsq = dot(D.bcon, D.bcov);

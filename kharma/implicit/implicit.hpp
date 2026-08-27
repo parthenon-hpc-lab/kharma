@@ -178,19 +178,20 @@ KOKKOS_INLINE_FUNCTION void calc_residual(const GRCoordinates& G, const Global& 
         Real bulk = eos.BulkModulusFromDensityInternalEnergy(Ps(m_p.RHO, k, j, i), Ps(m_p.UU, k, j, i)/Ps(m_p.RHO, k, j, i));
         Real pg = eos.PressureFromDensityInternalEnergy(Ps(m_p.RHO, k, j, i), Ps(m_p.UU, k, j, i)/Ps(m_p.RHO, k, j, i));
         Real gam = bulk / pg;
-        EMHD::set_parameters(G, Ps, m_p, emhd_params, gam, k, j, i, tau, chi_e, nu_e);
+        EMHD::set_parameters(G, Ps, m_p, emhd_params, eos, k, j, i, tau, chi_e, nu_e);
         GRMHD::calc_4vecs(G, Ps, m_p, k, j, i, Loci::center, Dtmp);
 
         // Compute new implicit source terms and time derivative source terms
         Real dUq, dUdP; // Don't need full array for these
-        EMHD::implicit_sources(G, P_test, m_p, gam, tau, k, j, i, dUq, dUdP); // dU_new
+        EMHD::implicit_sources(G, P_test, m_p, eos, tau, k, j, i, dUq, dUdP); // dU_new
         // ... - 0.5*(dU_new(ip) + dUi(ip)) ...
         if (m_u.Q >= 0) rq -= 0.5 * (dUq + dUi(m_u.Q, k, j, i));
         if (m_u.DP >= 0) rdP -= 0.5 * (dUdP + dUi(m_u.DP, k, j, i));
 
         // Note we're now getting tau/chi_e/nu_e with emhd_params_s!
         // TODO(CEP) split out time-dependent parts of the params struct
-        EMHD::set_parameters(G, Ps, m_p, emhd_params_s, gam, k, j, i, tau, chi_e, nu_e);
+        EMHD::set_parameters(G, Ps, m_p, emhd_params_s, eos, k, j, i, tau, chi_e, nu_e);
+        //TODO_EOS: This function uses a definition of temperature that is only valid for ideal gas case. Should probably be modified to work with general EOS.
         EMHD::time_derivative_sources(G, P_test, Pi, Ps, m_p, tau, chi_e, nu_e, Dtmp,
             emhd_params_s.higher_order_terms, gam, dt, k, j, i, dUq,
             dUdP); // dU_time
@@ -204,6 +205,7 @@ KOKKOS_INLINE_FUNCTION void calc_residual(const GRCoordinates& G, const Global& 
         if (emhd_params.higher_order_terms) {
             const Real& rho = Ps(m_p.RHO, k, j, i);
             const Real& uu = Ps(m_p.UU, k, j, i);
+            //TODO_EOS: This function uses a definition of temperature that is only valid for ideal gas case. Should probably be modified to work with general EOS.
             Real Theta = (gam - 1.) * uu / rho;
 
             rq *= (chi_e != 0) ? m::sqrt(rho * chi_e * tau * Theta * Theta) / tau : 1.;

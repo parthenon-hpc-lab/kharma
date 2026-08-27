@@ -146,7 +146,7 @@ class KastaunResidual
         const Real rhohat = std::max(rhohat_mu(iWhat), 0.);
         const Real ehat = std::max(ehat_mu(mu, qbar, rbarsq, vhatsq, What), 0.);
         const Real Phat = eos_.PressureFromDensityInternalEnergy(rhohat, ehat);
-        // TODO eos: ahat general or ideal-only?
+        //TODO_EOS: ahat general or ideal-only?
         const Real ahat = Phat / (rhohat * (1.0 + ehat));
 
         const Real nua = (1.0 + ahat) * (1.0 + ehat) * iWhat;

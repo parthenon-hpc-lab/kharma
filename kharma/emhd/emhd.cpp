@@ -41,6 +41,11 @@
 #include "grmhd.hpp"
 #include "kharma.hpp"
 
+// phoebus includes
+#include "microphysics/eos_kharma/eos_kharma.hpp"
+#include "phoebus_utils/unit_conversions.hpp"
+#include "phoebus_utils/variables.hpp"
+
 #include <parthenon/parthenon.hpp>
 
 using namespace parthenon;
@@ -321,7 +326,11 @@ TaskStatus AddSource(MeshData<Real>* md, MeshData<Real>* mdudt, IndexDomain doma
     auto pmb0 = mdudt->GetBlockData(0)->GetBlockPointer();
     // Options: Global
     const auto& gpars = pmb0->packages.Get("GRMHD")->AllParams();
-    const Real gam = gpars.Get<Real>("gamma");
+    
+    const auto& eos_params = pmb0->packages.Get("eos")->AllParams();
+    auto eos = eos_params.Get<Microphysics::EOS::EOS>("d.EOS");
+
+
     const int ndim = pmesh->ndim;
     // Options: Local
     const auto& pars = pmb0->packages.Get("EMHD")->AllParams();
@@ -366,8 +375,12 @@ TaskStatus AddSource(MeshData<Real>* md, MeshData<Real>* mdudt, IndexDomain doma
             DLOOP1
                 Temps(b, m_ucov + mu, k, j, i) = ucov[mu];
             // theta
+            Real pg = eos->PressureFromDensityInternalEnergy(
+                P(b)(m_p.RHO, k, j, i), P(b)(m_p.UU, k, j, i)/P(b)(m_p.RHO, k, j, i));
+
+            // TODO_EOS: should this be P/rho or just the temperature?
             Temps(b, m_theta, k, j, i) = m::max(
-                (gam - 1) * P(b)(m_p.UU, k, j, i) / P(b)(m_p.RHO, k, j, i), SMALL_NUM);
+                pg / P(b)(m_p.RHO, k, j, i), SMALL_NUM);
         });
 
     // Calculate & apply source terms
@@ -379,7 +392,7 @@ TaskStatus AddSource(MeshData<Real>* md, MeshData<Real>* mdudt, IndexDomain doma
             // Get the EGRMHD parameters
             Real tau, chi_e, nu_e;
             EMHD::set_parameters(
-                G, P(b), m_p, emhd_params, gam, k, j, i, tau, chi_e, nu_e);
+                G, P(b), m_p, emhd_params, eos, k, j, i, tau, chi_e, nu_e);
 
             // and the 4-vectors
             FourVectors D;
@@ -459,8 +472,6 @@ void ApplyEMHDLimits(MeshBlockData<Real>* mbd, IndexDomain domain)
     GridScalar eflag = mbd->Get("eflag").data;
 
     const EMHD::EMHD_parameters& emhd_params = EMHD::GetEMHDParameters(packages);
-
-    const Real gam = packages.Get("GRMHD")->Param<Real>("gamma");
 
     // Apply the EMHD instability limits in q, deltaP
     // The user-specified limit values are in the FloorPrescription struct,
