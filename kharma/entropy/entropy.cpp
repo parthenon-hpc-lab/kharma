@@ -63,10 +63,10 @@ std::shared_ptr<KHARMAPackage> Initialize(ParameterInput *pin, std::shared_ptr<P
     bool init_to_default = pin->GetOrAddBoolean("entropy", "init_to_default", true);
     params.Add("init_to_default", init_to_default);
 
-    Metadata::AddUserFlag("Entropy");
+    Metadata::AddUserFlag("TrackEntropy");
     // Ktot is the fluid entropy computed at end of each substep based on other 
     // fluid primitives.
-    std::vector<MetadataFlag> flags_entropy = {Metadata::Cell, Metadata::GetUserFlag("Explicit"), Metadata::GetUserFlag("Entropy")};
+    std::vector<MetadataFlag> flags_entropy = {Metadata::Cell, Metadata::GetUserFlag("Explicit"), Metadata::GetUserFlag("TrackEntropy")};
 
     auto& driver = packages->Get("Driver")->AllParams();
     auto flags_prim = driver.Get<std::vector<MetadataFlag>>("prim_flags");
@@ -103,7 +103,7 @@ TaskStatus InitEntropy(MeshBlockData<Real> *rc, ParameterInput *pin)
 
     // Covers prims.Ktot and, if enabled, prims.Ktot_adv -- both start from the same,
     // real initial entropy implied by the problem's initial rho, u.
-    auto& k_P = rc->PackVariables({Metadata::GetUserFlag("Entropy"), Metadata::GetUserFlag("Primitive")});
+    auto& k_P = rc->PackVariables({Metadata::GetUserFlag("TrackEntropy"), Metadata::GetUserFlag("Primitive")});
     GridScalar rho = rc->Get("prims.rho").data;
     GridScalar u = rc->Get("prims.u").data;
 
@@ -128,8 +128,9 @@ void BlockUtoP(MeshBlockData<Real> *rc, IndexDomain domain, bool coarse)
     auto pmb = rc->GetBlockPointer();
 
     // No need for a "map" here, we just want everything that fits these
-    auto& k_P = rc->PackVariables({Metadata::GetUserFlag("Entropy"), Metadata::GetUserFlag("Primitive")});
-    auto& k_U = rc->PackVariables({Metadata::GetUserFlag("Entropy"), Metadata::Conserved});
+    // criteria.
+    auto& k_P = rc->PackVariables({Metadata::GetUserFlag("TrackEntropy"), Metadata::GetUserFlag("Primitive")});
+    auto& k_U = rc->PackVariables({Metadata::GetUserFlag("TrackEntropy"), Metadata::Conserved});
     // And then the local density
     GridScalar rho_U = rc->Get("cons.rho").data;
 
