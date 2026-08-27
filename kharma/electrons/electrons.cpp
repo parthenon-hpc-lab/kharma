@@ -344,7 +344,7 @@ TaskStatus ApplyElectronHeating(MeshBlockData<Real> *rc_old, MeshBlockData<Real>
 
             // Convert dissipation from fluid-entropy units into electron-entropy units
             const Real diss = (game-1.) / (gam-1.) * m::pow(P(m_p.RHO, k, j, i), gam - game) * diss_fluid;
-            //this is eq27                  ratio of heating: Qi/Qe
+            //this is eq27
 
             // We'll be applying floors inline as we heat electrons, so
             // we cache the floors as entropy limits so they'll be cheaper to apply.

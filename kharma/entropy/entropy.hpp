@@ -39,6 +39,7 @@
 
 #include "decs.hpp"
 #include "kharma_package.hpp"
+#include "types.hpp"
 
 using namespace parthenon;
 
