@@ -1,0 +1,27 @@
+diff --git a/ports-of-call/variant.hpp b/ports-of-call/variant.hpp
+index ce65a87..8d72632 100644
+--- a/ports-of-call/variant.hpp
++++ b/ports-of-call/variant.hpp
+@@ -269,8 +269,13 @@ class bad_variant_access : public std::exception {
+   virtual const char *what() const noexcept override { return "bad_variant_access"; }
+ };
+ 
++#if defined(SYCL_LANGUAGE_VERSION)
++V_GPU_FUNCTION inline void throw_bad_variant_access() {
++  return;
++}
++#else
+ [[noreturn]] V_GPU_FUNCTION inline void throw_bad_variant_access() {
+-#if defined(__HIP_DEVICE_COMPILE__) ||                                                   \
++#if defined(__HIP_DEVICE_COMPILE__) || \
+     (defined(__clang__) && defined(__CUDA__) && defined(__CUDA_ARCH__))
+   __assert_fail(nullptr, nullptr, 0, nullptr);
+   PORTABLE_BUILTIN_UNREACHABLE;
+@@ -284,6 +289,7 @@ class bad_variant_access : public std::exception {
+   PORTABLE_BUILTIN_UNREACHABLE;
+ #endif
+ }
++#endif
+ 
+ template <typename... Ts>
+ class variant;
