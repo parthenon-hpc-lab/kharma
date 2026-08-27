@@ -75,8 +75,8 @@
  * * dxdX_to_embed
  * * dxdX_to_native
  *
- * Each possible class is added to a couple of PortsOfCall::variant containers, and then to the
- * chains of if statements below.
+ * Each possible class is added to a couple of PortsOfCall::variant containers, and then
+ * to the chains of if statements below.
  *
  * TODO convenience functions.  Intelligent r/th/phi, x/y/z, KS and BL, a, etc by
  * auto-translating contents
@@ -95,9 +95,11 @@ class CoordinateEmbedding
         // Isn't there some more elegant way to say "yeah the types are fine just copy da
         // bits"?
         if (PortsOfCall::holds_alternative<SphMinkowskiCoords>(base_in)) {
-            base.emplace<SphMinkowskiCoords>(PortsOfCall::get<SphMinkowskiCoords>(base_in));
+            base.emplace<SphMinkowskiCoords>(
+                PortsOfCall::get<SphMinkowskiCoords>(base_in));
         } else if (PortsOfCall::holds_alternative<CartMinkowskiCoords>(base_in)) {
-            base.emplace<CartMinkowskiCoords>(PortsOfCall::get<CartMinkowskiCoords>(base_in));
+            base.emplace<CartMinkowskiCoords>(
+                PortsOfCall::get<CartMinkowskiCoords>(base_in));
         } else if (PortsOfCall::holds_alternative<SphBLCoords>(base_in)) {
             base.emplace<SphBLCoords>(PortsOfCall::get<SphBLCoords>(base_in));
         } else if (PortsOfCall::holds_alternative<SphKSCoords>(base_in)) {
@@ -109,17 +111,21 @@ class CoordinateEmbedding
         }
 
         if (PortsOfCall::holds_alternative<NullTransform>(transform_in)) {
-            transform.emplace<NullTransform>(PortsOfCall::get<NullTransform>(transform_in));
+            transform.emplace<NullTransform>(
+                PortsOfCall::get<NullTransform>(transform_in));
         } else if (PortsOfCall::holds_alternative<ExponentialTransform>(transform_in)) {
             transform.emplace<ExponentialTransform>(
                 PortsOfCall::get<ExponentialTransform>(transform_in));
-        } else if (PortsOfCall::holds_alternative<SuperExponentialTransform>(transform_in)) {
+        } else if (PortsOfCall::holds_alternative<SuperExponentialTransform>(
+                       transform_in)) {
             transform.emplace<SuperExponentialTransform>(
                 PortsOfCall::get<SuperExponentialTransform>(transform_in));
         } else if (PortsOfCall::holds_alternative<ModifyTransform>(transform_in)) {
-            transform.emplace<ModifyTransform>(PortsOfCall::get<ModifyTransform>(transform_in));
+            transform.emplace<ModifyTransform>(
+                PortsOfCall::get<ModifyTransform>(transform_in));
         } else if (PortsOfCall::holds_alternative<FunkyTransform>(transform_in)) {
-            transform.emplace<FunkyTransform>(PortsOfCall::get<FunkyTransform>(transform_in));
+            transform.emplace<FunkyTransform>(
+                PortsOfCall::get<FunkyTransform>(transform_in));
         } else if (PortsOfCall::holds_alternative<WidepoleTransform>(transform_in)) {
             transform.emplace<WidepoleTransform>(
                 PortsOfCall::get<WidepoleTransform>(transform_in));
@@ -720,9 +726,11 @@ class CoordinateEmbedding
         // Then transform that 4-vector to KS (or not, if we're using BL base coords)
         Real ucon_base[GR_DIM];
         if (PortsOfCall::holds_alternative<SphKSCoords>(base)) {
-            PortsOfCall::get<SphKSCoords>(base).vec_from_bl(Xembed, ucon_bl_fourv, ucon_base);
+            PortsOfCall::get<SphKSCoords>(base).vec_from_bl(
+                Xembed, ucon_bl_fourv, ucon_base);
         } else if (PortsOfCall::holds_alternative<SphKSExtG>(base)) {
-            PortsOfCall::get<SphKSExtG>(base).vec_from_bl(Xembed, ucon_bl_fourv, ucon_base);
+            PortsOfCall::get<SphKSExtG>(base).vec_from_bl(
+                Xembed, ucon_bl_fourv, ucon_base);
         } else if (PortsOfCall::holds_alternative<SphBLCoords>(base) ||
                    PortsOfCall::holds_alternative<SphBLExtG>(base)) {
             DLOOP1
