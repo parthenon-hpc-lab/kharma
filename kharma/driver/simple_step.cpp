@@ -47,7 +47,7 @@ TaskCollection KHARMADriver::MakeSimpleTaskCollection(BlockList_t &blocks, int s
     auto& flux_pkg   = pkgs.at("Flux")->AllParams();
 
     if (pkgs.count("B_Cleanup") || pkgs.count("B_CT") ||
-        pkgs.count("Electrons") || flux_pkg.Get<bool>("use_fofc") ||
+        pkgs.count("Electrons") || pkgs.count("Entropy") || flux_pkg.Get<bool>("use_fofc") ||
         pkgs.count("Implicit") || pkgs.count("Current") ||
         pkgs.count("EMHD") || pkgs.count("ISMR") || pmesh->multilevel)
     {

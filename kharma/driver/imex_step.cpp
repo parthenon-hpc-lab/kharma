@@ -41,6 +41,7 @@
 #include "b_ct.hpp"
 #include "b_flux_ct.hpp"
 #include "electrons.hpp"
+#include "entropy.hpp"
 #include "inverter.hpp"
 #include "ismr.hpp"
 #include "grmhd.hpp"
@@ -70,6 +71,7 @@ TaskCollection KHARMADriver::MakeImExTaskCollection(BlockList_t &blocks, int sta
     const bool use_b_cleanup = pkgs.count("B_Cleanup");
     const bool use_b_ct = pkgs.count("B_CT");
     const bool use_electrons = pkgs.count("Electrons");
+    const bool use_entropy = pkgs.count("Entropy");
     const bool use_fofc = flux_pkg.Get<bool>("use_fofc");
     const bool use_implicit = pkgs.count("Implicit");
     const bool use_jcon = pkgs.count("Current");
@@ -316,13 +318,21 @@ TaskCollection KHARMADriver::MakeImExTaskCollection(BlockList_t &blocks, int sta
                                           md_sub_step_init.get(), md_sub_step_final.get(), stage == 1);
         }
 
+        // Update the tracked total entropy for the step that just completed.
+        // This must run *after* electron heating, which still needs to read the
+        // pre-update (purely advected) value of Ktot to calculate dissipation.
+        auto t_entropy = t_heat_electrons;
+        if (use_entropy) {
+            t_entropy = tl.AddTask(t_heat_electrons, Entropy::MeshUpdateEntropy, md_sub_step_final.get());
+        }
+
         // Compute explicit dissipation terms for EMHD, if enabled.
-        // This is done after the instability limits are applied so that the 
+        // This is done after the instability limits are applied so that the
         // dissipation is computed on the final state that is the input to the next step.
-        auto t_dissipation = t_heat_electrons;
+        auto t_dissipation = t_entropy;
         if (stage == integrator->nstages) {
             if (evaluate_explicit_dissipation) {
-                t_dissipation = tl.AddTask(t_heat_electrons, 
+                t_dissipation = tl.AddTask(t_entropy,
                     EMHD::MeshComputeExplicitDissipation, md_sub_step_final.get());
             }
         }

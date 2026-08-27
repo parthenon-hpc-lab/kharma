@@ -44,8 +44,8 @@ using namespace parthenon;
 /**
  * This physics package implements self-consistent Electron heating and transport
  * as in Ressler+ 2015.
- * It tracks fluid total entropy in order to calculate stepwise changes, and electron
- * entropy fed by some fraction of dissipation.
+ * It splits each step's fluid dissipation (tracked by the Entropy package, see entropy.hpp)
+ * among electron entropy variables, fed by some fraction of that dissipation.
  * It supports running any/all of several heating models (dissipation fractions) via runtime parameters.
  *
  * Adapted very closely from work done for iharm3d by Cesar Diaz
@@ -59,9 +59,10 @@ using namespace parthenon;
 namespace Electrons {
 /**
  * Initialization: declare any fields this package will evolve, initialize any parameters
- * 
- * For electrons, this means a total entropy Ktot to track dissipation, and electron entropies
- * for each model being run.
+ *
+ * For electrons, this means electron entropies for each heating model being run.
+ * The fluid's total entropy Ktot, which this package reads to calculate dissipation,
+ * is owned by the Entropy package (see entropy.hpp) -- Electrons requires it be enabled.
  */
 std::shared_ptr<KHARMAPackage> Initialize(ParameterInput *pin, std::shared_ptr<Packages_t>& packages);
 
@@ -88,8 +89,9 @@ inline TaskStatus MeshInitElectrons(MeshData<Real> *md, ParameterInput *pin)
  * 
  * Usually this should default to the entire domain, as the KHARMA algorithm relies on applying
  * UtoP over ghost zones.
- * 
- * Function in this package: Get the specific entropy primitive value, by dividing the total entropy K/(rho*u^0)
+ *
+ * Function in this package: Get the specific electron entropy primitive value(s), by dividing
+ * the conserved (density-weighted) electron entropy by the density: Kel/(rho*u^0)
  */
 void BlockUtoP(MeshBlockData<Real> *rc, IndexDomain domain, bool coarse=false);
 
@@ -98,16 +100,19 @@ void BlockUtoP(MeshBlockData<Real> *rc, IndexDomain domain, bool coarse=false);
  * at the very end of the step. For reasons mentioned there & above, it must update *all* zones, incl. ghosts.
  *
  * The function calculates how electrons should be heated and updates their entropy values,
- * using each step's total dissipation (advected vs actual fluid entropy)
+ * using each step's total fluid dissipation. This dissipation is computed from the Entropy
+ * package's Ktot (advected vs actual fluid entropy, see entropy.hpp), pulled in via
+ * Entropy::CalcEntropy rather than recomputed here.
  * It applies any or all of several different esimates for this split, to each of the several different
  * primitive variables "prims.Kel_X"
  * Finally, it checks the results against a minimum and maximum temperature ratio T_protons/T_electrons
- * 
+ *
  * To recap re: floors:
- * This function expects two sets of values {rho0, u0, Ktot0} from rc_old and {rho1, u1} from rc,
- * all of which obey all given floors.
- * It produces end-of-substep values {Ktot1, Kel_X1, Kel_Y1, etc}, which are also guaranteed to obey floors
- * 
+ * This function expects two sets of values {rho0, u0, Ktot0} from rc_old and {rho1, u1, Ktot1} from rc,
+ * all of which obey all given floors, where Ktot0/Ktot1 are the Entropy package's pre-/post-step values.
+ * It produces end-of-substep values {Kel_X1, Kel_Y1, etc}, which are also guaranteed to obey floors.
+ * Note it does *not* update Ktot itself -- that's the Entropy package's job, run just after this.
+ *
  * TODO this function should update fflag to reflect temperature ratio floor hits
  */
 TaskStatus ApplyElectronHeating(MeshBlockData<Real> *rc_old, MeshBlockData<Real> *rc, bool generate_grf=false);
@@ -119,13 +124,6 @@ inline TaskStatus MeshApplyElectronHeating(MeshData<Real> *md_old, MeshData<Real
     EndFlag();
     return TaskStatus::complete;
 }
-
-/**
- * Apply adjustments to KTOT & e- K values based on floors.
- * Note that Kmin/max limits are applied immediately at heating,
- * *not* here.
- */
-void ApplyFloors(MeshBlockData<Real> *mbd, IndexDomain domain);
 
 /**
  * Diagnostics printed/computed after each step, called from kharma.cpp
@@ -156,7 +154,7 @@ KOKKOS_FORCEINLINE_FUNCTION void p_to_u(const GRCoordinates& G, const VariablePa
     const Real ut = GRMHD::lorentz_calc(G, P, m_p, k, j, i, loc) * m::sqrt(-G.gcon(loc, j, i, 0, 0));
     const Real rho_ut = P(m_p.RHO, k, j, i) * ut * G.gdet(loc, j, i);
 
-    flux(m_u.KTOT, k, j, i) = rho_ut * P(m_p.KTOT, k, j, i);
+    // Ktot's flux is handled generically by Flux::prim_to_flux; it belongs to the Entropy package.
     if (m_p.K_CONSTANT >= 0)
         flux(m_u.K_CONSTANT, k, j, i) = rho_ut * P(m_p.K_CONSTANT, k, j, i);
     if (m_p.K_HOWES >= 0)
