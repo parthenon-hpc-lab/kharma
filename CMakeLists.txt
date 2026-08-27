@@ -38,8 +38,6 @@ set(HDF5_USE_STATIC_LIBRARIES OFF CACHE BOOL "KHARMA Override")
 
 
 # Kokkos options
-set(Kokkos_ENABLE_CUDA_LAMBDA ON CACHE BOOL "KHARMA Override")
-set(Kokkos_ENABLE_CUDA_CONSTEXPR ON CACHE BOOL "KHARMA Override")
 # Set ON for possible speed improvement?
 set(Kokkos_ENABLE_HWLOC OFF CACHE BOOL "KHARMA Override")
 set(Kokkos_ENABLE_AGGRESSIVE_VECTORIZATION ON CACHE BOOL "KHARMA Override")
