@@ -185,7 +185,7 @@ elif option "hip"; then
   ENABLE_SYCL="OFF"
   ENABLE_HIP="ON"
 elif option "cuda"; then
-  export CXX="$SCRIPT_DIR/bin/nvcc_wrapper"
+  export CXX="$SCRIPT_DIR/external/parthenon/external/Kokkos/bin/nvcc_wrapper"
   if option "wrapper_dryrun"; then
     export CXXFLAGS="-dryrun $CXXFLAGS"
     echo "Dry-running the nvcc wrapper with $CXXFLAGS"
