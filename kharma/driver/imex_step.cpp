@@ -76,6 +76,11 @@ TaskCollection KHARMADriver::MakeImExTaskCollection(BlockList_t &blocks, int sta
     const bool use_linesearch = (use_implicit) ? pkgs.at("Implicit")->Param<bool>("linesearch") : false;
     const bool emhd_enabled = pkgs.count("EMHD");
     const bool use_ideal_guess = (emhd_enabled) ? pkgs.at("GRMHD")->Param<bool>("ideal_guess") : false;
+    // Boolean flags re: Extended MHD dissipation tracking
+    const bool evaluate_explicit_dissipation = (emhd_enabled) ? 
+        pkgs.at("EMHD")->Param<bool>("evaluate_explicit_dissipation") : false;
+    const bool evaluate_explicit_dissipation_split = (emhd_enabled) ? 
+        pkgs.at("EMHD")->Param<bool>("evaluate_explicit_dissipation_split") : false;
 
     // Allocate/copy the things we need
     // TODO these can now be reduced by including the var lists/flags which actually need to be allocated
@@ -311,8 +316,19 @@ TaskCollection KHARMADriver::MakeImExTaskCollection(BlockList_t &blocks, int sta
                                           md_sub_step_init.get(), md_sub_step_final.get(), stage == 1);
         }
 
+        // Compute explicit dissipation terms for EMHD, if enabled.
+        // This is done after the instability limits are applied so that the 
+        // dissipation is computed on the final state that is the input to the next step.
+        auto t_dissipation = t_heat_electrons;
+        if (stage == integrator->nstages) {
+            if (evaluate_explicit_dissipation) {
+                t_dissipation = tl.AddTask(t_heat_electrons, 
+                    EMHD::MeshComputeExplicitDissipation, md_sub_step_final.get());
+            }
+        }
+        
         // Make sure *all* conserved vars are synchronized at step end
-        auto t_ptou = tl.AddTask(t_heat_electrons, Flux::MeshPtoU, md_sub_step_final.get(), IndexDomain::entire, false);
+        auto t_ptou = tl.AddTask(t_dissipation, Flux::MeshPtoU, md_sub_step_final.get(), IndexDomain::entire, false);
 
         auto t_step_done = t_ptou;
         if (pkgs.count("ISMR")) {

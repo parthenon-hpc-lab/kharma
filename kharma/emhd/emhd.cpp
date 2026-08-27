@@ -87,6 +87,13 @@ std::shared_ptr<KHARMAPackage> Initialize(ParameterInput *pin, std::shared_ptr<P
     Real eta   = pin->GetOrAddReal("emhd", "eta", 1.0);
     params.Add("eta", eta);
 
+    // Evaluate explicit dissipation in Extended GRMHD?
+    // See Equation 53 in Chandra et al. 2015, arXiv:1508.00878
+    bool evaluate_explicit_dissipation = pin->GetOrAddBoolean("emhd", "evaluate_explicit_dissipation", false);
+    bool evaluate_explicit_dissipation_split = pin->GetOrAddBoolean("emhd", "evaluate_explicit_dissipation_split", false);
+    params.Add("evaluate_explicit_dissipation", evaluate_explicit_dissipation);
+    params.Add("evaluate_explicit_dissipation_split", evaluate_explicit_dissipation_split);
+
     EMHD_parameters emhd_params;
     emhd_params.higher_order_terms = higher_order_terms;
     emhd_params.feedback           = feedback;
@@ -162,6 +169,16 @@ std::shared_ptr<KHARMAPackage> Initialize(ParameterInput *pin, std::shared_ptr<P
     // we register zones where limits on q and dP are hit
     Metadata m = Metadata({Metadata::Real, Metadata::Cell, Metadata::Derived, Metadata::OneCopy});
     pkg->AddField("eflag", m);
+
+    // Track explicit dissipation in Extended GRMHD
+    m = Metadata({Metadata::Real, Metadata::Cell, Metadata::Derived, Metadata::OneCopy});
+    if (evaluate_explicit_dissipation) {
+        pkg->AddField("Q_emhd", m);
+        if (evaluate_explicit_dissipation_split) {
+            pkg->AddField("Q_emhd_conduction", m);
+            pkg->AddField("Q_emhd_viscosity", m);
+        }
+    }
 
     // Callbacks
 
@@ -426,6 +443,78 @@ void ApplyEMHDLimits(MeshBlockData<Real> *mbd, IndexDomain domain)
             eflag(k, j, i) = apply_instability_limits(G, P, m_p, gam, emhd_params, k, j, i, U, m_u);
         }
     );
+}
+
+TaskStatus ComputeExtendedMHDDissipation(MeshBlockData<Real> *rc)
+{
+    // Get the block pointer
+    auto pmb = rc->GetBlockPointer();
+
+    // Get the coordinates
+    const auto& G = pmb->coords;
+
+    // Get fluid adiabatic index
+    const Real gam = pmb->packages.Get("GRMHD")->Param<Real>("gamma");
+
+    // Pull EMHD params
+    const auto& pars                   = pmb->packages.Get("EMHD")->AllParams();
+    const EMHD_parameters& emhd_params = pars.Get<EMHD_parameters>("emhd_params");
+    const bool split_dissipation       = pars.Get<bool>("evaluate_explicit_dissipation_split");
+
+    // Pack primitives
+    PackIndexMap prims_map;
+    auto P = rc->PackVariables({Metadata::GetUserFlag("Primitive")}, prims_map);
+    const VarMap m_p(prims_map, false);
+
+    // Grab the output fields to write into.
+    // rc->Get(name) returns the Variable, ".data" is the underlying ParArrayND/GridScalar
+    // that can be indexed directly as var(k, j, i) inside the kernel.
+    GridScalar Q_emhd = rc->Get("Q_emhd").data;
+    GridScalar Q_emhd_conduction, Q_emhd_viscosity;
+    if (split_dissipation) {
+        // Only registered/allocated when "emhd/evaluate_explicit_dissipation_split" 
+        // is set, so only fetch them in that case.
+        Q_emhd_conduction = rc->Get("Q_emhd_conduction").data;
+        Q_emhd_viscosity  = rc->Get("Q_emhd_viscosity").data;
+    }
+
+    // Per-block domain range
+    const IndexRange ib = rc->GetBoundsI(IndexDomain::entire);
+    const IndexRange jb = rc->GetBoundsJ(IndexDomain::entire);
+    const IndexRange kb = rc->GetBoundsK(IndexDomain::entire);
+
+    // Loop over the block and compute the explicit dissipation terms
+    pmb->par_for("compute_explicit_dissipation", kb.s, kb.e, jb.s, jb.e, ib.s, ib.e,
+        KOKKOS_LAMBDA (const int &k, const int &j, const int &i) {
+            const Real rho    = P(m_p.RHO, k, j, i);
+            const Real uu     = P(m_p.UU, k, j, i);
+            const Real pg     = (gam - 1.) * uu;
+            const Real Theta  = pg / rho;
+            const Real cs2    = gam * pg / (rho + (gam * uu));
+
+            Real tau, chi_e, nu_e;
+            EMHD::set_parameters(G, P, m_p, emhd_params, gam, k, j, i, tau, chi_e, nu_e);
+
+            const Real qtilde  = (m_p.Q >= 0)  ? P(m_p.Q, k, j, i)  : 0.;
+            const Real dPtilde = (m_p.DP >= 0) ? P(m_p.DP, k, j, i) : 0.;
+            Real q, dP;
+            EMHD::convert_prims_to_q_dP(qtilde, dPtilde, rho, Theta, cs2, emhd_params, q, dP);
+
+            // Entropy current divergence (Chandra+ 2015 eq. 53):
+            // q^2/(chi rho Theta^2) + (1/3) dP^2/(nu rho Theta)
+            // Dissipation is this times the temperature.
+            const Real Q_conduction = (m_p.Q >= 0)  ? q*q / (chi_e * rho * Theta)  : 0.;
+            const Real Q_viscosity  = (m_p.DP >= 0) ? (1./3.) * dP*dP / (nu_e * rho) : 0.;
+
+            Q_emhd(k, j, i) = Q_conduction + Q_viscosity;
+            if (split_dissipation) {
+                Q_emhd_conduction(k, j, i) = Q_conduction;
+                Q_emhd_viscosity(k, j, i)  = Q_viscosity;
+            }
+        }
+    );
+
+    return TaskStatus::complete;
 }
 
 } // namespace EMHD

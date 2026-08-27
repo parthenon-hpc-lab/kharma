@@ -23,6 +23,11 @@ then
   export CXX_NATIVE=CC
 
   if [[ $ARGS == *"cuda"* ]]; then
+
+    # Enable GPU RDMA for cray-mpich
+    export MPICH_GPU_SUPPORT_ENABLED=1
+    export MPICH_GPU_MANAGED_MEMORY_SUPPORT_ENABLED=1
+    
     # GPU Compile
     if [[ "$ARGS" == *"hostside"* ]]; then
       # Device-side buffers are broken on some Nvidia machines

@@ -83,14 +83,6 @@ KOKKOS_INLINE_FUNCTION int apply_instability_limits(const GRCoordinates& G, cons
     Real q, dP;
     EMHD::convert_prims_to_q_dP(qtilde, dPtilde, rho, Theta, cs*cs, emhd_params, q, dP);
 
-    // if (i==128 && j==128) {
-    //     printf("\n---INSTABILITY LIMITS---\n");
-    //     printf("---Before applying limits---\n");
-    //     printf("Bsq:      %g\n", bsq);
-    //     printf("dP_tilde: %g\n", P(m_p.DP, k, j, i));
-    //     printf("dP:       %g\n", dP);
-    // }
-
     if (m_p.Q >= 0) {
         Real qmax         = 1.07 * rho * cs*cs*cs;
         Real max_frac     = m::max(m::abs(q) / qmax, 1.);

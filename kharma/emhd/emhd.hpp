@@ -143,6 +143,22 @@ inline EMHD_parameters GetEMHDParameters(Packages_t& packages)
     return emhd_params_tmp;
 }
 
+/**
+ * Compute the explicit dissipation in EMHD.
+ * This includes both,
+ * (i) the total dissipation in Extended MHD, and
+ * (ii) if enabled, the split of dissipation into conduction and viscosity contributions.
+ */
+TaskStatus ComputeExtendedMHDDissipation(MeshBlockData<Real> *rc);
+inline TaskStatus MeshComputeExplicitDissipation(MeshData<Real> *md)
+{
+    Flag("MeshComputeExplicitDissipation");
+    for (int i=0; i < md->NumBlocks(); ++i)
+        ComputeExtendedMHDDissipation(md->GetBlockData(i).get());
+    EndFlag();
+    return TaskStatus::complete;
+}
+
 #if DISABLE_EMHD
 
 template<typename Local>
