@@ -147,12 +147,6 @@ inline EMHD_parameters GetEMHDParameters(Packages_t& packages)
 
 #if DISABLE_EMHD
 
-template<typename Local>
-KOKKOS_INLINE_FUNCTION void set_parameters(const GRCoordinates& G, const Local& P,
-    const VarMap& m_p, const EMHD_parameters& emhd_params, const Real& gam, const int& j,
-    const int& i, Real& tau, Real& chi_e, Real& nu_e)
-{}
-
 KOKKOS_INLINE_FUNCTION void set_parameters(const GRCoordinates& G,
     const VariablePack<Real>& P, const VarMap& m_p, const EMHD_parameters& emhd_params,
     const Real& gam, const int& k, const int& j, const int& i, Real& tau, Real& chi_e,
@@ -260,19 +254,6 @@ KOKKOS_INLINE_FUNCTION void set_parameters(const GRCoordinates& G, const Real& r
         chi_e = m::min(max_alpha, emhd_params.conduction_alpha) * cs2 * tau;
         nu_e = m::min(max_alpha, emhd_params.viscosity_alpha) * cs2 * tau;
     }
-}
-template<typename Local>
-KOKKOS_INLINE_FUNCTION void set_parameters(const GRCoordinates& G, const Local& P,
-    const VarMap& m_p, const EMHD_parameters& emhd_params, const Real& gam, const int& j,
-    const int& i, Real& tau, Real& chi_e, Real& nu_e)
-{
-    FourVectors Dtmp;
-    GRMHD::calc_4vecs(G, P, m_p, j, i, Loci::center, Dtmp);
-    double bsq = m::max(dot(Dtmp.bcon, Dtmp.bcov), SMALL_NUM);
-    Real qtilde = (m_p.Q >= 0) ? P(m_p.Q) : 0.;
-    Real dPtilde = (m_p.DP >= 0) ? P(m_p.DP) : 0.;
-    set_parameters(G, P(m_p.RHO), P(m_p.UU), qtilde, dPtilde, bsq, emhd_params, gam, j, i,
-        tau, chi_e, nu_e);
 }
 
 KOKKOS_INLINE_FUNCTION void set_parameters(const GRCoordinates& G,
