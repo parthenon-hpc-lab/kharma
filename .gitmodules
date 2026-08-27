@@ -11,3 +11,6 @@
 [submodule "external/singularity-eos"]
 	path = external/singularity-eos
 	url = https://github.com/lanl/singularity-eos.git
+[submodule "external/kokkos-kernels"]
+	path = external/kokkos-kernels
+	url = https://github.com/kokkos/kokkos-kernels.git

@@ -71,17 +71,17 @@ add_subdirectory(external/parthenon)
 include_directories(external/parthenon/src)
 # variant is header only, don't build anything
 include_directories(external/singularity-eos/utils/ports-of-call)
-# Inherit pristine kokkos-kernels (mistake?)
-include_directories(external/singularity-eos/utils/kokkos-kernels)
 
+# Inherit pristine kokkos-kernels
+include_directories(external/kokkos-kernels)
 # kokkos-kernels want to import from their own directories
-include_directories(external/singularity-eos/utils/kokkos-kernels/batched)
-include_directories(external/singularity-eos/utils/kokkos-kernels/batched/dense)
-include_directories(external/singularity-eos/utils/kokkos-kernels/batched/dense/src)
-include_directories(external/singularity-eos/utils/kokkos-kernels/batched/dense/impl)
-include_directories(external/singularity-eos/utils/kokkos-kernels/blas/src)
-include_directories(external/singularity-eos/utils/kokkos-kernels/blas/impl)
-include_directories(external/singularity-eos/utils/kokkos-kernels/common/src)
+include_directories(external/kokkos-kernels/batched)
+include_directories(external/kokkos-kernels/batched/dense)
+include_directories(external/kokkos-kernels/batched/dense/src)
+include_directories(external/kokkos-kernels/batched/dense/impl)
+include_directories(external/kokkos-kernels/blas/src)
+include_directories(external/kokkos-kernels/blas/impl)
+include_directories(external/kokkos-kernels/common/src)
 
 # Needed for running singularity-eos tests
 set(SINGULARITY_USE_HDF5 ON CACHE BOOL "" FORCE)
