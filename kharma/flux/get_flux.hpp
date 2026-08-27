@@ -302,7 +302,8 @@ inline TaskStatus GetFlux(MeshData<Real>* md)
     // If we have B field on faces, we "must" replace reconstructed version with that
     // Override at user option due to unreasonable effectiveness
     // (https://github.com/AFD-Illinois/kharma/issues/79)
-    // TODO(CEP) integrate above: if(p == m_p.B && consistent_face_b) and see if that's faster
+    // TODO(CEP) integrate above: if(p == m_p.B && consistent_face_b) and see if that's
+    // faster
     if (pmb0->packages.AllPackages().count("B_CT") &&
         packages.Get("Fluxes")->Param<bool>("consistent_face_b")) {
         const auto& Bf = md->PackVariables(std::vector<std::string>{"cons.fB"});
@@ -347,8 +348,8 @@ inline TaskStatus GetFlux(MeshData<Real>* md)
 
             // Magnetosonic speeds
             Real cmaxL, cminL;
-            Flux::vchar(G, Pl_all(bl), m_p, Dtmp, gam, emhd_params, k, j, i, loc,
-                dir, cmaxL, cminL);
+            Flux::vchar(G, Pl_all(bl), m_p, Dtmp, gam, emhd_params, k, j, i, loc, dir,
+                cmaxL, cminL);
 
             // Record speeds
             cmax(bl, dir - 1, k, j, i) = m::max(0., cmaxL);
@@ -377,8 +378,8 @@ inline TaskStatus GetFlux(MeshData<Real>* md)
 
             // Magnetosonic speeds
             Real cmaxR, cminR;
-            Flux::vchar(G, Pr_all(bl), m_p, Dtmp, gam, emhd_params, k, j, i, loc,
-                dir, cmaxR, cminR);
+            Flux::vchar(G, Pr_all(bl), m_p, Dtmp, gam, emhd_params, k, j, i, loc, dir,
+                cmaxR, cminR);
 
             // Calculate cmax/min based on comparison with cached values
             cmax(bl, dir - 1, k, j, i) = m::max(cmax(bl, dir - 1, k, j, i), cmaxR);

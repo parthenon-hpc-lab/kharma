@@ -400,12 +400,11 @@ TaskStatus Implicit::Step(MeshData<Real>* md_full_step_init,
                 ScratchPad2D<int> pivot_s(member.team_scratch(scratch_level), n1, nfvar);
 
                 // Copy in to scratchpads
-                parthenon::par_for_inner(member, 0, nfvar-1, 0, nfvar-1, 0, n1 - 1,
+                parthenon::par_for_inner(member, 0, nfvar - 1, 0, nfvar - 1, 0, n1 - 1,
                     [&](const int& ip, const int& jp, const int& i)
                     {
                         if (jp == 0) delta_prim_s(i, ip) = -residual_all(b, ip, k, j, i);
-                        jacobian_s(i, ip, jp) =
-                            jacobian_all(b, ip * nfvar + jp, k, j, i);
+                        jacobian_s(i, ip, jp) = jacobian_all(b, ip * nfvar + jp, k, j, i);
                     });
                 member.team_barrier();
 
@@ -468,7 +467,7 @@ TaskStatus Implicit::Step(MeshData<Real>* md_full_step_init,
                 member.team_barrier();
 
                 // Copy out delta_prim
-                parthenon::par_for_inner(member, 0, nfvar-1, ib.s, ib.e,
+                parthenon::par_for_inner(member, 0, nfvar - 1, ib.s, ib.e,
                     [&](const int& ip, const int& i)
                     {
                         delta_prim_all(b)(ip, k, j, i) = delta_prim_s(i, ip);
