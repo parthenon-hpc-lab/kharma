@@ -191,7 +191,7 @@ elif option "cuda"; then
     echo "Dry-running the nvcc wrapper with $CXXFLAGS"
   fi
   export NVCC_WRAPPER_DEFAULT_COMPILER="$CXX_NATIVE"
-  # TODO set Kokkos CUDA options here instead of CMakeLists to avoid warnings
+  EXTRA_FLAGS="$EXTRA_FLAGS -DKokkos_ENABLE_CUDA_CONSTEXPR=ON"
   OUTER_LAYOUT="MANUAL1D_LOOP"
   INNER_LAYOUT="TVR_INNER_LOOP"
   ENABLE_OPENMP="OFF"

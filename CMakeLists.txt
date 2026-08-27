@@ -38,8 +38,6 @@ set(HDF5_USE_STATIC_LIBRARIES OFF CACHE BOOL "KHARMA Override")
 
 
 # Kokkos options
-set(Kokkos_ENABLE_CUDA_LAMBDA ON CACHE BOOL "KHARMA Override")
-set(Kokkos_ENABLE_CUDA_CONSTEXPR ON CACHE BOOL "KHARMA Override")
 # Set ON for possible speed improvement?
 set(Kokkos_ENABLE_HWLOC OFF CACHE BOOL "KHARMA Override")
 set(Kokkos_ENABLE_AGGRESSIVE_VECTORIZATION ON CACHE BOOL "KHARMA Override")
@@ -69,18 +67,26 @@ endif()
 # Build Parthenon
 add_subdirectory(external/parthenon)
 include_directories(external/parthenon/src)
-# mpark::variant is header only, don't build anything
-include_directories(external/variant/include)
-# Our hacked-up version of the Kokkos kernels
-include_directories(external/kokkos-kernels)
+# variant is header only, don't build anything
+include_directories(external/singularity-eos/utils/ports-of-call)
 
+# Inherit pristine kokkos-kernels
+include_directories(external/kokkos-kernels)
+# kokkos-kernels want to import from their own directories
+include_directories(external/kokkos-kernels/batched)
+include_directories(external/kokkos-kernels/batched/dense)
+include_directories(external/kokkos-kernels/batched/dense/src)
+include_directories(external/kokkos-kernels/batched/dense/impl)
+include_directories(external/kokkos-kernels/blas/src)
+include_directories(external/kokkos-kernels/blas/impl)
+include_directories(external/kokkos-kernels/common/src)
 
 # Needed for running singularity-eos tests
-set(SINGULARITY_USE_HDF5 ON CACHE BOOL "" FORCE)
-set(SINGULARITY_USE_SPINER ON CACHE BOOL "" FORCE)
-set(SINGULARITY_USE_SPINER_WITH_HDF5 ON CACHE BOOL "" FORCE)
-set(PARTHENON_DISABLE_HDF5 OFF CACHE BOOL "" FORCE)
-set(SINGULARITY_USE_STELLAR_COLLAPSE ON CACHE BOOL "" FORCE)
+#set(SINGULARITY_USE_HDF5 ON CACHE BOOL "" FORCE)
+#set(SINGULARITY_USE_SPINER ON CACHE BOOL "" FORCE)
+#set(SINGULARITY_USE_SPINER_WITH_HDF5 ON CACHE BOOL "" FORCE)
+#set(PARTHENON_DISABLE_HDF5 OFF CACHE BOOL "" FORCE)
+#set(SINGULARITY_USE_STELLAR_COLLAPSE ON CACHE BOOL "" FORCE)
 set(SINGULARITY_FORCE_SUBMODULE_MODE ON CACHE BOOL "" FORCE)
 
 # Build Singularity-eos
