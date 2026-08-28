@@ -154,7 +154,7 @@ TaskStatus InitializeEMHDModes(
                 EMHD::set_parameters(G, rho(k, j, i), u(k, j, i), 0., 0., 0., emhd_params,
                     eos, j, i, tau, chi_e, nu_e);
 
-                RReal sie = u(k, j, i) / rho(k, j, i);
+                Real sie = u(k, j, i) / rho(k, j, i);
                 Real gamma1 = eos.BulkModulusFromDensityInternalEnergy(rho(k,j,i),sie)/eos.PressureFromDensityInternalEnergy(rho(k,j,i),sie);
                 //TODO_EOS: This function uses a definition of temperature that is only valid for ideal gas case. Should probably be modified to work with general EOS.
 

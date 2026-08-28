@@ -223,7 +223,7 @@ TaskStatus SeedBFieldType(MeshBlockData<Real>* rc, ParameterInput* pin,
                 kappa = pin->GetReal("torus", "kappa");
                 tilt = pin->GetReal("torus", "tilt") / 180. * M_PI;
                 // Other things we need only for torus evaluation
-                gam = pmb->packages.Get("GRMHD")->Param<Real>("gamma");
+                gam = pmb->packages.Get("eos")->Param<Real>("gm1") + 1.0;
                 rho_norm = pmb->packages.Get("GRMHD")->Param<Real>("rho_norm");
                 a = G.coords.get_a();
                 break;
@@ -232,7 +232,7 @@ TaskStatus SeedBFieldType(MeshBlockData<Real>* rc, ParameterInput* pin,
                 arg1 = pin->GetReal("orszag_tang", "phase");
                 break;
             case BSeedType::r1s2:
-                gam = pmb->packages.Get("GRMHD")->Param<Real>("gamma");
+                gam = pmb->packages.Get("eos")->Param<Real>("gm1") + 1.0;
                 n = 1. / (gam - 1.);
                 rs = pin->GetOrAddReal("bondi", "rs", m::sqrt(1e5));
                 if (m::abs(n - 1.5) < 0.01)

@@ -83,6 +83,8 @@ KOKKOS_INLINE_FUNCTION int apply_instability_limits(const GRCoordinates& G,
     //TODO_EOS: check theta here, might be temperature and need to be calculated accordingly.
     Real Theta = pg / rho;
     const Real ef = rho + pg + uu; // \rho * h = rho + u + P.
+    const Real bulk = eos.BulkModulusFromDensityInternalEnergy(rho, uu/rho);
+
     Real cs = m::sqrt(bulk / ef);
     FourVectors D;
     GRMHD::calc_4vecs(G, P, m_p, k, j, i, Loci::center, D);

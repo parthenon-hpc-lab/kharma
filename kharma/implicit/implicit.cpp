@@ -197,7 +197,6 @@ TaskStatus Implicit::Step(MeshData<Real>* md_full_step_init,
     const auto& globals = pmb_full_step_init->packages.Get("Globals")->AllParams();
     const int verbose = globals.Get<int>("verbose");
     const int flag_verbose = globals.Get<int>("flag_verbose");
-    //const Real gam = pmb_full_step_init->packages.Get("GRMHD")->Param<Real>("gamma");
 
     const auto& eos_params = pmb_full_step_init->packages.Get("eos")->AllParams();
     auto eos = eos_params.Get<Microphysics::EOS::EOS>("d.EOS");

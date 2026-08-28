@@ -220,12 +220,11 @@ KOKKOS_INLINE_FUNCTION void set_parameters(const GRCoordinates& G, const Real& r
         // Compute dynamical time scale
         const Real tau_dyn = m::sqrt(r * r * r);
         tau = tau_dyn;
+        const Real sie = u/rho; //specific internal energy
         const Real pg = eos.PressureFromDensityInternalEnergy(rho, sie);
         const Real Theta = pg / rho;
         // Compute local sound speed, ensure it is defined and >0
         // Passing NaN disables an upper bound (TODO should we have one?)
-
-        const Real sie = u/rho; //specific internal energy
         const Real ef = rho + u + pg; // \rho * h = rho + u + P.
         const Real cs2 = clip(eos.BulkModulusFromDensityInternalEnergy(rho,sie)/ef, SMALL_NUM, 0. / 0.);
 

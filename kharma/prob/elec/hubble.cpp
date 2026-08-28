@@ -52,7 +52,7 @@ TaskStatus InitializeHubble(std::shared_ptr<MeshBlockData<Real>>& rc, ParameterI
     // boundaries
     int counter = -5.0;
     Params& g_params = pmb->packages.Get("GRMHD")->AllParams();
-    const Real gam = g_params.Get<Real>("gamma");
+    const Real gam = pmb->packages.Get("eos")->Param<Real>("gm1") + 1.0;
     if (!g_params.hasKey("counter")) g_params.Add("counter", counter, true);
     Real rho0 = (mach / v0) * sqrt(gam * (gam - 1));
     Real ug0 = (v0 / mach) / sqrt(gam * (gam - 1));
@@ -94,7 +94,7 @@ TaskStatus SetHubbleImpl(
     GridScalar u = rc->Get("prims.u").data;
     GridVector uvec = rc->Get("prims.uvec").data;
 
-    const Real gam = pmb->packages.Get("GRMHD")->Param<Real>("gamma");
+    const Real gam = pmb->packages.Get("eos")->Param<Real>("gm1") + 1.0;
     const Real rho0 = pmb->packages.Get("GRMHD")->Param<Real>("rho0");
     const Real v0 = pmb->packages.Get("GRMHD")->Param<Real>("v0");
     const bool cooling = pmb->packages.Get("GRMHD")->Param<bool>("cooling");
@@ -203,7 +203,7 @@ void ApplyHubbleHeating(MeshBlockData<Real>* mbase)
     const Real t = pmb0->packages.Get("Globals")->Param<Real>("time") + 0.5 * dt;
     const Real v0 = pmb0->packages.Get("GRMHD")->Param<Real>("v0");
     const Real ug0 = pmb0->packages.Get("GRMHD")->Param<Real>("ug0");
-    const Real gam = pmb0->packages.Get("GRMHD")->Param<Real>("gamma");
+    const Real gam = pmb0->packages.Get("eos")->Param<Real>("gm1") + 1.0;
     Q = (ug0 * v0 * (gam - 2) / pow(1 + v0 * t, 3));
     IndexDomain domain = IndexDomain::interior;
     auto ib = mbase->GetBoundsI(domain);

@@ -69,8 +69,6 @@ TaskStatus Flux::MarkFOFC(MeshData<Real>* guess)
     const auto& U = guess->PackVariablesAndFluxes(cons_flags, cons_map);
     const VarMap m_u(cons_map, true), m_p(prims_map, false);
 
-    const Real gam = pmb0->packages.Get("GRMHD")->Param<Real>("gamma");
-
     // Use values from floors package if it's enabled, otherwise any we've been asked to
     // apply
     const Floors::Prescription floors =
@@ -197,7 +195,6 @@ TaskStatus Flux::FOFC(MeshData<Real>* md, MeshData<Real>* guess)
 
     // Parameters
     const auto& pars = packages.Get("Fluxes")->AllParams();
-    const Real gam = packages.Get("GRMHD")->Param<Real>("gamma");
     const bool use_global = pars.Get<bool>("fofc_use_glf");
     const EMHD::EMHD_parameters& emhd_params = EMHD::GetEMHDParameters(packages);
     // Only fix faces if they exist

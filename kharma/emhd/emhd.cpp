@@ -375,7 +375,7 @@ TaskStatus AddSource(MeshData<Real>* md, MeshData<Real>* mdudt, IndexDomain doma
             DLOOP1
                 Temps(b, m_ucov + mu, k, j, i) = ucov[mu];
             // theta
-            Real pg = eos->PressureFromDensityInternalEnergy(
+            Real pg = eos.PressureFromDensityInternalEnergy(
                 P(b)(m_p.RHO, k, j, i), P(b)(m_p.UU, k, j, i)/P(b)(m_p.RHO, k, j, i));
 
             // TODO_EOS: should this be P/rho or just the temperature?
