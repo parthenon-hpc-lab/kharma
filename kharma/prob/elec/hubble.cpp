@@ -36,6 +36,8 @@
 #include "pack.hpp"
 #include "types.hpp"
 
+#include "entropy.hpp"
+
 TaskStatus InitializeHubble(std::shared_ptr<MeshBlockData<Real>>& rc, ParameterInput *pin)
 {
     auto pmb = rc->GetBlockPointer();
@@ -65,6 +67,11 @@ TaskStatus InitializeHubble(std::shared_ptr<MeshBlockData<Real>>& rc, ParameterI
     if (pmb->packages.AllPackages().count("Electrons")) {
         const Real fel0 = pmb->packages.Get("Electrons")->Param<Real>("fel_0");
         if(!g_params.hasKey("ue0")) g_params.Add("ue0", fel0 * ug0);
+    }
+
+    // Let the Entropy package fill Ktot from the initial rho, u
+    if (pmb->packages.AllPackages().count("Entropy")) {
+        pmb->packages.Get("Entropy")->UpdateParam<bool>("init_to_default", false);
     }
 
     // Override end time to be 1 dynamical time L/max(v@t=0)
@@ -191,7 +198,7 @@ void ApplyHubbleHeating(MeshBlockData<Real> *mbase)
     const Real v0 = pmb0->packages.Get("GRMHD")->Param<Real>("v0");
     const Real ug0 = pmb0->packages.Get("GRMHD")->Param<Real>("ug0");
     const Real gam = pmb0->packages.Get("GRMHD")->Param<Real>("gamma");
-    Q = (ug0 * v0 * (gam - 2) / pow(1 + v0 * t, 3));
+    Q = -(ug0 * v0 * (gam - 2) / pow(1 + v0 * t, 3));
     IndexDomain domain = IndexDomain::interior;
     auto ib = mbase->GetBoundsI(domain);
     auto jb = mbase->GetBoundsJ(domain);

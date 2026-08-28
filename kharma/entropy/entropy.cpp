@@ -59,9 +59,9 @@ std::shared_ptr<KHARMAPackage> Initialize(ParameterInput *pin, std::shared_ptr<P
 
     // Whether to set Ktot (& Ktot_adv) to their default values -- the entropy implied by
     // the problem's initial rho, u -- at startup.  Problems which set these values themselves
-    // (e.g. Hubble flow) should disable this.
+    // should disable this, or override the parameter during their own initialization.
     bool init_to_default = pin->GetOrAddBoolean("entropy", "init_to_default", true);
-    params.Add("init_to_default", init_to_default);
+    params.Add("init_to_default", init_to_default, true);
 
     Metadata::AddUserFlag("TrackEntropy");
     // Ktot is the fluid entropy computed at end of each substep based on other 
