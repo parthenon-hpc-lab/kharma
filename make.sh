@@ -185,13 +185,13 @@ elif option "hip"; then
   ENABLE_SYCL="OFF"
   ENABLE_HIP="ON"
 elif option "cuda"; then
-  export CXX="$SCRIPT_DIR/bin/nvcc_wrapper"
+  export CXX="$SCRIPT_DIR/external/parthenon/external/Kokkos/bin/nvcc_wrapper"
   if option "wrapper_dryrun"; then
     export CXXFLAGS="-dryrun $CXXFLAGS"
     echo "Dry-running the nvcc wrapper with $CXXFLAGS"
   fi
   export NVCC_WRAPPER_DEFAULT_COMPILER="$CXX_NATIVE"
-  # TODO set Kokkos CUDA options here instead of CMakeLists to avoid warnings
+  EXTRA_FLAGS="$EXTRA_FLAGS -DKokkos_ENABLE_CUDA_CONSTEXPR=ON"
   OUTER_LAYOUT="MANUAL1D_LOOP"
   INNER_LAYOUT="TVR_INNER_LOOP"
   ENABLE_OPENMP="OFF"
@@ -316,16 +316,15 @@ if option "clean"; then
   fi
   cd -
 
-  # HIP requires device-capable variant functions
-  if  ! ((! option "hip") && (! option "sycl")); then
-    cd external/variant
-    if [[ $(( $(git --version | cut -d '.' -f 2) > 35 )) == "1" ]]; then
-      git apply --quiet ../patches/variant-hip.patch
-    else
-      git apply ../patches/variant-hip.patch
-    fi
-    cd -
+  # Patches for ports-of-call
+  cd external/singularity-eos/utils/ports-of-call
+  if [[ $(( $(git --version | cut -d '.' -f 2) > 35 )) == "1" ]]; then
+    git apply --quiet ../../../patches/ports-of-call-*.patch
+  else
+    echo "make.sh note: You may see errors applying patches below. These are normal."
+    git apply ../../../patches/ports-of-call-*.patch
   fi
+  cd -
 
   rm -rf build
 fi

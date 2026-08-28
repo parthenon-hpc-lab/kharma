@@ -55,9 +55,9 @@ using parthenon::MeshBlockData;
 // This provides a way of addressing vectors that matches
 // directions, to make derivatives etc more readable
 // TODO is there something tricky with statics we can do here to type?
-#define V1 0
-#define V2 1
-#define V3 2
+constexpr int V1 = 0;
+constexpr int V2 = 1;
+constexpr int V3 = 2;
 
 // Pull TopologicalElements out to match the above
 using TE = parthenon::TopologicalElement;
