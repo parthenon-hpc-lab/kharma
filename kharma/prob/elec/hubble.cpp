@@ -205,7 +205,7 @@ TaskStatus SetHubbleImpl(
 }
 
 // TODO(CEP) Add MeshApplySource callback & convert this
-void ApplyHubbleHeating(MeshBlockData<Real>* mbase)
+void ApplyHubbleHeating(MeshBlockData<Real>* mbase, Real t_start, Real dt_split)
 {
     auto pmb0 = mbase->GetBlockPointer();
 
@@ -214,17 +214,19 @@ void ApplyHubbleHeating(MeshBlockData<Real>* mbase)
     const VarMap m_p(prims_map, false);
 
     Real Q = 0;
-    // This runs once per sub-step, so treat Q as just another term of the RHS: evaluate
-    // it at the time this sub-step's fluxes are evaluated, and weight it the same way the
-    // integrator weights those fluxes.  The stages then combine the source exactly as
-    // they combine everything else, which is what makes the heating 2nd-order in time --
-    // the whole point of this test.
-    const auto dt = pmb0->packages.Get("Globals")->Param<double>("dt_substep");
-    const Real t = pmb0->packages.Get("Globals")->Param<double>("time_substep");
+    // We own the half-interval [t_start, t_start+dt_split] of the Strang split, and we
+    // have to integrate Q across it to 2nd order or the whole composition drops an order.
+    // Q here depends on time alone, so the midpoint rule does it exactly to that order.
+    const Real dt = dt_split;
+    const Real t = t_start + 0.5 * dt_split;
     const Real v0 = pmb0->packages.Get("GRMHD")->Param<Real>("v0");
     const Real ug0 = pmb0->packages.Get("GRMHD")->Param<Real>("ug0");
     const Real gam = pmb0->packages.Get("GRMHD")->Param<Real>("gamma");
     Q = (ug0 * v0 * (gam - 2) / pow(1 + v0 * t, 3));
+    // Interior only: our boundary zones are held at the analytic solution, which already
+    // includes the heating, so adding Q there again would double-count it.  A package
+    // whose boundaries do *not* already carry the source must use IndexDomain::entire, so
+    // that the ghosts stay consistent with the interior for the next reconstruction.
     IndexDomain domain = IndexDomain::interior;
     auto ib = mbase->GetBoundsI(domain);
     auto jb = mbase->GetBoundsJ(domain);

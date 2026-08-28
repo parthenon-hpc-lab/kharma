@@ -76,16 +76,11 @@ std::shared_ptr<KHARMAPackage> KHARMA::InitializeGlobals(ParameterInput *pin, st
     // Last step's dt (Parthenon SimTime tm.dt), which must be preserved to output jcon
     // Also sets max step increase, so we initialize it to max value to allow any first step size
     params.Add("dt_last", std::numeric_limits<double>::max(), true);
-    // Description of the sub-step currently being taken, set by the driver at the top of
-    // each stage (see KHARMADriver::MakeTaskCollection).  Anything which must line up
-    // with the current sub-step should use these rather than trying to reconstruct them
-    // from "time" and "dt_last" -- and note dt_last is DBL_MAX before the loop starts.
-    // Time of the sub-step's *input* state, i.e. where its fluxes & sources are evaluated
-    params.Add("time_substep", 0.0, true);
-    // Time the sub-step's *output* state represents, i.e. what boundaries should be set to
+    // Time the current sub-step's *output* state represents, i.e. what time-dependent
+    // boundaries should be set to.  Written by the driver at the top of each stage, see
+    // KHARMADriver::MakeTaskCollection.  Use this rather than reconstructing it from
+    // "time" and "dt_last". Also, note that dt_last is DBL_MAX before the loop starts.
     params.Add("time_substep_end", 0.0, true);
-    // Weight this sub-step gives its RHS, i.e. integrator beta * dt
-    params.Add("dt_substep", 0.0, true);
     // Whether we are computing initial outputs/timestep, or versions in the execution loop
     params.Add("in_loop", false, true);
 
