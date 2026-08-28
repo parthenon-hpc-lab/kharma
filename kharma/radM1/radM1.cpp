@@ -34,6 +34,7 @@
 #include "radM1.hpp"
 #include "radM1_solvers.hpp"
 
+#include "domain.hpp"
 #include "inverter.hpp"
 #include "kharma.hpp"
 #include "kharma_driver.hpp"
@@ -109,7 +110,7 @@ std::shared_ptr<KHARMAPackage> RadM1::Initialize(
     // Opacity model selector (see RadM1::OpacityModel in radM1.hpp).
     // Determine the problem ID
     std::string problem_id = pin->GetString("parthenon/job", "problem_id");
-    
+
     // Set the default opacity model based on the problem ID using an if/else chain
     std::string default_opacity_model = "default";
     if (problem_id == "shock") {
@@ -125,14 +126,14 @@ std::shared_ptr<KHARMAPackage> RadM1::Initialize(
     // fallback to the default if no input
     // TODO (PNM): add a vector of strings as the last parameter here to yell at the user what the options are
     std::string opacity_model_str = pin->GetOrAddString("radM1", "opacity_model", default_opacity_model);
-    
+
     int opacity_model = (int) OpacityModel::Default;
     if (opacity_model_str == "shocktube_constant") {
         opacity_model = (int) OpacityModel::ShocktubeConstant;
     } else if (opacity_model_str == "bondi_opacs") {
-        opacity_model = (int) OpacityModel::Bondi; 
+        opacity_model = (int) OpacityModel::Bondi;
     } else if (opacity_model_str == "beam_light_zero") {
-        opacity_model = (int) OpacityModel::BeamLight; 
+        opacity_model = (int) OpacityModel::BeamLight;
     } else if (opacity_model_str == "thermal_equilibrium") {
         opacity_model = (int) OpacityModel::ThermalEquilibrium;
     }
@@ -145,7 +146,7 @@ std::shared_ptr<KHARMAPackage> RadM1::Initialize(
 
     // Add everything to the package parameters
     pkg->AllParams().Add("opacity_model", opacity_model);
-    
+
     pkg->AllParams().Add("shocktube_sigma_rad", shocktube_sigma_rad);
     pkg->AllParams().Add("shocktube_kappa_rho", shocktube_kappa_rho);
     pkg->AllParams().Add("shocktube_kappa_scat", shocktube_kappa_scat);
@@ -166,7 +167,15 @@ std::shared_ptr<KHARMAPackage> RadM1::Initialize(
     // Tg = mp * c^2 * 1/kb * 1/m_scale (gamma -1) * ug */(rho)
     units_cgs.temperature_cgs = unit_conv.GetTemperatureCodeToCGS() * pc::mp * pc::c * pc::c;
     printf("RadM1: temperature_cgs = %e\n", units_cgs.temperature_cgs);
+
+    // Mean molecular weight, used only by OpacityModel::Default (see the comment on
+    // UnitScales::mu) to get a real temperature in Kelvin: T_K = Tg * mu *
+    // units_cgs.temperature_cgs. Existing branches (Bondi, ThermalEquilibrium, ...)
+    // are untouched and keep their original (implicit mu=1) behavior.
+    units_cgs.mu = pin->GetOrAddReal("radM1", "mu", 0.6);
+    printf("RadM1: mu = %e\n", units_cgs.mu);
     pkg->AllParams().Add("units_cgs", units_cgs);
+
 
     // TODO (PNM): Currently attached to the floors package. Make this a separate option only for radiation package.
     bool floors_on_default = true;
@@ -283,6 +292,12 @@ TaskStatus RadM1::Step(MeshData<Real>* md_sub_init,
         const Real shocktube_kappa_rho = params.Get<Real>("shocktube_kappa_rho");
         const Real shocktube_kappa_scat = params.Get<Real>("shocktube_kappa_scat");
         const UnitScales units_cgs = params.Get<UnitScales>("units_cgs");
+
+        Microphysics::Opacities opacities;
+        if (pmb->packages.AllPackages().count("opacity")) {
+            opacities = pmb->packages.Get("opacity")->AllParams().Get<Microphysics::Opacities>("opacities");
+        }
+
         const auto& G = pmb->coords;
 
         PackIndexMap prims_map, cons_map;
@@ -294,6 +309,7 @@ TaskStatus RadM1::Step(MeshData<Real>* md_sub_init,
         const VarMap m_u(cons_map, true);
 
         auto rflag = pmb_data->PackVariables(std::vector<std::string>{"rflag"});
+        auto pflag = pmb_data->PackVariables(std::vector<std::string>{"pflag"});
 
         auto pmb_init_data = md_sub_init->GetBlockData(b);
 
@@ -315,7 +331,7 @@ TaskStatus RadM1::Step(MeshData<Real>* md_sub_init,
                     solve_radiation_4d(G, U_init, P_init, P_new, U_new, m_p, m_u, k, j, i,
                         dt, gam, src_rootfind_eps, src_rootfind_tol, src_rootfind_maxiter,
                         opacity_model, shocktube_sigma_rad, shocktube_kappa_rho,
-                        shocktube_kappa_scat, units_cgs);
+                        shocktube_kappa_scat, units_cgs, opacities, pflag);
                 rflag(0, k, j, i) = rflagl;
             });
     }
@@ -333,13 +349,12 @@ TaskStatus RadM1::PostStepDiagnostics(const SimTime& tm, MeshData<Real>* md)
     const auto& pars = pmesh->packages.Get("Globals")->AllParams();
     const int flag_verbose = pars.Get<int>("flag_verbose");
 
-    // Debugging/diagnostic info about implicit step flags
-    // Mirrors Inverter function, logic should be the same
+
     if (flag_verbose >= 1) {
         Reductions::StartFlagReduce(
-            md, "rflag", RadM1::status_names, IndexDomain::interior, false, 1);
+            md, "rflag", RadM1::status_names, IndexDomain::interior, false, 3);
         auto total_flag_counts = Reductions::CheckFlagReduceAndPrintHits(
-            md, "rflag", RadM1::status_names, IndexDomain::interior, false, 1);
+            md, "rflag", RadM1::status_names, IndexDomain::interior, false, 3);
         Reductions::PrintFlagPercentages(
             md, "rflag", RadM1::status_names, IndexDomain::interior, total_flag_counts);
     }

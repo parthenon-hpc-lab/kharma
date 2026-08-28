@@ -34,6 +34,7 @@
 #pragma once
 
 #include "decs.hpp"
+#include "microphysics/opac_kharma/opac_kharma.hpp"
 
 #include "gr_coordinates.hpp"
 #include "grmhd_functions.hpp"
@@ -54,6 +55,7 @@ struct UnitScales {
     Real mass_cgs;
     Real energy_cgs;
     Real temperature_cgs;
+    Real mu;
 };
 
 // Denote implicit solve failures (rflags)
@@ -107,7 +109,8 @@ enum class OpacityModel : int { Default = 0, ShocktubeConstant = 1, Bondi = 2, B
 
 
 KOKKOS_INLINE_FUNCTION Real calc_kabs(Real rho, Real T, int opacity_model,
-    Real shocktube_kappa_rho, const UnitScales& units_cgs)
+    Real shocktube_kappa_rho, const UnitScales& units_cgs,
+    const Microphysics::Opacities& opacities)
 {
     if (opacity_model == (int)OpacityModel::ShocktubeConstant) {
         return m::min(rho * shocktube_kappa_rho, 1.e5);
@@ -125,13 +128,14 @@ KOKKOS_INLINE_FUNCTION Real calc_kabs(Real rho, Real T, int opacity_model,
         const Real rho_cgs = rho * units_cgs.mass_cgs / (units_cgs.length_cgs * units_cgs.length_cgs * units_cgs.length_cgs);
         return 0.4 * rho_cgs * units_cgs.length_cgs;
     } else {
-        // TODO: singularity-opac
-        return m::min(rho * 0.08, 1.e5);
+        const Real temp_arg = m::abs(T) * units_cgs.mu * pc::mp * pc::c * pc::c;
+        return opacities.PlanckMeanAbsorptionCoefficient(rho, temp_arg);
     }
 }
 
 KOKKOS_INLINE_FUNCTION Real calc_kscattering(Real rho, Real T, int opacity_model,
-    Real shocktube_kappa_scat, const UnitScales& units_cgs)
+    Real shocktube_kappa_scat, const UnitScales& units_cgs,
+    const Microphysics::Opacities& opacities)
 {
     if (opacity_model == (int)OpacityModel::ShocktubeConstant) {
         return shocktube_kappa_scat;
@@ -146,8 +150,10 @@ KOKKOS_INLINE_FUNCTION Real calc_kscattering(Real rho, Real T, int opacity_model
         return 0.0;
     } else if (opacity_model == (int)OpacityModel::ThermalEquilibrium) {
         return 0.0;
+    } else {
+        const Real temp_arg = m::abs(T) * units_cgs.mu * pc::mp * pc::c * pc::c;
+        return opacities.RosselandMeanScatteringCoefficient(rho, temp_arg);
     }
-    return 0.0;
 }
 
 // Global Lorentz Factor for Radiation

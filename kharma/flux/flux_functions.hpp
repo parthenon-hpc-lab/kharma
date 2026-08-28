@@ -452,7 +452,8 @@ KOKKOS_FORCEINLINE_FUNCTION void vchar_rad(const GRCoordinates& G, const Local& 
     const VarMap& m, const FourVectors& D, const Microphysics::EOS::EOS& eos,
     const EMHD::EMHD_parameters& emhd_params, const int& opacity_model,
     const Real& shocktube_kappa_rho, const Real& shocktube_kappa_scat,
-    const RadM1::UnitScales& units_cgs, const int& k,
+    const RadM1::UnitScales& units_cgs, const Microphysics::Opacities& opacities,
+    const int& k,
     const int& j, const int& i, const Loci& loc, const int& dir, Real& cmax, Real& cmin)
 {
     const Real sie = P(m.UU)/P(m.RHO);
@@ -463,9 +464,9 @@ KOKKOS_FORCEINLINE_FUNCTION void vchar_rad(const GRCoordinates& G, const Local& 
     GReal Tgas = (gam - 1.) * P(m.UU) / P(m.RHO);
     // Out of the package modification RADM1.
     GReal kappa_abs = RadM1::calc_kabs(
-        P(m.RHO), Tgas, opacity_model, shocktube_kappa_rho, units_cgs);
+        P(m.RHO), Tgas, opacity_model, shocktube_kappa_rho, units_cgs, opacities);
     GReal kappa_s = RadM1::calc_kscattering(
-        P(m.RHO), Tgas, opacity_model, shocktube_kappa_scat, units_cgs);
+        P(m.RHO), Tgas, opacity_model, shocktube_kappa_scat, units_cgs, opacities);
 
     GReal kappa_tot = kappa_abs + kappa_s;
 
