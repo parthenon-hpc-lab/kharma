@@ -131,8 +131,10 @@ class VarMap {
         int8_t RHO, UU, U1, U2, U3, B1, B2, B3, Bf1, Bf2, Bf3;
         // Tracker variables
         int8_t RHO_ADDED, UU_ADDED, PASSIVE;
+        // Total/idealized (advected, no-dissipation) fluid entropy tracking
+        int8_t KTOT, KTOT_ADV;
         // Electron entropy/energy tracking
-        int8_t KTOT, K_CONSTANT, K_HOWES, K_KAWAZURA, K_WERNER, K_ROWAN, K_SHARMA;
+        int8_t K_CONSTANT, K_HOWES, K_KAWAZURA, K_WERNER, K_ROWAN, K_SHARMA;
         // Implicit-solver variables: constraint damping, EGRMHD
         int8_t PSI, Q, DP;
         // Added material
@@ -153,8 +155,10 @@ class VarMap {
                 // Floors
                 RHO_ADDED = name_map["cons.rho_added"].first;
                 UU_ADDED = name_map["cons.u_added"].first;
-                // Electrons
+                // Entropy tracking
                 KTOT = name_map["cons.Ktot"].first;
+                KTOT_ADV = name_map["cons.Ktot_adv"].first;
+                // Electrons
                 K_CONSTANT = name_map["cons.Kel_Constant"].first;
                 K_HOWES = name_map["cons.Kel_Howes"].first;
                 K_KAWAZURA = name_map["cons.Kel_Kawazura"].first;
@@ -181,8 +185,10 @@ class VarMap {
                 // Floors (TODO cons only?)
                 RHO_ADDED = name_map["prims.rho_added"].first;
                 UU_ADDED = name_map["prims.u_added"].first;
-                // Electrons
+                // Entropy tracking
                 KTOT = name_map["prims.Ktot"].first;
+                KTOT_ADV = name_map["prims.Ktot_adv"].first;
+                // Electrons
                 K_CONSTANT = name_map["prims.Kel_Constant"].first;
                 K_HOWES = name_map["prims.Kel_Howes"].first;
                 K_KAWAZURA = name_map["prims.Kel_Kawazura"].first;

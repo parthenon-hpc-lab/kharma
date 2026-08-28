@@ -50,6 +50,7 @@
 #include "current.hpp"
 #include "kharma_driver.hpp"
 #include "electrons.hpp"
+#include "entropy.hpp"
 #include "implicit.hpp"
 #include "inverter.hpp"
 #include "ismr.hpp"
@@ -422,9 +423,21 @@ Packages_t KHARMA::ProcessPackages(std::unique_ptr<ParameterInput> &pin)
     }
 
     // Optional standalone packages
+    // Entropy tracking (Ktot, & optionally idealized/advected Ktot_adv) is independent of
+    // any package that might use it, but Electrons relies on it to get the fluid's current
+    // & purely-advected entropy, so it's forced on whenever Electrons is.
+    bool entropy_on = pin->GetOrAddBoolean("entropy", "on", false);
+    if (pin->GetOrAddBoolean("electrons", "on", false)) {
+        entropy_on = true;
+        pin->SetBoolean("entropy", "on", true);
+    }
+    auto t_entropy = t_grmhd;
+    if (entropy_on) {
+        t_entropy = tl.AddTask(t_grmhd, KHARMA::AddPackage, packages, Entropy::Initialize, pin.get());
+    }
     // Electrons are boring but not impossible without a B field (TODO add a test?)
     if (pin->GetOrAddBoolean("electrons", "on", false)) {
-        auto t_electrons = tl.AddTask(t_grmhd, KHARMA::AddPackage, packages, Electrons::Initialize, pin.get());
+        auto t_electrons = tl.AddTask(t_entropy, KHARMA::AddPackage, packages, Electrons::Initialize, pin.get());
     }
     if (pin->GetBoolean("emhd", "on")) { // Set above when deciding to load inverter
         auto t_emhd = tl.AddTask(t_grmhd, KHARMA::AddPackage, packages, EMHD::Initialize, pin.get());

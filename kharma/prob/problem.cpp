@@ -36,6 +36,7 @@
 
 #include "boundaries.hpp"
 #include "electrons.hpp"
+#include "entropy.hpp"
 #include "floors.hpp"
 #include "flux.hpp"
 #include "gr_coordinates.hpp"
@@ -138,6 +139,11 @@ void KHARMA::ProblemGenerator(MeshBlock* pmb, ParameterInput* pin)
         // Note this defaults to zero & is basically turned on only for torii
         if (pin->GetOrAddReal("perturbation", "u_jitter", 0.0) > 0.0) {
             PerturbU(rc, pin);
+        }
+
+        // Initialize tracked total (& idealized) entropy to defaults if enabled
+        if (pmb->packages.AllPackages().count("Entropy")) {
+            Entropy::InitEntropy(rc.get(), pin);
         }
 
         // Initialize electron entropies to defaults if enabled

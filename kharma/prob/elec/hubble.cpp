@@ -33,6 +33,7 @@
  */
 #include "hubble.hpp"
 
+#include "flux.hpp"
 #include "pack.hpp"
 #include "types.hpp"
 
@@ -145,8 +146,22 @@ TaskStatus SetHubbleImpl(
                 uvec(2, k, j, i) = 0.0;
             });
 
-        if (pmb->packages.AllPackages().count("Electrons")) {
+        if (pmb->packages.AllPackages().count("Entropy")) {
             GridScalar ktot = rc->Get("prims.Ktot").data;
+            // Ktot is the *total* entropy, tracked by the Entropy package, and it is what
+            // Electrons::ApplyElectronHeating differences against to find the
+            // dissipation.  Setting it to the entropy the gas actually has here means
+            // these zones see zero dissipation, so they keep exactly the analytic Kel we
+            // set below.
+            const Real tobektot = (gam - 1) * tobeu / pow(toberho, gam);
+            pmb->par_for("hubble_init_ktot", kb.s, kb.e, jb.s, jb.e, ib.s, ib.e,
+                         KOKKOS_LAMBDA(const int& k, const int& j, const int& i)
+                {
+                    ktot(k, j, i) = tobektot;
+                });
+        }
+
+        if (pmb->packages.AllPackages().count("Electrons")) {
             GridScalar kel_const = rc->Get("prims.Kel_Constant").data;
             const Real game = pmb->packages.Get("Electrons")->Param<Real>("gamma_e");
             const Real ue0 = pmb->packages.Get("GRMHD")->Param<Real>("ue0");
@@ -156,15 +171,9 @@ TaskStatus SetHubbleImpl(
             // Without cooling, the entropy of electrons should stay the same, analytic
             // solution.
             if (!cooling) tobeke = (game - 1) * ue0 / pow(rho0, game);
-            // Ktot is the *total* entropy, and it is what Electrons::ApplyElectronHeating
-            // differences against to find the dissipation.  Setting it to the entropy the
-            // gas actually has here means these zones see zero dissipation, so they keep
-            // exactly the analytic Kel we just set.
-            const Real tobektot = (gam - 1) * tobeu / pow(toberho, gam);
-            pmb->par_for("hubble_init", kb.s, kb.e, jb.s, jb.e, ib.s, ib.e,
+            pmb->par_for("hubble_init_kel", kb.s, kb.e, jb.s, jb.e, ib.s, ib.e,
                          KOKKOS_LAMBDA(const int& k, const int& j, const int& i)
                 {
-                    ktot(k, j, i) = tobektot;
                     kel_const(k, j, i) = tobeke; // Since we are using fel = 1
                 });
         }
@@ -200,6 +209,16 @@ TaskStatus SetHubbleImpl(
                 });
         }
     }
+
+    // We just wrote *primitives* into these zones.  Under the ImEx driver KHARMA syncs
+    // primitives, and ApplyBoundary runs PtoU right after us, so that would be enough.
+    // The KHARMA driver instead syncs conserved variables, and ApplyBoundary then runs
+    // UtoP on everything but the GRMHD fluid -- which would recompute prims.Ktot &
+    // prims.Kel_* from stale ghost-zone conserved values and throw away the analytic
+    // solution we just set.  Writing U ourselves makes this boundary correct under
+    // either convention.
+    Flux::BlockPtoU(rc.get(), domain, coarse);
+
     return TaskStatus::complete;
 }
 

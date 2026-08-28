@@ -42,6 +42,7 @@
 #include "blob.hpp"
 #include "boundaries.hpp"
 #include "electrons.hpp"
+#include "entropy.hpp"
 #include "emhd.hpp"
 #include "floors.hpp"
 #include "flux.hpp"
@@ -191,6 +192,12 @@ void KHARMA::PostInitialize(ParameterInput* pin, Mesh* pmesh, bool is_restart)
     if (pkgs.count("Electrons") &&
         pin->GetOrAddBoolean("electrons", "reinitialize", false)) {
         std::cout << "Reinitializing electron temperatures!" << std::endl;
+        // Ktot itself belongs to the Entropy package (always present alongside
+        // Electrons), and needs reinitializing too -- a restart from an ideal GRMHD run
+        // has no sensible value for it otherwise.
+        if (pkgs.count("Entropy")) {
+            Entropy::MeshInitEntropy(md.get(), pin);
+        }
         Electrons::MeshInitElectrons(md.get(), pin);
         // We probably don't want to do this again next time we restart
         pin->SetBoolean("electrons", "reinitialize", false);

@@ -35,6 +35,7 @@
 
 #include "decs.hpp"
 #include "domain.hpp"
+#include "entropy.hpp"
 #include "flux.hpp"
 #include "gaussian.hpp"
 #include "grmhd.hpp"
@@ -58,6 +59,13 @@ namespace Electrons
 std::shared_ptr<KHARMAPackage> Initialize(
     ParameterInput* pin, std::shared_ptr<Packages_t>& packages)
 {
+    // Electrons split the Entropy package's tracked fluid dissipation among several
+    // heating models; kharma.cpp forces the Entropy package on whenever Electrons is,
+    // so this should never fail, but the check protects any other caller.
+    if (!packages->AllPackages().count("Entropy")) {
+        throw std::runtime_error("Electrons package requires the Entropy package to be enabled!");
+    }
+
     auto pkg = std::make_shared<KHARMAPackage>("Electrons");
     Params& params = pkg->AllParams();
 
@@ -142,10 +150,8 @@ std::shared_ptr<KHARMAPackage> Initialize(
     auto flags_cons = driver.Get<std::vector<MetadataFlag>>("cons_flags");
     flags_cons.insert(flags_cons.end(), flags_elec.begin(), flags_elec.end());
 
-    // Total entropy, used to track changes
-    int nKs = 1;
-    pkg->AddField("cons.Ktot", flags_cons);
-    pkg->AddField("prims.Ktot", flags_prim);
+    // Number of electron entropy (Kel_X) channels being run
+    int nKs = 0;
 
     if ("driven_turbulence" == packages->Get("Globals")->Param<std::string>("problem")) {
         std::vector<int> s_vector({2});
@@ -211,7 +217,7 @@ std::shared_ptr<KHARMAPackage> Initialize(
 
     pkg->BlockUtoP = Electrons::BlockUtoP;
     pkg->BoundaryUtoP = Electrons::BlockUtoP;
-    // If we wanted to apply the domian boundaries to primitive Electrons variables
+    // If we wanted to apply the domain boundaries to primitive Electrons variables
     // pkg->DomainBoundaryPtoU = Electrons::BlockPtoU;
 
     return pkg;
@@ -227,16 +233,15 @@ TaskStatus InitElectrons(MeshBlockData<Real>* rc, ParameterInput* pin)
         return TaskStatus::complete;
     }
 
-    // Need to distinguish KTOT from the other variables, so we record which it is
-    PackIndexMap prims_map;
+    // Ktot itself is owned & initialized by the Entropy package; here we only set up the
+    // individual electron entropy channels, each as a given constant initial fraction
+    // fel0 of the fluid's internal energy (equivalently, its own entropy at gamma_e,
+    // fel0*u).
     auto& e_P = rc->PackVariables(
-        {Metadata::GetUserFlag("Elec"), Metadata::GetUserFlag("Primitive")}, prims_map);
-    const int ktot_index = prims_map["prims.Ktot"].first;
-    // Just need these two from the rest of Prims
+        {Metadata::GetUserFlag("Elec"), Metadata::GetUserFlag("Primitive")});
     GridScalar rho = rc->Get("prims.rho").data;
     GridScalar u = rc->Get("prims.u").data;
 
-    const Real gam = pmb->packages.Get("GRMHD")->Param<Real>("gamma");
     const Real game = pmb->packages.Get("Electrons")->Param<Real>("gamma_e");
     const Real fel0 = pmb->packages.Get("Electrons")->Param<Real>("fel_0");
 
@@ -247,14 +252,8 @@ TaskStatus InitElectrons(MeshBlockData<Real>* rc, ParameterInput* pin)
     pmb->par_for("UtoP_electrons", 0, e_P.GetDim(4) - 1, ks, ke, js, je, is, ie,
                  KOKKOS_LAMBDA(const int& p, const int& k, const int& j, const int& i)
         {
-            if (p == ktot_index) {
-                // Initialize total entropy by definition,
-                e_P(p, k, j, i) = (gam - 1.) * u(k, j, i) * m::pow(rho(k, j, i), -gam);
-            } else {
-                // and e- entropy by given constant initial fraction
-                e_P(p, k, j, i) =
-                    (game - 1.) * fel0 * u(k, j, i) * m::pow(rho(k, j, i), -game);
-            }
+            e_P(p, k, j, i) =
+                Entropy::CalcEntropy(rho(k, j, i), fel0 * u(k, j, i), game);
         });
 
     EndFlag();
@@ -349,32 +348,33 @@ TaskStatus ApplyElectronHeating(
             GRMHD::calc_4vecs(G, P, m_p, k, j, i, Loci::center, Dtmp);
             Real bsq = dot(Dtmp.bcon, Dtmp.bcov);
 
-            // Calculate the new total entropy in this cell considering heating
-            const Real k_energy_conserving = (gam - 1.) * P_new(m_p.UU, k, j, i) /
-                                             m::pow(P_new(m_p.RHO, k, j, i), gam);
-
-            // Dissipation is the real entropy k_energy_conserving minus any advected
-            // entropy from the previous (sub-)step P_new(KTOT)
-            Real diss_tmp = (game - 1.) / (gam - 1.) *
-                            m::pow(P(m_p.RHO, k, j, i), gam - game) *
-                            (k_energy_conserving - P_new(m_p.KTOT, k, j, i));
-            // this is eq27                  ratio of heating: Qi/Qe advected entropy from
-            // prev step
-            //  ^ denotes the solution corresponding to entropy conservation
+            // Calculate the fluid's real, current entropy (pulled from the Entropy
+            // package), and the raw fluid dissipation this step caused: the difference
+            // between it and the value Ktot would have if it had only been passively
+            // advected this step (i.e., its pre-update value -- see entropy.hpp).
+            // Entropy::ApplyEntropyUpdate resets Ktot to this same real value just after
+            // this runs; it still needs the pre-update value here.
+            // Denotes the solution corresponding to entropy conservation.
+            const Real k_energy_conserving = Entropy::CalcEntropy(
+                P_new(m_p.RHO, k, j, i), P_new(m_p.UU, k, j, i), gam);
+            Real diss_fluid_tmp = k_energy_conserving - P_new(m_p.KTOT, k, j, i);
 
             // Under the flag "suppress_highb_heat", we set all dissipation to zero at
             // sigma > 1.
-            diss_tmp = (suppress_highb_heat && (bsq / P(m_p.RHO, k, j, i) > 1.))
-                           ? 0.0
-                           : diss_tmp;
+            diss_fluid_tmp = (suppress_highb_heat && (bsq / P(m_p.RHO, k, j, i) > 1.))
+                                 ? 0.0
+                                 : diss_fluid_tmp;
 
             // Default is True diss_sign == Enforce nonnegative
             // Due to floors we can end up with diss==0 or even *slightly* <0, so we
             // require it to be positive here
-            const Real diss = enforce_positive_diss ? m::max(diss_tmp, 0.0) : diss_tmp;
+            const Real diss_fluid =
+                enforce_positive_diss ? m::max(diss_fluid_tmp, 0.0) : diss_fluid_tmp;
 
-            // Reset the entropy to measure next (sub-)step's dissipation
-            P_new(m_p.KTOT, k, j, i) = k_energy_conserving;
+            // Convert dissipation from fluid-entropy units into electron-entropy units
+            const Real diss = (game - 1.) / (gam - 1.) *
+                              m::pow(P(m_p.RHO, k, j, i), gam - game) * diss_fluid;
+            // this is eq27
 
             // We'll be applying floors inline as we heat electrons, so
             // we cache the floors as entropy limits so they'll be cheaper to apply.
@@ -656,69 +656,6 @@ TaskStatus ApplyElectronHeating(
     }
     EndFlag();
     return TaskStatus::complete;
-}
-
-void ApplyFloors(MeshBlockData<Real>* mbd, IndexDomain domain)
-{
-    auto pmb = mbd->GetBlockPointer();
-    auto packages = pmb->packages;
-
-    PackIndexMap prims_map, cons_map;
-    auto P = mbd->PackVariables({Metadata::GetUserFlag("Primitive")}, prims_map);
-    const VarMap m_p(prims_map, false);
-
-    auto fflag = mbd->PackVariables(std::vector<std::string>{"fflag"}, prims_map);
-
-    const auto& G = pmb->coords;
-
-    const Real gam = packages.Get("GRMHD")->Param<Real>("gamma");
-    const Floors::Prescription floors =
-        packages.Get("Floors")->Param<Floors::Prescription>("prescription");
-    const Floors::Prescription floors_inner =
-        packages.Get("Floors")->Param<Floors::Prescription>("prescription_inner");
-
-    const IndexRange3 b = KDomain::GetRange(mbd, domain);
-    pmb->par_for("apply_electrons_floors", b.ks, b.ke, b.js, b.je, b.is, b.ie,
-                 KOKKOS_LAMBDA(const int& k, const int& j, const int& i)
-        {
-            // Also apply the ceiling to the advected entropy KTOT, if we're
-            // keeping track of that (either for electrons, or robust primitive
-            // inversions in future)
-            Real ktot_max;
-            if (m_p.KTOT >= 0) {
-                if (floors.radius_dependent_floors && G.coords.is_spherical() &&
-                    G.r(k, j, i) < floors.floors_switch_r) {
-                    ktot_max = floors_inner.ktot_max;
-                } else {
-                    ktot_max = floors.ktot_max;
-                }
-
-                if (P(m_p.KTOT, k, j, i) > ktot_max) {
-                    fflag(0, k, j, i) = Floors::FFlag::KTOT | (int)fflag(0, k, j, i);
-                    P(m_p.KTOT, k, j, i) = ktot_max;
-                }
-            }
-
-            // TODO(CEP) restore Ressler adjustment option
-            // Ressler adjusts KTOT & KEL to conserve u whenever adjusting rho
-            // but does *not* recommend adjusting them when u hits
-            // floors/ceilings This is in contrast to ebhlight, which heats
-            // electrons before applying *any* floors, and resets KTOT during
-            // floor application without touching KEL if (floors.adjust_k &&
-            // (fflag() & FFlag::GEOM_RHO || fflag() & FFlag::B_RHO)) {
-            //     const Real reduce   = m::pow(rho / P(m_p.RHO, k, j, i), gam);
-            //     const Real reduce_e = m::pow(rho / P(m_p.RHO, k, j, i), 4./3);
-            //     // TODO pipe in real gam_e if (m_p.KTOT >= 0) P(m_p.KTOT, k,
-            //     j, i) *= reduce; if (m_p.K_CONSTANT >= 0) P(m_p.K_CONSTANT, k,
-            //     j, i) *= reduce_e; if (m_p.K_HOWES >= 0)    P(m_p.K_HOWES, k,
-            //     j, i)    *= reduce_e; if (m_p.K_KAWAZURA >= 0)
-            //     P(m_p.K_KAWAZURA, k, j, i) *= reduce_e; if (m_p.K_WERNER >= 0)
-            //     P(m_p.K_WERNER, k, j, i)   *= reduce_e; if (m_p.K_ROWAN >= 0)
-            //     P(m_p.K_ROWAN, k, j, i)    *= reduce_e; if (m_p.K_SHARMA >= 0)
-            //     P(m_p.K_SHARMA, k, j, i)   *= reduce_e;
-            // }
-        });
-    Flux::BlockPtoU(mbd, domain);
 }
 
 TaskStatus PostStepDiagnostics(const SimTime& tm, MeshData<Real>* rc)
