@@ -371,13 +371,10 @@ TaskCollection KHARMADriver::MakeImExTaskCollection(BlockList_t& blocks, int sta
             parthenon::ApplyBoundaryConditionsOnCoarseOrFineMD, md_sync, false);
 
         // Any package- (likely, problem-) specific source terms which must be applied to
-        // primitive variables Apply these only after the final step so they're
-        // operator-split
-        auto t_prim_source = t_set_bc;
-        if (stage == integrator->nstages) {
-            t_prim_source = tl.AddTask(
-                t_set_bc, Packages::MeshApplyPrimSource, md_sub_step_final.get());
-        }
+        // primitive variables.  As in the KHARMA driver, these run every stage and weight
+        // themselves by Globals/dt_substep -- see the comment there.
+        auto t_prim_source = tl.AddTask(t_set_bc, Packages::MeshApplyPrimSource, 
+            md_sub_step_final.get());
         // Electron heating goes where it does in the KHARMA Driver, for the same reasons
         auto t_heat_electrons = t_prim_source;
         if (use_electrons) {

@@ -61,6 +61,22 @@ TaskCollection KHARMADriver::MakeTaskCollection(BlockList_t& blocks, int stage)
 {
     DriverType driver_type = blocks[0]->packages.Get("Driver")->Param<DriverType>("type");
     Flag("MakeTaskCollection");
+
+    // Record where this sub-step starts, where it lands, and the weight it gives its RHS,
+    // for packages which need to evaluate something analytic in step with the integrator.
+    // Task lists are built and executed one stage at a time, so setting this here is safe.
+    // "c" is the integrator's time offset per stage: stage "s" takes the state at c[s-1]
+    // and produces the one used as input to stage "s+1", with the last stage landing on
+    // the full step.
+    auto& globals = blocks[0]->packages.Get("Globals")->AllParams();
+    const Real substep_end_frac =
+        (stage < integrator->nstages) ? integrator->c[stage] : 1.0;
+    globals.Update<double>(
+        "time_substep", tm.time + integrator->c[stage - 1] * integrator->dt);
+    globals.Update<double>(
+        "time_substep_end", tm.time + substep_end_frac * integrator->dt);
+    globals.Update<double>("dt_substep", integrator->beta[stage - 1] * integrator->dt);
+
     TaskCollection tc;
     switch (driver_type) {
         case DriverType::kharma:
@@ -323,13 +339,13 @@ TaskCollection KHARMADriver::MakeDefaultTaskCollection(BlockList_t& blocks, int 
         // MeshBlocks.
 
         // Any package- (likely, problem-) specific source terms which must be applied to
-        // primitive variables Apply these only after the final step so they're
-        // operator-split
-        auto t_prim_source = t_set_bc;
-        if (stage == integrator->nstages) {
-            t_prim_source = tl.AddTask(
-                t_set_bc, Packages::MeshApplyPrimSource, md_sub_step_final.get());
-        }
+        // primitive variables.  These run every stage: applying them once at the end of
+        // the step is Lie splitting, which would cap the whole scheme at 1st order.
+        // Sources should weight themselves by Globals/dt_substep and evaluate at
+        // Globals/time_substep, so the stages combine them the way the integrator
+        // combines its fluxes.
+        auto t_prim_source = tl.AddTask(
+            t_set_bc, Packages::MeshApplyPrimSource, md_sub_step_final.get());
         // Electron heating goes where it does in HARMDriver, for the same reasons
         auto t_heat_electrons = t_prim_source;
         if (use_electrons) {
