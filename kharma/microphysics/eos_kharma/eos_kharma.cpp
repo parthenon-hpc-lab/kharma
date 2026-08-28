@@ -75,8 +75,20 @@ std::shared_ptr<KHARMAPackage> Initialize(ParameterInput *pin, std::shared_ptr<P
   bool needs_ye = false;
   bool provides_entropy = false;
   if (eos_type.compare(IdealGas::EosType()) == 0) {
-    const Real gm1 = pin->GetReal(block_name, "Gamma") - 1.0;
-    const Real Cv = pin->GetReal(block_name, "Cv");
+    Real gamma1;
+    // Check if there is gamma in <GRMHD> block for backwards compatibility
+    if(!pin -> DoesParameterExist("GRMHD", "gamma") && !pin -> DoesParameterExist(block_name, "gamma")) {
+      throw std::runtime_error("IdealGas EOS requires that gamma be specified in <GRMHD> or <eos> block!");
+    }
+
+    if(pin -> DoesParameterExist("GRMHD", "gamma")) {
+      gamma1 = pin->GetReal("GRMHD", std::string("gamma"));
+    } else {
+      gamma1 = pin->GetReal(block_name, std::string("gamma"));
+    }
+
+    const Real gm1 = gamma1 - 1.0;
+    const Real Cv = pin->GetOfAddReal(block_name, "Cv", 1.0);
     params.Add("gm1", gm1);
     params.Add("Cv", Cv);
 
