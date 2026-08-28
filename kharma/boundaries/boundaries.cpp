@@ -35,9 +35,9 @@
 
 #include "bondi.hpp"
 #include "boundary_types.hpp"
-#include "elec/hubble.hpp"
 #include "decs.hpp"
 #include "domain.hpp"
+#include "elec/hubble.hpp"
 #include "flux_functions.hpp"
 #include "grmhd_functions.hpp"
 #include "kharma.hpp"

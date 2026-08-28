@@ -179,11 +179,11 @@ TaskCollection KHARMADriver::MakeImExTaskCollection(BlockList_t& blocks, int sta
             "sync" + integrator->stage_name[stage] + std::to_string(i), md_sub_step_final,
             sync_vars);
 
-
         // Strang splitting, first half.  Any primitive-variable sources get to advance
         // the state at t^n over dt/2 before any transport happens. This is split around
         // the whole *step*, not each sub-step, so only stage 1 -- and note
-        // md_sub_step_init IS md_full_step_init here -- so the fluxes below see the result.
+        // md_sub_step_init IS md_full_step_init here -- so the fluxes below see the
+        // result.
         auto t_prim_source_first = t_none;
         if (stage == 1 && use_prim_source) {
             auto t_src_first = tl.AddTask(t_none, Packages::MeshApplyPrimSource,
@@ -192,8 +192,9 @@ TaskCollection KHARMADriver::MakeImExTaskCollection(BlockList_t& blocks, int sta
             // the gas raises its entropy, which is how the electrons get their share.
             auto t_heat_first = t_src_first;
             if (use_electrons) {
-                t_heat_first = tl.AddTask(t_src_first, Electrons::MeshApplyElectronHeating,
-                    md_full_step_init.get(), md_full_step_init.get(), false);
+                t_heat_first =
+                    tl.AddTask(t_src_first, Electrons::MeshApplyElectronHeating,
+                        md_full_step_init.get(), md_full_step_init.get(), false);
             }
             // Required because the state update below reads this container's conserved
             // vars, and we have only touched the primitives.
@@ -214,8 +215,8 @@ TaskCollection KHARMADriver::MakeImExTaskCollection(BlockList_t& blocks, int sta
         // This reconstructs the primitives (P) at faces and uses them to calculate fluxes
         // of the conserved variables (U) through each face.
         auto t_flux_start = t_start_recv_flux | t_prim_source_first;
-        auto t_flux_calc = KHARMADriver::AddFluxCalculations(
-            t_flux_start, tl, md_sub_step_init.get());
+        auto t_flux_calc =
+            KHARMADriver::AddFluxCalculations(t_flux_start, tl, md_sub_step_init.get());
         auto t_fluxes = t_flux_calc;
         if (use_fofc) {
             auto& guess_src = pmesh->mesh_data.GetOrAdd("fofc_source", i);

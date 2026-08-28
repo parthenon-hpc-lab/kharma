@@ -152,8 +152,7 @@ TaskStatus SetHubbleImpl(
             const Real ue0 = pmb->packages.Get("GRMHD")->Param<Real>("ue0");
             // Equation 40: with ue0 = (gam-2)/(game-2)*ug0 this is identically
             // (gam-2)(game-1)/(game-2) * ug0/rho0^game * (1+v0*t)^(game-2)
-            Real tobeke =
-                (game - 1) * ue0 / pow(rho0, game) * pow(1 + v0 * t, game - 2);
+            Real tobeke = (game - 1) * ue0 / pow(rho0, game) * pow(1 + v0 * t, game - 2);
             // Without cooling, the entropy of electrons should stay the same, analytic
             // solution.
             if (!cooling) tobeke = (game - 1) * ue0 / pow(rho0, game);
