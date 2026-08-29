@@ -51,6 +51,9 @@ jobs:
         - tilt_init
         - torus_sanity
     steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: 'recursive'
       - uses: actions/download-artifact@v8
         with:
           name: build-artifacts
