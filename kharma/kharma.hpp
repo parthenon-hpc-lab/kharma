@@ -107,7 +107,7 @@ inline bool FieldIsOutput(ParameterInput *pin, std::string name)
             }
         }
     }
-    return true;
+    return false;
 }
 
 /**
