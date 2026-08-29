@@ -370,7 +370,6 @@ if option "clean"; then
   echo "--- Using Kokkos version: ---"
   (cd $SCRIPT_DIR/external/parthenon/external/Kokkos && git describe --tags --always)
   echo "-----------------------------"
-  exit
 fi
 
 if ! option "dryrun"; then
