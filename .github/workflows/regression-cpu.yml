@@ -6,20 +6,24 @@ on:
   pull_request:
     branches: [ main, dev ]
 
+env:
+  MPI_NUM_PROCS: 4
+
 jobs:
   # Job 1: Compilation
   build:
     runs-on: [self-hosted, kharma]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           submodules: 'recursive'
       - name: Run compilation
-        run: bash -i ./make.sh clean
-      - uses: actions/upload-artifact@v4
+        run: bash -i ./make.sh clean noopenmp
+      - uses: actions/upload-artifact@v7
         with:
           name: build-artifacts
           path: kharma.host
+          if-no-files-found: 'error'
 
   # Job 2: Test Matrix
   test:
@@ -47,7 +51,7 @@ jobs:
         - tilt_init
         - torus_sanity
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: build-artifacts
       - name: install pyharm
