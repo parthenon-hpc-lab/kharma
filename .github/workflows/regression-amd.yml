@@ -8,6 +8,7 @@ on:
 
 env:
   MPI_NUM_PROCS: 1
+  OMP_NUM_THREADS: 1
 
 jobs:
   # Job 1: Compilation
@@ -17,6 +18,11 @@ jobs:
       - uses: actions/checkout@v7
         with:
           submodules: 'recursive'
+      - name: Patch for rx7800
+        run: |
+          cd $SOURCE_DIR/external/parthenon/external/Kokkos
+          git apply ../../../patches/kokkos-rx7800.patch
+          cd -
       - name: Run compilation
         run: bash -i ./make.sh clean hip
       - uses: actions/upload-artifact@v7

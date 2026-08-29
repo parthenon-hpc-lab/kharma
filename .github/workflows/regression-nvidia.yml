@@ -8,6 +8,7 @@ on:
 
 env:
   MPI_NUM_PROCS: 1
+  OMP_NUM_THREADS: 1
 
 jobs:
   # Job 1: Compilation
@@ -18,7 +19,7 @@ jobs:
         with:
           submodules: 'recursive'
       - name: Run compilation
-        run: bash -i 'module load nvhpc && ./make.sh clean cuda'
+        run: bash -ic 'module load nvhpc && ./make.sh clean cuda'
       - uses: actions/upload-artifact@v7
         with:
           name: build-artifacts

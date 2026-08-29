@@ -120,9 +120,6 @@ fi
 # and OMP_NUM_THREADS at option "-nt"
 if [[ "$1" == "-n" ]]; then
   MPI_NUM_PROCS="$2"
-  if [[ -z $MPI_EXE && $(( $MPI_NUM_PROCS > 1 )) ]]; then
-    MPI_EXE="mpirun"
-  fi
   shift
   shift
 fi
@@ -141,6 +138,12 @@ if [[ "$1" == "-d" ]]; then
   shift
   shift
 fi
+
+# If we requested >1 process, set a default MPI runner
+if [[ -z $MPI_EXE && $(( $MPI_NUM_PROCS > 1 )) ]]; then
+  MPI_EXE="mpirun"
+fi
+
 
 # Set default exe only if we didn't specify it
 if [ -z "$EXE_NAME" ]; then

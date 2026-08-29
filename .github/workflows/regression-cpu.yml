@@ -8,6 +8,7 @@ on:
 
 env:
   MPI_NUM_PROCS: 4
+  OMP_NUM_THREADS: 1
 
 jobs:
   # Job 1: Compilation
