@@ -62,3 +62,12 @@ jobs:
       - name: Run ${{ matrix.test_name }}
         working-directory: tests/${{ matrix.test_name }}
         run: bash -i ./run.sh
+      - uses: actions/upload-artifact@v7
+        with:
+          name: ${{ matrix.test_name }}-artifacts
+          path: |
+            .
+            !*.phdf
+            !*.rhdf
+            !*.xdmf
+            !*.h5
