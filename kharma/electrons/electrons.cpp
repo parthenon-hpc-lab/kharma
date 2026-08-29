@@ -63,7 +63,8 @@ std::shared_ptr<KHARMAPackage> Initialize(
     // heating models; kharma.cpp forces the Entropy package on whenever Electrons is,
     // so this should never fail, but the check protects any other caller.
     if (!packages->AllPackages().count("Entropy")) {
-        throw std::runtime_error("Electrons package requires the Entropy package to be enabled!");
+        throw std::runtime_error(
+            "Electrons package requires the Entropy package to be enabled!");
     }
 
     auto pkg = std::make_shared<KHARMAPackage>("Electrons");
@@ -252,8 +253,7 @@ TaskStatus InitElectrons(MeshBlockData<Real>* rc, ParameterInput* pin)
     pmb->par_for("UtoP_electrons", 0, e_P.GetDim(4) - 1, ks, ke, js, je, is, ie,
                  KOKKOS_LAMBDA(const int& p, const int& k, const int& j, const int& i)
         {
-            e_P(p, k, j, i) =
-                Entropy::CalcEntropy(rho(k, j, i), fel0 * u(k, j, i), game);
+            e_P(p, k, j, i) = Entropy::CalcEntropy(rho(k, j, i), fel0 * u(k, j, i), game);
         });
 
     EndFlag();

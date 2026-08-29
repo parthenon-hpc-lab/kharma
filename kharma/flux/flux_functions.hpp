@@ -245,8 +245,7 @@ KOKKOS_FORCEINLINE_FUNCTION void prim_to_flux(const GRCoordinates& G, const Glob
             flux[m_u.K_SHARMA] = flux[m_u.RHO] * P(m_p.K_SHARMA, k, j, i);
     }
     // Idealized (advected, no-dissipation) entropy: advects exactly like Ktot
-    if (m_u.KTOT_ADV >= 0)
-        flux[m_u.KTOT_ADV] = flux[m_u.RHO] * P(m_p.KTOT_ADV, k, j, i);
+    if (m_u.KTOT_ADV >= 0) flux[m_u.KTOT_ADV] = flux[m_u.RHO] * P(m_p.KTOT_ADV, k, j, i);
 }
 
 template<typename Global>

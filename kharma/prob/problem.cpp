@@ -47,6 +47,7 @@
 
 // Problem initialization headers
 #include "bondi.hpp"
+#include "entropy_wave.hpp"
 #include "explosion.hpp"
 #include "fm_torus.hpp"
 #include "gizmo.hpp"
@@ -91,6 +92,8 @@ void KHARMA::ProblemGenerator(MeshBlock* pmb, ParameterInput* pin)
         status = InitializeOrszagTang(rc, pin);
     } else if (prob == "explosion") {
         status = InitializeExplosion(rc, pin);
+    } else if (prob == "entropy_wave") {
+        status = InitializeEntropyWave(rc, pin);
     } else if (prob == "kelvin_helmholtz") {
         status = InitializeKelvinHelmholtz(rc, pin);
     } else if (prob == "shock") {

@@ -113,7 +113,14 @@ TaskStatus InitEntropy(MeshBlockData<Real>* rc, ParameterInput* pin)
 
     const Real gam = pmb->packages.Get("GRMHD")->Param<Real>("gamma");
 
-    IndexDomain domain = IndexDomain::interior;
+    // Over the *entire* domain, ghost zones included. Ktot's ghosts would be fine
+    // either way -- ApplyEntropyUpdate rewrites them from rho, u every sub-step -- but
+    // Ktot_adv is never reset, and the first flux calculation of the first step
+    // reconstructs from these zones before any UtoP has run over them (the driver's
+    // MeshUtoP lives in the fix region, after the flux region). Leaving them
+    // uninitialized injects a one-time error at the domain edge that is then locked in
+    // for the whole run.
+    IndexDomain domain = IndexDomain::entire;
     int is = pmb->cellbounds.is(domain), ie = pmb->cellbounds.ie(domain);
     int js = pmb->cellbounds.js(domain), je = pmb->cellbounds.je(domain);
     int ks = pmb->cellbounds.ks(domain), ke = pmb->cellbounds.ke(domain);
@@ -134,8 +141,8 @@ void BlockUtoP(MeshBlockData<Real>* rc, IndexDomain domain, bool coarse)
     // No need for a "map" here, we just want everything that fits these criteria.
     auto& k_P = rc->PackVariables(
         {Metadata::GetUserFlag("TrackEntropy"), Metadata::GetUserFlag("Primitive")});
-    auto& k_U = rc->PackVariables(
-        {Metadata::GetUserFlag("TrackEntropy"), Metadata::Conserved});
+    auto& k_U =
+        rc->PackVariables({Metadata::GetUserFlag("TrackEntropy"), Metadata::Conserved});
     // And then the local density
     GridScalar rho_U = rc->Get("cons.rho").data;
 

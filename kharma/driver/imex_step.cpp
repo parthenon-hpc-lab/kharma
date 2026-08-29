@@ -434,8 +434,8 @@ TaskCollection KHARMADriver::MakeImExTaskCollection(BlockList_t& blocks, int sta
         }
 
         // Make sure *all* conserved vars are synchronized at step end
-        auto t_ptou = tl.AddTask(t_entropy, Flux::MeshPtoU,
-            md_sub_step_final.get(), IndexDomain::entire, false);
+        auto t_ptou = tl.AddTask(t_entropy, Flux::MeshPtoU, md_sub_step_final.get(),
+            IndexDomain::entire, false);
 
         auto t_step_done = t_ptou;
         if (pkgs.count("ISMR")) {

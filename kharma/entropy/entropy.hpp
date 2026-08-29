@@ -92,8 +92,7 @@ TaskStatus InitEntropy(MeshBlockData<Real>* rc, ParameterInput* pin);
 inline TaskStatus MeshInitEntropy(MeshData<Real>* md, ParameterInput* pin)
 {
     Flag("MeshInitEntropy");
-    for (int i = 0; i < md->NumBlocks(); ++i)
-        InitEntropy(md->GetBlockData(i).get(), pin);
+    for (int i = 0; i < md->NumBlocks(); ++i) InitEntropy(md->GetBlockData(i).get(), pin);
     EndFlag();
     return TaskStatus::complete;
 }
