@@ -20,7 +20,7 @@ jobs:
           submodules: 'recursive'
       - name: Patch for rx7800
         run: |
-          cd $SOURCE_DIR/external/parthenon/external/Kokkos
+          cd external/parthenon/external/Kokkos
           git apply ../../../patches/kokkos-rx7800.patch
           cd -
       - name: Run compilation
