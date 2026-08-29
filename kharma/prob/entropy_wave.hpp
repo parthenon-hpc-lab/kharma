@@ -138,8 +138,7 @@ TaskStatus InitializeEntropyWave(
             GReal X[GR_DIM];
             G.coord_embed(k, j, i, Loci::center, X);
 
-            rho(k, j, i) =
-                rho0 * (1. + amp * m::sin(k1 * X[1] + k2 * X[2] + k3 * X[3]));
+            rho(k, j, i) = rho0 * (1. + amp * m::sin(k1 * X[1] + k2 * X[2] + k3 * X[3]));
             // Uniform pressure: this is the whole point, it makes K = p/rho^gam vary
             u(k, j, i) = pgas / (gam - 1.);
             uvec(0, k, j, i) = ut1;
