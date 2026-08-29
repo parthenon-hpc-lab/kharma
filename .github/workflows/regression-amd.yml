@@ -1,0 +1,64 @@
+name: Regression tests (AMD)
+
+on:
+  push:
+    branches: [ main, dev ]
+  pull_request:
+    branches: [ main, dev ]
+
+env:
+  MPI_NUM_PROCS: 1
+
+jobs:
+  # Job 1: Compilation
+  build:
+    runs-on: [self-hosted, kharma-gpu-amd]
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: 'recursive'
+      - name: Run compilation
+        run: bash -i ./make.sh clean hip
+      - uses: actions/upload-artifact@v7
+        with:
+          name: build-artifacts
+          path: kharma.hip
+          if-no-files-found: 'error'
+
+  # Job 2: Test Matrix
+  test:
+    needs: build
+    runs-on: [self-hosted, kharma-gpu-amd]
+    strategy:
+      matrix:
+        # add back 'resize' when new solvers work
+        test_name:
+        - all_pars
+        - anisotropic_conduction
+        - bondi
+        - bondi_viscous
+        - bz_monopole
+        - conducting_atmosphere
+        - emhdmodes
+        - emhdshock
+        - hubble_flow
+        - mhdmodes
+        - mhdmodes_smr
+        - noh
+        - regrid
+        - reinit
+        - restart
+        - tilt_init
+        - torus_sanity
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: 'recursive'
+      - uses: actions/download-artifact@v8
+        with:
+          name: build-artifacts
+      - name: install pyharm
+        run: pip install git+https://github.com/c-prather/pyharm@dev
+      - name: Run ${{ matrix.test_name }}
+        working-directory: tests/${{ matrix.test_name }}
+        run: bash -i ./run.sh
