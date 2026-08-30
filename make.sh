@@ -368,7 +368,7 @@ if option "clean"; then
 
   # Describe the kokkos version, for debugging
   echo "--- Using Kokkos version: ---"
-  (cd $SCRIPT_DIR/external/parthenon/external/Kokkos && git describe --tags --always)
+  (cd $SCRIPT_DIR/external/parthenon/external/Kokkos && git describe --tags --always && cd -)
   echo "-----------------------------"
 fi
 
