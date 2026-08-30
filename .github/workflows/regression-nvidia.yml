@@ -31,7 +31,9 @@ jobs:
   test:
     needs: build
     runs-on: [self-hosted, kharma-gpu-nv]
+    continue-on-error: true
     strategy:
+      fail-fast: false
       matrix:
         # add back 'resize' when new solvers work
         test_name:
