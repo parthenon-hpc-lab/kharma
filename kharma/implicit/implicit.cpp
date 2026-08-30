@@ -396,7 +396,7 @@ TaskStatus Implicit::Step(MeshData<Real>* md_full_step_init,
                 ScratchPad3D<Real> jacobian_s(
                     member.team_scratch(scratch_level), n1, nfvar, nfvar);
                 ScratchPad3D<Real> delta_prim_s(
-                    member.team_scratch(scratch_level), n1, 1, nfvar);
+                    member.team_scratch(scratch_level), n1, nfvar, 1);
                 ScratchPad2D<Real> trans_s(member.team_scratch(scratch_level), n1, nfvar);
                 ScratchPad2D<Real> work_s(
                     member.team_scratch(scratch_level), n1, 2 * nfvar);
@@ -433,7 +433,7 @@ TaskStatus Implicit::Step(MeshData<Real>* md_full_step_init,
                             auto delta_prim = Kokkos::subview(
                                 delta_prim_s, i, Kokkos::ALL(), Kokkos::ALL());
                             auto delta_prim_one =
-                                Kokkos::subview(delta_prim_s, i, 0, Kokkos::ALL());
+                                Kokkos::subview(delta_prim_s, i, Kokkos::ALL(), 0);
                             auto pivot = Kokkos::subview(pivot_s, i, Kokkos::ALL());
                             auto trans = Kokkos::subview(trans_s, i, Kokkos::ALL());
                             auto work = Kokkos::subview(work_s, i, Kokkos::ALL());
@@ -455,7 +455,7 @@ TaskStatus Implicit::Step(MeshData<Real>* md_full_step_init,
                                 // Linear solve by QR decomposition
                                 KokkosBatched::SerialApplyPivot<KokkosBatched::Side::Left,
                                     KokkosBatched::Direct::Backward>::invoke(pivot,
-                                    delta_prim);
+                                    delta_prim_one);
                             }
                         });
                 } else {

@@ -9,6 +9,7 @@ on:
 env:
   MPI_NUM_PROCS: 1
   OMP_NUM_THREADS: 1
+  MODULEPATH: '/opt/nvidia/hpc_sdk/modulefiles'
 
 jobs:
   # Job 1: Compilation

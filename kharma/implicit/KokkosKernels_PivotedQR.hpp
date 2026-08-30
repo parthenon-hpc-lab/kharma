@@ -246,8 +246,13 @@ struct SerialPivotedQR_Internal
         norm_part1x2.partWithAL(norm, n, 0);
 
         // compute initial column norms (replaced by dot product)
-        // KokkosBatched::SerialDot<KokkosBatched::Trans::Transpose, 0>
+        // Had previously:
         SerialDotInternal::invoke(m, n, A, as0, as1, A, as0, as1, norm, 1);
+        // In TeamVector this is:
+        //Impl::TeamVectorDotInternal::invoke(member, KokkosBlas::Impl::OpConj(), m, n, A, as0, as1, A, as0, as1, norm, 1);
+        // So:
+        //SerialDot<Trans::ConjTranspose, 1>::invoke(A, A, norm);
+        // But this seems to require A to be a View
 
         int matrix_rank = min_mn;
         value_type max_diag(0);
@@ -291,7 +296,8 @@ struct SerialPivotedQR_Internal
                                  threshold(10 * max_diag * ats::epsilon());
                 if (val_diag < threshold) {
                     matrix_rank = m_atl;
-                    // if (finish_when_rank_found) break;
+                    // Triggered if matrix_rank passed in is -1. Probably this is allowed?
+                    if (true) break;
                 }
             }
 

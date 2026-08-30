@@ -478,8 +478,8 @@ Real EstimateTimestep(MeshData<Real>* md)
     const double dt_last = globals.Get<double>("dt_last");
     const double dt_max = grmhd_pars.Get<double>("max_dt_increase") * dt_last;
     if (verbose > 1) {
-        std::cerr << "Updating dt. min allowed: " << dt_min << "max allowed: " << dt_max
-                  << "\nCalculated timestep (w/CFL factor!): " << min_ndt * cfl
+        std::cerr << "Updating dt on block. min allowed: " << dt_min << " max allowed: " << dt_max
+                  << "\nCalculated timestep before clipping (w/CFL factor): " << min_ndt * cfl
                   << std::endl;
     }
     const double ndt = clip(min_ndt * cfl, dt_min, dt_max);
