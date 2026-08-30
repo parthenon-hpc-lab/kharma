@@ -118,7 +118,7 @@ std::shared_ptr<KHARMAPackage> RadM1::Initialize(
     } else if (problem_id == "bondi_rad") {
         default_opacity_model = "bondi_opacs";
     } else if (problem_id == "beam_of_light") {
-        default_opacity_model = "beam_light_zero";
+        default_opacity_model = "transparent";
     } else if (problem_id == "thermal_equilibrium") {
         default_opacity_model = "thermal_equilibrium";
     }
@@ -132,8 +132,8 @@ std::shared_ptr<KHARMAPackage> RadM1::Initialize(
         opacity_model = (int) OpacityModel::ShocktubeConstant;
     } else if (opacity_model_str == "bondi_opacs") {
         opacity_model = (int) OpacityModel::Bondi;
-    } else if (opacity_model_str == "beam_light_zero") {
-        opacity_model = (int) OpacityModel::BeamLight;
+    } else if (opacity_model_str == "transparent") {
+        opacity_model = (int) OpacityModel::Transparent;
     } else if (opacity_model_str == "thermal_equilibrium") {
         opacity_model = (int) OpacityModel::ThermalEquilibrium;
     }

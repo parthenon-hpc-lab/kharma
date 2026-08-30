@@ -172,7 +172,7 @@ KOKKOS_INLINE_FUNCTION StatusRadiationInversion u_to_p_rad(const GRCoordinates& 
     Real E_rf = (3.0 * R_t_con[0] * alpha_sq) / (4.0 * gammarel2 - 1.0);
 
     // Limits
-    const Real min_erad = 10. * 1.e-80;
+    const Real min_erad = 1.e-30;
     const Real GAMMAMAX = 50.0;
     const Real GAMMA_TOL = 1.0 - 1e-10; // matches koral's GAMMASMALLLIMIT
     int flag1 = (gammarel2 >= 1.0);
@@ -187,13 +187,24 @@ KOKKOS_INLINE_FUNCTION StatusRadiationInversion u_to_p_rad(const GRCoordinates& 
 
     // Evaluate valid primitives or apply cold closure fix
     bool used_normal = false;
+    int flag4 = 1;
     if (nonfailure) {
         for (int mu = 0; mu < 4; ++mu) {
             uvec_radframe_con[mu] = alpha * (R_t_con[mu] + 1. / 3. * E_rf * G.gcon(Loci::center, j, i, 0, mu) * (4.0 * gammarel2 - 1.0)) / (4. / 3. * E_rf * m::sqrt(gammarel2));
         }
-        // E_rf can be small enough to make this division blow up even with
-        // gammarel2 in bounds; verify before trusting it.
-        used_normal = std::isfinite(E_rf) && std::isfinite(uvec_radframe_con[1]) && std::isfinite(uvec_radframe_con[2]) && std::isfinite(uvec_radframe_con[3]);
+
+        // After calculating uvec_radframe_con, we can still have trouble with gamma > gammamax, so let's recheck
+        Real qsq = G.gcov(Loci::center, j, i, 1, 1) * uvec_radframe_con[1] * uvec_radframe_con[1]
+             + G.gcov(Loci::center, j, i, 2, 2) * uvec_radframe_con[2] * uvec_radframe_con[2]
+             + G.gcov(Loci::center, j, i, 3, 3) * uvec_radframe_con[3] * uvec_radframe_con[3]
+             + 2.0 * G.gcov(Loci::center, j, i, 1, 2) * uvec_radframe_con[1] * uvec_radframe_con[2]
+             + 2.0 * G.gcov(Loci::center, j, i, 1, 3) * uvec_radframe_con[1] * uvec_radframe_con[3]
+             + 2.0 * G.gcov(Loci::center, j, i, 2, 3) * uvec_radframe_con[2] * uvec_radframe_con[3];
+        Real gammarel2_out = 1.0 + qsq;
+
+        flag4 = gammarel2_out <= (GAMMAMAX * GAMMAMAX) / (GAMMA_TOL * GAMMA_TOL);
+        used_normal = std::isfinite(E_rf) && std::isfinite(uvec_radframe_con[1]) && std::isfinite(uvec_radframe_con[2]) && std::isfinite(uvec_radframe_con[3])
+        && flag4;
     }
 
     if (!used_normal) {
@@ -229,7 +240,7 @@ KOKKOS_INLINE_FUNCTION StatusRadiationInversion u_to_p_rad(const GRCoordinates& 
                 return StatusRadiationInversion::gammarel2_low;
             }else if(!flag2){
                 return StatusRadiationInversion::urad_below_floor;
-            }else if(!flag3){
+            }else if(!flag3 || !flag4){
                 return StatusRadiationInversion::gammarel2_high;
             }else{
                 return StatusRadiationInversion::division_nonfinite;
@@ -278,8 +289,9 @@ KOKKOS_INLINE_FUNCTION void compute_covariant_fourforce(const GRCoordinates& G,
     Real Erf = P_rad[0];
     Real uvec_rad[3] = {P_rad[1], P_rad[2], P_rad[3]};
     Real ucon_rad[4], ucov_rad[4];
-    GRMHD::calc_ucon(G, uvec_rad, k, j, i, Loci::center, ucon_rad);
+    RadM1::calc_ucon_rad(G, P_rad, j, i, ucon_rad);
     G.lower(ucon_rad, ucov_rad, k, j, i, Loci::center);
+
 
     Real gamma_rel = -(ucon_rad[0] * ucov_mhd[0] + ucon_rad[1] * ucov_mhd[1] +
                        ucon_rad[2] * ucov_mhd[2] + ucon_rad[3] * ucov_mhd[3]);
@@ -923,11 +935,32 @@ KOKKOS_INLINE_FUNCTION int solve_radiation_4d(const GRCoordinates& G,
         // We don't update velocity since the 1D update is only for temperature.
         if (status_1d != StatusImplicitStep::success) {
             // It failed the 1d too!
-            // We just set dcov-rad to 0 here.
-            dcov_rad[0] = 0.0;
-            dcov_rad[1] = 0.0;
-            dcov_rad[2] = 0.0;
-            dcov_rad[3] = 0.0;
+            //Let's try reverting to the initial state and assume that the source term was zero for this step;
+            U_new(m_u.UU_RAD, k , j, i) = U_init(m_u.UU_RAD, k , j, i);
+            U_new(m_u.U1_RAD, k , j, i) = U_init(m_u.U1_RAD, k , j, i);
+            U_new(m_u.U2_RAD, k , j, i) = U_init(m_u.U2_RAD, k , j, i);
+            U_new(m_u.U3_RAD, k , j, i) = U_init(m_u.U3_RAD, k , j, i);
+            U_new(m_u.UU, k , j, i) = U_init(m_u.UU, k , j, i);
+            U_new(m_u.U1, k , j, i) = U_init(m_u.U1, k , j, i);
+            U_new(m_u.U2, k , j, i) = U_init(m_u.U2, k , j, i);
+            U_new(m_u.U3, k , j, i) = U_init(m_u.U3, k , j, i);
+
+            // Just invert both as if the source term was zero;
+            auto mhd_inverter_status = Inverter::u_to_p<Inverter::Type::kastaun>(
+            G, U_new, m_u, gam, k, j, i, P_new, m_p, Loci::center, 25, 1e-12);
+            pflag(0, k, j, i) = mhd_inverter_status;
+            // Now since the u2p for MHD was successful, do it for radiation:
+            Real U_rad_final[4] = {U_new(m_u.UU_RAD, k, j, i), U_new(m_u.U1_RAD, k, j, i),
+                U_new(m_u.U2_RAD, k, j, i), U_new(m_u.U3_RAD, k, j, i)};
+            Real P_rad_final[4];
+
+            auto rad_status = u_to_p_rad(G, U_rad_final, P_rad_final, k, j, i);
+
+            P_new(m_p.UU_RAD, k, j, i) = P_rad_final[0];
+            P_new(m_p.U1_RAD, k, j, i) = P_rad_final[1];
+            P_new(m_p.U2_RAD, k, j, i) = P_rad_final[2];
+            P_new(m_p.U3_RAD, k, j, i) = P_rad_final[3];
+    
             return static_cast<int>(StatusImplicitStep::onedfallback_failure);
         }
     } else {
@@ -961,14 +994,40 @@ KOKKOS_INLINE_FUNCTION int solve_radiation_4d(const GRCoordinates& G,
 
         // Let the fluid fixup (Inverter::MeshFixUtoP, keyed on pflag) repair
         // the gas variables via its own neighbor-averaging/backstop.
-        pflag(0, k, j, i) = mhd_inverter_status;
+        // pflag(0, k, j, i) = mhd_inverter_status;
 
+        //Let's try reverting to the initial state and assume that the source term was zero for this step;
+        U_new(m_u.UU_RAD, k , j, i) = U_init(m_u.UU_RAD, k , j, i);
+        U_new(m_u.U1_RAD, k , j, i) = U_init(m_u.U1_RAD, k , j, i);
+        U_new(m_u.U2_RAD, k , j, i) = U_init(m_u.U2_RAD, k , j, i);
+        U_new(m_u.U3_RAD, k , j, i) = U_init(m_u.U3_RAD, k , j, i);
+        U_new(m_u.UU, k , j, i) = U_init(m_u.UU, k , j, i);
+        U_new(m_u.U1, k , j, i) = U_init(m_u.U1, k , j, i);
+        U_new(m_u.U2, k , j, i) = U_init(m_u.U2, k , j, i);
+        U_new(m_u.U3, k , j, i) = U_init(m_u.U3, k , j, i);
+
+        // Just invert both as if the source term was zero;
+        auto mhd_inverter_status = Inverter::u_to_p<Inverter::Type::kastaun>(
+        G, U_new, m_u, gam, k, j, i, P_new, m_p, Loci::center, 25, 1e-12);
+        pflag(0, k, j, i) = mhd_inverter_status;
+        // Now since the u2p for MHD was successful, do it for radiation:
+        Real U_rad_final[4] = {U_new(m_u.UU_RAD, k, j, i), U_new(m_u.U1_RAD, k, j, i),
+            U_new(m_u.U2_RAD, k, j, i), U_new(m_u.U3_RAD, k, j, i)};
+        Real P_rad_final[4];
+
+        auto rad_status = u_to_p_rad(G, U_rad_final, P_rad_final, k, j, i);
+
+        P_new(m_p.UU_RAD, k, j, i) = P_rad_final[0];
+        P_new(m_p.U1_RAD, k, j, i) = P_rad_final[1];
+        P_new(m_p.U2_RAD, k, j, i) = P_rad_final[2];
+        P_new(m_p.U3_RAD, k, j, i) = P_rad_final[3];
+    
         return static_cast<int>(StatusImplicitStep::mhdsolve);
 
     } else {
         successful_prim_recovery = true;
 
-        // Now since the P2U for MHD was successful, do it for radiation:
+        // Now since the u2p for MHD was successful, do it for radiation:
         Real U_rad_final[4] = {U_new(m_u.UU_RAD, k, j, i), U_new(m_u.U1_RAD, k, j, i),
             U_new(m_u.U2_RAD, k, j, i), U_new(m_u.U3_RAD, k, j, i)};
         Real P_rad_final[4];
