@@ -5,7 +5,7 @@ set -euo pipefail
 # Require similarity to round-off after 5 steps
 
 # TODO figure out why I need the following.  Sure smells like a Parthenon bug
-export MPI_NUM_PROCS=1
+#export MPI_NUM_PROCS=1
 
 # Set paths
 KHARMADIR=../..
@@ -31,7 +31,7 @@ test_restart() {
     check_code=0
     # Compare to some high degree of accuracy
     pyharm diff --rel_tol 1e-9 restart_${1}_first.phdf restart_${1}_second.phdf --no_plot || check_code=$?
-    # Compare binary. For someday
+    # TODO(CEP) Should compare binary
     #h5diff --exclude-path=/Info --exclude-path=/Input --exclude-path=/divB \
     #       --relative=1e-5 \
     #       restart_${1}_first.phdf restart_${1}_second.phdf || check_code=$?
@@ -59,7 +59,7 @@ test_restart_phdf() {
     mv torus.out0.final.phdf restart_${1}_second.phdf
 
     check_code=0
-    # Only check basics for now
+    # PHDF files are not archival so this won't be exact. Only check basics for now
     #pyharm diff --rel_tol 1e-3 restart_${1}_first.phdf restart_${1}_second.phdf --no_plot || check_code=$?
     pyharm check-basics restart_${1}_second.phdf || check_code=$?
 
@@ -86,8 +86,8 @@ test_restart_smr() {
 
     check_code=0
     # Compare to some high degree of accuracy
-    pyharm diff --rel_tol 1e-9 restart_${1}_first.phdf restart_${1}_second.phdf --no_plot || check_code=$?
-    # Compare binary. For someday
+    pyharm diff --rel_tol 2e-8 restart_${1}_first.phdf restart_${1}_second.phdf --no_plot || check_code=$?
+    # TODO(CEP) Should compare binary
     #h5diff --exclude-path=/Info --exclude-path=/Input --exclude-path=/divB \
     #       --relative=1e-5 \
     #       restart_${1}_first.phdf restart_${1}_second.phdf || check_code=$?

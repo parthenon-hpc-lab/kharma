@@ -7,7 +7,7 @@ tilt_init() {
     # Run default tilted problem to 5 steps
     ../../run.sh -d . -i ../../pars/tori_3d/mad.par parthenon/time/nlim=5 debug/verbose=1 \
                     parthenon/mesh/nx1=128 parthenon/mesh/nx2=64 parthenon/mesh/nx3=64 \
-                    parthenon/meshblock/nx1=128 parthenon/meshblock/nx2=32 parthenon/meshblock/nx3=64 \
+                    parthenon/meshblock/nx1=64 parthenon/meshblock/nx2=32 parthenon/meshblock/nx3=64 \
                     parthenon/job/archive_parameters=false \
                     parthenon/output0/single_precision_output=false \
                     parthenon/output0/variables=prims,jcon,fflag,pflag,divB \
