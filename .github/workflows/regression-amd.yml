@@ -71,6 +71,7 @@ jobs:
         working-directory: tests/${{ matrix.test_name }}
         run: bash -i ./run.sh
       - uses: actions/upload-artifact@v7
+        if: always()
         with:
           name: ${{ matrix.test_name }}-artifacts
           path: |
