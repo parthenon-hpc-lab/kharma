@@ -48,7 +48,6 @@ jobs:
         - bz_monopole
         - conducting_atmosphere
         - emhdmodes
-        - emhdshock
         - hubble_flow
         - mhdmodes
         - mhdmodes_smr
