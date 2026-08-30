@@ -12,6 +12,7 @@ conv_2d() {
     IFS=',' read -ra RES_LIST <<< "$ALL_RES"
     for res in "${RES_LIST[@]}"
     do
+        echo Running conducting atmosphere test $3
         # Must be one block!
         cp conducting_atmosphere_${res}_default/atmosphere_soln_*.txt .
         $BASE/run.sh -n 1 -d . -i ./conducting_atmosphere.par debug/verbose=1 \

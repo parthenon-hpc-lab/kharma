@@ -29,7 +29,9 @@ tilt_init() {
     fi
 }
 
-tilt_init cell "b_field/solver=flux_ct torus/tilt=30" "Cell-centered B" "1e-9"
+# Cell-centered MAD cannot cross the pole
+tilt_init cell "b_field/solver=flux_ct torus/tilt=10" "Cell-centered B" "1e-9"
+# Face-centered can!
 tilt_init face "b_field/solver=face_ct torus/tilt=30" "Face-centered B" "1e-9"
 
 exit $exit_code
