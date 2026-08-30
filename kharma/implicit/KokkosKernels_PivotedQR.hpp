@@ -249,9 +249,10 @@ struct SerialPivotedQR_Internal
         // Had previously:
         SerialDotInternal::invoke(m, n, A, as0, as1, A, as0, as1, norm, 1);
         // In TeamVector this is:
-        //Impl::TeamVectorDotInternal::invoke(member, KokkosBlas::Impl::OpConj(), m, n, A, as0, as1, A, as0, as1, norm, 1);
+        // Impl::TeamVectorDotInternal::invoke(member, KokkosBlas::Impl::OpConj(), m, n,
+        // A, as0, as1, A, as0, as1, norm, 1);
         // So:
-        //SerialDot<Trans::ConjTranspose, 1>::invoke(A, A, norm);
+        // SerialDot<Trans::ConjTranspose, 1>::invoke(A, A, norm);
         // But this seems to require A to be a View
 
         int matrix_rank = min_mn;

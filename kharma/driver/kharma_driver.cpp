@@ -499,8 +499,8 @@ TaskID KHARMADriver::AddStateUpdateIdealGuess(TaskID& t_start, TaskList& tl,
     return t_copy_prims | t_update;
 }
 
-// TODO(CEP) bring back as extra prints/limits only, calling up to EvolutionDriver::SetGlobalTimeStep?
-// void KHARMADriver::SetGlobalTimeStep()
+// TODO(CEP) bring back as extra prints/limits only, calling up to
+// EvolutionDriver::SetGlobalTimeStep? void KHARMADriver::SetGlobalTimeStep()
 // {
 //     if (tm.dt < 0.1 * std::numeric_limits<Real>::max()) {
 //         tm.dt *= 2.0;
