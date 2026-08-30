@@ -9,15 +9,15 @@ problem_id = torus
 archive_parameters = timestamp
 
 <parthenon/mesh>
-nx1 = 128
-nx2 = 64
-nx3 = 64
+nx1 = 192
+nx2 = 128
+nx3 = 128
 
 <parthenon/meshblock>
-nx1 = 128
+nx1 = 96
 nx2 = 64
-# Many boundaries options are incompatible with multiple phi blocks
-nx3 = 64
+# Many boundary options are incompatible with multiple phi blocks
+nx3 = 128
 
 <coordinates>
 base = spherical_ks

@@ -12,11 +12,12 @@ conv_2d() {
     IFS=',' read -ra RES_LIST <<< "$ALL_RES"
     for res in "${RES_LIST[@]}"
     do
+        half=$(( $res / 2 ))
         cp conducting_atmosphere_${res}_default/atmosphere_soln_*.txt .
         $BASE/run.sh -d . -i ./conducting_atmosphere.par debug/verbose=1 \
             parthenon/time/tlim=200 parthenon/output0/dt=1000000 \
             parthenon/mesh/nx1=$res parthenon/mesh/nx2=$res parthenon/mesh/nx3=1 \
-            parthenon/meshblock/nx1=$res parthenon/meshblock/nx2=$res parthenon/meshblock/nx3=1 \
+            parthenon/meshblock/nx1=$half parthenon/meshblock/nx2=$half parthenon/meshblock/nx3=1 \
             $2 >log_${1}_${res}.txt 2>&1
 
         mv conducting_atmosphere.out0.00000.phdf emhd_2d_${res}_start_${1}.phdf

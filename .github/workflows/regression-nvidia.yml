@@ -7,7 +7,7 @@ on:
     branches: [ main, dev ]
 
 env:
-  NPROC: 8
+  NPROC: 12
   MPI_NUM_PROCS: 1
   OMP_NUM_THREADS: 1
   MODULEPATH: '/opt/nvidia/hpc_sdk/modulefiles:/usr/share/modulefiles'
