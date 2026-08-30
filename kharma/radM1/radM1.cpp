@@ -95,8 +95,8 @@ std::shared_ptr<KHARMAPackage> RadM1::Initialize(
     // Flag denoting RadM1 implicit solver failures
     Metadata m =
         Metadata({Metadata::Real, Metadata::Cell, Metadata::Derived, Metadata::OneCopy});
-    pkg->AddField("rflag", m);
-
+    pkg->AddField("rimplflag", m);
+    pkg->AddField("rinvflag", m);
     Real u_rad_floor = pin->GetOrAddReal("radM1", "u_rad_floor", 1.e-8);
     pkg->AllParams().Add("u_rad_floor", u_rad_floor);
 
@@ -308,8 +308,10 @@ TaskStatus RadM1::Step(MeshData<Real>* md_sub_init,
         const VarMap m_p(prims_map, false);
         const VarMap m_u(cons_map, true);
 
-        auto rflag = pmb_data->PackVariables(std::vector<std::string>{"rflag"});
+        auto rimplflag = pmb_data->PackVariables(std::vector<std::string>{"rimplflag"});
         auto pflag = pmb_data->PackVariables(std::vector<std::string>{"pflag"});
+
+        auto rinvflag = pmb_data->PackVariables(std::vector<std::string>{"rinvflag"});
 
         auto pmb_init_data = md_sub_init->GetBlockData(b);
 
@@ -331,8 +333,8 @@ TaskStatus RadM1::Step(MeshData<Real>* md_sub_init,
                     solve_radiation_4d(G, U_init, P_init, P_new, U_new, m_p, m_u, k, j, i,
                         dt, gam, src_rootfind_eps, src_rootfind_tol, src_rootfind_maxiter,
                         opacity_model, shocktube_sigma_rad, shocktube_kappa_rho,
-                        shocktube_kappa_scat, units_cgs, opacities, pflag);
-                rflag(0, k, j, i) = rflagl;
+                        shocktube_kappa_scat, units_cgs, opacities, pflag, rinvflag);
+                rimplflag(0, k, j, i) = rflagl;
             });
     }
 
@@ -345,18 +347,24 @@ TaskStatus RadM1::PostStepDiagnostics(const SimTime& tm, MeshData<Real>* md)
 {
     auto pmesh = md->GetMeshPointer();
     auto pmb0 = md->GetBlockData(0)->GetBlockPointer();
-    // Options
     const auto& pars = pmesh->packages.Get("Globals")->AllParams();
     const int flag_verbose = pars.Get<int>("flag_verbose");
 
 
     if (flag_verbose >= 1) {
         Reductions::StartFlagReduce(
-            md, "rflag", RadM1::status_names, IndexDomain::interior, false, 3);
+            md, "rimplflag", RadM1::status_names_implicit, IndexDomain::interior, false, 3);
         auto total_flag_counts = Reductions::CheckFlagReduceAndPrintHits(
-            md, "rflag", RadM1::status_names, IndexDomain::interior, false, 3);
+            md, "rimplflag", RadM1::status_names_implicit, IndexDomain::interior, false, 3);
         Reductions::PrintFlagPercentages(
-            md, "rflag", RadM1::status_names, IndexDomain::interior, total_flag_counts);
+            md, "rimplflag", RadM1::status_names_implicit, IndexDomain::interior, total_flag_counts);
+        // Radiation inversion flags
+        Reductions::StartFlagReduce(
+            md, "rinvflag", RadM1::status_names_inversion, IndexDomain::interior, false, 4);
+        auto rad_inv_counts = Reductions::CheckFlagReduceAndPrintHits(
+            md, "rinvflag", RadM1::status_names_inversion, IndexDomain::interior, false, 4);
+        Reductions::PrintFlagPercentages(
+            md, "rinvflag", RadM1::status_names_inversion, IndexDomain::interior, rad_inv_counts);
     }
 
     return TaskStatus::complete;

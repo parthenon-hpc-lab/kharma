@@ -134,7 +134,7 @@ KOKKOS_INLINE_FUNCTION double calculate_gamma_rel2(const GRCoordinates& G,
     return gammarel2;
 }
 
-KOKKOS_INLINE_FUNCTION StatusImplicitStep u_to_p_rad(const GRCoordinates& G,
+KOKKOS_INLINE_FUNCTION StatusRadiationInversion u_to_p_rad(const GRCoordinates& G,
     const Real U_rad[4], Real P_rad[4], const int k, const int j, const int i)
 {
     Real gdet = G.gdet(Loci::center, j, i);
@@ -146,7 +146,7 @@ KOKKOS_INLINE_FUNCTION StatusImplicitStep u_to_p_rad(const GRCoordinates& G,
         P_rad[1] = 0.0;
         P_rad[2] = 0.0;
         P_rad[3] = 0.0;
-        return StatusImplicitStep::success;
+        return StatusRadiationInversion::success;
     }
 
     // Recover R^t_mu from conserved state
@@ -175,8 +175,11 @@ KOKKOS_INLINE_FUNCTION StatusImplicitStep u_to_p_rad(const GRCoordinates& G,
     const Real min_erad = 10. * 1.e-80;
     const Real GAMMAMAX = 50.0;
     const Real GAMMA_TOL = 1.0 - 1e-10; // matches koral's GAMMASMALLLIMIT
-    int nonfailure = (gammarel2 >= 1.0) && (E_rf > min_erad) &&
-                     (gammarel2 <= (GAMMAMAX * GAMMAMAX) / (GAMMA_TOL * GAMMA_TOL));
+    int flag1 = (gammarel2 >= 1.0);
+    int flag2 = (E_rf > min_erad);
+    int flag3 = (gammarel2 <= (GAMMAMAX * GAMMAMAX) / (GAMMA_TOL * GAMMA_TOL));
+
+    int nonfailure = flag1 && flag2 && flag3;
 
     // Our primitives is saving uvec_rad as the eulerian frame velocity.
     // $\tilde{u}^i = \gamma v^i$
@@ -186,22 +189,16 @@ KOKKOS_INLINE_FUNCTION StatusImplicitStep u_to_p_rad(const GRCoordinates& G,
     bool used_normal = false;
     if (nonfailure) {
         for (int mu = 0; mu < 4; ++mu) {
-            uvec_radframe_con[mu] =
-                alpha *
-                (R_t_con[mu] + 1. / 3. * E_rf * G.gcon(Loci::center, j, i, 0, mu) *
-                                   (4.0 * gammarel2 - 1.0)) /
-                (4. / 3. * E_rf * m::sqrt(gammarel2));
+            uvec_radframe_con[mu] = alpha * (R_t_con[mu] + 1. / 3. * E_rf * G.gcon(Loci::center, j, i, 0, mu) * (4.0 * gammarel2 - 1.0)) / (4. / 3. * E_rf * m::sqrt(gammarel2));
         }
         // E_rf can be small enough to make this division blow up even with
         // gammarel2 in bounds; verify before trusting it.
-        used_normal = std::isfinite(E_rf) && std::isfinite(uvec_radframe_con[1]) &&
-                      std::isfinite(uvec_radframe_con[2]) &&
-                      std::isfinite(uvec_radframe_con[3]);
+        used_normal = std::isfinite(E_rf) && std::isfinite(uvec_radframe_con[1]) && std::isfinite(uvec_radframe_con[2]) && std::isfinite(uvec_radframe_con[3]);
     }
+
     if (!used_normal) {
         // Attempt Cold Closure
-        Real gammarel2_slow =
-            m::pow(1.0 + 10.0 * std::numeric_limits<double>::epsilon(), 2.0);
+        Real gammarel2_slow = m::pow(1.0 + 10.0 * std::numeric_limits<double>::epsilon(), 2.0);
         Real gammarel2_fast = GAMMAMAX * GAMMAMAX;
 
         Real R_t_t_slow, Erf_slow;
@@ -228,34 +225,33 @@ KOKKOS_INLINE_FUNCTION StatusImplicitStep u_to_p_rad(const GRCoordinates& G,
             P_rad[1] = 0.0;
             P_rad[2] = 0.0;
             P_rad[3] = 0.0;
-            return StatusImplicitStep::radsolve;
+            if (!flag1){
+                return StatusRadiationInversion::gammarel2_low;
+            }else if(!flag2){
+                return StatusRadiationInversion::urad_below_floor;
+            }else if(!flag3){
+                return StatusRadiationInversion::gammarel2_high;
+            }else{
+                return StatusRadiationInversion::division_nonfinite;
+            }
         }
 
         Real R_t_cov_new[4] = {R_t_t_new, R_t_cov[1], R_t_cov[2], R_t_cov[3]};
         Real R_t_con_new[4];
         G.raise(R_t_cov_new, R_t_con_new, k, j, i, Loci::center);
 
-        if (E_rf > 0.0) {
-            for (int mu = 0; mu < 4; ++mu) {
-                uvec_radframe_con[mu] =
-                    alpha *
-                    (R_t_con_new[mu] + 1. / 3. * E_rf *
-                                           G.gcon(Loci::center, j, i, 0, mu) *
-                                           (4.0 * gammarel2_new - 1.0)) /
-                    (4. / 3. * E_rf * m::sqrt(gammarel2_new));
-            }
-        } else {
-            for (int mu = 0; mu < 4; ++mu) uvec_radframe_con[mu] = 0.0;
+        for (int mu = 0; mu < 4; ++mu) {
+            uvec_radframe_con[mu] = alpha * (R_t_con_new[mu] + 1. / 3. * E_rf * G.gcon(Loci::center, j, i, 0, mu) * (4.0 * gammarel2_new - 1.0)) / (4. / 3. * E_rf * m::sqrt(gammarel2_new));
         }
+        
 
         // The cold-closure fallback also divides by E_rf, so check it too.
-        if (!std::isfinite(E_rf) || !std::isfinite(uvec_radframe_con[1]) ||
-            !std::isfinite(uvec_radframe_con[2]) || !std::isfinite(uvec_radframe_con[3])) {
+        if (!std::isfinite(E_rf) || !std::isfinite(uvec_radframe_con[1]) || !std::isfinite(uvec_radframe_con[2]) || !std::isfinite(uvec_radframe_con[3])) {
             P_rad[0] = min_erad;
             P_rad[1] = 0.0;
             P_rad[2] = 0.0;
             P_rad[3] = 0.0;
-            return StatusImplicitStep::radsolve;
+            return StatusRadiationInversion::cold_closure_nonfinite;
         }
     }
 
@@ -264,7 +260,7 @@ KOKKOS_INLINE_FUNCTION StatusImplicitStep u_to_p_rad(const GRCoordinates& G,
     P_rad[2] = uvec_radframe_con[2];
     P_rad[3] = uvec_radframe_con[3];
 
-    return StatusImplicitStep::success;
+    return StatusRadiationInversion::success;
 }
 
 KOKKOS_INLINE_FUNCTION void compute_covariant_fourforce(const GRCoordinates& G,
@@ -355,7 +351,7 @@ KOKKOS_INLINE_FUNCTION Real calculate_energy_residual(const GRCoordinates& G,
     }
 
     auto status = u_to_p_rad(G, U_rad_trial_out, P_rad_trial_out, k, j, i);
-    rad_recovery_ok = (status != StatusImplicitStep::radsolve);
+    rad_recovery_ok = (status == StatusRadiationInversion::success);
 
     Real P_mhd_trial[4] = {u_trial, uvec_frozen[0], uvec_frozen[1], uvec_frozen[2]};
     compute_covariant_fourforce(G, P_mhd_trial, P_rad_trial_out, Gas_Rho, gam,
@@ -497,7 +493,7 @@ KOKKOS_INLINE_FUNCTION int solve_radiation_4d(const GRCoordinates& G,
     const int src_rootfind_maxiter, const int opacity_model,
     const Real shocktube_sigma_rad, const Real shocktube_kappa_rho,
     const Real shocktube_kappa_scat, const UnitScales& units_cgs, const Microphysics::Opacities& opacities,
-    const VariablePack<Real> pflag)
+    const VariablePack<Real> pflag, const VariablePack<Real> rinvflag)
 {
     const Real Gas_Rho = P_init(m_p.RHO, k, j, i);
 
@@ -623,7 +619,7 @@ KOKKOS_INLINE_FUNCTION int solve_radiation_4d(const GRCoordinates& G,
 
             // Recover rad primitives
             auto status_m = u_to_p_rad(G, U_rad_m, P_rad_m, k, j, i);
-            if (status_m == StatusImplicitStep::radsolve) {
+            if (status_m != StatusRadiationInversion::success) {
                 bad_guess_m = true;
             }
 
@@ -647,7 +643,7 @@ KOKKOS_INLINE_FUNCTION int solve_radiation_4d(const GRCoordinates& G,
             }
             //TODO (PNM): Change name of KOKKOS kernel to lower snake case
             auto status_p = u_to_p_rad(G, U_rad_p, P_rad_p, k, j, i);
-            if (status_p == StatusImplicitStep::radsolve) {
+            if (status_p != StatusRadiationInversion::success) {
                 bad_guess_p = true;
             }
 
@@ -701,7 +697,7 @@ KOKKOS_INLINE_FUNCTION int solve_radiation_4d(const GRCoordinates& G,
                     dS_p);
                 for (int n = 0; n < 4; n++) dS_p[n] = gdet * dS_p[n];
 
-                PARTHENON_REQUIRE(status_p == StatusImplicitStep::success,
+                PARTHENON_REQUIRE(status_p == StatusRadiationInversion::success,
                     "This inversion should have already worked!");
 
                 for (int n = 0; n < 4; n++) {
@@ -737,7 +733,7 @@ KOKKOS_INLINE_FUNCTION int solve_radiation_4d(const GRCoordinates& G,
                     opacity_model, shocktube_sigma_rad, shocktube_kappa_rho, shocktube_kappa_scat, units_cgs, opacities, k, j, i,
                     dS_m);
                 for (int n = 0; n < 4; n++) dS_m[n] = gdet * dS_m[n];
-                PARTHENON_REQUIRE(status_m == StatusImplicitStep::success,
+                PARTHENON_REQUIRE(status_m == StatusRadiationInversion::success,
                     "This inversion should have already worked!");
                 for (int n = 0; n < 4; n++) {
                     Real fm = U_mhd_m[n] - U_mhd_0[n] + dt * dS_m[n];
@@ -785,7 +781,7 @@ KOKKOS_INLINE_FUNCTION int solve_radiation_4d(const GRCoordinates& G,
         for (int n = 0; n < 4; n++) dS_guess[n] = gdet * dS_guess[n];
 
         // Line search if rad prim had a bad inversion. Maybe reducing the step will help.
-        if (status == StatusImplicitStep::radsolve) {
+        if (status != StatusRadiationInversion::success) {
             constexpr Real umin = 1.e-12;
             constexpr Real Emin = 1.e-60;
             const Real gamma_max_sq = 1.e6; // Corresponds to Gamma_max = 1000
@@ -866,7 +862,7 @@ KOKKOS_INLINE_FUNCTION int solve_radiation_4d(const GRCoordinates& G,
 
             // If the scaled step lands in a physically valid regime, we cleared the
             // error flag!
-            if (status == StatusImplicitStep::radsolve || P_mhd_guess[0] < umin) {
+            if (status != StatusRadiationInversion::success || P_mhd_guess[0] < umin) {
                 bad_guess = true;
                 break;
             }
@@ -932,6 +928,7 @@ KOKKOS_INLINE_FUNCTION int solve_radiation_4d(const GRCoordinates& G,
             dcov_rad[1] = 0.0;
             dcov_rad[2] = 0.0;
             dcov_rad[3] = 0.0;
+            return static_cast<int>(StatusImplicitStep::onedfallback_failure);
         }
     } else {
         dcov_rad[0] = U_rad_guess[0] - U_rad_0[0];
@@ -957,6 +954,7 @@ KOKKOS_INLINE_FUNCTION int solve_radiation_4d(const GRCoordinates& G,
 
     // Refresh pflag each step so a stale failure doesn't linger.
     pflag(0, k, j, i) = static_cast<int>(Inverter::Status::success);
+    rinvflag(0, k, j, i) = static_cast<int>(StatusRadiationInversion::success);
 
     if (mhd_inverter_status != static_cast<int>(Inverter::Status::success)) {
         successful_prim_recovery = false;
@@ -964,6 +962,8 @@ KOKKOS_INLINE_FUNCTION int solve_radiation_4d(const GRCoordinates& G,
         // Let the fluid fixup (Inverter::MeshFixUtoP, keyed on pflag) repair
         // the gas variables via its own neighbor-averaging/backstop.
         pflag(0, k, j, i) = mhd_inverter_status;
+
+        return static_cast<int>(StatusImplicitStep::mhdsolve);
 
     } else {
         successful_prim_recovery = true;
@@ -974,8 +974,8 @@ KOKKOS_INLINE_FUNCTION int solve_radiation_4d(const GRCoordinates& G,
         Real P_rad_final[4];
 
         auto rad_status = u_to_p_rad(G, U_rad_final, P_rad_final, k, j, i);
-
-        if (rad_status == StatusImplicitStep::radsolve) {
+        rinvflag(0, k, j, i) = static_cast<int>(rad_status);
+        if (rad_status != StatusRadiationInversion::success) {
             successful_prim_recovery = false;
         } else {
             P_new(m_p.UU_RAD, k, j, i) = P_rad_final[0];
@@ -986,61 +986,12 @@ KOKKOS_INLINE_FUNCTION int solve_radiation_4d(const GRCoordinates& G,
     }
 
     if (!successful_prim_recovery) {
-        // Define a safe numerical floor
-        const Real floor_val = SMALL_NUM;
-
-        // Reset fluid to floors
-        // Density and energy to minimum, velocity to zero.
-        P_new(m_p.RHO, k, j, i) = 10. * floor_val;
-        P_new(m_p.UU, k, j, i) = 10. * floor_val;
-        P_new(m_p.U1, k, j, i) = 0.0;
-        P_new(m_p.U2, k, j, i) = 0.0;
-        P_new(m_p.U3, k, j, i) = 0.0;
-
-        // Fetch B-fields to recalculate fluid conserved state
-        if (m_p.B1 >= 0) {
-            B_P[V1] = P_init(m_p.B1, k, j, i);
-            B_P[V2] = P_init(m_p.B2, k, j, i);
-            B_P[V3] = P_init(m_p.B3, k, j, i);
-        }
-        Real U_mhd_floor[4];
-        Real rho_ut_dummy;
-
-        uvec[0] = P_new(m_p.U1, k, j, i);
-        uvec[1] = P_new(m_p.U2, k, j, i);
-        uvec[2] = P_new(m_p.U3, k, j, i);
-        GRMHD::p_to_u_mhd(G, 10. * floor_val, 10. * floor_val, uvec, B_P, gam, k, j, i,
-            rho_ut_dummy, U_mhd_floor, Loci::center);
-
-        U_new(m_u.UU, k, j, i) = U_mhd_floor[0];
-        U_new(m_u.U1, k, j, i) = U_mhd_floor[1];
-        U_new(m_u.U2, k, j, i) = U_mhd_floor[2];
-        U_new(m_u.U3, k, j, i) = U_mhd_floor[3];
-
-        // Reset radiation floors
-        // Radiation energy to minimum, flux to zero.
-        P_new(m_p.UU_RAD, k, j, i) = floor_val;
-        P_new(m_p.U1_RAD, k, j, i) = 0.0;
-        P_new(m_p.U2_RAD, k, j, i) = 0.0;
-        P_new(m_p.U3_RAD, k, j, i) = 0.0;
-
-        // Because fluid velocity is exactly zero, fluid rest frame == lab frame.
-        // All we have to do is multiply by gdet to make them Conserved Variables.
-        U_new(m_u.UU_RAD, k, j, i) = floor_val * gdet;
-        U_new(m_u.U1_RAD, k, j, i) = 0.0;
-        U_new(m_u.U2_RAD, k, j, i) = 0.0;
-        U_new(m_u.U3_RAD, k, j, i) = 0.0;
-
-        if (mhd_inverter_status != static_cast<int>(Inverter::Status::success)) {
-            return static_cast<int>(StatusImplicitStep::mhdsolve);
-        } else {
-            // The inverter for MHD worked, but the radiation failed.
-            return static_cast<int>(StatusImplicitStep::radsolve);
-        }
+        // The inverter for MHD worked, but the radiation failed.
+        return static_cast<int>(StatusImplicitStep::radsolve);
     }
 
     if (used_1d_fallback) {
-        return static_cast<int>(StatusImplicitStep::onedfallback);
+        return static_cast<int>(StatusImplicitStep::onedfallback_success);
     }
     return static_cast<int>(StatusImplicitStep::success);
 }

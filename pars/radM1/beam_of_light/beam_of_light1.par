@@ -58,6 +58,9 @@ fluid_density_cgs = 1.0
 <b_field>
 solver = none
 
+# check donor_cell 
+# change the cfl too? needs to be upwind
+
 <boundaries>
 inner_x1 = outflow
 outer_x1 = outflow

@@ -60,20 +60,27 @@ struct UnitScales {
 
 // Denote implicit solve failures (rflags)
 // This enum should grow to cover any potential flags
-enum class StatusImplicitStep { success = 0, mhdsolve, radsolve, bothsolve, failure, onedfallback };
+enum class StatusImplicitStep { success = 0, mhdsolve, radsolve, bothsolve, failure, onedfallback_success, onedfallback_failure };
 
-static const std::map<int, std::string> status_names = {
-    {(int)StatusImplicitStep::mhdsolve,
-        "RadM1 MHD Solve Failure"}, // flag that means that the MHD inversion failed (but
-                                    // rad solve worked)
-    {(int)StatusImplicitStep::radsolve,
-        "RadM1 Radiation Solve Failure"}, // flag that means that the radiation solve
-                                          // failed (but mhd solve worked)
+static const std::map<int, std::string> status_names_implicit = {
+    {(int)StatusImplicitStep::mhdsolve, "RadM1 MHD Solve Failure"}, // flag that means that the MHD inversion failed (but rad solve worked)
+    {(int)StatusImplicitStep::radsolve, "RadM1 Radiation Solve Failure"}, // flag that means that the radiation solve failed (but mhd solve worked)
     {(int)StatusImplicitStep::failure, "RadM1 Step Failure"},
-    {(int)StatusImplicitStep::onedfallback,
-        "RadM1 4D Solver Fell Back to 1D"}}; // flag that means the 4D Newton solve didn't
-                                              // converge/failed and the 1D fallback solver
-                                              // was used instead
+    {(int)StatusImplicitStep::onedfallback_success, "RadM1 4D Solver Fell Back to 1D and succeeded"}, // flag that means the 4D Newton solve didn't converge/failed and the 1D fallback solver was used instead and it succeeded
+    {(int)StatusImplicitStep::onedfallback_failure, "RadM1 4D Solver Fell Back to 1D and Failed"} // flag that means the 4D Newton solve didn't converge/failed and the 1D fallback solver was used instead and it also failed
+};
+
+
+enum class StatusRadiationInversion {success = 0, urad_below_floor, gammarel2_low, gammarel2_high, division_nonfinite, cold_closure_nonfinite};
+
+static const std::map<int, std::string> status_names_inversion = {
+    {(int)StatusRadiationInversion::urad_below_floor, "RadM1 Radiation Inversion Failure: Negative Radiation Energy"},
+    {(int)StatusRadiationInversion::gammarel2_low, "RadM1 Radiation Inversion Failure: Low Lorentz Factor"},
+    {(int)StatusRadiationInversion::gammarel2_high, "RadM1 Radiation Inversion Failure: High Lorentz Factor"},
+    {(int)StatusRadiationInversion::division_nonfinite, "RadM1 Radiation Inversion Failure: Non-finite Division"},
+    {(int)StatusRadiationInversion::cold_closure_nonfinite, "RadM1 Radiation Inversion Failure: Non-finite Result from Cold Closure"}
+
+};
 
 TaskStatus BlockPtoU(MeshBlockData<Real>* rc, IndexDomain domain, bool coarse = false);
 /**
