@@ -406,7 +406,8 @@ TaskStatus Implicit::Step(MeshData<Real>* md_full_step_init,
                 parthenon::par_for_inner(member, 0, nfvar - 1, 0, nfvar - 1, 0, n1 - 1,
                     [&](const int& ip, const int& jp, const int& i)
                     {
-                        if (jp == 0) delta_prim_s(i, ip, 0) = -residual_all(b, ip, k, j, i);
+                        if (jp == 0)
+                            delta_prim_s(i, ip, 0) = -residual_all(b, ip, k, j, i);
                         jacobian_s(i, ip, jp) = jacobian_all(b, ip * nfvar + jp, k, j, i);
                     });
 
