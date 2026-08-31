@@ -196,7 +196,7 @@ void KHARMA::FixParameters(ParameterInput *pin, bool is_parthenon_restart)
             GReal x1max = tmp_coords.r_to_native(Rout);
             pin->GetOrAddReal("parthenon/mesh", "x1max", x1max);
 
-            if (mpark::holds_alternative<SphMinkowskiCoords>(tmp_coords.base)) {
+            if (PortsOfCall::holds_alternative<SphMinkowskiCoords>(tmp_coords.base)) {
                 // In Minkowski coordinates, require Rin so the singularity is at user option
                 GReal Rin = pin->GetReal("coordinates", "r_in");
                 GReal x1min = tmp_coords.r_to_native(Rin);
@@ -284,40 +284,37 @@ void KHARMA::FixParameters(ParameterInput *pin, bool is_parthenon_restart)
         pin->GetOrAddReal("parthenon/mesh", "x3max", tmp_coords.stopx(3));
 
     // Also set x1 refinements as a proportion of size
-    InputBlock *pib = pin->pfirst_block;
-    while (pib != nullptr) {
-        if (pib->block_name.compare(0, 27, "parthenon/static_refinement") == 0) {
-            Real startx1 = pin->GetReal("parthenon/mesh", "x1min");
-            Real stopx1 = pin->GetReal("parthenon/mesh", "x1max");
-            Real lx1 = stopx1 - startx1;
-            Real startx1_prop = pin->GetReal(pib->block_name, "x1min");
-            Real stopx1_prop = pin->GetReal(pib->block_name, "x1max");
-            //std::cerr << "StartX1 " << startx1 << " lx1 " << lx1 << "Prop " << startx1_prop << " " << stopx1_prop << std::endl;
-            //std::cerr << "Adjust X1 " << startx1_prop*lx1 + startx1 << " to " << stopx1_prop*lx1 + startx1 << std::endl;
-            pin->SetReal(pib->block_name, "x1min", std::max(startx1_prop*lx1 + startx1, startx1));
-            pin->SetReal(pib->block_name, "x1max", std::min(stopx1_prop*lx1 + startx1, stopx1));
+    auto block_names = pin->GetBlockNamesWithPrefix("parthenon/static_refinement");
+    for (auto block_name : block_names) {
+        Real startx1 = pin->GetReal("parthenon/mesh", "x1min");
+        Real stopx1 = pin->GetReal("parthenon/mesh", "x1max");
+        Real lx1 = stopx1 - startx1;
+        Real startx1_prop = pin->GetReal(block_name, "x1min");
+        Real stopx1_prop = pin->GetReal(block_name, "x1max");
+        //std::cerr << "StartX1 " << startx1 << " lx1 " << lx1 << "Prop " << startx1_prop << " " << stopx1_prop << std::endl;
+        //std::cerr << "Adjust X1 " << startx1_prop*lx1 + startx1 << " to " << stopx1_prop*lx1 + startx1 << std::endl;
+        pin->SetReal(block_name, "x1min", std::max(startx1_prop*lx1 + startx1, startx1));
+        pin->SetReal(block_name, "x1max", std::min(stopx1_prop*lx1 + startx1, stopx1));
 
-            if (pin->DoesParameterExist(pib->block_name, "x2min")) {
-                Real startx2 = pin->GetReal("parthenon/mesh", "x2min");
-                Real stopx2 = pin->GetReal("parthenon/mesh", "x2max");
-                Real lx2 = stopx2 - startx2;
-                Real startx2_prop = pin->GetReal(pib->block_name, "x2min");
-                Real stopx2_prop = pin->GetReal(pib->block_name, "x2max");
-                pin->SetReal(pib->block_name, "x2min", std::max(startx2_prop*lx2 + startx2, startx2));
-                pin->SetReal(pib->block_name, "x2max", std::min(stopx2_prop*lx2 + startx2, stopx2));
-            }
-
-            if (pin->DoesParameterExist(pib->block_name, "x3min")) {
-                Real startx3 = pin->GetReal("parthenon/mesh", "x3min");
-                Real stopx3 = pin->GetReal("parthenon/mesh", "x3max");
-                Real lx3 = stopx3 - startx3;
-                Real startx3_prop = pin->GetReal(pib->block_name, "x3min");
-                Real stopx3_prop = pin->GetReal(pib->block_name, "x3max");
-                pin->SetReal(pib->block_name, "x3min", std::max(startx3_prop*lx3 + startx3, startx3));
-                pin->SetReal(pib->block_name, "x3max", std::min(stopx3_prop*lx3 + startx3, stopx3));
-            }
+        if (pin->DoesParameterExist(block_name, "x2min")) {
+            Real startx2 = pin->GetReal("parthenon/mesh", "x2min");
+            Real stopx2 = pin->GetReal("parthenon/mesh", "x2max");
+            Real lx2 = stopx2 - startx2;
+            Real startx2_prop = pin->GetReal(block_name, "x2min");
+            Real stopx2_prop = pin->GetReal(block_name, "x2max");
+            pin->SetReal(block_name, "x2min", std::max(startx2_prop*lx2 + startx2, startx2));
+            pin->SetReal(block_name, "x2max", std::min(stopx2_prop*lx2 + startx2, stopx2));
         }
-        pib = pib->pnext;
+
+        if (pin->DoesParameterExist(block_name, "x3min")) {
+            Real startx3 = pin->GetReal("parthenon/mesh", "x3min");
+            Real stopx3 = pin->GetReal("parthenon/mesh", "x3max");
+            Real lx3 = stopx3 - startx3;
+            Real startx3_prop = pin->GetReal(block_name, "x3min");
+            Real stopx3_prop = pin->GetReal(block_name, "x3max");
+            pin->SetReal(block_name, "x3min", std::max(startx3_prop*lx3 + startx3, startx3));
+            pin->SetReal(block_name, "x3max", std::min(stopx3_prop*lx3 + startx3, stopx3));
+        }
     }
 
     EndFlag();

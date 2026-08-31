@@ -147,6 +147,11 @@ inline EMHD_parameters GetEMHDParameters(Packages_t& packages)
 
 #if DISABLE_EMHD
 
+KOKKOS_INLINE_FUNCTION void set_parameters(const GRCoordinates& G, const Real& rho,
+    const Real& u, const Real& qtilde, const Real& dPtilde, const Real& bsq,
+    const EMHD_parameters& emhd_params, const Real& gam, const int& j, const int& i,
+    Real& tau, Real& chi_e, Real& nu_e)
+{}
 template<typename Local>
 KOKKOS_INLINE_FUNCTION void set_parameters(const GRCoordinates& G, const Local& P,
     const VarMap& m_p, const EMHD_parameters& emhd_params, const Real& gam, const int& j,
@@ -159,14 +164,9 @@ KOKKOS_INLINE_FUNCTION void set_parameters(const GRCoordinates& G,
     Real& nu_e)
 {}
 
-KOKKOS_INLINE_FUNCTION void set_parameters_init(const GRCoordinates& G, const Real& rho,
-    const Real& u, const EMHD_parameters& emhd_params, const Real& gam, const int& k,
-    const int& j, const int& i, Real& tau, Real& chi_e, Real& nu_e)
-{}
-
 KOKKOS_INLINE_FUNCTION void calc_tensor(const Real& rho, const Real& u, const Real& pgas,
-    const EMHD::EMHD_parameters& emhd_params, const Real& q, const Real& dP,
-    const FourVectors& D, const int& dir, Real emhd[GR_DIM])
+    const Real& q, const Real& dP, const FourVectors& D, const int& dir,
+    Real emhd[GR_DIM])
 {}
 
 KOKKOS_INLINE_FUNCTION void convert_prims_to_q_dP(const Real& q_tilde,

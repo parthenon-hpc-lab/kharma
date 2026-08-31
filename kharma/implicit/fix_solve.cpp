@@ -40,6 +40,12 @@
 
 #define NFVAR_MAX 10
 
+#if DISABLE_EMHD
+
+TaskStatus Implicit::FixSolve(MeshBlockData<Real>* mbd) { return TaskStatus::complete; }
+
+#else
+
 // TODO(CEP) should merge this with FixUtoP by generalizing that
 TaskStatus Implicit::FixSolve(MeshBlockData<Real>* mbd)
 {
@@ -137,3 +143,5 @@ TaskStatus Implicit::FixSolve(MeshBlockData<Real>* mbd)
     EndFlag();
     return TaskStatus::complete;
 }
+
+#endif
