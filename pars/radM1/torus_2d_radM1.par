@@ -1,16 +1,5 @@
 # 2D SANE torus with RadM1 radiation transport, using real (CGS) microphysical
-# opacities -- thermal electron-proton bremsstrahlung absorption/emission plus
-# Thomson electron scattering, via singularity-opac (OpacityModel::Default).
-#
-# Based on sane2d_radM1.par. The key difference: sane2d_radM1.par leaves
-# <units> scale_free unset, which defaults to true (trivial, dimensionless
-# units) for RadM1/opac_kharma's own unit system (phoebus::UnitConversions) --
-# note this is entirely separate from the KHARMA "Units" package below (M_BH,
-# rho_scale), which only feeds diagnostics like luminosity outputs. Since
-# bremsstrahlung/Thomson need real Kelvin/g/cm^3 numbers to mean anything,
-# this file sets scale_free = false and gives phoebus::UnitConversions its own
-# CGS scale (geom_mass_msun, fluid_density_cgs) consistent with the same
-# M_BH/rho_scale used by the KHARMA Units package.
+# opacities.
 
 <parthenon/job>
 problem_id = torus
@@ -35,7 +24,7 @@ hslope = 0.3
 correct_connections = true
 
 <parthenon/time>
-tlim = 60000.0
+tlim = 600.0
 nlim = -1
 
 <torus>
@@ -55,6 +44,11 @@ beta_min = 100.
 <GRMHD>
 cfl = 0.7
 gamma = 1.666667
+
+<inverter>
+backstop = false
+fix_average_neighbors = true
+fix_atmosphere = true
 
 <flux>
 type = llf
@@ -76,24 +70,14 @@ outer_x2 = reflecting
 # Minimal floors, applied in the default Normal Observer frame
 rho_min_geom = 1e-6
 u_min_geom   = 1e-8
-# gamma_max left unset (defaults to unlimited), matching sane2d.par -- testing
-# whether the 32 cap was interacting badly with RadM1's four-force coupling.
 
 <fofc>
-# FOFC is disabled by default because of tests but recommended
-# for most production runs
 on = false
 
 <radM1>
 on = true
 u_rad_floor = 1.e-8
-# Mean molecular weight, used to convert code temperature to Kelvin for the
-# Default opacity model's bremsstrahlung/Thomson calls (see UnitScales::mu).
 mu = 0.6
-# opacity_model is intentionally left unset: for problem_id = torus it falls
-# through radM1.cpp's problem_id switch to "default" (OpacityModel::Default),
-# which is what routes through the opac_kharma Opacities object below.
-#Root-finding parameters for the 4D solver; Maybe transfer this to IMEX package?
 src_rootfind_eps = 1e-8
 src_rootfind_tol = 1e-8
 src_rootfind_maxiter = 50
@@ -102,9 +86,6 @@ src_rootfind_maxiter = 50
 on = true
 M_BH = 10
 rho_scale = 1e-6
-# The two lines above feed the separate KHARMA "Units" package (diagnostics
-# only). These feed phoebus::UnitConversions instead, which is what RadM1 and
-# opac_kharma actually use -- kept numerically consistent with M_BH/rho_scale.
 scale_free = false
 geom_mass_msun = 10
 fluid_density_cgs = 1e-2
@@ -121,13 +102,13 @@ flag_verbose = 2
 
 <parthenon/output0>
 file_type = hdf5
-dt = 0.5
+dt = 1.0
 single_precision_output = true
 variables = prims, divB, jcon, fflag, pflag, rimplflag, rinvflag, fofcflag
 
 <parthenon/output1>
 file_type = rst
-dt = 55.0
+dt = 2.0
 
 <parthenon/output2>
 file_type = hst
