@@ -110,13 +110,16 @@ if [[ "$1" == "ncu_full" ]]; then
   shift
 fi
 
+DRYRUN=0
+if [[ "$1" == "--dryrun" ]]; then
+  DRYRUN=1
+  shift
+fi
+
 # Override MPI_NUM_PROCS at user option "-n"
 # and OMP_NUM_THREADS at option "-nt"
 if [[ "$1" == "-n" ]]; then
   MPI_NUM_PROCS="$2"
-  if [[ -z $MPI_EXE && $(( $MPI_NUM_PROCS > 1 )) ]]; then
-    MPI_EXE="mpirun"
-  fi
   shift
   shift
 fi
@@ -135,6 +138,12 @@ if [[ "$1" == "-d" ]]; then
   shift
   shift
 fi
+
+# If we requested >1 process, set a default MPI runner
+if [[ -z $MPI_EXE && $(( $MPI_NUM_PROCS > 1 )) ]]; then
+  MPI_EXE="mpirun"
+fi
+
 
 # Set default exe only if we didn't specify it
 if [ -z "$EXE_NAME" ]; then
@@ -165,11 +174,14 @@ fi
 chmod +x $KHARMA_DIR/$EXE_NAME
 
 # Run based on preferences
-# TODO can we just set +x to print commands, like does that play nice with exec?
 if [ -z "$MPI_EXE" ]; then
   echo "Running $PROF_EXE $PROF_OPTS $KHARMA_DIR/$EXE_NAME $@ $KHARMA_PROF_OPTS"
-  exec $PROF_EXE $PROF_OPTS $KHARMA_DIR/$EXE_NAME -d "$OUTDIR" "$@" $KHARMA_PROF_OPTS
+  if [[ $DRYRUN != 1 ]]; then
+    $PROF_EXE $PROF_OPTS $KHARMA_DIR/$EXE_NAME -d "$OUTDIR" "$@" $KHARMA_PROF_OPTS
+  fi
 else
   echo "Running $MPI_EXE -n $MPI_NUM_PROCS $MPI_EXTRA_ARGS $KHARMA_DIR/$EXE_NAME $@"
-  exec $MPI_EXE -n $MPI_NUM_PROCS $MPI_EXTRA_ARGS $KHARMA_DIR/$EXE_NAME -d "$OUTDIR" "$@"
+  if [[ $DRYRUN != 1 ]]; then
+    $MPI_EXE -n $MPI_NUM_PROCS $MPI_EXTRA_ARGS $KHARMA_DIR/$EXE_NAME -d "$OUTDIR" "$@"
+  fi
 fi

@@ -12,20 +12,24 @@ exit_code=0
 # Set paths
 KHARMADIR=../..
 
+echo "First run"
 $KHARMADIR/run.sh -d . -i ./orszag_tang_with_restarts.par >log_orig.txt 2>&1
 
 mv orszag_tang.out0.final.phdf orszag_tang.out0.final.orig.phdf
 
 sleep 1
 
+echo "Converting..."
 pyharm-convert --to-restart orszag_tang.out1.00005.rhdf orszag_tang.out1.00009.rhdf
 
 sleep 1
 
+echo "Second run"
 $KHARMADIR/run.sh -d . -i ./regrid_orszag_tang.par >log_regrid.txt 2>&1
 
 mv resize_restart.out0.final.phdf resize_restart.out0.final.regrid.phdf
 
+echo "Checking..."
 check_code=0
 pyharm-diff orszag_tang.out0.final.orig.phdf resize_restart.out0.final.regrid.phdf --no_plot --rel_tol=0.002 || check_code=$?
 if [[ $check_code != 0 ]]; then

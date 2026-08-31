@@ -10,7 +10,6 @@ then
 
   # Generally we want the Cray comipiler/environment,
   # for better device-side MPI support
-  module reset
   if [[ $ARGS == *"cray"* ]]; then
     module swap PrgEnv-gnu PrgEnv-cray
   fi

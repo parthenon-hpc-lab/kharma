@@ -509,6 +509,12 @@ KOKKOS_INLINE_FUNCTION int apply_geo_floors(const GRCoordinates& G, Local& P,
 
     P(m.RHO) += m::max(0., rhoflr_geom - P(m.RHO));
     P(m.UU) += m::max(0., uflr_geom - P(m.UU));
+    // These are a last-ditch *after* the usual floor applications.  Keep them stable
+    if (fflag) {
+        P(m.U1) = 0.;
+        P(m.U2) = 0.;
+        P(m.U3) = 0.;
+    }
 
     // These are a last-ditch *after* the usual floor applications.  Keep them stable
     if (fflag) {
@@ -555,6 +561,12 @@ KOKKOS_INLINE_FUNCTION int apply_geo_floors(const GRCoordinates& G, Global& P,
 
     P(m.RHO, k, j, i) += m::max(0., rhoflr_geom - P(m.RHO, k, j, i));
     P(m.UU, k, j, i) += m::max(0., uflr_geom - P(m.UU, k, j, i));
+    // These are a last-ditch *after* the usual floor applications.  Keep them stable
+    if (fflag) {
+        P(m.U1, k, j, i) = 0.;
+        P(m.U2, k, j, i) = 0.;
+        P(m.U3, k, j, i) = 0.;
+    }
 
     // These are a last-ditch *after* the usual floor applications.  Keep them stable
     if (fflag) {

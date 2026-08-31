@@ -67,7 +67,7 @@ std::shared_ptr<KHARMAPackage> Reductions::Initialize(
     params.Add("allreduce_pool", allreduce_pool, true);
 
     // Reductions sometimes need global elements of the simulation we don't otherwise keep
-    if (pin->GetReal("coordinates", "spherical")) {
+    if (pin->GetBoolean("coordinates", "spherical")) {
         params.Add("domain_r_in", (GReal)pin->GetReal("coordinates", "r_in"));
         params.Add("domain_r_eh", (GReal)pin->GetReal("coordinates", "r_eh"));
         params.Add("domain_r_out", (GReal)pin->GetReal("coordinates", "r_out"));
