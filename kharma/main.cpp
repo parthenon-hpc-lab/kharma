@@ -239,6 +239,15 @@ int main(int argc, char *argv[])
         EndFlag();
 
         // TODO(CEP) Figure this out instead of circumventing
+        // Parthenon cleanup includes Kokkos, MPI
+        Flag("HackyFinalize");
+        Kokkos::finalize();
+#ifdef MPI_PARALLEL
+        int mpi_finalized;
+        PARTHENON_MPI_CHECK(MPI_Finalized(&mpi_finalized));
+        if (!mpi_finalized) PARTHENON_MPI_CHECK(MPI_Finalize());
+#endif
+        EndFlag();
         exit(0);
     }
 
