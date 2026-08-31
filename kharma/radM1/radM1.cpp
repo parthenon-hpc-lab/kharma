@@ -214,6 +214,14 @@ void RadM1::ApplyRadM1Floors(MeshBlockData<Real>* rc, IndexDomain domain)
         {
             if (P(m_p.UU_RAD, k, j, i) < erad_floor) {
                 P(m_p.UU_RAD, k, j, i) = erad_floor;
+
+                // Flooring Erf here without also resetting the associated radiation-frame velocity leaves a cell that looks
+                // "floored" (tiny Erf) but, if it had a large Lorentz factor before
+                // hitting the floor, still reconverts (BlockPtoU) to a large conserved
+                // energy via that gamma^2 factor.
+                P(m_p.U1_RAD, k, j, i) = 0.0;
+                P(m_p.U2_RAD, k, j, i) = 0.0;
+                P(m_p.U3_RAD, k, j, i) = 0.0;
             }
         });
 }

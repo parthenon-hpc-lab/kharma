@@ -80,7 +80,7 @@ KOKKOS_INLINE_FUNCTION void ApplyColdClosureFix(const GRCoordinates& G,
 }
 
 KOKKOS_INLINE_FUNCTION double calculate_gamma_rel2(const GRCoordinates& G,
-    const Real R_t_cov[GR_DIM], const Real invariant_scalar, const int& j, const int& i)
+    const Real R_t_cov[GR_DIM], const int& j, const int& i)
 {
     Real gcon_tt = G.gcon(Loci::center, j, i, 0, 0);
     Real R_t_t = R_t_cov[0];
@@ -99,6 +99,9 @@ KOKKOS_INLINE_FUNCTION double calculate_gamma_rel2(const GRCoordinates& G,
         2.0 * G.gcon(Loci::center, j, i, 2, 3) * (R_t_cov[2] * R_t_cov[3]) +
         G.gcon(Loci::center, j, i, 3, 3) * (R_t_cov[3] * R_t_cov[3]);
 
+
+    Real invariant_scalar = gcon_tt * (R_t_t * R_t_t) + 2.0 * R_t_t * dot_t_i + dot_spatial;
+
     // Calculate Roots for (u^t_R)^2
     Real radical_inside = 4.0 * (gcon_tt * gcon_tt) * (R_t_t * R_t_t) +
                           (dot_t_i * dot_t_i) +
@@ -116,8 +119,14 @@ KOKKOS_INLINE_FUNCTION double calculate_gamma_rel2(const GRCoordinates& G,
     Real gamma2a = -0.25 * num_a / invariant_scalar;
     Real gamma2b = 0.25 * num_b / invariant_scalar;
 
+    // TODO (PNM): Check if the ill_conditoned boolean here is necessary.
+    const Real natural_scale = m::abs(gcon_tt * R_t_t * R_t_t) +
+                                m::abs(2.0 * R_t_t * dot_t_i) + m::abs(dot_spatial);
+    const bool ill_conditioned =
+        m::abs(invariant_scalar) < 1.e-3 * natural_scale;
+
     Real gamma2 = gamma2a;
-    if (gamma2a < (1.0 - 1e-10) || m::isnan(gamma2a) || m::isinf(gamma2a)) {
+    if (ill_conditioned || gamma2a < (1.0 - 1e-10) || m::isnan(gamma2a) || m::isinf(gamma2a)) {
         gamma2 = gamma2b;
     }
 
@@ -157,14 +166,8 @@ KOKKOS_INLINE_FUNCTION StatusRadiationInversion u_to_p_rad(const GRCoordinates& 
     Real R_t_con[4];
     G.raise(R_t_cov, R_t_con, k, j, i, Loci::center);
 
-    // Calculate Invariant Scalar S = R^t_\mu * R^{t\mu}
-    Real invariant_scalar = 0.0;
-    for (int mu = 0; mu < 4; ++mu) {
-        invariant_scalar += R_t_cov[mu] * R_t_con[mu];
-    }
-
     // Calculate gamma^2 for the radiation frame
-    Real gammarel2 = calculate_gamma_rel2(G, R_t_cov, invariant_scalar, j, i);
+    Real gammarel2 = calculate_gamma_rel2(G, R_t_cov, j, i);
 
     // Pre-calculate alpha bounds and rest-frame energy E_rf
     Real alpha_sq = -1.0 / G.gcon(Loci::center, j, i, 0, 0);
@@ -202,14 +205,22 @@ KOKKOS_INLINE_FUNCTION StatusRadiationInversion u_to_p_rad(const GRCoordinates& 
              + 2.0 * G.gcov(Loci::center, j, i, 2, 3) * uvec_radframe_con[2] * uvec_radframe_con[3];
         Real gammarel2_out = 1.0 + qsq;
 
+        // self consistent is comparing the gammarel2 we obtained with the gmmarel2_out
+        // They should match I think, but we are checking here 1e-6 is hard coded, we should get rid of this
+        // TODO (PNM): Maybe get rid of this?
+        const bool self_consistent =
+            m::abs(gammarel2_out - gammarel2) <= 1.e-6 * (gammarel2_out + gammarel2);
+
         flag4 = gammarel2_out <= (GAMMAMAX * GAMMAMAX) / (GAMMA_TOL * GAMMA_TOL);
         used_normal = std::isfinite(E_rf) && std::isfinite(uvec_radframe_con[1]) && std::isfinite(uvec_radframe_con[2]) && std::isfinite(uvec_radframe_con[3])
-        && flag4;
+        && flag4 && self_consistent;
     }
 
     if (!used_normal) {
         // Attempt Cold Closure
-        Real gammarel2_slow = m::pow(1.0 + 10.0 * std::numeric_limits<double>::epsilon(), 2.0);
+        //gammarel2_slow should definitely not be this, should be way smaller
+        // TODO (PNM): See if this is necessary
+        Real gammarel2_slow = m::pow(1.0 + 1.0e-4, 2.0);
         Real gammarel2_fast = GAMMAMAX * GAMMAMAX;
 
         Real R_t_t_slow, Erf_slow;
@@ -331,16 +342,20 @@ KOKKOS_INLINE_FUNCTION void compute_covariant_fourforce(const GRCoordinates& G,
 
     Real kappa_tot = kappa_a + kappa_sc;
 
+    if (kappa_tot == 0.0) {
+        dS[0] = 0.0;
+        dS[1] = 0.0;
+        dS[2] = 0.0;
+        dS[3] = 0.0;
+        return;
+    }
+
     Real coupling_term = kappa_a * (JBB - E_hat);
 
     dS[0] = coupling_term * ucov_mhd[0] - kappa_tot * F_hat_cov[0];
     dS[1] = coupling_term * ucov_mhd[1] - kappa_tot * F_hat_cov[1];
     dS[2] = coupling_term * ucov_mhd[2] - kappa_tot * F_hat_cov[2];
     dS[3] = coupling_term * ucov_mhd[3] - kappa_tot * F_hat_cov[3];
-    // dS[0] = 0.0;
-    // dS[1] = 0.0;
-    // dS[2] = 0.0;
-    // dS[3] = 0.0;
 }
 
 KOKKOS_INLINE_FUNCTION Real calculate_energy_residual(const GRCoordinates& G,
@@ -582,6 +597,10 @@ KOKKOS_INLINE_FUNCTION int solve_radiation_4d(const GRCoordinates& G,
     bool bad_guess = false;
 
     do {
+        if (err <= src_rootfind_tol) {
+            break;
+        }
+
         Real P_rad_m[4];
         Real P_rad_p[4];
         Real U_mhd_m[4];
@@ -816,16 +835,11 @@ KOKKOS_INLINE_FUNCTION int solve_radiation_4d(const GRCoordinates& G,
             // Check Velocity / Lorentz Factor Violation
             // Re-calculate the Lorentz factor squared of the guess to see if it went
             // superluminal
-            Real invariant_scalar_guess = 0.0;
             Real R_t_cov_guess[4] = {U_rad_guess[0] / gdet, U_rad_guess[1] / gdet,
                 U_rad_guess[2] / gdet, U_rad_guess[3] / gdet};
-            Real R_t_con_guess[4];
-            G.raise(R_t_cov_guess, R_t_con_guess, k, j, i, Loci::center);
-            for (int mu = 0; mu < 4; ++mu)
-                invariant_scalar_guess += R_t_cov_guess[mu] * R_t_con_guess[mu];
 
             Real gamma_sq_guess =
-                calculate_gamma_rel2(G, R_t_cov_guess, invariant_scalar_guess, j, i);
+                calculate_gamma_rel2(G, R_t_cov_guess, j, i);
 
             if (gamma_sq_guess > gamma_max_sq || gamma_sq_guess < 1.0) {
                 // If velocity exploded, aggressively damp the step (e.g., cut it in
