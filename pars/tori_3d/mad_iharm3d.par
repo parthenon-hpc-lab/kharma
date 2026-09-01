@@ -1,0 +1,103 @@
+# Emulate exactly how iharm3d worked
+# Should be comparable to "v1" simulation library
+
+<parthenon/job>
+archive_parameters_timestamp = true
+problem_id = torus
+
+<parthenon/mesh>
+nx1 = 288
+nx2 = 128
+nx3 = 128
+
+<parthenon/meshblock>
+nx1 = 288
+nx2 = 128
+nx3 = 64
+
+<coordinates>
+base = spherical_ks
+transform = fmks
+r_out = 1000
+a = 0.9375
+hslope = 0.3
+mks_smooth = 0.5
+poly_xt = 0.82
+poly_alpha = 14.0
+
+<parthenon/time>
+tlim = 10000.0
+# Predictor-corrector.  KHARMA now uses RK2
+integrator = vl2
+
+<GRMHD>
+cfl = 0.5
+gamma = 1.444444
+
+<flux>
+type = llf
+reconstruction = weno5
+
+<inverter>
+type = onedw
+iter_max = 8
+err_tol = 1e-8
+fix_average_neighbors = true
+fix_atmosphere = true
+
+<driver>
+# Treat primitive vars as fundamental & sync them
+type = imex
+two_sync = true
+
+<torus>
+rin = 20.0
+rmax = 41.0
+
+<perturbation>
+u_jitter = 0.1
+
+<b_field>
+solver = flux_ct
+type = mad
+beta_min = 100.
+
+<floors>
+# iharm3d had hard-coded constant floors
+rho_min_const = 1e-20
+u_min_const = 1e-20
+# Taken directly from v1 parameters.h
+rho_min_geom = 1e-6
+u_min_geom = 1e-8
+bsq_over_rho_max = 100
+u_over_rho_max = 100
+ktot_max = 3
+# Characteristic radius beyond which floors fall faster,
+# was supposed to prevent runaway energy additions
+use_r_char = true
+r_char = 10.
+
+<fofc>
+on = false
+
+<debug>
+verbose = 1
+extra_checks = 1
+flag_verbose = 0
+
+<parthenon/output0>
+file_type = hdf5
+write_xdmf = false
+dt = 5.0
+single_precision_output = true
+variables = prims, jcon, fflag, pflag
+
+<parthenon/output1>
+file_type = rst
+write_xdmf = false
+dt = 100.0
+
+<parthenon/output2>
+file_type = hst
+dt = 0.1
+variables = all_reductions

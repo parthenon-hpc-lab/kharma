@@ -25,10 +25,14 @@ nx2 = 64
 nx3 = 1
 
 <parthenon/static_refinement0>
-x1min = -0.1
-x1max = 0.1
-x2min = -0.1
-x2max = 0.1
+# Refinement is expressed as an N-dimensional convex box,
+# with each coordinate given as a proportion 0.0-1.0 of its dimension
+# Any meshblock intersecting the box gets refined to the given level
+# e.g. this is the central region ~0
+x1min = 0.49
+x1max = 0.51
+x2min = 0.49
+x2max = 0.51
 level = 1
 
 <coordinates>
@@ -49,8 +53,7 @@ reconstruction = weno5
 
 <b_field>
 solver = face_ct
-ct_scheme = bs99
-#ct_scheme = gs05_0
+ct_scheme = gs05_c
 
 <debug>
 verbose = 1
@@ -62,6 +65,7 @@ disable_floors = true
 
 <parthenon/output0>
 file_type = hdf5
+write_xdmf = false
 dt = 1.0
 single_precision_output = true
 variables = prims, divB, jcon
@@ -69,9 +73,3 @@ variables = prims, divB, jcon
 <parthenon/output1>
 file_type = hst
 dt = 0.1
-
-# This problem is generally much too short to need
-# checkpointing.  However, we have a test which uses it.
-#<parthenon/output2>
-#file_type = rst
-#dt = 10.0

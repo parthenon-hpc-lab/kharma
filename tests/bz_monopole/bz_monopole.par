@@ -18,13 +18,10 @@ nx3 = 1
 
 <coordinates>
 base = spherical_ks
-transform = fmks
+transform = mks
 r_out = 100.
 a = 0.9375
 hslope = 0.3
-mks_smooth = 0.5
-poly_xt = 0.82
-poly_alpha = 14.0
 
 <parthenon/time>
 tlim = 100.0
@@ -33,22 +30,24 @@ nlim = -1
 <debug>
 verbose = 1
 extra_checks = 1
-flag_verbose = 0
+flag_verbose = 2
 
 <GRMHD>
 cfl = 0.7
 gamma = 1.444444
-reconstruction = linear_mc
+
+<flux>
+type = llf
+reconstruction = weno5
 
 <b_field>
 type = bz_monopole
 norm = false
 
 <floors>
-bsq_over_rho_max = 100
-rho_min_geom = 1e-20
-u_min_geom = 1e-20
-gamma_max = 10
+rho_min_geom = 1e-6
+u_min_geom = 1e-8
+#bsq_over_rho_max = 1000
 
 <wind>
 on = false
@@ -61,7 +60,7 @@ power = 40
 file_type = hdf5
 dt = 5.0
 single_precision_output = false
-variables = prims.rho, prims.u, prims.uvec, prims.B, cons.B, divB
+variables = prims, cons.B, divB
 ghost_zones = true
 
 <parthenon/output1>

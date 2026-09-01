@@ -1,5 +1,5 @@
-# MAD model for testing. Differences from mad.par:
-# 1. Smaller, smaller meshblocks
+# MAD model for regression testing. Differences from mad.par:
+# 1. Smaller w/ much smaller meshblocks
 # 2. No history or restart file output
 # 3. Output in double, include divB, exclude jcon
 # 4. Default to 10 steps
@@ -36,6 +36,9 @@ nlim = 10
 <GRMHD>
 cfl = 0.7
 gamma = 1.666667
+
+<flux>
+type = llf
 reconstruction = weno5
 
 <driver>
@@ -57,7 +60,6 @@ beta_min = 100.
 rho_min_geom = 1e-6
 u_min_geom = 1e-8
 bsq_over_rho_max = 100
-u_over_rho_max = 2
 
 <debug>
 verbose = 1
@@ -68,4 +70,4 @@ flag_verbose = 2
 file_type = hdf5
 dt = 5.0
 single_precision_output = false
-variables = prims.rho, prims.u, prims.uvec, prims.B, cons.B, fflag, pflag, divB
+variables = prims, cons.B, fflag, pflag, divB

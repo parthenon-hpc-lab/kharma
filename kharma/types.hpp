@@ -55,9 +55,9 @@ using parthenon::MeshBlockData;
 // This provides a way of addressing vectors that matches
 // directions, to make derivatives etc more readable
 // TODO is there something tricky with statics we can do here to type?
-#define V1 0
-#define V2 1
-#define V3 2
+constexpr int V1 = 0;
+constexpr int V2 = 1;
+constexpr int V3 = 2;
 
 // Pull TopologicalElements out to match the above
 using TE = parthenon::TopologicalElement;
@@ -70,14 +70,21 @@ constexpr TE E2 = TE::E2;
 constexpr TE E3 = TE::E3;
 constexpr TE NN = TE::NN;
 
-// Any basic type manips, see LocOf in decs etc etc
+// Any basic type manips, see loc_of in decs etc etc
+// Host-only because the templating/types are weird on device
+// TODO(CEP) make host/device?
 template<typename T>
-KOKKOS_FORCEINLINE_FUNCTION TopologicalElement FaceOf(const T& dir) {
+inline TE FaceOf(const T& dir) {
     return (dir == X1DIR) ? F1 : ((dir == X2DIR) ? F2 : F3);
 }
 template<typename T>
-KOKKOS_FORCEINLINE_FUNCTION TopologicalElement EdgeOf(const T& dir) {
+inline TE EdgeOf(const T& dir) {
     return (dir == X1DIR) ? E1 : ((dir == X2DIR) ? E2 : E3);
+}
+template<typename T>
+inline std::vector<TE> OrthogonalEdges(const T& dir) {
+    return (dir == X1DIR) ? std::vector<TE>{E2, E3} :
+        ((dir == X2DIR) ? std::vector<TE>{E1, E3} : std::vector<TE>{E1, E2});
 }
 
 // Struct for derived 4-vectors at a point, usually calculated and needed together
@@ -89,12 +96,12 @@ typedef struct {
 } FourVectors;
 
 typedef struct {
-    uint is;
-    uint ie;
-    uint js;
-    uint je;
-    uint ks;
-    uint ke;
+    int is;
+    int ie;
+    int js;
+    int je;
+    int ks;
+    int ke;
 } IndexRange3;
 
 typedef struct {
@@ -130,6 +137,8 @@ class VarMap {
         int8_t PSI, Q, DP;
         // Force-free variables: FF-specific velocity and momentum
         int8_t UUFF, U1FF, U2FF, U3FF;
+        // Added material
+        int8_t RHOADD, T0ADD, T1ADD, T2ADD, T3ADD;
         // Total struct size ~20 bytes, < 1 vector of 4 doubles
 
         VarMap(parthenon::PackIndexMap& name_map, bool is_cons)
@@ -160,6 +169,11 @@ class VarMap {
                 // FF
                 UUFF = name_map["cons.ff.upar"].first;
                 U1FF = name_map["cons.ff.uvec"].first;
+
+                // Added material
+                RHOADD = name_map["Floors.rhou0add"].first;
+                T0ADD = name_map["Floors.Tadd"].first;
+
             } else {
                 // HD
                 RHO = name_map["prims.rho"].first;
@@ -215,6 +229,15 @@ class VarMap {
                 Bf2 = -1;
                 Bf3 = -1;
             }
+            if (T0ADD >= 0) {
+                T1ADD = T0ADD + 1;
+                T2ADD = T0ADD + 2;
+                T3ADD = T0ADD + 3;
+            } else {
+                T1ADD = -1;
+                T2ADD = -1;
+                T3ADD = -1;
+            }
         }
 
         void print() const
@@ -225,6 +248,11 @@ class VarMap {
             printf("EMHD q: %d dP: %d\n", Q, DP);
         }
 };
+
+// Reasonable maximum number of fluid primitive or conserved variables being evolved
+// e.g. 8 for GRMHD, 10 for EMHD, and additional vars for e-/passives
+// TODO(CEP) make configurable.  Currently only used for implicit kernel temporaries
+#define MAX_VARS 20
 
 #if DEBUG
 /**

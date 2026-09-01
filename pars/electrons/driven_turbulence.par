@@ -1,30 +1,21 @@
 # Driven turbulence electron heating
-# Perturb 2D state 
+# Perturb 2D state
 
 <parthenon/job>
 problem_id = driven_turbulence
 
 <parthenon/mesh>
-refinement = none
-numlevel = 1
-
 nx1 = 64
 x1min = 0
 x1max = 1
-ix1_bc = periodic
-ox1_bc = periodic
 
 nx2 = 64
 x2min = 0
 x2max = 1
-ix2_bc = periodic
-ox2_bc = periodic
 
 nx3 = 1
 x3min = -1
 x3max = 1
-ix3_bc = periodic
-ox3_bc = periodic
 
 <parthenon/meshblock>
 nx1 = 64
@@ -76,11 +67,10 @@ extra_checks = 1
 
 <parthenon/output0>
 file_type = hdf5
-dt = 5.
+write_xdmf = false
+dt = 5.0
 single_precision_output = true
-variables = prims.rho, prims.u, prims.uvec, prims.B, &
-            prims.Ktot, prims.Kel_Constant, prims.Kel_Sharma, prims.Kel_Kawazura, &
-            grf_normalized, alfven_speed, ctop, fflag, pflag
+variables = prims, grf_normalized, alfven_speed, ctop, fflag, pflag
 
 <parthenon/output1>
 file_type = hst

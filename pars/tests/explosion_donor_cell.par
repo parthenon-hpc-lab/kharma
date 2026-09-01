@@ -1,6 +1,6 @@
 # Komissarov cylindrical explosion with magnetic field
 # see Komissarov (1999), section 7.3
-# Uses donor-cell reconstruction for stability and simplicity, 
+# Uses donor-cell reconstruction for stability and simplicity,
 # good for looking at code behavior in bad situations.
 # Compare to AthenaK algorithm/GRMHD blast wave test
 
@@ -8,26 +8,17 @@
 problem_id = explosion
 
 <parthenon/mesh>
-refinement = none
-numlevel = 1
-
 nx1 = 200
 x1min = -6.0
 x1max = 6.0
-ix1_bc = periodic
-ox1_bc = periodic
 
 nx2 = 200
 x2min = -6.0
 x2max = 6.0
-ix2_bc = periodic
-ox2_bc = periodic
 
 nx3 = 1
 x3min = -6.0
 x3max = 6.0
-ix3_bc = periodic
-ox3_bc = periodic
 
 <parthenon/meshblock>
 nx1 = 100
@@ -65,14 +56,12 @@ r_out = 1.0
 rho_out = 1e-4
 
 <floors>
-disable_floors = false
-frame = drift
 rho_min_const = 1e-10
 u_min_const = 1e-10
 
 <b_field>
 solver = face_ct
-ct_scheme = sg07
+ct_scheme = gs05_c
 type = constant
 B10 = 1.0
 
@@ -83,6 +72,7 @@ extra_checks = 2
 
 <parthenon/output0>
 file_type = hdf5
+write_xdmf = false
 dt = 0.1
 single_precision_output = true
 variables = prims, cons.fB, fflag, pflag

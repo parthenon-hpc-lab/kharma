@@ -11,16 +11,14 @@ problem_id = torus
 # Pretty representative size for a long simulation
 # Larger simulations have smaller in-simulation timesteps
 <parthenon/mesh>
-refinement = none
-numlevel = 1
 nx1 = 256
 nx2 = 128
 nx3 = 256
 
 <parthenon/meshblock>
 nx1 = 128
-nx2 = 32
-nx3 = 128
+nx2 = 128
+nx3 = 256
 
 <coordinates>
 base = spherical_ks

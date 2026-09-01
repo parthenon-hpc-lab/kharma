@@ -8,26 +8,17 @@
 problem_id = explosion
 
 <parthenon/mesh>
-refinement = none
-numlevel = 1
-
 nx1 = 200
 x1min = -6.0
 x1max = 6.0
-ix1_bc = periodic
-ox1_bc = periodic
 
 nx2 = 200
 x2min = -6.0
 x2max = 6.0
-ix2_bc = periodic
-ox2_bc = periodic
 
 nx3 = 1
 x3min = -6.0
 x3max = 6.0
-ix3_bc = periodic
-ox3_bc = periodic
 
 <parthenon/meshblock>
 nx1 = 200
@@ -51,32 +42,31 @@ gamma = 1.333333
 type = kharma
 
 <flux>
-type = hlle
-reconstruction = ppm
+type = llf
+reconstruction = weno5
 
 <inverter>
 type = kastaun
-fix_average_neighbors = false
-fix_atmosphere = true
+err_tol = 1e-14
 
 <explosion>
 rho_out = 1e-4
 
 <floors>
-frame = drift
 rho_min_const = 1e-10
 u_min_const = 1e-10
 
 <fofc>
-on = true
-rho_min_const = 1e-10
-u_min_const = 1e-10
+on = false
+#consistent_face_b = false
 
 <b_field>
 solver = face_ct
-ct_scheme = sg07
+ct_scheme = gs05_c
 type = constant
-B10 = 1.0
+# Balsara uses ~250
+B10 = 1.e4
+#B20 = 50.0
 
 <debug>
 verbose = 1
@@ -85,6 +75,7 @@ extra_checks = 2
 
 <parthenon/output0>
 file_type = hdf5
+write_xdmf = false
 dt = 0.1
 single_precision_output = true
 variables = prims, fflag, pflag

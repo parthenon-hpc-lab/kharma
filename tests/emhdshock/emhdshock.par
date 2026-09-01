@@ -50,9 +50,13 @@ dt_min     = 1.e-6
 <GRMHD>
 cfl            = 0.25
 gamma          = 1.333333
+
+<flux>
+type = llf
 reconstruction = linear_mc
 
 <b_field>
+solver          = flux_ct
 implicit        = true
 initial_cleanup = false
 

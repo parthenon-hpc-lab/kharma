@@ -26,10 +26,14 @@ nx2 = 32
 nx3 = 1
 
 <parthenon/static_refinement0>
-x1min = -3.14
-x1max = -3.1
-x2min = -3.14
-x2max = -3.1
+# Refinement is expressed as an N-dimensional convex box,
+# with each coordinate given as a proportion 0.0-1.0 of its dimension
+# Any meshblock intersecting the box gets refined to the given level
+# e.g. this is the bottom left corner, for testing
+x1min = 0.0
+x1max = 0.1
+x2min = 0.0
+x2max = 0.1
 level = 1
 
 # Set boring box coordinates. Explanations in bondi.par
@@ -48,7 +52,7 @@ gamma = 1.666667
 
 <b_field>
 solver = face_ct
-#type = wave
+ct_scheme = gs05_c
 
 <floors>
 # Disable all floor applications in this problem
@@ -66,6 +70,7 @@ reconstruction = weno5
 # Primary HDF5 output enabled in most problems
 <parthenon/output0>
 file_type = hdf5
+write_xdmf = false
 dt = 1.0
 variables = prims, divB
 

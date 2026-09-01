@@ -1,25 +1,25 @@
-/* 
+/*
  *  File: conducting_atmosphere.cpp
- *  
+ *
  *  BSD 3-Clause License
- *  
+ *
  *  Copyright (c) 2020, AFD Group at UIUC
  *  All rights reserved.
- *  
+ *
  *  Redistribution and use in source and binary forms, with or without
  *  modification, are permitted provided that the following conditions are met:
- *  
+ *
  *  1. Redistributions of source code must retain the above copyright notice, this
  *     list of conditions and the following disclaimer.
- *  
+ *
  *  2. Redistributions in binary form must reproduce the above copyright notice,
  *     this list of conditions and the following disclaimer in the documentation
  *     and/or other materials provided with the distribution.
- *  
+ *
  *  3. Neither the name of the copyright holder nor the names of its
  *     contributors may be used to endorse or promote products derived from
  *     this software without specific prior written permission.
- *  
+ *
  *  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  *  AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  *  IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -44,12 +44,13 @@ using namespace parthenon;
 
 /**
  * Initialization of the hydrostatic conducting atmosphere test
- * 
- * The ODE solution (kharma/prob/emhd/conducting_atmosphere_${RES}_default) is the input to the code.
- * Since the ODE solution is a steady-state solution of the EMHD equations,
+ *
+ * The ODE solution (kharma/prob/emhd/conducting_atmosphere_${RES}_default) is the input
+ * to the code. Since the ODE solution is a steady-state solution of the EMHD equations,
  * the code should maintain the solution.
  */
-TaskStatus InitializeAtmosphere(std::shared_ptr<MeshBlockData<Real>>& rc, ParameterInput *pin)
+TaskStatus InitializeAtmosphere(
+    std::shared_ptr<MeshBlockData<Real>>& rc, ParameterInput* pin)
 {
     auto pmb = rc->GetBlockPointer();
 
@@ -59,7 +60,7 @@ TaskStatus InitializeAtmosphere(std::shared_ptr<MeshBlockData<Real>>& rc, Parame
 
     // Obtain GRMHD params
     const auto& grmhd_pars = pmb->packages.Get("GRMHD")->AllParams();
-    const Real& gam        = grmhd_pars.Get<Real>("gamma");
+    const Real& gam = grmhd_pars.Get<Real>("gamma");
 
     // Get all primitive variables (GRMHD+EMHD if in use)
     PackIndexMap prims_map;
@@ -69,7 +70,8 @@ TaskStatus InitializeAtmosphere(std::shared_ptr<MeshBlockData<Real>>& rc, Parame
     const auto& G = pmb->coords;
 
     // Type of input to the problem
-    const std::string input = pin->GetOrAddString("conducting_atmosphere", "input", "ODE");
+    const std::string input =
+        pin->GetOrAddString("conducting_atmosphere", "input", "ODE");
 
     // Set default B field parameters
     pin->GetOrAddString("b_field", "type", "monopole_cube");
@@ -84,47 +86,53 @@ TaskStatus InitializeAtmosphere(std::shared_ptr<MeshBlockData<Real>>& rc, Parame
     // TODO store as single file table. HDF5?
     char fode_rCoords[STRLEN], fode_rho[STRLEN], fode_u[STRLEN], fode_q[STRLEN];
     sprintf(fode_rCoords, "atmosphere_soln_rCoords.txt");
-    sprintf(fode_rho,     "atmosphere_soln_rho.txt");
-    sprintf(fode_u,       "atmosphere_soln_u.txt");
-    sprintf(fode_q,       "atmosphere_soln_phi.txt");
+    sprintf(fode_rho, "atmosphere_soln_rho.txt");
+    sprintf(fode_u, "atmosphere_soln_u.txt");
+    sprintf(fode_q, "atmosphere_soln_phi.txt");
 
     // Assign file pointers
-    FILE *fp_r, *fp_rho, *fp_u, *fp_q;;
-    fp_r   = fopen(fode_rCoords, "r");
+    FILE *fp_r, *fp_rho, *fp_u, *fp_q;
+    ;
+    fp_r = fopen(fode_rCoords, "r");
     fp_rho = fopen(fode_rho, "r");
-    fp_u   = fopen(fode_u,   "r");
+    fp_u = fopen(fode_u, "r");
     if (fp_r == NULL || fp_rho == NULL || fp_u == NULL) {
+        std::cout << std::endl; // flush messages in output buffer before we error
         throw std::runtime_error("Could not open conducting atmosphere solution!");
     }
     if (use_emhd) {
         fp_q = fopen(fode_q, "r");
         if (fp_q == NULL) {
+            std::cout << std::endl; // flush messages in output buffer before we error
             throw std::runtime_error("Could not open conducting atmosphere solution!");
         }
     }
 
     // Get primitives individually, so we can use GetHostMirror()
-    // TODO implement VariablePack::GetHostMirror, or mirror a temporary and dump into a pack device-side
-    GridScalar rho  = rc->Get("prims.rho").data; 
-    GridScalar u    = rc->Get("prims.u").data; 
+    // TODO implement VariablePack::GetHostMirror, or mirror a temporary and dump into a
+    // pack device-side
+    GridScalar rho = rc->Get("prims.rho").data;
+    GridScalar u = rc->Get("prims.u").data;
     GridVector uvec = rc->Get("prims.uvec").data;
 
     // Host side mirror of primitives
-    auto rho_host   = rho.GetHostMirror();
-    auto u_host     = u.GetHostMirror();
-    auto uvec_host  = uvec.GetHostMirror();
+    auto rho_host = rho.GetHostMirror();
+    auto u_host = u.GetHostMirror();
+    auto uvec_host = uvec.GetHostMirror();
 
     // Then for EMHD if enabled
+    const bool use_conduction = pmb->packages.Get("EMHD")->Param<bool>("conduction");
+    const bool use_viscosity = pmb->packages.Get("EMHD")->Param<bool>("viscosity");
     GridScalar q;
     GridScalar dP;
     // Temporary initializations are necessary for auto type
-    auto q_host     = rho.GetHostMirror();
-    auto dP_host    = rho.GetHostMirror();
-    if (use_emhd && emhd_params.conduction) {
-        q  = rc->Get("prims.q").data;
-        q_host  = q.GetHostMirror();
+    auto q_host = rho.GetHostMirror();
+    auto dP_host = rho.GetHostMirror();
+    if (use_emhd && use_conduction) {
+        q = rc->Get("prims.q").data;
+        q_host = q.GetHostMirror();
     }
-    if (use_emhd && emhd_params.viscosity) {
+    if (use_emhd && use_viscosity) {
         dP = rc->Get("prims.dP").data;
         dP_host = dP.GetHostMirror();
     }
@@ -140,7 +148,10 @@ TaskStatus InitializeAtmosphere(std::shared_ptr<MeshBlockData<Real>>& rc, Parame
         G.coord_embed(0, jb_in.s, i, Loci::center, Xembed);
         error = m::abs(Xembed[1] - rCoords[i]);
         if (error > 1.e-10) {
-            fprintf(stdout, "Error at radial zone i = %d, Error = %8.5e KHARMA: %8.7e, sage nb: %8.7e\n", i, error, Xembed[1], rCoords[i]);
+            fprintf(stdout,
+                "Error at radial zone i = %d, Error = %8.5e KHARMA: %8.7e, sage nb: "
+                "%8.7e\n",
+                i, error, Xembed[1], rCoords[i]);
             exit(-1);
         }
     }
@@ -151,32 +162,29 @@ TaskStatus InitializeAtmosphere(std::shared_ptr<MeshBlockData<Real>>& rc, Parame
 
     for (int i = ib.s; i <= ib.e; i++) {
         fscanf(fp_rho, "%lf", &(rho_temp));
-        fscanf(fp_u,   "%lf", &(u_temp));
-        if (use_emhd)
-            fscanf(fp_q, "%lf", &(q_temp));
+        fscanf(fp_u, "%lf", &(u_temp));
+        if (use_emhd) fscanf(fp_q, "%lf", &(q_temp));
 
         for (int j = jb.s; j <= jb.e; j++) {
             for (int k = kb.s; k <= kb.e; k++) {
 
-                GReal Xnative[GR_DIM], Xembed[GR_DIM]; 
+                GReal Xnative[GR_DIM], Xembed[GR_DIM];
                 G.coord(k, j, i, Loci::center, Xnative);
                 G.coord_embed(k, j, i, Loci::center, Xembed);
 
                 // First initialize primitives that are read from .txt files
-                rho_host(k, j, i)   = rho_temp;
-                u_host(k, j, i)     = u_temp;
-                if (use_emhd)
-                    q_host(k, j, i) = q_temp;
+                rho_host(k, j, i) = rho_temp;
+                u_host(k, j, i) = u_temp;
+                if (use_emhd) q_host(k, j, i) = q_temp;
 
                 // Now the remaining primitives
-                if (use_emhd && emhd_params.viscosity)
-                    dP_host(k, j, i)   = 0.;
+                if (use_emhd && use_viscosity) dP_host(k, j, i) = 0.;
 
                 // Note that the velocity primitives defined up there aren't quite right.
-                // For a fluid at rest wrt. the normal observer, ucon = {-1/g_tt,0,0,0}. 
+                // For a fluid at rest wrt. the normal observer, ucon = {-1/g_tt,0,0,0}.
                 // We need to use this info to obtain the correct values for U1, U2 and U3
 
-                Real ucon[GR_DIM]         = {0};
+                Real ucon[GR_DIM] = {0};
                 Real gcov[GR_DIM][GR_DIM] = {0};
                 Real gcon[GR_DIM][GR_DIM] = {0};
                 // Use functions because we're host-side
@@ -196,15 +204,21 @@ TaskStatus InitializeAtmosphere(std::shared_ptr<MeshBlockData<Real>>& rc, Parame
                 uvec_host(V3, k, j, i) = u_prim[V3];
 
                 if (use_emhd && emhd_params.higher_order_terms) {
-                    // Update q_host (and dP_host, which is zero in this problem). These are now q_tilde and dP_tilde
+                    // Update q_host (and dP_host, which is zero in this problem). These
+                    // are now q_tilde and dP_tilde
                     Real tau, chi_e, nu_e;
                     // Zeros are q, dP, and bsq, only needed for torus closure
-                    EMHD::set_parameters(G, rho_temp, u_temp, 0., 0., 0., emhd_params, gam, j, i, tau, chi_e, nu_e);
+                    EMHD::set_parameters(G, rho_temp, u_temp, 0., 0., 0., emhd_params,
+                        gam, j, i, tau, chi_e, nu_e);
                     const Real Theta = (gam - 1.) * u_temp / rho_temp;
-                    if (emhd_params.conduction)
-                        q_host(k, j, i)  *= (chi_e != 0) ? m::sqrt(tau / (chi_e * rho_temp * Theta * Theta)) : 0;
-                    if (emhd_params.viscosity)
-                        dP_host(k, j, i) *= (nu_e  != 0) ? m::sqrt(tau / (nu_e * rho_temp * Theta)) : 0;
+                    if (use_conduction)
+                        q_host(k, j, i) *=
+                            (chi_e != 0)
+                                ? m::sqrt(tau / (chi_e * rho_temp * Theta * Theta))
+                                : 0;
+                    if (use_viscosity)
+                        dP_host(k, j, i) *=
+                            (nu_e != 0) ? m::sqrt(tau / (nu_e * rho_temp * Theta)) : 0;
                 }
             }
         }
@@ -214,18 +228,15 @@ TaskStatus InitializeAtmosphere(std::shared_ptr<MeshBlockData<Real>>& rc, Parame
     fclose(fp_r);
     fclose(fp_rho);
     fclose(fp_u);
-    if (use_emhd)
-        fclose(fp_q);
+    if (use_emhd) fclose(fp_q);
 
     // Deep copy to device
     Kokkos::fence();
     rho.DeepCopy(rho_host);
     u.DeepCopy(u_host);
     uvec.DeepCopy(uvec_host);
-    if (use_emhd && emhd_params.conduction)
-        q.DeepCopy(q_host);
-    if (use_emhd && emhd_params.viscosity)
-        dP.DeepCopy(dP_host);
+    if (use_emhd && use_conduction) q.DeepCopy(q_host);
+    if (use_emhd && use_viscosity) dP.DeepCopy(dP_host);
     Kokkos::fence();
 
     // Also fill cons
@@ -235,5 +246,4 @@ TaskStatus InitializeAtmosphere(std::shared_ptr<MeshBlockData<Real>>& rc, Parame
     KBoundaries::FreezeDirichletBlock(rc.get());
 
     return TaskStatus::complete;
-
 }

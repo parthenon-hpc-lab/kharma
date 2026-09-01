@@ -6,8 +6,6 @@
 problem_id = resize_restart
 
 <parthenon/mesh>
-refinement = none
-numlevel = 1
 nx1 = 288
 nx2 = 128
 nx3 = 128
@@ -61,14 +59,17 @@ extra_checks = 1
 
 <parthenon/output0>
 file_type = hdf5
-dt = 0.0001
+write_xdmf = false
+dt = 5.0
 single_precision_output = true
-variables = prims.rho, prims.u, prims.uvec, prims.B, jcon, fflag, pflag
+variables = prims, divB, jcon, fflag, pflag
 
 <parthenon/output1>
 file_type = rst
+write_xdmf = false
 dt = 100.0
 
-<parthenon/output1>
+<parthenon/output2>
 file_type = hst
 dt = 0.1
+variables = all_reductions

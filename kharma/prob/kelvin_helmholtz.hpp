@@ -47,7 +47,8 @@
  * Follows initial conditions from Lecoanet et al. 2015,
  * MNRAS 455, 4274.
  */
-TaskStatus InitializeKelvinHelmholtz(std::shared_ptr<MeshBlockData<Real>>& rc, ParameterInput *pin)
+TaskStatus InitializeKelvinHelmholtz(
+    std::shared_ptr<MeshBlockData<Real>>& rc, ParameterInput* pin)
 {
     auto pmb = rc->GetBlockPointer();
     GridScalar rho = rc->Get("prims.rho").data;
@@ -72,7 +73,8 @@ TaskStatus InitializeKelvinHelmholtz(std::shared_ptr<MeshBlockData<Real>>& rc, P
     IndexDomain domain = IndexDomain::entire;
     IndexRange3 b = KDomain::GetRange(rc, domain, 0, 0);
     pmb->par_for("kh_init", b.ks, b.ke, b.js, b.je, b.is, b.ie,
-        KOKKOS_LAMBDA (const int &k, const int &j, const int &i) {
+                 KOKKOS_LAMBDA(const int& k, const int& j, const int& i)
+        {
             GReal X[GR_DIM];
             G.coord_embed(k, j, i, Loci::center, X);
             // Lecoanet's x <-> x1; z <-> x2
@@ -82,13 +84,14 @@ TaskStatus InitializeKelvinHelmholtz(std::shared_ptr<MeshBlockData<Real>>& rc, P
             rho(k, j, i) =
                 rho0 + Drho * 0.5 * (m::tanh(zdist1 / a) - m::tanh(zdist2 / a));
             u(k, j, i) = P0 / (gam - 1.) * tscale * tscale;
-            uvec(0, k, j, i) = uflow * (m::tanh(zdist1 / a) - m::tanh(zdist2 / a) - 1.) * tscale;
+            uvec(0, k, j, i) =
+                uflow * (m::tanh(zdist1 / a) - m::tanh(zdist2 / a) - 1.) * tscale;
             uvec(1, k, j, i) = amp * m::sin(2. * M_PI * X[1]) *
-                        (m::exp(-(zdist1 * zdist1) / (sigma * sigma)) +
-                        m::exp(-(zdist2 * zdist2) / (sigma * sigma))) * tscale;
+                               (m::exp(-(zdist1 * zdist1) / (sigma * sigma)) +
+                                   m::exp(-(zdist2 * zdist2) / (sigma * sigma))) *
+                               tscale;
             uvec(2, k, j, i) = 0.;
-        }
-    );
+        });
 
     return TaskStatus::complete;
 }

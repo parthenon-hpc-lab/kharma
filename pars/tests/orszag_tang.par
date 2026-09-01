@@ -5,26 +5,17 @@
 problem_id = orszag_tang
 
 <parthenon/mesh>
-refinement = none
-numlevel = 1
-
 nx1 = 512
 x1min = -3.141592653589793
 x1max = 3.141592653589793
-ix1_bc = periodic
-ox1_bc = periodic
 
 nx2 = 512
 x2min = -3.141592653589793
 x2max = 3.141592653589793
-ix2_bc = periodic
-ox2_bc = periodic
 
 nx3 = 1
 x3min = -0.01
 x3max = 0.01
-ix3_bc = periodic
-ox3_bc = periodic
 
 <parthenon/meshblock>
 nx1 = 256
@@ -49,7 +40,7 @@ reconstruction = weno5
 
 <b_field>
 solver = face_ct
-ct_scheme = sg07
+ct_scheme = gs05_c
 
 <debug>
 verbose = 1
@@ -58,6 +49,7 @@ extra_checks = 1
 
 <parthenon/output0>
 file_type = hdf5
+write_xdmf = false
 dt = 1.0
 single_precision_output = true
 variables = prims, jcon
@@ -66,13 +58,9 @@ variables = prims, jcon
 file_type = hst
 dt = 0.1
 
-<b_cleanup>
-# B transport experiments: clean every 10 steps
-on = false
-cleanup_interval = 10
-
 # This problem is generally much too short to need
 # checkpointing.  However, we have a test which uses it.
 #<parthenon/output2>
 #file_type = rst
+#write_xdmf = false
 #dt = 10.0

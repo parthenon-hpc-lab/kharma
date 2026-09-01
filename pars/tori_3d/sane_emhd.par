@@ -1,14 +1,12 @@
-# Extended SANE model mirroring the simulation library
-# Quite small to run for more than 10kM, 6M/12M F-M torus,
-# Overall simulation size 1000M
+# SANE model in "Extended" MHD, including some viscosity & heat
+# conduction effects via semi-implicit scheme. See
+# https://github.com/AFD-Illinois/kharma/wiki/Packages#important-packages
 
 <parthenon/job>
 archive_parameters_timestamp = true
 problem_id = torus
 
 <parthenon/mesh>
-refinement = none
-numlevel = 1
 nx1 = 128
 nx2 = 64
 nx3 = 64
@@ -31,6 +29,9 @@ poly_alpha = 14.0
 <parthenon/time>
 tlim = 4000.0
 nlim = -1
+# Only supported integrator for semi-implicit solve
+# Set whenever solver is used
+integrator = vl2
 
 <driver>
 type     = imex
@@ -46,18 +47,6 @@ max_linesearch_iter = 3
 linesearch_eps      = 1.e-4
 use_qr              = true
 
-<GRMHD>
-implicit       = true
-cfl            = 0.9
-gamma          = 1.666667
-reconstruction = weno5
-
-<b_field>
-implicit        = false
-type            = sane
-beta_min        = 100.
-initial_cleanup = false
-
 # This block must be present and values filled in all EGRMHD simulations
 <emhd>
 on                 = true
@@ -69,6 +58,22 @@ closure_type     = torus
 conduction_alpha = 1.0
 viscosity_alpha  = 1.0
 
+<GRMHD>
+implicit       = true
+cfl            = 0.9
+gamma          = 1.666667
+
+<flux>
+type = llf
+reconstruction = weno5
+
+<b_field>
+solver = flux_ct
+implicit = false
+type = sane
+beta_min = 100.
+initial_cleanup = false
+
 <torus>
 rin  = 6.0
 rmax = 12.0
@@ -77,34 +82,33 @@ rmax = 12.0
 u_jitter = 0.04
 
 <floors>
-frame              = drift
-rho_min_geom       = 1e-5
-u_min_geom         = 1e-7
-bsq_over_rho_max   = 100
-bsq_over_u_max     = 1e20
-u_over_rho_max     = 100
-gamma_max          = 5
+frame        = drift
+rho_min_geom = 1e-4
+u_min_geom   = 1e-6
+bsq_over_rho_max = 100
+bsq_over_u_max   = 1000
+u_over_rho_max   = 10
+gamma_max        = 5
+temp_adjust_u    = true
 
 <debug>
 verbose            = 1
 extra_checks       = 1
 flag_verbose       = 0
 
-<wind>
-on = false
-ne = 1.e-4
-Tp = 10
-
 <parthenon/output0>
 file_type = hdf5
+write_xdmf = false
 dt = 5.0
 single_precision_output = true
-variables = prims.rho, prims.u, prims.uvec, prims.B, prims.q, prims.dP, jcon, fflag, pflag, solve_norm, solve_fail, eflag
+variables = prims, jcon, fflag, pflag, solve_norm, solve_fail, eflag
 
 <parthenon/output1>
 file_type = rst
-dt        = 5.0
+write_xdmf = false
+dt        = 100.0
 
 <parthenon/output2>
 file_type = hst
 dt        = 0.1
+variables = all_reductions

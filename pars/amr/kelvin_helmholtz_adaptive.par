@@ -12,20 +12,14 @@ numlevel = 3
 nx1 = 256
 x1min = 0.0
 x1max = 1.0
-ix1_bc = periodic
-ox1_bc = periodic
 
 nx2 = 256
 x2min = 0.0
 x2max = 2.0
-ix2_bc = periodic
-ox2_bc = periodic
 
 nx3 = 1
 x3min = -0.01
 x3max = 0.01
-ix3_bc = periodic
-ox3_bc = periodic
 
 <parthenon/meshblock>
 nx1 = 64
@@ -33,6 +27,7 @@ nx2 = 64
 nx3 = 1
 
 <parthenon/refinement0>
+# See https://parthenon-hpc-lab.github.io/parthenon/develop/src/amr.html
 method = derivative_order_1
 field = prims.rho
 refine_tol = 0.01
@@ -59,6 +54,9 @@ type = kharma
 cfl = 0.9
 gamma = 1.666667
 reconstruction = linear_mc
+# GRMHD also accepts refine_tol and derefine_tol,
+# measuring difference between max/min rho.
+# Though, this may need updating to work
 
 <b_field>
 type = constant
@@ -74,6 +72,8 @@ extra_checks = 0
 
 <parthenon/output0>
 file_type = hdf5
+write_xdmf = false
 dt = 5.0
-variables = prims.rho, prims.u, prims.uvec, prims.B, divB
+single_precision_output = true
+variables = prims, divB
 

@@ -1,0 +1,82 @@
+# 2D SANE model w/electron heating
+# Compares a bunch of heating models
+
+<parthenon/job>
+problem_id = torus
+
+<parthenon/mesh>
+refinement = none
+numlevel = 1
+nx1 = 128
+nx2 = 128
+nx3 = 1
+
+<parthenon/meshblock>
+nx1 = 128
+nx2 = 64
+nx3 = 1
+
+<coordinates>
+base = spherical_ks
+transform = mks
+r_out = 50
+a = 0.9375
+hslope = 0.3
+mks_smooth = 0.5
+poly_xt = 0.82
+poly_alpha = 14.0
+
+<parthenon/time>
+tlim = 3000.0
+
+<debug>
+verbose = 1
+extra_checks = 1
+flag_verbose = 0
+
+<GRMHD>
+cfl = 0.9
+gamma = 1.666667
+reconstruction = weno5
+
+<torus>
+rin = 6.0
+rmax = 12.0
+
+<perturbation>
+u_jitter = 0.04
+
+<b_field>
+type = sane
+beta_min = 100.
+
+<floors>
+rho_min_geom = 1e-5
+u_min_geom = 1e-7
+ktot_max = 1500
+u_over_rho_max = 100
+bsq_over_rho_max = 100
+
+<electrons>
+on = true
+howes = false
+kawazura = true
+werner = true
+rowan = true
+sharma = true
+
+<parthenon/output0>
+file_type = hdf5
+write_xdmf = false
+dt = 10.0
+single_precision_output = true
+variables = prims, pflag, fflag
+
+<parthenon/output1>
+file_type = rst
+write_xdmf = false
+dt = 100.0
+
+<parthenon/output2>
+file_type = hst
+dt = 0.1

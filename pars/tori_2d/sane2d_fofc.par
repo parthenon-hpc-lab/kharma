@@ -1,21 +1,28 @@
-# SANE model mirroring the simulation library
-# Overall simulation size 50M, to allow
-# running at small scale on e.g. a laptop
-# Uses MKS coordinates, not Funky variant
+# SANE model using FOFC: how low can the floors go?
+# This setup tries to avoid floors at all costs:
+# The only floors used are geometric, and very low.
+# Reconstruction fallbacks and first-order corrections
+# are used to avoid hitting them unless necessary.
+# When they are hit, material is added in normal
+# frame, requiring a 1Dw primitive variable recovery,
+# which fails anywhere interesting, leading to "fixup"
+# via averaging adjacent zones.
+# The result is a tiny trickle of density floor,
+# with all other problematic zones fixed via FOFC or
+# averaging.
+# Resulting funnel density: ~1e-9, sigma: ~1e6
 
 <parthenon/job>
 problem_id = torus
 
 <parthenon/mesh>
-refinement = none
-numlevel = 1
-nx1 = 256
-nx2 = 256
+nx1 = 128
+nx2 = 128
 nx3 = 1
 
 <parthenon/meshblock>
-nx1 = 256
-nx2 = 256
+nx1 = 128
+nx2 = 128
 nx3 = 1
 
 <coordinates>
@@ -41,6 +48,8 @@ gamma = 1.666667
 <flux>
 type = llf
 reconstruction = weno5
+# Fall back to PPM when reconstruction would hit floor
+reconstruction_fallback = true
 
 <driver>
 type = kharma
@@ -54,43 +63,35 @@ u_jitter = 0.04
 
 <b_field>
 solver = face_ct
-ct_scheme = sg07
-consistent_face_b = false
 type = sane
 beta_min = 100.
 
 <floors>
-rho_min_geom = 1e-6
+frame = normal
+rho_min_geom = 1e-8
 u_min_geom = 1e-8
-rho_min_const = 1e-10
-u_min_const = 1e-10
+rho_min_const = 1e-20
+u_min_const = 1e-20
 gamma_max = 50
 
 <fofc>
 on = true
-use_source_term = false
-
-<fofc_floors>
-rho_min_geom = 0.
-u_min_geom = 0.
-rho_min_const = 0.
-u_min_const = 0.
-gamma_max = 1e20
-
-<wind>
-on = false
+eh_buffer = 0.01
+consistent_face_b = false
 
 <parthenon/output0>
 file_type = hdf5
+write_xdmf = false
 dt = 5.0
 single_precision_output = true
 variables = prims, jcon, pflag, fflag, fofcflag
 
 <parthenon/output1>
 file_type = rst
+write_xdmf = false
 dt = 100.0
-ghost_zones = true
 
 <parthenon/output2>
 file_type = hst
 dt = 0.1
+variables = all_reductions

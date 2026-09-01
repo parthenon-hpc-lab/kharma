@@ -5,26 +5,17 @@
 problem_id = orszag_tang
 
 <parthenon/mesh>
-refinement = none
-numlevel = 1
-
 nx1 = 512
 x1min = -3.141592653589793
 x1max = 3.141592653589793
-ix1_bc = periodic
-ox1_bc = periodic
 
 nx2 = 512
 x2min = -3.141592653589793
 x2max = 3.141592653589793
-ix2_bc = periodic
-ox2_bc = periodic
 
 nx3 = 1
 x3min = -0.01
 x3max = 0.01
-ix3_bc = periodic
-ox3_bc = periodic
 
 <parthenon/meshblock>
 nx1 = 128
@@ -56,9 +47,10 @@ extra_checks = 0
 
 <parthenon/output0>
 file_type = hdf5
+write_xdmf = false
 dt = 1.0
 single_precision_output = true
-variables = prims.rho, prims.u, prims.uvec, prims.B, jcon
+variables = prims, jcon
 
 <parthenon/output1>
 file_type = hst

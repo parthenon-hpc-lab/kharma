@@ -5,7 +5,7 @@
 
 if [[ ($HOSTNAME == "cn"* || $HOSTNAME == "darwin"*) &&
       ("$PWD" == "/projects/jacamar-ci"* || "$PWD" == "/vast"*) ]]; then
-  module purge
+  #module purge
   module load cmake
 
   # Where we're going, we don't need system libraries
@@ -20,8 +20,13 @@ if [[ ($HOSTNAME == "cn"* || $HOSTNAME == "darwin"*) &&
     C_NATIVE=gcc
     CXX_NATIVE=g++
   elif [[ "$ARGS" == *"gcc"* ]]; then
-    # Default GCC
-    module load gcc/12.1.0 openmpi/4.1.5-gcc_12.2.0
+    if [[ "$ARGS" == *"cuda"* ]]; then
+      # Whatever GCC for CUDA
+      module load gcc
+    else
+      # Specifically latest+MPI on CPU
+      module load openmpi/4.1.5-gcc_12.2.0
+    fi
     C_NATIVE=gcc
     CXX_NATIVE=g++
   elif [[ "$ARGS" == *"aocc"* ]]; then
@@ -32,9 +37,6 @@ if [[ ($HOSTNAME == "cn"* || $HOSTNAME == "darwin"*) &&
     module load nvhpc
     C_NATIVE="nvc"
     CXX_NATIVE="nvc++"
-    # New NVHPC doesn't like CUDA_HOME
-    export NVHPC_CUDA_HOME="$CUDA_HOME"
-    unset CUDA_HOME
   elif [[ "$ARGS" == *"icc"* ]]; then
     module load intel-classic/2021.3.0
     C_NATIVE=icc
@@ -45,9 +47,6 @@ if [[ ($HOSTNAME == "cn"* || $HOSTNAME == "darwin"*) &&
       module load nvhpc
       C_NATIVE="nvc"
       CXX_NATIVE="nvc++"
-      # New NVHPC doesn't like CUDA_HOME
-      export NVHPC_CUDA_HOME="$CUDA_HOME"
-      unset CUDA_HOME
     else
       module load intel
       C_NATIVE=icx
@@ -57,9 +56,24 @@ if [[ ($HOSTNAME == "cn"* || $HOSTNAME == "darwin"*) &&
 
   # 2. Load accelerator libraries
   if [[ "$ARGS" == *"cuda"* ]]; then
-    module load cuda/12.0.0 nvhpc
-    PREFIX_PATH=$NVHPC_ROOT
-    #EXTRA_FLAGS="-DPARTHENON_ENABLE_HOST_COMM_BUFFERS=ON $EXTRA_FLAGS"
+    if [[ "$ARGS" == *"cuda11"* ]]; then
+      module load cuda/11.8.0
+    elif [[ "$ARGS" == *"cuda120"* ]]; then
+      module load cuda/12.0.0
+    else
+      module load cuda/12.3.1
+    fi
+    # Host MPI for CUDA w/o NVHPC
+    if [[ "$C_NATIVE" != "nvc" ]]; then
+      module load openmpi
+      EXTRA_FLAGS="-DPARTHENON_ENABLE_HOST_COMM_BUFFERS=ON $EXTRA_FLAGS"
+    fi
+    # Newer NVHPC wants us to leave it alone
+    #unset CUDA_HOME
+    # For manually exporting CUDA and COMM_LIBS
+    #export NVHPC_CUDA_HOME="$CUDA_HOME"
+    #export NVHPC_COMM_LIBS_HOME=/projects/darwin-nv/rhel8/aarch64/packages/nvhpc/Linux_aarch64/24.1/comm_libs
+    #PREFIX_PATH=$NVHPC_ROOT
   elif [[ "$ARGS" == *"hip"* ]]; then
     # No MPI or OpenMP -- No OFI OpenMPI on Darwin (right?) and HIP hates OpenMP
     module load rocm
@@ -132,8 +146,10 @@ if [[ ($HOSTNAME == "cn"* || $HOSTNAME == "darwin"*) &&
   fi
   MPI_NUM_PROCS=${MPI_NUM_PROCS:-$MPI_NUM_PROCS_D}
 
+  module list
+
   # Runtime
-  MPI_EXE="mpirun"
+  #MPI_EXE="mpirun"
   # Lead MPI to water
-  MPI_EXTRA_ARGS="--map-by ppr:${MPI_NUM_PROCS}:node:pe=$(($NPROC / $MPI_NUM_PROCS / $NODE_SLICE))"
+  #MPI_EXTRA_ARGS="--map-by ppr:${MPI_NUM_PROCS}:node:pe=$(($NPROC / $MPI_NUM_PROCS / $NODE_SLICE))"
 fi

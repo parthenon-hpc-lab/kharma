@@ -76,14 +76,14 @@ TaskStatus AddPackage(std::shared_ptr<Packages_t>& packages,
  * This includes boundaries in spherical coordinates, coordinate system translations, etc.
  * This function also handles setting parameters from restart files
  */
-void FixParameters(ParameterInput *pin);
+void FixParameters(ParameterInput *pin, bool is_parthenon_restart);
 
 /**
  * Load any packages specified in the input parameters
  */
 Packages_t ProcessPackages(std::unique_ptr<ParameterInput>& pin);
 
-// TODO(BSP) not sure where to put these
+// TODO(CEP) not sure where to put these
 
 /**
  * Check whether a given field is anywhere in outputs.
@@ -95,40 +95,19 @@ Packages_t ProcessPackages(std::unique_ptr<ParameterInput>& pin);
  */
 inline bool FieldIsOutput(ParameterInput *pin, std::string name)
 {
-    InputBlock *pib = pin->pfirst_block;
-    while (pib != nullptr) {
+    auto block_names = pin->GetBlockNamesWithPrefix("parthenon/output");
+    for (auto block_name : block_names) {
         // For every output block with a 'variables' entry...
-        if (pib->block_name.find("parthenon/output") != std::string::npos &&
-            pin->DoesParameterExist(pib->block_name, "variables")) {
-            std::string allvars = pin->GetString(pib->block_name, "variables");
-            if (allvars.find(name) != std::string::npos) {
-                return true;
+        if (pin->DoesParameterExist(block_name, "variables")) {
+            std::vector<std::string> allvars = pin->GetVector<std::string>(block_name, "variables");
+            for (std::string var : allvars) {
+                if (var.find(name) != std::string::npos) {
+                    return true;
+                }
             }
         }
-        pib = pib->pnext;
     }
     return false;
-}
-
-/**
- * This fn calculates the size a VariablePack *would* be, without making one --
- * it uses only the package list, and counts through each variable in each package.
- * Mostly useful for initialization.
- */
-inline int PackDimension(Packages_t* packages, Metadata::FlagCollection fc)
-{
-    // We want to exclude anything specific to startup processes e.g. B field cleanup,
-    // & not used elsewhere
-    if (packages->AllPackages().count("StartupOnly"))
-        fc = fc - Metadata::GetUserFlag("StartupOnly");
-
-    // Count dimensions (1 for scalars + vector lengths) of each package's variables
-    int nvar = 0;
-    for (auto pkg : packages->AllPackages()) {
-        nvar += pkg.second->GetPackDimension(fc);
-        // std::cout << pkg.first << " variables: " << pkg.second->GetPackDimension(fc) << std::endl;
-    }
-    return nvar;
 }
 
 /**

@@ -6,11 +6,11 @@
 problem_id = anisotropic_conduction
 
 <parthenon/mesh>
-nx1 = 256
+nx1 = 128
 x1min = 0.0
 x1max = 1.0
 
-nx2 = 256
+nx2 = 128
 x2min = 0.0
 x2max = 1.0
 
@@ -19,8 +19,8 @@ x3min = 0.0
 x3max = 1.0
 
 <parthenon/meshblock>
-nx1 = 128
-nx2 = 128
+nx1 = 64
+nx2 = 64
 nx3 = 1
 
 <coordinates>
@@ -62,9 +62,10 @@ max_nonlinear_iter = 3
 
 <parthenon/output0>
 file_type = hdf5
+write_xdmf = false
 dt = 0.1
 single_precision_output = true
-variables = prims.rho, prims.u, prims.uvec, prims.B, prims.q, prims.dP
+variables = prims
 
 <parthenon/output1>
 file_type = hst

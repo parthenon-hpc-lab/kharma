@@ -1,0 +1,74 @@
+# Restart from an iharm3d snapshot file, resizing to specified mesh
+# Note most parameters here will carry through to running after
+# restarting, as iharm3d restart files do not specify much
+
+<parthenon/job>
+problem_id = resize_restart
+
+<parthenon/mesh>
+multigrid = true
+refinement = none
+numlevel = 1
+nx1 = 128
+nx2 = 64
+nx3 = 96
+
+<parthenon/meshblock>
+nx1 = 64
+nx2 = 32
+nx3 = 32
+
+<coordinates>
+base = spherical_ks
+transform = fmks
+a = 0.9375
+hslope = 0.3
+r_out = 500
+
+<parthenon/time>
+tlim = 300000
+integrator = rk2
+dt_min = 0.00001
+
+<GRMHD>
+cfl = 0.9
+gamma = 1.666667
+
+<resize_restart>
+fname = torus.out1.00100.h5
+use_tf = false
+use_dt = false
+skip_b_cleanup = false
+
+<b_cleanup>
+solver = BiCGSTAB
+flux_correct = true
+tolerance = 1.e-12
+precondition = true
+print_per_step = true
+smoother = SRJ2
+do_FAS = true
+
+<floors>
+rho_min_geom = 1e-6
+u_min_geom = 1e-8
+bsq_over_rho_max = 100
+bsq_over_u_max = 50
+u_over_rho_max = 100
+
+<debug>
+verbose = 1
+flag_verbose = 2
+extra_checks = 1
+
+<parthenon/output0>
+file_type = hdf5
+write_xdmf = false
+dt = 0.0001
+single_precision_output = false
+variables = prims, divB, jcon, fflag, pflag
+
+<parthenon/output1>
+file_type = rst
+write_xdmf = false
+dt = 100.0

@@ -1,0 +1,95 @@
+# SANE model like sane.par,
+# but evolves the ideal GRMHD semi-implicitly.
+# Used for testing
+
+<parthenon/job>
+archive_parameters_timestamp = true
+problem_id = torus
+
+<parthenon/mesh>
+nx1 = 128
+nx2 = 64
+nx3 = 64
+
+<parthenon/meshblock>
+nx1 = 32
+nx2 = 32
+nx3 = 32
+
+<coordinates>
+base = spherical_ks
+transform  = fmks
+r_out      = 1000
+a          = 0.9375
+hslope     = 0.3
+mks_smooth = 0.5
+poly_xt    = 0.82
+poly_alpha = 14.0
+
+<parthenon/time>
+tlim = 4000.0
+nlim = -1
+
+<driver>
+type     = imex
+two_sync = true
+
+<implicit>
+min_nonlinear_iter  = 1
+max_nonlinear_iter  = 3
+jacobian_delta      = 4.e-8
+rootfind_tol        = 1.e-3
+linesearch          = true
+max_linesearch_iter = 3
+linesearch_eps      = 1.e-4
+use_qr              = true
+
+<GRMHD>
+implicit       = true
+cfl            = 0.9
+gamma          = 1.666667
+reconstruction = weno5
+
+<b_field>
+implicit = false
+type = sane
+beta_min = 100.
+
+<torus>
+rin  = 6.0
+rmax = 12.0
+
+<perturbation>
+u_jitter = 0.04
+
+<floors>
+frame              = drift
+rho_min_geom       = 1e-3
+u_min_geom         = 1e-5
+bsq_over_rho_max   = 100
+bsq_over_u_max     = 100
+u_over_rho_max     = 100
+gamma_max          = 10
+u_over_rho_max     = 2
+
+<debug>
+verbose            = 1
+extra_checks       = 1
+flag_verbose       = 0
+
+<parthenon/output0>
+file_type = hdf5
+write_xdmf = false
+dt = 5.0
+single_precision_output = true
+variables = prims, jcon, fflag, pflag, solve_norm, solve_fail
+
+<parthenon/output1>
+file_type = rst
+write_xdmf = false
+dt        = 100.0
+
+<parthenon/output2>
+file_type = hst
+dt        = 0.1
+variables = all_reductions

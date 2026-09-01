@@ -21,6 +21,7 @@ AUX_SOURCE_DIRECTORY(${CMAKE_CURRENT_SOURCE_DIR}/flux EXE_NAME_SRC)
 
 AUX_SOURCE_DIRECTORY(${CMAKE_CURRENT_SOURCE_DIR}/b_cd EXE_NAME_SRC)
 AUX_SOURCE_DIRECTORY(${CMAKE_CURRENT_SOURCE_DIR}/b_cleanup EXE_NAME_SRC)
+AUX_SOURCE_DIRECTORY(${CMAKE_CURRENT_SOURCE_DIR}/b_cleanup_gmg EXE_NAME_SRC)
 AUX_SOURCE_DIRECTORY(${CMAKE_CURRENT_SOURCE_DIR}/b_ct EXE_NAME_SRC)
 AUX_SOURCE_DIRECTORY(${CMAKE_CURRENT_SOURCE_DIR}/b_flux_ct EXE_NAME_SRC)
 AUX_SOURCE_DIRECTORY(${CMAKE_CURRENT_SOURCE_DIR}/boundaries EXE_NAME_SRC)
@@ -35,6 +36,7 @@ AUX_SOURCE_DIRECTORY(${CMAKE_CURRENT_SOURCE_DIR}/force_free EXE_NAME_SRC)
 AUX_SOURCE_DIRECTORY(${CMAKE_CURRENT_SOURCE_DIR}/grmhd EXE_NAME_SRC)
 AUX_SOURCE_DIRECTORY(${CMAKE_CURRENT_SOURCE_DIR}/implicit EXE_NAME_SRC)
 AUX_SOURCE_DIRECTORY(${CMAKE_CURRENT_SOURCE_DIR}/inverter EXE_NAME_SRC)
+AUX_SOURCE_DIRECTORY(${CMAKE_CURRENT_SOURCE_DIR}/ismr EXE_NAME_SRC)
 AUX_SOURCE_DIRECTORY(${CMAKE_CURRENT_SOURCE_DIR}/reductions EXE_NAME_SRC)
 AUX_SOURCE_DIRECTORY(${CMAKE_CURRENT_SOURCE_DIR}/emhd EXE_NAME_SRC)
 AUX_SOURCE_DIRECTORY(${CMAKE_CURRENT_SOURCE_DIR}/wind EXE_NAME_SRC)
@@ -49,6 +51,7 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR}/flux)
 
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/b_cd)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/b_cleanup)
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/b_cleanup_gmg)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/b_ct)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/b_flux_ct)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/boundaries)
@@ -63,6 +66,7 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR}/force_free)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/grmhd)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/implicit)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/inverter)
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/ismr)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/reductions)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/emhd)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/wind)
@@ -99,22 +103,16 @@ endif()
 # These are almost universally performance trade-offs,
 # or disabling features that need dependencies.
 # TODO is there any way to make compile options less painful in CMake?
-option(FUSE_FLUX_KERNELS "Bundle the usual four flux calculation kernels (floors,R,L,apply) into one" ON)
-option(FUSE_FLOOR_KERNELS "Bundle applying the floors and ceilings into one kernel" ON)
+option(KHARMA_SPLIT_IMPLICIT_SOLVE "Split the implicit solver kernel into three. Only faster on Frontier, so far" OFF)
 option(FAST_CARTESIAN "Break operation in curved spacetimes to make Cartesian Minkowski space computations faster" OFF)
 option(KHARMA_DISABLE_IMPLICIT "Disable the implicit solver, which requires bundled kokkos-kernels. Default false" OFF)
 option(KHARMA_DISABLE_CLEANUP "Disable the magnetic field cleanup module, which requires recent Parthenon. Default false" OFF)
 option(KHARMA_TRACE "Compile with tracing: print entry and exit of important functions. Default false" OFF)
 
-if(FUSE_FLUX_KERNELS)
-    target_compile_definitions(${EXE_NAME} PUBLIC FUSE_FLUX_KERNELS=1)
+if(KHARMA_SPLIT_IMPLICIT_SOLVE)
+    target_compile_definitions(${EXE_NAME} PUBLIC SPLIT_IMPLICIT_SOLVE=1)
 else()
-    target_compile_definitions(${EXE_NAME} PUBLIC FUSE_FLUX_KERNELS=0)
-endif()
-if(FUSE_FLOOR_KERNELS)
-    target_compile_definitions(${EXE_NAME} PUBLIC FUSE_FLOOR_KERNELS=1)
-else()
-    target_compile_definitions(${EXE_NAME} PUBLIC FUSE_FLOOR_KERNELS=0)
+    target_compile_definitions(${EXE_NAME} PUBLIC SPLIT_IMPLICIT_SOLVE=0)
 endif()
 if(FAST_CARTESIAN)
     message("Compiling for Cartesian coordinates only. GRMHD will be disabled!")
@@ -168,3 +166,15 @@ if (Kokkos_ENABLE_HWLOC)
     target_compile_definitions(${EXE_NAME} PUBLIC Kokkos_ENABLE_HWLOC)
     target_link_libraries(${EXE_NAME} PUBLIC hwloc)
 endif()
+
+target_link_libraries(${EXE_NAME} 
+PUBLIC
+    singularity-eos::singularity-eos
+    singularity-opac::flags    
+)
+
+# Installation
+# Install binary
+install(TARGETS ${EXE_NAME} TYPE RUNTIME)
+
+# TODO could do headers, library, tests, or parameter files in share/docs...

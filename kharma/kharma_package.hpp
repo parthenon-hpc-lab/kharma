@@ -69,7 +69,7 @@ class KHARMAPackage : public StateDescriptor {
         // Currently only the GRMHD primitives (rho, u, uvec) do this
         std::function<void(MeshBlockData<Real>*, IndexDomain, bool)> DomainBoundaryPtoU = nullptr;
 
-        // Going the other way, however, is handled by Flux::{Block,Mesh}PtoU.
+        // Going the other way, however, is always handled by Flux::{Block,Mesh}PtoU.
         // All PtoU implementations are device-side (called prim_to_flux),
         // so we do not need something like
         //std::function<void(MeshBlockData<Real>*, IndexDomain, bool)> BlockPtoU = nullptr;
@@ -159,8 +159,7 @@ TaskStatus AddSource(MeshData<Real> *md, MeshData<Real> *mdudt, IndexDomain doma
 TaskStatus MeshApplyPrimSource(MeshData<Real> *md);
 
 /**
- * Apply all floors, including any package-specific limiters.
- * This function respects "disable_floors".
+ * Apply all registered floors, including any package-specific limiters.
  * 
  * LOCKSTEP: this function respects P and returns consistent P<->U
  */
@@ -168,7 +167,7 @@ TaskStatus MeshApplyFloors(MeshData<Real> *md, IndexDomain domain);
 
 // These are already Parthenon global callbacks -- see their documentation
 // I define them here so I can pass them on to packages
-void UserWorkBeforeOutput(MeshBlock *pmb, ParameterInput *pin);
+void UserWorkBeforeOutput(MeshBlock *pmb, ParameterInput *pin, const SimTime& unused);
 void PreStepWork(Mesh *pmesh, ParameterInput *pin, const SimTime &tm);
 void PostStepWork(Mesh *pmesh, ParameterInput *pin, const SimTime &tm);
 void PostStepDiagnostics(Mesh *pmesh, ParameterInput *pin, const SimTime &tm);

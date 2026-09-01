@@ -12,20 +12,14 @@ numlevel = 3
 nx1 = 128
 x1min = 0.0
 x1max = 1.0
-ix1_bc = periodic
-ox1_bc = periodic
 
 nx2 = 192
 x2min = 0.0
 x2max = 2.0
-ix2_bc = periodic
-ox2_bc = periodic
 
 nx3 = 1
 x3min = -0.01
 x3max = 0.01
-ix3_bc = periodic
-ox3_bc = periodic
 
 <parthenon/meshblock>
 nx1 = 64
@@ -35,10 +29,8 @@ nx3 = 1
 <parthenon/static_refinement0>
 x1min = 0.4
 x1max = 0.6
-x2min = 0.9
-x2max = 1.1
-x3min = 0.0
-x3max = 0.0
+x2min = 0.45
+x2max = 0.55
 level = 1
 
 <parthenon/static_refinement1>
@@ -73,6 +65,9 @@ cfl = 0.9
 gamma = 1.666667
 reconstruction = linear_mc
 
+<b_field>
+solver = flux_ct
+
 <debug>
 verbose = 1
 flag_verbose = 0
@@ -80,6 +75,7 @@ extra_checks = 0
 
 <parthenon/output0>
 file_type = hdf5
+write_xdmf = false
 dt = 0.1
 variables = prims, divB
 

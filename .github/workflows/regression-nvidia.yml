@@ -1,0 +1,78 @@
+name: Regression tests (Nvidia)
+
+on:
+  push:
+    branches: [ main, dev ]
+  pull_request:
+    branches: [ main, dev ]
+
+env:
+  NPROC: 6
+  MPI_NUM_PROCS: 1
+  OMP_NUM_THREADS: 1
+  MODULEPATH: '/opt/nvidia/hpc_sdk/modulefiles:/usr/share/modulefiles'
+
+jobs:
+  # Job 1: Compilation
+  build:
+    runs-on: [self-hosted, kharma-gpu-nv]
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: 'recursive'
+      - name: Run compilation
+        run: bash -ic 'module load nvhpc && ./make.sh clean cuda'
+      - uses: actions/upload-artifact@v7
+        with:
+          name: build-artifacts
+          path: kharma.cuda
+          if-no-files-found: 'error'
+
+  # Job 2: Test Matrix
+  test:
+    needs: build
+    runs-on: [self-hosted, kharma-gpu-nv]
+    continue-on-error: true
+    strategy:
+      fail-fast: false
+      matrix:
+        # add back 'resize' when new solvers work
+        test_name:
+        - all_pars
+        - anisotropic_conduction
+        - bondi
+        - bondi_viscous
+        - bz_monopole
+        - conducting_atmosphere
+        - emhdmodes
+        - hubble_flow
+        - mhdmodes
+        - mhdmodes_smr
+        - noh
+        - regrid
+        - reinit
+        - restart
+        - tilt_init
+        - torus_sanity
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: 'recursive'
+      - uses: actions/download-artifact@v8
+        with:
+          name: build-artifacts
+      - name: install pyharm
+        run: pip install git+https://github.com/c-prather/pyharm@dev
+      - name: Run ${{ matrix.test_name }}
+        working-directory: tests/${{ matrix.test_name }}
+        run: bash -i ./run.sh
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: ${{ matrix.test_name }}-artifacts
+          path: |
+            .
+            !*.phdf
+            !*.rhdf
+            !*.xdmf
+            !*.h5
