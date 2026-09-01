@@ -246,7 +246,8 @@ if option "hdf5" && option "clean" && ! option "dryrun"; then
   H5VER=1.14.2
   H5VERU=1_14_2
 
-  cd external
+  # Download, blow away existing dir on option
+  cd $SOURCE_DIR/external
   # Allow complete reconfigure (for switching compilers, takes longer)
   if option "cleanhdf5"; then
     rm -rf hdf5-${H5VER}/
@@ -259,9 +260,11 @@ if option "hdf5" && option "clean" && ! option "dryrun"; then
   if [ ! -d hdf5-${H5VER}/ ]; then
     tar xf hdf5-${H5VER}.tar.gz
   fi
-  cd hdf5-${H5VER}/
+
+  # Configure and compile
+  cd $SOURCE_DIR/external/hdf5-${H5VER}/
   # TODO better ensure we're using C_NATIVE underneath.  e.g. MPI_CFLAGS with -cc
-  if  option "nompi"; then
+  if option "nompi"; then
     HDF_CC=$C_NATIVE
     HDF_EXTRA=""
   else
@@ -281,8 +284,8 @@ if option "hdf5" && option "clean" && ! option "dryrun"; then
   echo Configuring HDF5...
 
   export CFLAGS="-fPIC $CFLAGS"
-  CC=$HDF_CC sh configure -C $HDF_EXTRA --prefix=$SOURCE_DIR/external/hdf5 --enable-build-mode=production \
-  --disable-dependency-tracking --disable-tests --disable-tools --disable-shared --disable-deprecated-symbols > build-hdf5.log
+  CC=$HDF_CC sh ./configure -C $HDF_EXTRA --prefix=$SOURCE_DIR/external/hdf5 --enable-build-mode=production \
+  --disable-dependency-tracking --disable-tests --disable-tools --disable-deprecated-symbols > build-hdf5.log
   sleep 1
 
   echo "Building HDF5 (probably 30s-2min)"
@@ -294,7 +297,7 @@ if option "hdf5" && option "clean" && ! option "dryrun"; then
   fi
   make install >> build-hdf5.log 2>&1
   make clean >> build-hdf5.log 2>&1
-  cd ../..
+  cd $SOURCE_DIR
 
   echo Built HDF5 version $H5VER
 fi
@@ -302,7 +305,7 @@ fi
 # Compile against our hdf5 if specified
 if option "hdf5"; then
   PREFIX_PATH="$SOURCE_DIR/external/hdf5;$PREFIX_PATH"
-  EXTRA_FLAGS="$EXTRA_FLAGS -DHDF5_USE_STATIC_LIBRARIES=ON"
+  #EXTRA_FLAGS="$EXTRA_FLAGS -DHDF5_USE_STATIC_LIBRARIES=ON"
 fi
 
 ### Build KHARMA ###
