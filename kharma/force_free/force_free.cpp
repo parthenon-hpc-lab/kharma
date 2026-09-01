@@ -248,9 +248,8 @@ void Force_Free::ApplyFloors(MeshBlockData<Real> *mbd, IndexDomain domain)
         }
     );
 
-    // Also update the entropy
-    // TODO end-of-step callback for this, this is silly
-    Entropy::UpdateEntropy(mbd);
+    // Also update the entropy -- pretty sure the new package takes care of this tho
+    //Entropy::MeshUpdateEntropy(mbd);
 }
 
 TaskStatus Force_Free::BlockUtoP(MeshBlockData<Real> *mbd, IndexDomain domain, bool coarse)
