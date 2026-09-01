@@ -35,7 +35,8 @@
 
 #include "pack/default_names.hpp"
 
-namespace rays {
+namespace rays
+{
 
 PAR_SWARMVAR(parthenon::Real, swarm, t);
 PAR_SWARMVAR(parthenon::Real, swarm, k);

@@ -51,19 +51,19 @@ xargs_command="-I {} -0 -t ${CFM} -style=file -i {}"
 if [ -n "$KDEV_FORMAT_STAGED" ]; then
     echo "Formatting staged files..."
     git diff --staged --name-only --diff-filter=ACMR -z \
-        'kharma/**.[ch]pp' 'tests/**.[ch]pp' |
+        'kharma/**.[ch]pp' 'iris/**.[ch]pp' 'tests/**.[ch]pp' |
         xargs $xargs_command
 
 elif [ -n "$KDEV_FORMAT_TRACKED" ]; then
     echo "Formatting tracked files..."
-    git ls-files --cached -z 'kharma/**.[ch]pp' 'tests/**.[ch]pp' |
+    git ls-files --cached -z 'kharma/**.[ch]pp' 'iris/**.[ch]pp' 'tests/**.[ch]pp' |
         xargs $xargs_command
 
 else
     # format both tracked and untracked cpp/hpp files in our directories.
     # git ls-files seemed more reliable here than ls or find.
     echo "Formatting all files..."
-    git ls-files --cached --other -z 'kharma/**.[ch]pp' 'tests/**.[ch]pp' |
+    git ls-files --cached --other -z 'kharma/**.[ch]pp' 'iris/**.[ch]pp' 'tests/**.[ch]pp' |
         xargs $xargs_command
 fi
 echo "...Done"

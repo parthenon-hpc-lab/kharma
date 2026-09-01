@@ -43,10 +43,10 @@
 // Parthenon headers
 #include <parthenon/parthenon.hpp>
 
-std::shared_ptr<StateDescriptor> File::Initialize(ParameterInput *pin)
+std::shared_ptr<StateDescriptor> File::Initialize(ParameterInput* pin)
 {
     auto pkg = std::make_shared<StateDescriptor>("File");
-    Params &params = pkg->AllParams();
+    Params& params = pkg->AllParams();
 
     // TODO separate file loading, so we can regrid/slow light/etc
     std::string fname = pin->GetString("model", "file");
@@ -54,20 +54,31 @@ std::shared_ptr<StateDescriptor> File::Initialize(ParameterInput *pin)
 
     // Read prims directly: mark them "Restart" to read them when passing -r to Parthenon
     Metadata::AddUserFlag("Primitive");
-    auto m = Metadata({Metadata::Cell, Metadata::Real, Metadata::Derived, Metadata::OneCopy, Metadata::GetUserFlag("Primitive"), Metadata::Restart, Metadata::FillGhost});
+    auto m =
+        Metadata({Metadata::Cell, Metadata::Real, Metadata::Derived, Metadata::OneCopy,
+            Metadata::GetUserFlag("Primitive"), Metadata::Restart, Metadata::FillGhost});
     pkg->AddField("prims.rho", m);
     pkg->AddField("prims.u", m);
     std::vector<int> s_vector({NVEC});
-    m = Metadata({Metadata::Cell, Metadata::Real, Metadata::Derived, Metadata::OneCopy, Metadata::Vector, Metadata::GetUserFlag("Primitive"), Metadata::Restart, Metadata::FillGhost}, s_vector);
+    m = Metadata({Metadata::Cell, Metadata::Real, Metadata::Derived, Metadata::OneCopy,
+                     Metadata::Vector, Metadata::GetUserFlag("Primitive"),
+                     Metadata::Restart, Metadata::FillGhost},
+        s_vector);
     pkg->AddField("prims.uvec", m);
 
     // Try to read either cell- or face-centered fields
-    m = Metadata({Metadata::Cell, Metadata::Real, Metadata::Derived, Metadata::OneCopy, Metadata::Vector, Metadata::Conserved, Metadata::Restart}, s_vector);
+    m = Metadata({Metadata::Cell, Metadata::Real, Metadata::Derived, Metadata::OneCopy,
+                     Metadata::Vector, Metadata::Conserved, Metadata::Restart},
+        s_vector);
     pkg->AddField("cons.B", m);
-    m = Metadata({Metadata::Face, Metadata::Real, Metadata::Derived, Metadata::OneCopy, Metadata::Conserved, Metadata::Restart});
+    m = Metadata({Metadata::Face, Metadata::Real, Metadata::Derived, Metadata::OneCopy,
+        Metadata::Conserved, Metadata::Restart});
     pkg->AddField("cons.fB", m);
     // We'll fill this with UtoP when initializing.  Note we only need/sync prims.B
-    m = Metadata({Metadata::Cell, Metadata::Real, Metadata::Derived, Metadata::OneCopy, Metadata::Vector, Metadata::GetUserFlag("Primitive"), Metadata::FillGhost}, s_vector);
+    m = Metadata(
+        {Metadata::Cell, Metadata::Real, Metadata::Derived, Metadata::OneCopy,
+            Metadata::Vector, Metadata::GetUserFlag("Primitive"), Metadata::FillGhost},
+        s_vector);
     pkg->AddField("prims.B", m);
 
     return pkg;
@@ -86,41 +97,53 @@ TaskStatus File::InitMeshBlock(MeshBlock* pmb)
 
     // This could be made faster but it's initialization code
     double maxfB;
-    pmb->par_reduce("Max_Bf", bc.ks, bc.ke, bc.js, bc.je, bc.is, bc.ie,
-        KOKKOS_LAMBDA (const int &k, const int &j, const int &i, Real &local_result) {
+    pmb->par_reduce(
+        "Max_Bf", bc.ks, bc.ke, bc.js, bc.je, bc.is, bc.ie,
+        KOKKOS_LAMBDA(const int& k, const int& j, const int& i, Real& local_result)
+        {
             if (B_Uf(F1, 0, k, j, i) > local_result) local_result = B_Uf(F1, 0, k, j, i);
             if (B_Uf(F2, 0, k, j, i) > local_result) local_result = B_Uf(F2, 0, k, j, i);
             if (B_Uf(F3, 0, k, j, i) > local_result) local_result = B_Uf(F3, 0, k, j, i);
-        }
-    , Kokkos::Max<Real>(maxfB));
+        },
+        Kokkos::Max<Real>(maxfB));
 
     if (maxfB > 0.) {
         // Average the primitive vals to zone centers
         pmb->par_for("UtoP_B_center", bc.ks, bc.ke, bc.js, bc.je, bc.is, bc.ie,
-            KOKKOS_LAMBDA (const int &k, const int &j, const int &i) {
-                B_P(V1, k, j, i) = (B_Uf(F1, 0, k, j, i) / G.gdet(Loci::face1, j, i)
-                                + B_Uf(F1, 0, k, j, i + 1) / G.gdet(Loci::face1, j, i + 1)) / 2;
-                B_P(V2, k, j, i) = (ndim > 1) ? (B_Uf(F2, 0, k, j, i) / G.gdet(Loci::face2, j, i)
-                                            + B_Uf(F2, 0, k, j + 1, i) / G.gdet(Loci::face2, j + 1, i)) / 2
-                                            : B_Uf(F2, 0, k, j, i) / G.gdet(Loci::face2, j, i);
-                B_P(V3, k, j, i) = (ndim > 2) ? (B_Uf(F3, 0, k, j, i) / G.gdet(Loci::face3, j, i)
-                                            + B_Uf(F3, 0, k + 1, j, i) / G.gdet(Loci::face3, j, i)) / 2
-                                            : B_Uf(F3, 0, k, j, i) / G.gdet(Loci::face3, j, i);
-            }
-        );
+            KOKKOS_LAMBDA (const int &k, const int &j, const int &i)
+            {
+                B_P(V1, k, j, i) =
+                    (B_Uf(F1, 0, k, j, i) / G.gdet(Loci::face1, j, i) +
+                        B_Uf(F1, 0, k, j, i + 1) / G.gdet(Loci::face1, j, i + 1)) /
+                    2;
+                B_P(V2, k, j, i) =
+                    (ndim > 1)
+                        ? (B_Uf(F2, 0, k, j, i) / G.gdet(Loci::face2, j, i) +
+                              B_Uf(F2, 0, k, j + 1, i) / G.gdet(Loci::face2, j + 1, i)) /
+                              2
+                        : B_Uf(F2, 0, k, j, i) / G.gdet(Loci::face2, j, i);
+                B_P(V3, k, j, i) =
+                    (ndim > 2)
+                        ? (B_Uf(F3, 0, k, j, i) / G.gdet(Loci::face3, j, i) +
+                              B_Uf(F3, 0, k + 1, j, i) / G.gdet(Loci::face3, j, i)) /
+                              2
+                        : B_Uf(F3, 0, k, j, i) / G.gdet(Loci::face3, j, i);
+            });
         // Recover conserved B at centers
-        pmb->par_for("UtoP_B_centerPtoU", 0, NVEC-1, bc.ks, bc.ke, bc.js, bc.je, bc.is, bc.ie,
-            KOKKOS_LAMBDA (const int &v, const int &k, const int &j, const int &i) {
+        pmb->par_for("UtoP_B_centerPtoU", 0, NVEC - 1, bc.ks, bc.ke, bc.js, bc.je, bc.is,
+            bc.ie,
+            KOKKOS_LAMBDA (const int &v, const int &k, const int &j, const int &i)
+            {
                 B_U(v, k, j, i) = B_P(v, k, j, i) * G.gdet(Loci::center, j, i);
-            }
-        );
+            });
     } else {
         // Recover primitive B at centers
-        pmb->par_for("UtoP_B_centerPtoU", 0, NVEC-1, bc.ks, bc.ke, bc.js, bc.je, bc.is, bc.ie,
-            KOKKOS_LAMBDA (const int &v, const int &k, const int &j, const int &i) {
+        pmb->par_for("UtoP_B_centerPtoU", 0, NVEC - 1, bc.ks, bc.ke, bc.js, bc.je, bc.is,
+            bc.ie,
+            KOKKOS_LAMBDA (const int &v, const int &k, const int &j, const int &i)
+            {
                 B_P(v, k, j, i) = B_U(v, k, j, i) / G.gdet(Loci::center, j, i);
-            }
-        );
+            });
     }
 
     return TaskStatus::complete;

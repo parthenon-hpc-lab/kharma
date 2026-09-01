@@ -42,27 +42,25 @@
 
 /* return angle between magnetic field and wavevector */
 KOKKOS_INLINE_FUNCTION double get_bk_mu(const double Kcon[GR_DIM],
-                                        const double Ucov[GR_DIM], const double Bcov[GR_DIM],
-                                        const double &B)
+    const double Ucov[GR_DIM], const double Bcov[GR_DIM], const double& B)
 {
-    if (B == 0.)
-    	return 0.; // cosine of pi/2
+    if (B == 0.) return 0.; // cosine of pi/2
 
     double k = m::abs(dot(Kcon, Ucov));
 
     double mu = dot(Kcon, Bcov) / (k * B);
 
-    if (m::abs(mu) > 1.)
-	    mu /= m::abs(mu);
+    if (m::abs(mu) > 1.) mu /= m::abs(mu);
 
     return mu;
 }
 
 /* get frequency in fluid frame, in Hz */
-KOKKOS_INLINE_FUNCTION double get_fluid_nu(const double Kcon[GR_DIM], const double Ucov[GR_DIM])
+KOKKOS_INLINE_FUNCTION double get_fluid_nu(
+    const double Kcon[GR_DIM], const double Ucov[GR_DIM])
 {
     // Get the energy in electron rest-mass units and divide
-    return -(Kcon[0] * Ucov[0] + Kcon[1] * Ucov[1] +
-           Kcon[2] * Ucov[2] + Kcon[3] * Ucov[3])
-           * ME * CL * CL / HPL;
+    return -(Kcon[0] * Ucov[0] + Kcon[1] * Ucov[1] + Kcon[2] * Ucov[2] +
+               Kcon[3] * Ucov[3]) *
+           ME * CL * CL / HPL;
 }

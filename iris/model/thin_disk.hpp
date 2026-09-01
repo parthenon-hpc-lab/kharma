@@ -43,9 +43,11 @@
 #include "decs.hpp"
 #include "types.hpp"
 
-namespace ThinDisk {
+namespace ThinDisk
+{
 
-KOKKOS_INLINE_FUNCTION double krolikc(const double &r, const double &a, const double &r_isco)
+KOKKOS_INLINE_FUNCTION double krolikc(
+    const double& r, const double& a, const double& r_isco)
 {
     double y = m::sqrt(r);
     double yms = m::sqrt(r_isco);
@@ -57,12 +59,13 @@ KOKKOS_INLINE_FUNCTION double krolikc(const double &r, const double &a, const do
     double arg3 = 3. * m::pow(y2 - a, 2) / (y * y2 * (y2 - y1) * (y2 - y3));
     double arg4 = 3. * m::pow(y3 - a, 2) / (y * y3 * (y3 - y1) * (y3 - y2));
 
-    return 1. - yms / y - arg1 * m::log(y / yms) - arg2 * m::log((y - y1) / (yms - y1))
-        - arg3 * m::log((y - y2) / (yms - y2)) - arg4 * m::log((y - y3) / (yms - y3));
+    return 1. - yms / y - arg1 * m::log(y / yms) - arg2 * m::log((y - y1) / (yms - y1)) -
+           arg3 * m::log((y - y2) / (yms - y2)) - arg4 * m::log((y - y3) / (yms - y3));
 }
 
 // Only supports midplane!
-KOKKOS_INLINE_FUNCTION void thindisk_vals(const CoordinateEmbedding &coords, const double &r, const double &T0, double &T, double &omega)
+KOKKOS_INLINE_FUNCTION void thindisk_vals(const CoordinateEmbedding& coords,
+    const double& r, const double& T0, double& T, double& omega)
 {
     constexpr double th = M_PI_2;
     const double a = coords.get_a();
@@ -70,15 +73,15 @@ KOKKOS_INLINE_FUNCTION void thindisk_vals(const CoordinateEmbedding &coords, con
 
     const double b = 1. - 3. / r + 2. * a / m::pow(r, 3. / 2.);
     const double d = r * r - 2. * r + a * a;
-    const double lc = (r_isco * r_isco - 2. * a * m::sqrt(r_isco) + a * a)
-        / (m::pow(r_isco, 1.5) - 2. * m::sqrt(r_isco) + a);
+    const double lc = (r_isco * r_isco - 2. * a * m::sqrt(r_isco) + a * a) /
+                      (m::pow(r_isco, 1.5) - 2. * m::sqrt(r_isco) + a);
     const double hc = (2. * r - a * lc) / d;
 
     const double ar = m::pow(r * r + a * a, 2.) - a * a * d * m::pow(m::sin(th), 2.);
     const double om = 2. * a * r / ar;
 
-    // Start the disk at r_isco, the marginally stable orbit which N-K take as an inner boundary condition.
-    // End it eventually.
+    // Start the disk at r_isco, the marginally stable orbit which N-K take as an inner
+    // boundary condition. End it eventually.
     if (r > r_isco) {
         omega = m::max(1. / (m::pow(r, 3. / 2.) + a), om);
     } else {
@@ -96,14 +99,16 @@ KOKKOS_INLINE_FUNCTION void thindisk_vals(const CoordinateEmbedding &coords, con
 
 // Blackbody function B_nu(theta_e)
 // c.f. Bnu_inv, same function but different interface. TODO unify
-KOKKOS_INLINE_FUNCTION double bnu(const double &nu, const double &T) {
-    return 2 * HPL * nu*nu*nu / (CL * CL) / (exp(HPL * nu / (KBOL * T)) - 1);
+KOKKOS_INLINE_FUNCTION double bnu(const double& nu, const double& T)
+{
+    return 2 * HPL * nu * nu * nu / (CL * CL) / (exp(HPL * nu / (KBOL * T)) - 1);
 }
 
 /*
  * Set photon wavevector for each radial zone of thin disk (polarized emission)
  */
-KOKKOS_INLINE_FUNCTION void fbbpolemis(const double &nu, const double &T, const double &cosne, double &SI, double &SQ)
+KOKKOS_INLINE_FUNCTION void fbbpolemis(
+    const double& nu, const double& T, const double& cosne, double& SI, double& SQ)
 {
     double f = 1.8;
     SI = m::pow(f, -4.) * bnu(nu, T * f);
@@ -115,14 +120,15 @@ KOKKOS_INLINE_FUNCTION void fbbpolemis(const double &nu, const double &T, const 
     SQ = SI * interpdel;
 
     // Return invariant intensity & polarization
-    SI = SI / (nu*nu*nu);
-    SQ = SQ / (nu*nu*nu);
+    SI = SI / (nu * nu * nu);
+    SQ = SQ / (nu * nu * nu);
 }
 
 //// SUPPORT: Tetrads ////
 
 // This sure is a vector.
-KOKKOS_INLINE_FUNCTION void calc_polvec(const CoordinateEmbedding &coords, const double X[GR_DIM], const double Kcon[GR_DIM], double fourf[GR_DIM])
+KOKKOS_INLINE_FUNCTION void calc_polvec(const CoordinateEmbedding& coords,
+    const double X[GR_DIM], const double Kcon[GR_DIM], double fourf[GR_DIM])
 {
     double fourf_bl[GR_DIM];
     fourf_bl[0] = 0;
@@ -132,7 +138,7 @@ KOKKOS_INLINE_FUNCTION void calc_polvec(const CoordinateEmbedding &coords, const
 
     // Then transform to KS and to native coords
     coords.bl_vec_to_native(X, fourf_bl, fourf);
-    //vec_to_ks(X, fourf_ks, fourf);
+    // vec_to_ks(X, fourf_ks, fourf);
 
     // Now normalize
     double gcov[GR_DIM][GR_DIM];
@@ -141,8 +147,9 @@ KOKKOS_INLINE_FUNCTION void calc_polvec(const CoordinateEmbedding &coords, const
 }
 
 //// PUBLIC INTERFACE ////
-KOKKOS_INLINE_FUNCTION void get_model_fourv(const CoordinateEmbedding &coords, const double X[GR_DIM], const double Kcon[GR_DIM], const double &T0,
-                                            double Ucon[GR_DIM], double Ucov[GR_DIM], double Bcon[GR_DIM], double Bcov[GR_DIM])
+KOKKOS_INLINE_FUNCTION void get_model_fourv(const CoordinateEmbedding& coords,
+    const double X[GR_DIM], const double Kcon[GR_DIM], const double& T0,
+    double Ucon[GR_DIM], double Ucov[GR_DIM], double Bcon[GR_DIM], double Bcov[GR_DIM])
 {
     double r = coords.X1_to_embed(X[1]);
     double T, omega;
@@ -152,8 +159,7 @@ KOKKOS_INLINE_FUNCTION void get_model_fourv(const CoordinateEmbedding &coords, c
 
     // normal observer velocity for Ucon/Ucov
     Ucon[0] =
-        sqrt(-1. / (gcov[0][0] + 2. * gcov[0][3] * omega
-                    + gcov[3][3] * omega * omega));
+        sqrt(-1. / (gcov[0][0] + 2. * gcov[0][3] * omega + gcov[3][3] * omega * omega));
     Ucon[1] = 0.;
     Ucon[2] = 0.;
     Ucon[3] = omega * Ucon[0];
@@ -167,8 +173,9 @@ KOKKOS_INLINE_FUNCTION void get_model_fourv(const CoordinateEmbedding &coords, c
     flip_index(Bcon, gcov, Bcov);
 }
 
-KOKKOS_INLINE_FUNCTION void get_model_stokes(const CoordinateEmbedding &coords, const double X[GR_DIM], const double Kcon[GR_DIM],
-                      const double &T0, double &SI, double &SQ, double &SU, double &SV)
+KOKKOS_INLINE_FUNCTION void get_model_stokes(const CoordinateEmbedding& coords,
+    const double X[GR_DIM], const double Kcon[GR_DIM], const double& T0, double& SI,
+    double& SQ, double& SU, double& SV)
 {
     double r = coords.X1_to_embed(X[1]);
     if (r > coords.get_horizon()) {
@@ -184,8 +191,8 @@ KOKKOS_INLINE_FUNCTION void get_model_stokes(const CoordinateEmbedding &coords, 
         fbbpolemis(nu, T, mu, SI, SQ);
 
     } else {
-      SI = 0;
-      SQ = 0;
+        SI = 0;
+        SQ = 0;
     }
 
     SU = 0;

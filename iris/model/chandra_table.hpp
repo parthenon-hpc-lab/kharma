@@ -36,7 +36,7 @@
 // KHARMA headers
 #include "decs.hpp"
 
-KOKKOS_INLINE_FUNCTION double get_weight(const double *xx, double x, int *jlo)
+KOKKOS_INLINE_FUNCTION double get_weight(const double* xx, double x, int* jlo)
 {
     // Get the value _before_ x in the table
     while (xx[*jlo] < x) {
@@ -48,17 +48,15 @@ KOKKOS_INLINE_FUNCTION double get_weight(const double *xx, double x, int *jlo)
     return (x - xx[*jlo]) / m::max(xx[*jlo + 1] - xx[*jlo], SMALL_NUM);
 }
 
-KOKKOS_INLINE_FUNCTION void interp_chandra(double mu, double *i, double *del)
+KOKKOS_INLINE_FUNCTION void interp_chandra(double mu, double* i, double* del)
 {
-    static constexpr double ch_mu[21] = {0.000000, 0.050000, 0.100000, 0.150000,
-        0.200000, 0.250000, 0.300000, 0.350000, 0.400000, 0.450000, 0.500000,
-        0.550000, 0.600000, 0.650000, 0.700000, 0.750000, 0.800000, 0.850000,
-        0.900000, 0.950000, 1.000000};
+    static constexpr double ch_mu[21] = {0.000000, 0.050000, 0.100000, 0.150000, 0.200000,
+        0.250000, 0.300000, 0.350000, 0.400000, 0.450000, 0.500000, 0.550000, 0.600000,
+        0.650000, 0.700000, 0.750000, 0.800000, 0.850000, 0.900000, 0.950000, 1.000000};
 
-    static constexpr double ch_I[21] = {0.414410, 0.474900, 0.523970, 0.570010,
-        0.614390, 0.657700, 0.700290, 0.742340, 0.783980, 0.825300, 0.866370,
-        0.907220, 0.947890, 0.988420, 1.02882,  1.06911,  1.10931,  1.14943,
-        1.18947, 1.22945, 1.26938};
+    static constexpr double ch_I[21] = {0.414410, 0.474900, 0.523970, 0.570010, 0.614390,
+        0.657700, 0.700290, 0.742340, 0.783980, 0.825300, 0.866370, 0.907220, 0.947890,
+        0.988420, 1.02882, 1.06911, 1.10931, 1.14943, 1.18947, 1.22945, 1.26938};
 
     static constexpr double ch_delta[21] = {0.117130, 0.0897900, 0.0744800, 0.0631100,
         0.0541000, 0.0466700, 0.0404100, 0.0350200, 0.03033000, 0.02619000, 0.0225200,

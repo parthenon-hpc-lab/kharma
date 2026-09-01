@@ -44,94 +44,98 @@
 
 using namespace parthenon;
 
-class Camera {
-    public:
-        int nx, ny;
-        // KS coordinate location
-        double r, th, phi;
-        // Native coordinate location
-        double X[GR_DIM], K[GR_DIM]; // X defined for pinhole, K for planar
-        // FOV in r_g, radian, from Earth
-        double dx, dy, fovx, fovy, fovx_dsource, fovy_dsource;
-        // Distance
-        double dsource;
-        // Scale from intensity to flux in Jy
-        double scale;
-        // Other parameters passed directly to geodesic creation
-        double xoff, yoff, rotcam, frequency;
-        // Convention for Stokes Q & U.  0 == normal, EVPA East of North
-        int qu_conv;
+class Camera
+{
+  public:
+    int nx, ny;
+    // KS coordinate location
+    double r, th, phi;
+    // Native coordinate location
+    double X[GR_DIM], K[GR_DIM]; // X defined for pinhole, K for planar
+    // FOV in r_g, radian, from Earth
+    double dx, dy, fovx, fovy, fovx_dsource, fovy_dsource;
+    // Distance
+    double dsource;
+    // Scale from intensity to flux in Jy
+    double scale;
+    // Other parameters passed directly to geodesic creation
+    double xoff, yoff, rotcam, frequency;
+    // Convention for Stokes Q & U.  0 == normal, EVPA East of North
+    int qu_conv;
 
-        Camera(CoordinateEmbedding &coords, ParameterInput *pin, std::string block) {
-            // Size, image
-            nx = pin->GetOrAddInteger(block, "nx", 160);
-            ny = pin->GetOrAddInteger(block, "ny", 160);
+    Camera(CoordinateEmbedding& coords, ParameterInput* pin, std::string block)
+    {
+        // Size, image
+        nx = pin->GetOrAddInteger(block, "nx", 160);
+        ny = pin->GetOrAddInteger(block, "ny", 160);
 
-            // Location/FOV
-            r = pin->GetReal(block, "r");
-            // Convert to radian
-            th = pin->GetReal(block, "theta") / 180. * M_PI;
-            phi = pin->GetReal(block, "phi") / 180. * M_PI;
-            double Xembed[GR_DIM] = {0., r, th, phi};
-            coords.coord_to_native(Xembed, X);
+        // Location/FOV
+        r = pin->GetReal(block, "r");
+        // Convert to radian
+        th = pin->GetReal(block, "theta") / 180. * M_PI;
+        phi = pin->GetReal(block, "phi") / 180. * M_PI;
+        double Xembed[GR_DIM] = {0., r, th, phi};
+        coords.coord_to_native(Xembed, X);
 
-            dsource = pin->GetOrAddReal(block, "dsource", DM87_PC) * PC;
+        dsource = pin->GetOrAddReal(block, "dsource", DM87_PC) * PC;
 
-            // set DX/DY using fov_dsource if possible, otherwise DX, otherwise old default
-            // TODO accept fovx/fovy directly?  TODO arctan?
-            // TODO check for square pixels at the end?
-            double L_unit = pin->GetReal("model", "L_unit");
-            double fov_to_d = dsource / L_unit / MUAS_PER_RAD;
-            if (pin->DoesParameterExist(block, "fovx_dsource")) { // FOV was specified
-                fovx_dsource = pin->GetReal(block, "fovx_dsource");
-                if (pin->DoesParameterExist(block, "fovy_dsource")) {
-                    fovy_dsource = pin->GetReal(block, "fovy_dsource");
-                } else {
-                    fovy_dsource = fovx_dsource;
-                }
-                dx = fovx_dsource * fov_to_d;
-                dy = fovy_dsource * fov_to_d;
-            } else if (pin->DoesParameterExist(block, "dx")) {
-                dx = pin->GetReal(block, "dx");
-                if (pin->DoesParameterExist(block, "dy")) {
-                    dy = pin->GetReal(block, "dy");
-                } else {
-                    dy = dx;
-                }
-                fovx_dsource = dx / fov_to_d;
-                fovy_dsource = dy / fov_to_d;
-
+        // set DX/DY using fov_dsource if possible, otherwise DX, otherwise old default
+        // TODO accept fovx/fovy directly?  TODO arctan?
+        // TODO check for square pixels at the end?
+        double L_unit = pin->GetReal("model", "L_unit");
+        double fov_to_d = dsource / L_unit / MUAS_PER_RAD;
+        if (pin->DoesParameterExist(block, "fovx_dsource")) { // FOV was specified
+            fovx_dsource = pin->GetReal(block, "fovx_dsource");
+            if (pin->DoesParameterExist(block, "fovy_dsource")) {
+                fovy_dsource = pin->GetReal(block, "fovy_dsource");
             } else {
-                std::cerr << "No FOV was specified for camera " << block
-                          << ". Using default 160muas!" << std::endl;
-                fovx_dsource = 160.;
-                fovy_dsource = 160.;
-                dx = fovx_dsource * fov_to_d;
-                dy = fovy_dsource * fov_to_d;
+                fovy_dsource = fovx_dsource;
             }
-            // Set the *camera* fov values, in radian.
-            fovx = dx / r;
-            fovy = dy / r;
-            // And the scale intensity->flux
-            scale = (dx * L_unit / nx) * (dy * L_unit / ny) / (dsource * dsource) / JY;
+            dx = fovx_dsource * fov_to_d;
+            dy = fovy_dsource * fov_to_d;
+        } else if (pin->DoesParameterExist(block, "dx")) {
+            dx = pin->GetReal(block, "dx");
+            if (pin->DoesParameterExist(block, "dy")) {
+                dy = pin->GetReal(block, "dy");
+            } else {
+                dy = dx;
+            }
+            fovx_dsource = dx / fov_to_d;
+            fovy_dsource = dy / fov_to_d;
 
-            xoff = pin->GetOrAddReal(block, "xoff", 0.0);
-            yoff = pin->GetOrAddReal(block, "yoff", 0.0);
-            rotcam = pin->GetOrAddReal(block, "rotcam", 0.0);
-            frequency = pin->GetOrAddReal(block, "frequency", 2.3e11);
-            qu_conv = pin->GetOrAddReal(block, "qu_conv", 0);
+        } else {
+            std::cerr << "No FOV was specified for camera " << block
+                      << ". Using default 160muas!" << std::endl;
+            fovx_dsource = 160.;
+            fovy_dsource = 160.;
+            dx = fovx_dsource * fov_to_d;
+            dy = fovy_dsource * fov_to_d;
         }
+        // Set the *camera* fov values, in radian.
+        fovx = dx / r;
+        fovy = dy / r;
+        // And the scale intensity->flux
+        scale = (dx * L_unit / nx) * (dy * L_unit / ny) / (dsource * dsource) / JY;
 
-        void print() {
-            printf("Xcam[] = %e %e %e %e\n", X[0], X[1], X[2], X[3]);
-            printf("intensity [cgs] to flux per pixel [Jy] conversion: %g\n", scale);
-            printf("Dsource: %g [cm]\n", dsource);
-            printf("Dsource: %g [kpc]\n", dsource/(1.e3*PC));
-            printf("FOVx, FOVy: %g %g [GM/c^2]\n", dx, dy);
-            printf("FOVx, FOVy: %g %g [rad]\n", fovx_dsource / MUAS_PER_RAD, fovy_dsource / MUAS_PER_RAD);
-            printf("FOVx, FOVy: %g %g [muas]\n", fovx_dsource, fovy_dsource);
-            printf("Resolution: %dx%d\n", nx, ny);
-        }
+        xoff = pin->GetOrAddReal(block, "xoff", 0.0);
+        yoff = pin->GetOrAddReal(block, "yoff", 0.0);
+        rotcam = pin->GetOrAddReal(block, "rotcam", 0.0);
+        frequency = pin->GetOrAddReal(block, "frequency", 2.3e11);
+        qu_conv = pin->GetOrAddReal(block, "qu_conv", 0);
+    }
+
+    void print()
+    {
+        printf("Xcam[] = %e %e %e %e\n", X[0], X[1], X[2], X[3]);
+        printf("intensity [cgs] to flux per pixel [Jy] conversion: %g\n", scale);
+        printf("Dsource: %g [cm]\n", dsource);
+        printf("Dsource: %g [kpc]\n", dsource / (1.e3 * PC));
+        printf("FOVx, FOVy: %g %g [GM/c^2]\n", dx, dy);
+        printf("FOVx, FOVy: %g %g [rad]\n", fovx_dsource / MUAS_PER_RAD,
+            fovy_dsource / MUAS_PER_RAD);
+        printf("FOVx, FOVy: %g %g [muas]\n", fovx_dsource, fovy_dsource);
+        printf("Resolution: %dx%d\n", nx, ny);
+    }
 };
 
 /**
@@ -140,9 +144,11 @@ class Camera {
  * 2. splits pixel lists out into images, calculate observer frame Stokes params
  *
  */
-namespace Cameras {
+namespace Cameras
+{
 
-std::shared_ptr<StateDescriptor> Initialize(ParameterInput *pin, std::shared_ptr<Packages_t>& packages);
+std::shared_ptr<StateDescriptor> Initialize(
+    ParameterInput* pin, std::shared_ptr<Packages_t>& packages);
 
 // These operate only within the given block
 TaskStatus InitGeodesics(MeshBlock* pmb);

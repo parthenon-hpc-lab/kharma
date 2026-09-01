@@ -11,17 +11,18 @@
 
 #define STOKES_DIM 4
 
-namespace Coefficients {
+namespace Coefficients
+{
 
 // TODO template?
-KOKKOS_INLINE_FUNCTION void jar_calc(FitParams params,
-                                     double &jI, double &jQ, double &jU, double &jV,
-                                     double &aI, double &aQ, double &aU, double &aV,
-                                     double &rQ, double &rU, double &rV)
+KOKKOS_INLINE_FUNCTION void jar_calc(FitParams params, double& jI, double& jQ, double& jU,
+    double& jV, double& aI, double& aQ, double& aU, double& aV, double& rQ, double& rU,
+    double& rV)
 {
     // TODO check theta_e only for thermal
-    if (params.electron_density > 0 && params.nu > 0 && params.theta_e > 0 && params.magnetic_field > 0 &&
-        params.observer_angle != M_PI && params.observer_angle != M_PI/2 && params.observer_angle != 0) {
+    if (params.electron_density > 0 && params.nu > 0 && params.theta_e > 0 &&
+        params.magnetic_field > 0 && params.observer_angle != M_PI &&
+        params.observer_angle != M_PI / 2 && params.observer_angle != 0) {
         double inv_nusq = 1 / (params.nu * params.nu);
         jI = j_nu_fit<Stokes::I, ElectronDist::maxwell_juettner>(params) * inv_nusq;
         jQ = -j_nu_fit<Stokes::Q, ElectronDist::maxwell_juettner>(params) * inv_nusq;
@@ -50,9 +51,17 @@ KOKKOS_INLINE_FUNCTION void jar_calc(FitParams params,
 
         // TODO checks for >100% pol, allow rotation exactly along lines, etc.
     } else {
-        jI = 0.; jQ = 0.; jU = 0.; jV = 0.;
-        aI = 0.; aQ = 0.; aU = 0.; aV = 0.;
-        rQ = 0.; rU = 0.; rV = 0.;
+        jI = 0.;
+        jQ = 0.;
+        jU = 0.;
+        jV = 0.;
+        aI = 0.;
+        aQ = 0.;
+        aU = 0.;
+        aV = 0.;
+        rQ = 0.;
+        rU = 0.;
+        rV = 0.;
     }
     // REMEMBER aI,etc are `* nu` too!!  Also -Q/U just like above
 }

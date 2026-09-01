@@ -43,10 +43,10 @@
 
 #include <parthenon/parthenon.hpp>
 
-std::shared_ptr<StateDescriptor> Model::Initialize(ParameterInput *pin)
+std::shared_ptr<StateDescriptor> Model::Initialize(ParameterInput* pin)
 {
     auto pkg = std::make_shared<StateDescriptor>("Model");
-    Params &params = pkg->AllParams();
+    Params& params = pkg->AllParams();
 
     // TODO allowable types etc
     std::string type = pin->GetString("model", "type");
@@ -86,16 +86,17 @@ std::shared_ptr<StateDescriptor> Model::Initialize(ParameterInput *pin)
     double U_unit = RHO_unit * CL * CL;
     pin->SetReal("model", "U_unit", U_unit);
     params.Add("U_unit", U_unit);
-    double B_unit = CL * sqrt(4.*M_PI*RHO_unit);
+    double B_unit = CL * sqrt(4. * M_PI * RHO_unit);
     pin->SetReal("model", "B_unit", B_unit);
     params.Add("B_unit", B_unit);
 
     // Print units like ipole
     // technically thindisk problem doesn't print MBH but come on
     if (verbose > 0) {
-        if (! (type == "thin_disk")) printf("MBH: %g [Msun]\n", MBH / MSUN);
+        if (!(type == "thin_disk")) printf("MBH: %g [Msun]\n", MBH / MSUN);
         printf("L,T,M units: %g [cm] %g [s] %g [g]\n", L_unit, T_unit, M_unit);
-        printf("rho,u,B units: %g [g cm^-3] %g [g cm^-1 s^-2] %g [G] \n", RHO_unit, U_unit, B_unit);
+        printf("rho,u,B units: %g [g cm^-3] %g [g cm^-1 s^-2] %g [G] \n", RHO_unit,
+            U_unit, B_unit);
     }
 
     // TODO if analytic...
@@ -184,12 +185,17 @@ std::shared_ptr<StateDescriptor> Model::Initialize(ParameterInput *pin)
     if (verbose > 0) {
         if (type == "thin_disk") {
             // Some precomputation. Remember Mdot == M_unit in thin disk prob
-            double T0 = m::pow(3.0 / 8.0 / M_PI * GNEWT * MBH * M_unit / m::pow(L_unit, 3) / SIG, 1. / 4.);
+            double T0 =
+                m::pow(3.0 / 8.0 / M_PI * GNEWT * MBH * M_unit / m::pow(L_unit, 3) / SIG,
+                    1. / 4.);
             params.Add("T0", T0);
-            printf("Rh, Rin, Rout, r_isco, T0: %g %g %g %g %g\n", coords.get_horizon(), coords.get_horizon(), Rout, coords.get_isco(), T0);
-            printf("Running thin disk:\nMBH: %g\nMdot: %g\na: %g\n\n", MBH, Mdot, coords.get_a());
+            printf("Rh, Rin, Rout, r_isco, T0: %g %g %g %g %g\n", coords.get_horizon(),
+                coords.get_horizon(), Rout, coords.get_isco(), T0);
+            printf("Running thin disk:\nMBH: %g\nMdot: %g\na: %g\n\n", MBH, Mdot,
+                coords.get_a());
         } else {
-            printf("Rh, Rin, Rout, r_isco: %g %g %g %g\n", coords.get_horizon(), coords.get_horizon(), Rout, coords.get_isco());
+            printf("Rh, Rin, Rout, r_isco: %g %g %g %g\n", coords.get_horizon(),
+                coords.get_horizon(), Rout, coords.get_isco());
         }
     }
 
@@ -199,11 +205,11 @@ std::shared_ptr<StateDescriptor> Model::Initialize(ParameterInput *pin)
     return pkg;
 }
 
-TaskStatus Model::SetStokesThindisk(MeshData<Real> *md)
+TaskStatus Model::SetStokesThindisk(MeshData<Real>* md)
 {
     // Make sure to iterate through only the blocks in this MeshData
     for (int n = 0; n < md->NumBlocks(); n++) {
-        auto &mbd = md->GetBlockData(n);
+        auto& mbd = md->GetBlockData(n);
         SetStokesThindiskBlock(mbd->GetBlockPointer());
     }
     return TaskStatus::complete;
@@ -214,12 +220,13 @@ TaskStatus Model::SetStokesThindiskBlock(MeshBlock* pmb)
     PARTHENON_INSTRUMENT
 
     auto swarm = pmb->meshblock_data.Get("base")->GetSwarmData()->Get("rays");
-    auto &model = pmb->packages.Get("Model")->AllParams();
+    auto& model = pmb->packages.Get("Model")->AllParams();
     const auto polarized = model.Get<bool>("polarized");
     const auto verbose = model.Get<int>("verbose");
 
     // Thin disk precomputation
-    const auto T0 = (model.Get<std::string>("type") == "thin_disk") ? model.Get<double>("T0") : 0.0;
+    const auto T0 =
+        (model.Get<std::string>("type") == "thin_disk") ? model.Get<double>("T0") : 0.0;
 
     // For the emission plane loctation
     const auto stop_condition = model.Get<StopCondition>("stop_condition");
@@ -227,28 +234,32 @@ TaskStatus Model::SetStokesThindiskBlock(MeshBlock* pmb)
     int max_active_index = swarm->GetMaxActiveIndex();
 
     // Position
-    auto &x0 = swarm->Get<Real>(rays::t::name()).Get();
-    auto &x1 = swarm->Get<Real>(swarm_position::x::name()).Get();
-    auto &x2 = swarm->Get<Real>(swarm_position::y::name()).Get();
-    auto &x3 = swarm->Get<Real>(swarm_position::z::name()).Get();
-    auto &k = swarm->Get<Real>(rays::k::name()).Get();
+    auto& x0 = swarm->Get<Real>(rays::t::name()).Get();
+    auto& x1 = swarm->Get<Real>(swarm_position::x::name()).Get();
+    auto& x2 = swarm->Get<Real>(swarm_position::y::name()).Get();
+    auto& x3 = swarm->Get<Real>(swarm_position::z::name()).Get();
+    auto& k = swarm->Get<Real>(rays::k::name()).Get();
     // Reason geodesics were stopped, i.e. which hit the disk?
-    auto &stopflag = swarm->Get<int>(rays::stop_flag::name()).Get();
+    auto& stopflag = swarm->Get<int>(rays::stop_flag::name()).Get();
     // Radiation
-    auto &I = swarm->Get<Real>(rays::I::name()).Get();
-    auto &Nr = (polarized) ? swarm->Get<Real>(rays::Nr::name()).Get() : swarm->Get<Real>(rays::I::name()).Get();
-    auto &Ni = (polarized) ? swarm->Get<Real>(rays::Ni::name()).Get() : swarm->Get<Real>(rays::I::name()).Get();
+    auto& I = swarm->Get<Real>(rays::I::name()).Get();
+    auto& Nr = (polarized) ? swarm->Get<Real>(rays::Nr::name()).Get()
+                           : swarm->Get<Real>(rays::I::name()).Get();
+    auto& Ni = (polarized) ? swarm->Get<Real>(rays::Ni::name()).Get()
+                           : swarm->Get<Real>(rays::I::name()).Get();
 
     auto swarm_d = swarm->GetDeviceContext();
 
     const CoordinateEmbedding coords = pmb->coords.coords;
 
     pmb->par_for(PARTHENON_AUTO_LABEL, 0, max_active_index,
-        KOKKOS_LAMBDA(const int &n) {
+        KOKKOS_LAMBDA(const int &n)
+        {
             if (swarm_d.IsActive(n)) {
-                if (stopflag(n) == (int) StopFlag::thin_disk) {
-                    // A thin disk problem emits nowhere but uses a boundary condition region defined by thindisk_region
-                    // There we just get a starting value for intensity with get_model_i
+                if (stopflag(n) == (int)StopFlag::thin_disk) {
+                    // A thin disk problem emits nowhere but uses a boundary condition
+                    // region defined by thindisk_region There we just get a starting
+                    // value for intensity with get_model_i
                     double X[GR_DIM] = {x0(n), x1(n), x2(n), x3(n)};
                     double Kcon[GR_DIM] = {k(0, n), k(1, n), k(2, n), k(3, n)};
                     double SI, SQ, SU, SV;
@@ -256,18 +267,20 @@ TaskStatus Model::SetStokesThindiskBlock(MeshBlock* pmb)
                     I(n) = SI;
 
                     if (polarized) {
-                        // For polarized emission, we get Stokes parameters in the fluid frame,
-                        // then compute the transport tensor N and transform it to coordinate frame
-                        // Make a tetrad
+                        // For polarized emission, we get Stokes parameters in the fluid
+                        // frame, then compute the transport tensor N and transform it to
+                        // coordinate frame Make a tetrad
                         double gcov[GR_DIM][GR_DIM];
                         coords.gcov_native(X, gcov);
                         double Ucon[GR_DIM], Ucov[GR_DIM], Bcon[GR_DIM], Bcov[GR_DIM];
-                        ThinDisk::get_model_fourv(coords, X, Kcon, T0, Ucon, Ucov, Bcon, Bcov);
+                        ThinDisk::get_model_fourv(
+                            coords, X, Kcon, T0, Ucon, Ucov, Bcon, Bcov);
                         double Ecov[GR_DIM][GR_DIM], Econ[GR_DIM][GR_DIM];
                         make_plasma_tetrad(Ucon, Kcon, Bcon, gcov, Econ, Ecov);
 
                         // make N_tetrad, and transform
-                        Kokkos::complex<double> N_coord[GR_DIM][GR_DIM], N_tetrad[GR_DIM][GR_DIM] = {{0.}};
+                        Kokkos::complex<double> N_coord[GR_DIM][GR_DIM],
+                            N_tetrad[GR_DIM][GR_DIM] = {{0.}};
                         stokes_to_N(SI, SQ, SU, SV, N_tetrad);
                         N_to_coord(N_tetrad, Econ, N_coord);
                         write_N(N_coord, Nr, Ni, n);
@@ -276,10 +289,10 @@ TaskStatus Model::SetStokesThindiskBlock(MeshBlock* pmb)
             }
         });
 
-
     if (polarized && verbose > 1) {
         pmb->par_for(PARTHENON_AUTO_LABEL, 0, max_active_index,
-            KOKKOS_LAMBDA(const int &n) {
+            KOKKOS_LAMBDA(const int &n)
+            {
                 if (swarm_d.IsActive(n)) {
                     // Can these temps be any smaller?
                     double X[GR_DIM] = {x0(n), x1(n), x2(n), x3(n)};
@@ -287,25 +300,29 @@ TaskStatus Model::SetStokesThindiskBlock(MeshBlock* pmb)
                     double Ucon[GR_DIM], Ucov[GR_DIM], Bcon[GR_DIM], Bcov[GR_DIM];
                     double Ecov[GR_DIM][GR_DIM], Econ[GR_DIM][GR_DIM];
                     double gcov[GR_DIM][GR_DIM];
-                    Kokkos::complex<double> N_coord[GR_DIM][GR_DIM], N_tetrad[GR_DIM][GR_DIM];
+                    Kokkos::complex<double> N_coord[GR_DIM][GR_DIM],
+                        N_tetrad[GR_DIM][GR_DIM];
 
                     read_N(Nr, Ni, n, N_coord);
                     // old gcov
                     coords.gcov_native(X, gcov);
                     // old tetrad
-                    ThinDisk::get_model_fourv(coords, X, Kcon, T0, Ucon, Ucov, Bcon, Bcov);
+                    ThinDisk::get_model_fourv(
+                        coords, X, Kcon, T0, Ucon, Ucov, Bcon, Bcov);
                     make_plasma_tetrad(Ucon, Kcon, Bcon, gcov, Econ, Ecov);
                     // N to tetrad frame
                     N_to_tetrad(N_coord, Ecov, N_tetrad);
                     double SI, SQ, SU, SV;
                     N_to_stokes(N_tetrad, SI, SQ, SU, SV);
 
-                    Rays::geodesic_parallel_transport_step(coords, X, Kcon, N_coord, 0.01, 1e-7);
+                    Rays::geodesic_parallel_transport_step(
+                        coords, X, Kcon, N_coord, 0.01, 1e-7);
 
                     // New gcov
                     coords.gcov_native(X, gcov);
                     // New tetrad
-                    ThinDisk::get_model_fourv(coords, X, Kcon, T0, Ucon, Ucov, Bcon, Bcov);
+                    ThinDisk::get_model_fourv(
+                        coords, X, Kcon, T0, Ucon, Ucov, Bcon, Bcov);
                     make_plasma_tetrad(Ucon, Kcon, Bcon, gcov, Econ, Ecov);
                     // N to tetrad frame
                     N_to_tetrad(N_coord, Ecov, N_tetrad);
@@ -313,10 +330,10 @@ TaskStatus Model::SetStokesThindiskBlock(MeshBlock* pmb)
                     N_to_stokes(N_tetrad, SInew, SQnew, SUnew, SVnew);
 
                     // Print comparison
-                    printf("One-step Stokes: (%g %g) (%g %g) (%g %g) (%g %g)\n", SI, SInew, SQ, SQnew, SU, SUnew, SV, SVnew);
+                    printf("One-step Stokes: (%g %g) (%g %g) (%g %g) (%g %g)\n", SI,
+                        SInew, SQ, SQnew, SU, SUnew, SV, SVnew);
                 }
-            }
-        );
+            });
     }
 
     return TaskStatus::complete;

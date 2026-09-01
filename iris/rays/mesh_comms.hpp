@@ -38,37 +38,40 @@
 using namespace parthenon;
 
 // Stolen from Jaybenne
-inline TaskStatus MeshResetCommunication(MeshData<Real> *md) {
-  const int nblocks = md->NumBlocks();
-  for (int n = 0; n < nblocks; n++) {
-    auto &mbd = md->GetBlockData(n);
-    auto &sc = mbd->GetSwarmData();
-    sc->ResetCommunication();
-  }
+inline TaskStatus MeshResetCommunication(MeshData<Real>* md)
+{
+    const int nblocks = md->NumBlocks();
+    for (int n = 0; n < nblocks; n++) {
+        auto& mbd = md->GetBlockData(n);
+        auto& sc = mbd->GetSwarmData();
+        sc->ResetCommunication();
+    }
 
-  return TaskStatus::complete;
+    return TaskStatus::complete;
 }
 
-inline TaskStatus MeshSend(MeshData<Real> *md) {
-  const int nblocks = md->NumBlocks();
-  for (int n = 0; n < nblocks; n++) {
-    auto &mbd = md->GetBlockData(n);
-    auto &sc = mbd->GetSwarmData();
-    sc->Send(BoundaryCommSubset::all);
-  }
+inline TaskStatus MeshSend(MeshData<Real>* md)
+{
+    const int nblocks = md->NumBlocks();
+    for (int n = 0; n < nblocks; n++) {
+        auto& mbd = md->GetBlockData(n);
+        auto& sc = mbd->GetSwarmData();
+        sc->Send(BoundaryCommSubset::all);
+    }
 
-  return TaskStatus::complete;
+    return TaskStatus::complete;
 }
 
-inline TaskStatus MeshReceive(MeshData<Real> *md) {
-  TaskStatus status = TaskStatus::complete;
-  const int nblocks = md->NumBlocks();
-  for (int n = 0; n < nblocks; n++) {
-    auto &mbd = md->GetBlockData(n);
-    auto &sc = mbd->GetSwarmData();
-    auto local_status = sc->Receive(BoundaryCommSubset::all);
-    while (local_status == TaskStatus::incomplete);
-  }
+inline TaskStatus MeshReceive(MeshData<Real>* md)
+{
+    TaskStatus status = TaskStatus::complete;
+    const int nblocks = md->NumBlocks();
+    for (int n = 0; n < nblocks; n++) {
+        auto& mbd = md->GetBlockData(n);
+        auto& sc = mbd->GetSwarmData();
+        auto local_status = sc->Receive(BoundaryCommSubset::all);
+        while (local_status == TaskStatus::incomplete);
+    }
 
-  return status;
+    return status;
 }
