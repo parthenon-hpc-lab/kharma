@@ -92,8 +92,6 @@ KOKKOS_INLINE_FUNCTION void Xtoijk_nearest(const GReal X[GR_DIM],
  * Dumb linear interpolation: no special cases for boundaries.
  * Takes indices i,j,k and a block size n1, n2, n3,
  * as well as a flat array var.
- *
- * TODO version(s) with View(s) for real device-side operation
  */
 KOKKOS_INLINE_FUNCTION Real linear(const int& i, const int& j, const int& k,
     const int& n1, const int& n2, const int& n3, const double del[4], const double* var)
@@ -111,6 +109,30 @@ KOKKOS_INLINE_FUNCTION Real linear(const int& i, const int& j, const int& k,
                               var[ind(i + 1, j, k + 1)] * del[1] * (1. - del[2]) +
                               var[ind(i, j + 1, k + 1)] * (1. - del[1]) * del[2] +
                               var[ind(i + 1, j + 1, k + 1)] * del[1] * del[2]);
+    }
+    return interp;
+}
+
+/**
+ * Dumb linear interpolation: no special cases for boundaries.
+ * Takes indices i,j,k and a block size n1, n2, n3,
+ * as well as a flat array var.
+ */
+KOKKOS_INLINE_FUNCTION Real linear(const int& i, const int& j, const int& k,
+    const double del[4], const int& p, const VariablePack<Real>& var)
+{
+    // Interpolate in 1D at a time to avoid reading zones we don't have
+    Real interp = var(p, k, j, i) * (1. - del[1]) + var(p, k, j, i + 1) * del[1];
+    if (var.GetDim(2) > 1) {
+        interp = (1. - del[2]) * interp + del[2] * (var(p, k, j + 1, i) * (1. - del[1]) +
+                                                       var(p, k, j + 1, i + 1) * del[1]);
+    }
+    if (var.GetDim(3) > 1) {
+        interp = (1. - del[3]) * interp +
+                 del[3] * (var(p, k + 1, j, i) * (1. - del[1]) * (1. - del[2]) +
+                              var(p, k + 1, j, i + 1) * del[1] * (1. - del[2]) +
+                              var(p, k + 1, j + 1, i) * (1. - del[1]) * del[2] +
+                              var(p, k + 1, j + 1, i + 1) * del[1] * del[2]);
     }
     return interp;
 }

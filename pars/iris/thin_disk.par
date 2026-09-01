@@ -1,0 +1,70 @@
+
+# Polarized comparison thin-disk image problem
+
+<parthenon/job>
+# Can use any name
+problem_id = thin_disk
+
+<parthenon/mesh>
+nx1 = 16
+nx2 = 1
+nx3 = 1
+
+<parthenon/meshblock>
+nx1 = 8
+nx2 = 1
+nx3 = 1
+
+<geodesics>
+max_nstep = 10000
+recalculate_paths = true
+
+<model>
+# Type, model name or 'file' to parse GRMHD dump
+type = thin_disk
+# Black hole mass
+MBH = 10
+# Accretion rate (fraction of Eddington)
+Mdot = 0.01
+# Currently must set this per-model, not per-camera
+polarized = true
+
+<coordinates>
+base = spherical_ks
+transform = mks
+hslope = 1.0
+# BH spin
+a = 0.99
+# outermost region that is traced
+r_out = 100
+
+<camera>
+# In r_g
+r = 1e4
+# In degrees
+theta = 75
+phi = 0.0
+# Micro-arcseconds
+dx = 40
+dy = 40
+
+# 1 eV
+frequency = 2.417989e17
+
+nx = 80
+ny = 80
+
+dsource = 0.05
+
+<debug>
+verbose = 1
+
+<parthenon/output0>
+file_type = hdf5
+single_precision_output = true
+write_xdmf = false
+variables = camera
+
+#swarms = rays
+#swarm_variables = pathlen, nstep, I, t, k,
+#xpath, kpath, dlpath

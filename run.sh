@@ -146,15 +146,16 @@ fi
 
 
 # Set default exe only if we didn't specify it
+PROJ_NAME=${PROJ_NAME:-kharma}
 if [ -z "$EXE_NAME" ]; then
-  if [ -f $KHARMA_DIR/kharma.cuda ]; then
-    EXE_NAME=kharma.cuda
-  elif [ -f $KHARMA_DIR/kharma.sycl ]; then
-    EXE_NAME=kharma.sycl
-  elif [ -f $KHARMA_DIR/kharma.hip ]; then
-    EXE_NAME=kharma.hip
-  elif [ -f $KHARMA_DIR/kharma.host ]; then
-    EXE_NAME=kharma.host
+  if [ -f $KHARMA_DIR/${PROJ_NAME}.cuda ]; then
+    EXE_NAME=${PROJ_NAME}.cuda
+  elif [ -f $KHARMA_DIR/${PROJ_NAME}.sycl ]; then
+    EXE_NAME=${PROJ_NAME}.sycl
+  elif [ -f $KHARMA_DIR/${PROJ_NAME}.hip ]; then
+    EXE_NAME=${PROJ_NAME}.hip
+  elif [ -f $KHARMA_DIR/${PROJ_NAME}.host ]; then
+    EXE_NAME=${PROJ_NAME}.host
     # Enable OpenMP to use all threads only where not counterproductive
     #export OMP_PROC_BIND=${OMP_PROC_BIND:-spread}
     #export OMP_PLACES=${OMP_PLACES:-threads}

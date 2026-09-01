@@ -94,7 +94,10 @@ TaskCollection KHARMADriver::MakeSimpleTaskCollection(BlockList_t& blocks, int s
     // fluxes of the conserved variables (U) through each face.
     auto t_fluxes = KHARMADriver::AddFluxCalculations(t_none, tl, md_sub_step_init.get());
 
-    // Any package modifications to the fluxes, e.g. from Flux-CT
+    // Any package modifications to the fluxes.  e.g.:
+    // 1. CT calculations for B field transport
+    // 2. Zero fluxes through poles
+    // etc
     auto t_fix_flux = tl.AddTask(t_fluxes, Packages::FixFlux, md_sub_step_init.get());
 
     // Apply the fluxes to calculate a change in cell-centered values "md_flux_src"

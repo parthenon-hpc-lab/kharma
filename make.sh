@@ -70,23 +70,27 @@ if [[ -v DEVICE_ARCH ]]; then
   done
 fi
 if option "trace"; then
-  EXTRA_FLAGS="-DKHARMA_TRACE=1 $EXTRA_FLAGS"
+  EXTRA_FLAGS="-DKHARMA_TRACE=ON $EXTRA_FLAGS"
 fi
 if option "nompi"; then
-  EXTRA_FLAGS="-DKHARMA_DISABLE_MPI=1 $EXTRA_FLAGS"
+  EXTRA_FLAGS="-DKHARMA_DISABLE_MPI=ON $EXTRA_FLAGS"
 fi
 if option "noimplicit"; then
-  EXTRA_FLAGS="-DKHARMA_DISABLE_IMPLICIT=1 $EXTRA_FLAGS"
+  EXTRA_FLAGS="-DKHARMA_DISABLE_IMPLICIT=ON $EXTRA_FLAGS"
 fi
 # Always disable old resizing, it's broken w/new tasking
 #if option "nocleanup"; then
-EXTRA_FLAGS="-DKHARMA_DISABLE_CLEANUP=1 $EXTRA_FLAGS"
+EXTRA_FLAGS="-DKHARMA_DISABLE_CLEANUP=ON $EXTRA_FLAGS"
 #fi
 if option "split_implicit"; then
-  EXTRA_FLAGS="-DKHARMA_SPLIT_IMPLICIT_SOLVE=1 $EXTRA_FLAGS"
+  EXTRA_FLAGS="-DKHARMA_SPLIT_IMPLICIT_SOLVE=ON $EXTRA_FLAGS"
 fi
 if option "test"; then
   EXTRA_FLAGS="-DKHARMA_BUILD_TESTS=ON $EXTRA_FLAGS"
+fi
+# This builds iris binary *instead* of KHARMA.  I have insufficient CMake-fu to do them together
+if option "iris"; then
+  EXTRA_FLAGS="-DKHARMA_BUILD_IRIS=ON $EXTRA_FLAGS"
 fi
 
 ### Enivoronment Prep ###
@@ -211,7 +215,7 @@ elif option "cuda"; then
 elif option "nvc++"; then
   OUTER_LAYOUT="MANUAL1D_LOOP"
   INNER_LAYOUT="TVR_INNER_LOOP"
-  ENABLE_OPENMP="ON"
+  ENABLE_OPENMP="OFF"
   ENABLE_CUDA="ON"
   ENABLE_SYCL="OFF"
   ENABLE_HIP="OFF"
@@ -305,6 +309,8 @@ if option "hdf5"; then
   EXTRA_FLAGS="$EXTRA_FLAGS -DHDF5_USE_STATIC_LIBRARIES=ON"
 fi
 
+
+
 ### Build KHARMA ###
 # If we're doing a clean build, prep the source and
 # delete the build directory
@@ -374,7 +380,12 @@ fi
 
 if ! option "dryrun"; then
   make -j$NPROC
-  cp kharma/kharma.* ..
+
+  if option "iris"; then
+    cp iris/iris.* ..
+  else
+    cp kharma/kharma.* ..
+  fi
 
   # Needed now that we build packages
   if option "install"; then
