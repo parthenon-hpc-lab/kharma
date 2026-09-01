@@ -6,7 +6,11 @@ BASE=../..
 exit_code=0
 
 # Extended MHD atmosphere test convergence to exercise geometrical terms
-# We'll use just 1 MPI rank to circumvent the somewhat annoying ODE initialization
+# We use many ranks to make this test faster on CPU,
+# But testing GPU w/MPI on our poor CI machine is out of scope
+if [[ $MPI_NUM_PROCS > 1 ]]; then
+  export MPI_NUM_PROCS=8
+fi
 
 conv_2d() {
     IFS=',' read -ra RES_LIST <<< "$ALL_RES"
@@ -17,7 +21,7 @@ conv_2d() {
         # Must still be one block in r!
         eighth=$(( $res / 8 ))
         cp conducting_atmosphere_${res}_default/atmosphere_soln_*.txt .
-        $BASE/run.sh -n 8 -d . -i ./conducting_atmosphere.par debug/verbose=1 \
+        $BASE/run.sh -d . -i ./conducting_atmosphere.par debug/verbose=1 \
             parthenon/time/tlim=200 parthenon/output0/dt=1000000 \
             parthenon/mesh/nx1=$res parthenon/mesh/nx2=$res parthenon/mesh/nx3=1 \
             parthenon/meshblock/nx1=$res parthenon/meshblock/nx2=$eighth parthenon/meshblock/nx3=1 \
@@ -38,6 +42,7 @@ conv_2d() {
     fi
 }
 
+# TODO(CEP) remove 512? Remember can't go below 64 w/8 ranks
 ALL_RES="64,128,256,512"
 conv_2d emhd2d_weno driver/reconstruction=weno5 "in 2D, WENO5"
 # Test if it works with ideal solution as guess

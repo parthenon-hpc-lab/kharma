@@ -60,6 +60,19 @@ Further information can be found on the [wiki page](https://github.com/parthenon
 ## Hacking
 KHARMA has some documentation for developers on the [wiki](https://github.com/parthenon-hpc-lab/kharma/wiki).  The docs cover some quirks of coding in C++, in particular with Kokkos/GPU programming, and in particular with Parthenon.
 
+KHARMA has a desired formatting standard, so developers should configure
+their local clone to use the global `pre-commit` and other
+hooks which the repository defines. Just run:
+```
+git config --local core.hooksPath .githooks
+```
+If you also need custom local hooks for your workflow, see the comments
+in `.githooks/pre-commit`. The `pre-commit` will format files as they are
+changed or added. To apply formatting to existing code, e.g. many commits
+in a branch before the `pre-commit` hook was configured, use `scripts/format.sh`.
+Formatting is necessary or the GitHub Actions will flag problems on pull-requests
+to `stable` or `dev` branches.
+
 ## Licenses
 KHARMA is made available under the BSD 3-clause license included in each file and in the file LICENSE at the root of this repository.
 
