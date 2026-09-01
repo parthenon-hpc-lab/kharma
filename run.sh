@@ -146,7 +146,7 @@ fi
 
 
 # Set default exe only if we didn't specify it
-PROJ_NAME="iris"
+PROJ_NAME=${PROJ_NAME:-kharma}
 if [ -z "$EXE_NAME" ]; then
   if [ -f $KHARMA_DIR/${PROJ_NAME}.cuda ]; then
     EXE_NAME=${PROJ_NAME}.cuda
