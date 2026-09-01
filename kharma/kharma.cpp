@@ -78,6 +78,11 @@ std::shared_ptr<KHARMAPackage> KHARMA::InitializeGlobals(ParameterInput *pin, st
     // Last step's dt (Parthenon SimTime tm.dt), which must be preserved to output jcon
     // Also sets max step increase, so we initialize it to max value to allow any first step size
     params.Add("dt_last", std::numeric_limits<double>::max(), true);
+    // Time the current sub-step's *output* state represents, i.e. what time-dependent
+    // boundaries should be set to.  Written by the driver at the top of each stage, see
+    // KHARMADriver::MakeTaskCollection.  Use this rather than reconstructing it from
+    // "time" and "dt_last". Also, note that dt_last is DBL_MAX before the loop starts.
+    params.Add("time_substep_end", 0.0, true);
     // Whether we are computing initial outputs/timestep, or versions in the execution loop
     params.Add("in_loop", false, true);
 
@@ -419,10 +424,22 @@ Packages_t KHARMA::ProcessPackages(std::unique_ptr<ParameterInput> &pin)
     }
 
     // Optional standalone packages
+    // Entropy tracking (Ktot, & optionally idealized/advected Ktot_adv) is independent of
+    // any package that might use it, but Electrons relies on it to get the fluid's current
+    // & purely-advected entropy, so it's forced on whenever Electrons is.
+    bool entropy_on = pin->GetOrAddBoolean("entropy", "on", false);
+    if (pin->GetOrAddBoolean("electrons", "on", false)) {
+        entropy_on = true;
+        pin->SetBoolean("entropy", "on", true);
+    }
+    auto t_entropy = t_grmhd;
+    if (entropy_on) {
+        t_entropy = tl.AddTask(t_grmhd, KHARMA::AddPackage, packages, Entropy::Initialize, pin.get());
+    }
     // Electrons are boring but not impossible without a B field (TODO add a test?)
     auto t_electrons = t_none;
     if (pin->GetOrAddBoolean("electrons", "on", false)) {
-        t_electrons = tl.AddTask(t_grmhd, KHARMA::AddPackage, packages, Electrons::Initialize, pin.get());
+        t_electrons = tl.AddTask(t_entropy, KHARMA::AddPackage, packages, Electrons::Initialize, pin.get());
     }
     auto t_emhd = t_none;
     if (pin->GetBoolean("emhd", "on")) {
@@ -437,12 +454,6 @@ Packages_t KHARMA::ProcessPackages(std::unique_ptr<ParameterInput> &pin)
         // TODO eventually this and B should not depend on GRMHD
         // B should just depend on having prims.uvec, which this package should provide if GRMHD is not in use
         t_force_free = tl.AddTask(t_grmhd, KHARMA::AddPackage, packages, Force_Free::Initialize, pin.get());
-    }
-    // Enable entropy advection if we're using force-free or electrons that need it
-    // (TODO now use this in inverter/fixup...)
-    auto t_entropy = t_none;
-    if (t_electrons != t_none || t_force_free != t_none) {
-        t_entropy = tl.AddTask(t_grmhd, KHARMA::AddPackage, packages, Entropy::Initialize, pin.get());
     }
 
     // Enable calculating jcon iff it is in any list of outputs (and there's even B to calculate it).

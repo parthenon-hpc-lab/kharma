@@ -77,10 +77,17 @@ class KHARMAPackage : public StateDescriptor {
         // Source term to add to the conserved variables during each step
         std::function<void(MeshData<Real>*, MeshData<Real>*, IndexDomain)> AddSource = nullptr;
 
-        // Source term to apply to primitive variables, needed for some problems in order
-        // to control dissipation (Hubble, turbulence).
-        // Must be applied over entire domain!
-        std::function<void(MeshBlockData<Real>*)> BlockApplyPrimSource = nullptr;
+        // Source term applied directly to the primitive variables, in contrast to
+        // AddSource above which contributes a rate to dU/dt and lets the integrator
+        // multiply through by beta*dt.  Here you write an already-integrated amount
+        // straight into P, after the update, inversion, floors and boundaries.
+        
+        // These are Strang-split around the transport step: the callback is invoked
+        // exactly twice per step, once on the state at t^n before the first stage and
+        // once on the state at t^n+dt after the last. The understanding is that it 
+        // advance its own source ODE across that interval at 2nd order. For a source 
+        // depending on time alone, the midpoint value t_start + dt_split/2 suffices.
+        std::function<void(MeshBlockData<Real>*, Real, Real)> BlockApplyPrimSource = nullptr;
 
         // Apply any fixes after the initial fluxes are calculated
         std::function<void(MeshData<Real>*)> FixFlux = nullptr;
@@ -154,9 +161,18 @@ TaskStatus BoundaryPtoUElseUtoP(MeshBlockData<Real> *rc, IndexDomain domain, boo
 TaskStatus AddSource(MeshData<Real> *md, MeshData<Real> *mdudt, IndexDomain domain);
 
 /**
- * Add any source terms to the primitive variables.  Applied directly rather than adding to a derivative.
+ * Add any source terms to the primitive variables. Strang-split around the transport 
+ * step: "t_start" and "dt_split" describe the half-step interval each call is 
+ * responsible for integrating.
  */
-TaskStatus MeshApplyPrimSource(MeshData<Real> *md);
+TaskStatus MeshApplyPrimSource(MeshData<Real> *md, Real t_start, Real dt_split);
+
+/**
+ * Whether any loaded package registers a BlockApplyPrimSource.  The drivers use this to
+ * skip the Strang-split half-steps entirely (and the extra PtoU they need) when nothing
+ * would be applied, which is the common case.
+ */
+bool AnyPrimSource(Mesh *pmesh);
 
 /**
  * Apply all registered floors, including any package-specific limiters.

@@ -37,6 +37,7 @@
 #include "boundary_types.hpp"
 #include "decs.hpp"
 #include "domain.hpp"
+#include "elec/hubble.hpp"
 #include "flux_functions.hpp"
 #include "grmhd_functions.hpp"
 #include "kharma.hpp"
@@ -402,6 +403,20 @@ std::shared_ptr<KHARMAPackage> KBoundaries::Initialize(
                         break;
                     default:
                         break;
+                }
+            } else if (btype == "hubble") {
+                // Analytic Hubble-flow solution, see InitializeHubble for the parameters
+                // it needs (added there, as this is only ever used with that problem)
+                switch (bface) {
+                    case BoundaryFace::inner_x1:
+                        pkg->KBoundaries[bface] = SetHubble<IndexDomain::inner_x1>;
+                        break;
+                    case BoundaryFace::outer_x1:
+                        pkg->KBoundaries[bface] = SetHubble<IndexDomain::outer_x1>;
+                        break;
+                    default:
+                        throw std::runtime_error(
+                            "Hubble boundary conditions are only defined in X1!");
                 }
             } else {
                 throw std::runtime_error("Unknown boundary type: " + btype);
