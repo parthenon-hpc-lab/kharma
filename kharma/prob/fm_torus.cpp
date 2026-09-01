@@ -70,7 +70,7 @@ TaskStatus InitializeFMTorus(
     Real l = lfish_calc(a, rmax);
 
     pmb->par_for("fm_torus_init", ks, ke, js, je, is, ie,
-        KOKKOS_LAMBDA (const int &k, const int &j, const int &i)
+        KOKKOS_LAMBDA(const int& k, const int& j, const int& i)
         {
             GReal Xnative[GR_DIM], Xembed[GR_DIM], Xmidplane[GR_DIM];
             G.coord(k, j, i, Loci::center, Xnative);
@@ -186,7 +186,7 @@ TaskStatus InitializeFMTorus(
     }
 
     pmb->par_for("fm_torus_normalize", ks, ke, js, je, is, ie,
-        KOKKOS_LAMBDA (const int &k, const int &j, const int &i)
+                 KOKKOS_LAMBDA(const int& k, const int& j, const int& i)
         {
             rho(k, j, i) /= rho_max;
             u(k, j, i) /= rho_max;

@@ -36,6 +36,7 @@
 #include "domain.hpp"
 #include "inverter.hpp"
 #include "kharma.hpp"
+#include <stdexcept>
 
 std::shared_ptr<KHARMAPackage> ISMR::Initialize(
     ParameterInput* pin, std::shared_ptr<Packages_t>& packages)
@@ -47,6 +48,8 @@ std::shared_ptr<KHARMAPackage> ISMR::Initialize(
     // TODO add "poles" specifically if we ever support other areas
     uint nlevels = (uint)pin->GetOrAddInteger("ismr", "nlevels", 1);
     params.Add("nlevels", nlevels);
+    if (nlevels < 1)
+        throw std::runtime_error("Internal SMR requires a positive number of levels!");
 
     // ISMR cache: not evolved, immediately copied to fluid state after averaging
     // Must be total size of variable list
@@ -73,12 +76,6 @@ std::shared_ptr<KHARMAPackage> ISMR::Initialize(
     if (pin->GetInteger("parthenon/meshblock", "nx3") == 1)
         throw std::runtime_error(
             "Internal SMR is not compatible with 2D blocks or meshes!");
-
-    // User probably wanted something to happen and this will invalidate it
-    if (nlevels == 0)
-        std::cerr << "WARNING: internal SMR near the poles is requested, but the number "
-                     "of levels should be >= 1. Not operating internal SMR!"
-                  << std::endl;
 
     // TODO register a split-operator callback?
 
@@ -111,7 +108,7 @@ TaskStatus ISMR::DerefinePoles(MeshData<Real>* md)
             auto bdir = KBoundaries::BoundaryDirection(bface);
             auto domain = KBoundaries::BoundaryDomain(bface);
             auto binner = KBoundaries::BoundaryIsInner(bface);
-            if (bdir == X2DIR && pmb->boundary_flag[bface] == BoundaryFlag::user) {
+            if (bdir == X2DIR && KBoundaries::IsPhysicalBoundary(pmb, bface)) {
                 // indices
                 IndexRange3 bCC = KDomain::GetRange(rc, IndexDomain::interior, CC);
                 // last physical face
@@ -175,7 +172,7 @@ TaskStatus ISMR::DerefinePoles(MeshData<Real>* md)
                         // The usual inverter is not EMHD-aware, so it's going to dump all
                         // of T into the ideal GRMHD fluid variables
                         Inverter::u_to_p<Inverter::Type::kastaun>(G, vars_utop, m_u, gam,
-                            k, j_c, i, P, m_p, Loci::center, 8, 1e-8, false);
+                            k, j_c, i, P, m_p, Loci::center, 25, 1e-12);
                         // Consistent with that, we zero out the EMHD extra variables.
                         // This switches theories to evolving ideal GRMHD in ISMR region,
                         // but conserves the components of T themselves

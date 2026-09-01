@@ -4,7 +4,9 @@
 # Build on Nvidia image.
 # Can pretty easily change this out, with changes to build
 # Someday we'll build & push a KHARMA image, then test that
-image: nvcr.io/nvidia/nvhpc:24.5-devel-cuda12.4-rockylinux9
+# Kokkos 4 has issues w/CUDA 13, and CI has issues updating it
+#image: nvcr.io/nvidia/nvhpc:26.1-devel-cuda13.1-rockylinux9
+image: nvcr.io/nvidia/nvhpc:25.7-devel-cuda12.9-rockylinux9
 
 variables:
   OMP_NUM_THREADS: 8
@@ -13,6 +15,7 @@ variables:
   MPI_NUM_PROCS: 2
   OMPI_ALLOW_RUN_AS_ROOT: 1
   OMPI_ALLOW_RUN_AS_ROOT_CONFIRM: 1
+  GIT_STRATEGY: clone
   GIT_SUBMODULE_STRATEGY: recursive
   MAMBA_ROOT_PREFIX: /mamba
   MAMBA_URL: https://micro.mamba.pm/api/micromamba/linux-64/latest

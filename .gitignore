@@ -25,6 +25,10 @@ log_*.txt
 bondi_analytic_*.txt
 atmosphere_soln_*.txt
 shock_soln_*.txt
+parthinput.*
+
+# Downloaded/bins
+bin/clang-format-19
 
 # Editor documents
 .project

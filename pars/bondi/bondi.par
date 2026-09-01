@@ -47,26 +47,43 @@ reconstruction = weno5
 mdot = 1.0
 # Sonic point
 rs = 8.0
+# Inner radius.  This is set at EH to pass tests
+r_in_bondi = 2.
+# Whether to fill with high density inside r_in or leave it at floors
+fill_interior = true
+# Conical angle to leave clear at poles
+bondi_clear_angle = 0.
+# For reducing infall velocity, fraction of usual
+ur_frac = 1.
+# For angular momentum, proportion of Keplerian
+uphi = 0.
 
 <floors>
 # Disable floors
 disable_floors = true
+
+<inverter>
+# Don't hide problems by being cute about inversion
+# We should never hit inversion failures in this problem
+backstop = false
+fix_average_neighbors = true
 
 <boundaries>
 # We'll be adding material, and that's okay
 check_inflow_outer_x1 = false
 
 <b_field>
-# No field.
+# Disable the whole module
 solver = none
 # Radial monopole, still stationary
+# For vertical field/non-test problems see `bondi_b_vertical.par`
 #solver = face_ct
 #type = monopole_cube
 #B10 = 1
 
 <debug>
-verbose = 0
-flag_verbose = 0
+verbose = 1
+flag_verbose = 2
 extra_checks = 1
 
 <parthenon/output0>
@@ -74,7 +91,6 @@ file_type = hdf5
 write_xdmf = false
 dt = 5.0
 single_precision_output = true
-# Fields not present are silently ignored
 variables = prims, pflag
 
 <parthenon/output1>

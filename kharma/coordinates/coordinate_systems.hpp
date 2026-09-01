@@ -34,7 +34,7 @@
 #pragma once
 
 // See note in coordintate_embedding
-#include <mpark/variant.hpp>
+#include <ports-of-call/variant.hpp>
 // #include <variant>
 // namespace mpark = std;
 
@@ -312,7 +312,7 @@ class SphBLCoords
         const GReal sin2 = sth * sth;
         const GReal a2 = a * a;
         const GReal r2 = r * r;
-        // TODO(BSP) this and gcov_embed for KS should look more similar...
+        // TODO(CEP) this and gcov_embed for KS should look more similar...
         const GReal mmu = 1. + a2 * cth * cth / r2; // mu is taken as an index
 
         gzero2(gcov);
@@ -324,7 +324,7 @@ class SphBLCoords
         gcov[3][3] = sin2 * (r2 + a2 + 2. * a2 * sin2 / (r * mmu));
     }
 
-    // TODO(BSP) vec to/from ks, put guaranteed ks/bl fns into embedding
+    // TODO(CEP) vec to/from ks, put guaranteed ks/bl fns into embedding
 };
 
 /**
@@ -386,8 +386,8 @@ class NullTransform
 {
   public:
     static constexpr char name[] = "NullTransform";
-    const GReal startx[3] = {-1, -1, -1};
-    const GReal stopx[3] = {-1, -1, -1};
+    static constexpr GReal startx[3] = {-1, -1, -1};
+    static constexpr GReal stopx[3] = {-1, -1, -1};
     // Coordinate transformations
     // Any coordinate value protections (th < 0, th > pi, phi > 2pi) should be in the base
     // system
@@ -423,8 +423,8 @@ class SphNullTransform
 {
   public:
     static constexpr char name[] = "SphNullTransform";
-    const GReal startx[3] = {-1, 0., 0.};
-    const GReal stopx[3] = {-1, M_PI, 2 * M_PI};
+    static constexpr GReal startx[3] = {-1, 0., 0.};
+    static constexpr GReal stopx[3] = {-1, M_PI, 2 * M_PI};
     // Coordinate transformations
     // Any coordinate value protections (th < 0, th > pi, phi > 2pi) should be in the base
     // system
@@ -463,8 +463,8 @@ class ExponentialTransform
 {
   public:
     static constexpr char name[] = "ExponentialTransform";
-    const GReal startx[3] = {-1, 0., 0.};
-    const GReal stopx[3] = {-1, M_PI, 2 * M_PI};
+    static constexpr GReal startx[3] = {-1, 0., 0.};
+    static constexpr GReal stopx[3] = {-1, M_PI, 2 * M_PI};
 
     // Coordinate transformations
     KOKKOS_INLINE_FUNCTION void coord_to_embed(
@@ -523,8 +523,8 @@ class SuperExponentialTransform
 {
   public:
     static constexpr char name[] = "SuperExponentialTransform";
-    const GReal startx[3] = {-1, 0., 0.};
-    const GReal stopx[3] = {-1, M_PI, 2 * M_PI};
+    static constexpr GReal startx[3] = {-1, 0., 0.};
+    static constexpr GReal stopx[3] = {-1, M_PI, 2 * M_PI};
 
     const GReal xe1br, xn1br;
     const double npow2, cpow2;
@@ -605,8 +605,8 @@ class ModifyTransform
 {
   public:
     static constexpr char name[] = "ModifyTransform";
-    const GReal startx[3] = {-1, 0., 0.};
-    const GReal stopx[3] = {-1, 1., 2 * M_PI};
+    static constexpr GReal startx[3] = {-1, 0., 0.};
+    static constexpr GReal stopx[3] = {-1, 1., 2 * M_PI};
 
     const GReal hslope;
 
@@ -676,8 +676,8 @@ class FunkyTransform
 {
   public:
     static constexpr char name[] = "FunkyTransform";
-    const GReal startx[3] = {-1, 0., 0.};
-    const GReal stopx[3] = {-1, 1., 2 * M_PI};
+    static constexpr GReal startx[3] = {-1, 0., 0.};
+    static constexpr GReal stopx[3] = {-1, 1., 2 * M_PI};
 
     const GReal startx1;
     const GReal hslope, poly_xt, poly_alpha, mks_smooth;
@@ -777,8 +777,8 @@ class WidepoleTransform
 {
   public:
     static constexpr char name[] = "WidepoleTransform";
-    const GReal startx[3] = {-1, 0., 0.};
-    const GReal stopx[3] = {-1, 1., 2 * M_PI};
+    static constexpr GReal startx[3] = {-1, 0., 0.};
+    static constexpr GReal stopx[3] = {-1, 1., 2 * M_PI};
 
     const GReal lin_frac, n2, n3;
     GReal smoothness;
@@ -876,9 +876,9 @@ class WidepoleTransform
 
 // Bundle coordinates and transforms into umbrella variant types
 // These act as a wannabe "interface" or "parent class" with the exception that access
-// requires "mpark::visit" See coordinate_embedding.hpp
-using SomeBaseCoords = mpark::variant<SphMinkowskiCoords, CartMinkowskiCoords,
+// requires "PortsOfCall::visit" See coordinate_embedding.hpp
+using SomeBaseCoords = PortsOfCall::variant<SphMinkowskiCoords, CartMinkowskiCoords,
     SphBLCoords, SphKSCoords, SphBLExtG, SphKSExtG>;
 using SomeTransform =
-    mpark::variant<NullTransform, SphNullTransform, ExponentialTransform,
+    PortsOfCall::variant<NullTransform, SphNullTransform, ExponentialTransform,
         SuperExponentialTransform, ModifyTransform, FunkyTransform, WidepoleTransform>;

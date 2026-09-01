@@ -63,10 +63,14 @@ enum BSeedType {
     sane,
     mad,
     mad_quadrupole,
+    mcaf,
     r3s3,
+    r3s3_min_rho,
     r5s5,
     gaussian,
     bz_monopole,
+    split_monopole,
+    split_monopole_const,
     vertical,
     r1s2
 };
@@ -98,6 +102,12 @@ KOKKOS_INLINE_FUNCTION Real seed_a<BSeedType::bz_monopole>(SEEDA_ARGS)
     return 1. - m::cos(x[2]);
 }
 
+template<>
+KOKKOS_INLINE_FUNCTION Real seed_a<BSeedType::split_monopole>(SEEDA_ARGS)
+{
+    return 1. - m::abs(m::cos(x[2]));
+}
+
 // BR's smoothed poloidal in-torus, EHT standard MAD
 template<>
 KOKKOS_INLINE_FUNCTION Real seed_a<BSeedType::mad>(SEEDA_ARGS)
@@ -117,11 +127,27 @@ KOKKOS_INLINE_FUNCTION Real seed_a<BSeedType::mad_quadrupole>(SEEDA_ARGS)
            m::cos(x[2]);
 }
 
+// Magnetically "choked" from McKinney+2012 (when paired with 10/100 torus)
+// Just an r^2 sin^2 th term, but cut off subtly differently
+// Also technically should be pegged to u, not rho
+template<>
+KOKKOS_INLINE_FUNCTION Real seed_a<BSeedType::mcaf>(SEEDA_ARGS)
+{
+    return m::max(m::pow(x[1] / rin, 2) * m::pow(m::sin(x[2]), 2) * (rho - min_A), 0.);
+}
+
 // Just the r^3 sin^3 th term
 template<>
 KOKKOS_INLINE_FUNCTION Real seed_a<BSeedType::r3s3>(SEEDA_ARGS)
 {
     return m::max(m::pow(x[1] / rin, 3) * m::pow(m::sin(x[2]), 3) * rho - min_A, 0.);
+}
+
+// Just the r^3 sin^3 th term, but cut on rho > 0.2 rather than A_phi > 0.2
+template<>
+KOKKOS_INLINE_FUNCTION Real seed_a<BSeedType::r3s3_min_rho>(SEEDA_ARGS)
+{
+    return m::max(m::pow(x[1] / rin, 3) * m::pow(m::sin(x[2]), 3) * (rho - min_A), 0.);
 }
 
 // Bump power to r^5 sin^5 th term, quieter MAD
@@ -180,11 +206,25 @@ template<>
 KOKKOS_INLINE_FUNCTION void seed_b<BSeedType::constant>(SEEDB_ARGS)
 {}
 
-// Reduce radial component by the cube of radius
+// Reduce set constant radial component by the cube of radius
 template<>
 KOKKOS_INLINE_FUNCTION void seed_b<BSeedType::monopole>(SEEDB_ARGS)
 {
     B1 /= (x[1] * x[1] * x[1]);
+}
+// template<>
+// KOKKOS_INLINE_FUNCTION void seed_b<BSeedType::split_monopole>(SEEDB_ARGS)
+// {
+//     if (x[2] < phase) {
+//         B1 /= (x[1]*x[1]*x[1]);
+//     } else {
+//         B1 /= -(x[1]*x[1]*x[1]);
+//     }
+// }
+template<>
+KOKKOS_INLINE_FUNCTION void seed_b<BSeedType::split_monopole_const>(SEEDB_ARGS)
+{
+    B1 = (x[2] < phase) ? B1 : -B1;
 }
 
 // For mhdmodes or linear waves tests

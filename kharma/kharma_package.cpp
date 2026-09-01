@@ -218,7 +218,7 @@ TaskStatus Packages::MeshApplyFloors(MeshData<Real>* md, IndexDomain domain)
         }
     }
     // Then everything else i.e. block versions
-    // TODO(BSP) allow Mesh versions and fallback
+    // TODO(CEP) allow Mesh versions and fallback
     for (int i = 0; i < md->NumBlocks(); ++i) {
         auto mbd = md->GetBlockData(i).get();
         auto pmb = mbd->GetBlockPointer();

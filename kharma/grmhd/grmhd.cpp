@@ -92,8 +92,8 @@ std::shared_ptr<KHARMAPackage> Initialize(
     params.Add("dt_min", dt_min);
     // Starting timestep: guaranteed step 1 timestep returned by EstimateTimestep,
     // usually matters most for restarts
-    double dt_start = pin->GetOrAddReal("parthenon/time", "dt", dt_min);
-    params.Add("dt_start", dt_start);
+    // double dt_start = pin->GetOrAddReal("parthenon/time", "dt", dt_min);
+    // params.Add("dt_start", dt_start);
     double max_dt_increase = pin->GetOrAddReal("parthenon/time", "max_dt_increase", 2.0);
     params.Add("max_dt_increase", max_dt_increase);
 
@@ -104,9 +104,6 @@ std::shared_ptr<KHARMAPackage> Initialize(
     params.Add("start_dt_light", start_dt_light);
     bool use_dt_light = pin->GetOrAddBoolean("parthenon/time", "use_dt_light", false);
     params.Add("use_dt_light", use_dt_light);
-    bool use_dt_light_phase_speed =
-        pin->GetOrAddBoolean("parthenon/time", "use_dt_light_phase_speed", false);
-    params.Add("use_dt_light_phase_speed", use_dt_light_phase_speed);
 
     // IMPLICIT PARAMETERS
     // The ImEx driver is necessary to evolve implicitly, but doesn't require it.  Using
@@ -224,7 +221,18 @@ std::shared_ptr<KHARMAPackage> Initialize(
         hst_vars.emplace_back(parthenon::HistoryOutputVar(UserHistoryOperation::sum,
             Reductions::Total<Reductions::Var::mix_T02>, "X2_Mom"));
         hst_vars.emplace_back(parthenon::HistoryOutputVar(UserHistoryOperation::sum,
-            Reductions::Total<Reductions::Var::mix_T03>, "Ang_Mom"));
+            Reductions::Total<Reductions::Var::mix_T03>, "X3_Mom"));
+
+        hst_vars.emplace_back(parthenon::HistoryOutputVar(UserHistoryOperation::sum,
+            Reductions::Total<Reductions::Var::abs_rhou0>, "AbsMass"));
+        hst_vars.emplace_back(parthenon::HistoryOutputVar(UserHistoryOperation::sum,
+            Reductions::Total<Reductions::Var::abs_mix_T00>, "AbsEgas"));
+        hst_vars.emplace_back(parthenon::HistoryOutputVar(UserHistoryOperation::sum,
+            Reductions::Total<Reductions::Var::abs_mix_T01>, "AbsX1_Mom"));
+        hst_vars.emplace_back(parthenon::HistoryOutputVar(UserHistoryOperation::sum,
+            Reductions::Total<Reductions::Var::abs_mix_T02>, "AbsX2_Mom"));
+        hst_vars.emplace_back(parthenon::HistoryOutputVar(UserHistoryOperation::sum,
+            Reductions::Total<Reductions::Var::abs_mix_T03>, "AbsX3_Mom"));
     }
     // TODO these are probably more useful at/within/without certain radii
     if (do_all || KHARMA::FieldIsOutput(pin, "luminosities")) {
@@ -256,7 +264,8 @@ std::shared_ptr<KHARMAPackage> Initialize(
                 Reductions::SumAt5M<Reductions::Var::ldot>, "Ldot_5M"));
         }
 
-        if (do_all || KHARMA::FieldIsOutput(pin, "eh_fluxes_flux")) {
+        // Add versions from the in-code fluxes by default as a check
+        if (true || do_all || KHARMA::FieldIsOutput(pin, "eh_fluxes_flux")) {
             hst_vars.emplace_back(parthenon::HistoryOutputVar(UserHistoryOperation::sum,
                 Reductions::SumAt0<Reductions::Var::mdot_flux>, "Mdot_Flux"));
             hst_vars.emplace_back(parthenon::HistoryOutputVar(UserHistoryOperation::sum,
@@ -277,6 +286,74 @@ std::shared_ptr<KHARMAPackage> Initialize(
                 Reductions::SumAt5M<Reductions::Var::ldot_flux>, "Ldot_5M_Flux"));
         }
     }
+    // Record all fluid conserved quantities in or out of the domain
+    if (KHARMA::FieldIsOutput(pin, "debug_conservation")) {
+        hst_vars.emplace_back(parthenon::HistoryOutputVar(UserHistoryOperation::sum,
+            Reductions::SumInnerX1<Reductions::Var::Uflux1RHO>, "InnerX1RHO"));
+        hst_vars.emplace_back(parthenon::HistoryOutputVar(UserHistoryOperation::sum,
+            Reductions::SumInnerX1<Reductions::Var::Uflux1UU>, "InnerX1UU"));
+        hst_vars.emplace_back(parthenon::HistoryOutputVar(UserHistoryOperation::sum,
+            Reductions::SumInnerX1<Reductions::Var::Uflux1U1>, "InnerX1U1"));
+        hst_vars.emplace_back(parthenon::HistoryOutputVar(UserHistoryOperation::sum,
+            Reductions::SumInnerX1<Reductions::Var::Uflux1U2>, "InnerX1U2"));
+        hst_vars.emplace_back(parthenon::HistoryOutputVar(UserHistoryOperation::sum,
+            Reductions::SumInnerX1<Reductions::Var::Uflux1U3>, "InnerX1U3"));
+
+        hst_vars.emplace_back(parthenon::HistoryOutputVar(UserHistoryOperation::sum,
+            Reductions::SumOuterX1<Reductions::Var::Uflux1RHO>, "OuterX1RHO"));
+        hst_vars.emplace_back(parthenon::HistoryOutputVar(UserHistoryOperation::sum,
+            Reductions::SumOuterX1<Reductions::Var::Uflux1UU>, "OuterX1UU"));
+        hst_vars.emplace_back(parthenon::HistoryOutputVar(UserHistoryOperation::sum,
+            Reductions::SumOuterX1<Reductions::Var::Uflux1U1>, "OuterX1U1"));
+        hst_vars.emplace_back(parthenon::HistoryOutputVar(UserHistoryOperation::sum,
+            Reductions::SumOuterX1<Reductions::Var::Uflux1U2>, "OuterX1U2"));
+        hst_vars.emplace_back(parthenon::HistoryOutputVar(UserHistoryOperation::sum,
+            Reductions::SumOuterX1<Reductions::Var::Uflux1U3>, "OuterX1U3"));
+
+        hst_vars.emplace_back(parthenon::HistoryOutputVar(UserHistoryOperation::sum,
+            Reductions::SumInnerX2<Reductions::Var::Uflux2RHO>, "InnerX2RHO"));
+        hst_vars.emplace_back(parthenon::HistoryOutputVar(UserHistoryOperation::sum,
+            Reductions::SumInnerX2<Reductions::Var::Uflux2UU>, "InnerX2UU"));
+        hst_vars.emplace_back(parthenon::HistoryOutputVar(UserHistoryOperation::sum,
+            Reductions::SumInnerX2<Reductions::Var::Uflux2U1>, "InnerX2U1"));
+        hst_vars.emplace_back(parthenon::HistoryOutputVar(UserHistoryOperation::sum,
+            Reductions::SumInnerX2<Reductions::Var::Uflux2U2>, "InnerX2U2"));
+        hst_vars.emplace_back(parthenon::HistoryOutputVar(UserHistoryOperation::sum,
+            Reductions::SumInnerX2<Reductions::Var::Uflux2U3>, "InnerX2U3"));
+
+        hst_vars.emplace_back(parthenon::HistoryOutputVar(UserHistoryOperation::sum,
+            Reductions::SumOuterX2<Reductions::Var::Uflux2RHO>, "OuterX2RHO"));
+        hst_vars.emplace_back(parthenon::HistoryOutputVar(UserHistoryOperation::sum,
+            Reductions::SumOuterX2<Reductions::Var::Uflux2UU>, "OuterX2UU"));
+        hst_vars.emplace_back(parthenon::HistoryOutputVar(UserHistoryOperation::sum,
+            Reductions::SumOuterX2<Reductions::Var::Uflux2U1>, "OuterX2U1"));
+        hst_vars.emplace_back(parthenon::HistoryOutputVar(UserHistoryOperation::sum,
+            Reductions::SumOuterX2<Reductions::Var::Uflux2U2>, "OuterX2U2"));
+        hst_vars.emplace_back(parthenon::HistoryOutputVar(UserHistoryOperation::sum,
+            Reductions::SumOuterX2<Reductions::Var::Uflux2U3>, "OuterX2U3"));
+
+        hst_vars.emplace_back(parthenon::HistoryOutputVar(UserHistoryOperation::sum,
+            Reductions::SumInnerX3<Reductions::Var::Uflux3RHO>, "InnerX3RHO"));
+        hst_vars.emplace_back(parthenon::HistoryOutputVar(UserHistoryOperation::sum,
+            Reductions::SumInnerX3<Reductions::Var::Uflux3UU>, "InnerX3UU"));
+        hst_vars.emplace_back(parthenon::HistoryOutputVar(UserHistoryOperation::sum,
+            Reductions::SumInnerX3<Reductions::Var::Uflux3U1>, "InnerX3U1"));
+        hst_vars.emplace_back(parthenon::HistoryOutputVar(UserHistoryOperation::sum,
+            Reductions::SumInnerX3<Reductions::Var::Uflux3U2>, "InnerX3U2"));
+        hst_vars.emplace_back(parthenon::HistoryOutputVar(UserHistoryOperation::sum,
+            Reductions::SumInnerX3<Reductions::Var::Uflux3U3>, "InnerX3U3"));
+
+        hst_vars.emplace_back(parthenon::HistoryOutputVar(UserHistoryOperation::sum,
+            Reductions::SumOuterX3<Reductions::Var::Uflux3RHO>, "OuterX3RHO"));
+        hst_vars.emplace_back(parthenon::HistoryOutputVar(UserHistoryOperation::sum,
+            Reductions::SumOuterX3<Reductions::Var::Uflux3UU>, "OuterX3UU"));
+        hst_vars.emplace_back(parthenon::HistoryOutputVar(UserHistoryOperation::sum,
+            Reductions::SumOuterX3<Reductions::Var::Uflux3U1>, "OuterX3U1"));
+        hst_vars.emplace_back(parthenon::HistoryOutputVar(UserHistoryOperation::sum,
+            Reductions::SumOuterX3<Reductions::Var::Uflux3U2>, "OuterX3U2"));
+        hst_vars.emplace_back(parthenon::HistoryOutputVar(UserHistoryOperation::sum,
+            Reductions::SumOuterX3<Reductions::Var::Uflux3U3>, "OuterX3U3"));
+    }
     // add callbacks for HST output to the Params struct, identified by the
     // `hist_param_key`
     pkg->AddParam<>(parthenon::hist_param_key, hst_vars);
@@ -292,42 +369,35 @@ Real EstimateTimestep(MeshData<Real>* md)
     Flag("EstimateTimestep");
     auto pmesh = md->GetMeshPointer();
     auto& globals = pmesh->packages.Get("Globals")->AllParams();
+    const int& verbose = globals.Get<int>("verbose");
     const auto& grmhd_pars = pmesh->packages.Get("GRMHD")->AllParams();
 
-    // If we have to recompute ctop anywhere, we do it now
-    // TODO only call if one of the reconnect_ or excised polar is enabled
-    UpdateAveragedCtop(md);
-
     // Other things we might have to return (light-crossing, pre-set timestep, etc.)
-    // TODO move these options to SetGlobalTimestep
+    // TODO option for user constant dt?
+    // On first step...
     if (!globals.Get<bool>("in_loop")) {
         if (grmhd_pars.Get<bool>("start_dt_light") ||
             grmhd_pars.Get<bool>("use_dt_light")) {
-            // Estimate based on light crossing time
-            double dt = EstimateRadiativeTimestep(md);
-            // This records a per-rank minimum,
-            // but Parthenon finds the global minimum anyway
-            if (globals.hasKey("dt_light")) {
-                if (dt < globals.Get<double>("dt_light"))
-                    globals.Update<double>("dt_light", dt);
-            } else {
-                globals.Add<double>("dt_light", dt);
-            }
-            EndFlag();
-            return dt;
+            // ...update signal speeds to be the light crossing, and calculate
+            UpdateCtopLight(md);
         } else {
-            // Or Just take from parameters
-            double dt = grmhd_pars.Get<double>("dt_start");
-            // Record this, since we'll use it to determine the max step increase
+            // ...or just take from parameters & return
+            double dt = grmhd_pars.Get<double>("dt_min");
+            // Record this, since we'll use it to calculate max increase for the next step
             globals.Update<double>("dt_last", dt);
             EndFlag();
             return dt;
         }
-    }
-    // If we're still using the light crossing time, skip the rest
-    if (grmhd_pars.Get<bool>("use_dt_light")) {
-        EndFlag();
-        return globals.Get<double>("dt_light");
+    } else {
+        // If we've cached the light crossing time, skip the rest
+        if (grmhd_pars.Get<bool>("use_dt_light")) {
+            EndFlag();
+            return globals.Get<double>("dt_light");
+        } else {
+            // If we have to recompute ctop anywhere, we do it now
+            // TODO only call if one of the reconnect_ or excised polar is enabled
+            UpdateAveragedCtop(md);
+        }
     }
 
     // Actually compute the timestep if we have to
@@ -348,10 +418,10 @@ Real EstimateTimestep(MeshData<Real>* md)
         auto rc = pmb->meshblock_data.Get(md->StageName()).get();
         // We only need this block-wise to check boundary flags for ISMR, could
         // special-case that
-        const bool polar_inner_x2 =
-            pmb->boundary_flag[BoundaryFace::inner_x2] == BoundaryFlag::user;
-        const bool polar_outer_x2 =
-            pmb->boundary_flag[BoundaryFace::outer_x2] == BoundaryFlag::user;
+        const bool is_inner_x2 =
+            KBoundaries::IsPhysicalBoundary(pmb, BoundaryFace::inner_x2);
+        const bool is_outer_x2 =
+            KBoundaries::IsPhysicalBoundary(pmb, BoundaryFace::outer_x2);
 
         const auto& cmax = rc->PackVariables(std::vector<std::string>{"Flux.cmax"});
         const auto& cmin = rc->PackVariables(std::vector<std::string>{"Flux.cmin"});
@@ -369,28 +439,28 @@ Real EstimateTimestep(MeshData<Real>* md)
                 int ismr_factor = 1;
                 double excise_factor = 1.0;
                 double courant_limit = 1.0;
-                if (ismr_poles && polar_inner_x2 && j < (b.js + ismr_nlevels)) {
+                if (ismr_poles && is_inner_x2 && j < (b.js + ismr_nlevels)) {
                     ismr_factor = m::pow(2, ismr_nlevels - (j - b.js));
                     courant_limit = 0.5;
                 }
-                if (ismr_poles && polar_outer_x2 && j > (b.je - ismr_nlevels)) {
+                if (ismr_poles && is_outer_x2 && j > (b.je - ismr_nlevels)) {
                     ismr_factor = m::pow(2, ismr_nlevels - (b.je - j));
                     courant_limit = 0.5;
                 }
 
-                if (excise_inner_x2 && polar_inner_x2 && j == b.js) {
+                if (excise_inner_x2 && is_inner_x2 && j == b.js) {
                     excise_factor = 0.5;
-                } else if (excise_outer_x2 && polar_outer_x2 && j == b.je) {
+                } else if (excise_outer_x2 && is_outer_x2 && j == b.je) {
                     excise_factor = 0.5;
                 }
 
                 double ndt_zone =
                     courant_limit /
-                    (1 / (G.Dxc<1>(i) / m::max(cmax(V1, k, j, i), cmin(V1, k, j, i))) +
-                        1 / (G.Dxc<2>(j) * excise_factor /
-                                m::max(cmax(V2, k, j, i), cmin(V2, k, j, i))) +
-                        1 / (G.Dxc<3>(k) * ismr_factor /
-                                m::max(cmax(V3, k, j, i), cmin(V3, k, j, i))));
+                    ((m::max(cmax(V1, k, j, i), cmin(V1, k, j, i)) / G.Dxc<1>(i)) +
+                        (m::max(cmax(V2, k, j, i), cmin(V2, k, j, i)) /
+                            (G.Dxc<2>(j) * excise_factor)) +
+                        (m::max(cmax(V3, k, j, i), cmin(V3, k, j, i)) /
+                            (G.Dxc<3>(k) * ismr_factor)));
 
                 if (!m::isnan(ndt_zone) && (ndt_zone < local_result)) {
                     local_result = ndt_zone;
@@ -407,88 +477,74 @@ Real EstimateTimestep(MeshData<Real>* md)
     const double dt_min = grmhd_pars.Get<double>("dt_min");
     const double dt_last = globals.Get<double>("dt_last");
     const double dt_max = grmhd_pars.Get<double>("max_dt_increase") * dt_last;
+    if (verbose > 1) {
+        std::cerr << "Updating dt on block. min allowed: " << dt_min
+                  << " max allowed: " << dt_max
+                  << "\nCalculated timestep before clipping (w/CFL factor): "
+                  << min_ndt * cfl << std::endl;
+    }
     const double ndt = clip(min_ndt * cfl, dt_min, dt_max);
+
+    // If we're using radiative speed, cache it now
+    // This records a per-rank minimum,
+    // but Parthenon finds the global minimum anyway
+    if (grmhd_pars.Get<bool>("use_dt_light")) {
+        if (!globals.hasKey("dt_light")) {
+            globals.Add<double>("dt_light", ndt);
+            if (ndt < globals.Get<double>("dt_light"))
+                globals.Update<double>("dt_light", ndt);
+        } else if (ndt < globals.Get<double>("dt_light")) {
+            globals.Update<double>("dt_light", ndt);
+        }
+    }
 
     EndFlag();
     return ndt;
 }
 
-Real EstimateRadiativeTimestep(MeshData<Real>* md)
+TaskStatus UpdateCtopLight(MeshData<Real>* md)
 {
-    Flag("EstimateRadiativeTimestep");
+    Flag("UpdateCtopLight");
     auto pmb0 = md->GetBlockData(0)->GetBlockPointer();
 
-    const auto& grmhd_pars = pmb0->packages.Get("GRMHD")->AllParams();
-    const bool phase_speed = grmhd_pars.Get<bool>("use_dt_light_phase_speed");
-
-    // Doesn't actually matter what we pack here, we're just pulling G
-    const auto& dummy = md->PackVariables(std::vector<std::string>{});
+    const auto& cmax = md->PackVariables(std::vector<std::string>{"Flux.cmax"});
+    const auto& cmin = md->PackVariables(std::vector<std::string>{"Flux.cmin"});
 
     const IndexRange3 b = KDomain::GetRange(md, IndexDomain::interior);
-    const IndexRange block = IndexRange{0, dummy.GetDim(5) - 1};
+    const IndexRange block = IndexRange{0, cmin.GetDim(5) - 1};
 
-    // Leaving minmax in case the max phase speed is useful
-    typename Kokkos::MinMax<Real>::value_type minmax;
-    pmb0->par_reduce(
-        "ndt_min", block.s, block.e, b.ks, b.ke, b.js, b.je, b.is, b.ie,
-        KOKKOS_LAMBDA(const int& b, const int& k, const int& j, const int& i,
-            typename Kokkos::MinMax<Real>::value_type& lminmax)
+    pmb0->par_for("ctop_light", block.s, block.e, b.ks, b.ke, b.js, b.je, b.is, b.ie,
+        KOKKOS_LAMBDA(const int& bl, const int& k, const int& j, const int& i)
         {
-            const auto& G = dummy.GetCoords(b);
+            const auto& G = cmax.GetCoords(bl);
 
-            double light_phase_speed = SMALL_NUM;
-            double dt_light_local = 0.;
+            for (int mu = 1; mu < GR_DIM; mu++) {
+                if (SQR(G.gcon(Loci::center, j, i, 0, mu)) -
+                        G.gcon(Loci::center, j, i, mu, mu) *
+                            G.gcon(Loci::center, j, i, 0, 0) >=
+                    0.) {
+                    cmax(bl, mu - 1, k, j, i) =
+                        m::abs((-G.gcon(Loci::center, j, i, 0, mu) +
+                                   m::sqrt(SQR(G.gcon(Loci::center, j, i, 0, mu)) -
+                                           G.gcon(Loci::center, j, i, mu, mu) *
+                                               G.gcon(Loci::center, j, i, 0, 0))) /
+                               G.gcon(Loci::center, j, i, 0, 0));
 
-            if (phase_speed) {
-                double local_phase_speed[GR_DIM];
-                for (int mu = 1; mu < GR_DIM; mu++) {
-                    if (SQR(G.gcon(Loci::center, j, i, 0, mu)) -
-                            G.gcon(Loci::center, j, i, mu, mu) *
-                                G.gcon(Loci::center, j, i, 0, 0) >=
-                        0.) {
-
-                        double cplus =
-                            m::abs((-G.gcon(Loci::center, j, i, 0, mu) +
-                                       m::sqrt(SQR(G.gcon(Loci::center, j, i, 0, mu)) -
-                                               G.gcon(Loci::center, j, i, mu, mu) *
-                                                   G.gcon(Loci::center, j, i, 0, 0))) /
-                                   G.gcon(Loci::center, j, i, 0, 0));
-
-                        double cminus =
-                            m::abs((-G.gcon(Loci::center, j, i, 0, mu) -
-                                       m::sqrt(SQR(G.gcon(Loci::center, j, i, 0, mu)) -
-                                               G.gcon(Loci::center, j, i, mu, mu) *
-                                                   G.gcon(Loci::center, j, i, 0, 0))) /
-                                   G.gcon(Loci::center, j, i, 0, 0));
-
-                        local_phase_speed[mu] = m::max(cplus, cminus);
-                    } else {
-                        local_phase_speed[mu] = SMALL_NUM;
-                    }
+                    cmin(bl, mu - 1, k, j, i) =
+                        m::abs((-G.gcon(Loci::center, j, i, 0, mu) -
+                                   m::sqrt(SQR(G.gcon(Loci::center, j, i, 0, mu)) -
+                                           G.gcon(Loci::center, j, i, mu, mu) *
+                                               G.gcon(Loci::center, j, i, 0, 0))) /
+                               G.gcon(Loci::center, j, i, 0, 0));
+                } else {
+                    cmax(bl, mu - 1, k, j, i) = SMALL_NUM;
+                    cmin(bl, mu - 1, k, j, i) = SMALL_NUM;
                 }
-                dt_light_local = 1. / (G.Dxc<1>(0) / local_phase_speed[1]) +
-                                 1. / (G.Dxc<2>(0) / local_phase_speed[2]) +
-                                 1. / (G.Dxc<3>(0) / local_phase_speed[3]);
-                light_phase_speed = m::max(local_phase_speed[1],
-                    m::max(local_phase_speed[2], local_phase_speed[3]));
-            } else {
-                dt_light_local = 1. / G.Dxc<1>(0) + 1. / G.Dxc<2>(0) + 1. / G.Dxc<3>(0);
             }
-            dt_light_local = 1 / dt_light_local;
-
-            if (!m::isnan(dt_light_local) && (dt_light_local < lminmax.min_val))
-                lminmax.min_val = dt_light_local;
-            if (!m::isnan(light_phase_speed) && (light_phase_speed > lminmax.max_val))
-                lminmax.max_val = light_phase_speed;
-        },
-        Kokkos::MinMax<Real>(minmax));
-
-    // Just spit out dt
-    const double cfl = grmhd_pars.Get<double>("cfl");
-    const double ndt = minmax.min_val * cfl;
+        });
 
     EndFlag();
-    return ndt;
+    return TaskStatus::complete;
 }
 
 AmrTag CheckRefinement(MeshBlockData<Real>* rc)
@@ -609,8 +665,8 @@ void CancelBoundaryU3(MeshBlockData<Real>* rc, IndexDomain domain, bool coarse)
                 parthenon::par_for_inner(member, bi.ks, bi.ke,
                     [&](const int& k)
                     {
-                        Inverter::u_to_p<Inverter::Type::kastaun>(G, U, m_u, gam, k, jf,
-                            i, P, m_p, Loci::center, 25, 1e-12, false);
+                        Inverter::u_to_p<Inverter::Type::kastaun>(
+                            G, U, m_u, gam, k, jf, i, P, m_p, Loci::center, 25, 1e-12);
                     });
             }
             member.team_barrier();
@@ -622,7 +678,8 @@ void CancelBoundaryU3(MeshBlockData<Real>* rc, IndexDomain domain, bool coarse)
                 inner_loop_pattern_ttr_tag, member, bi.ks, bi.ke,
                 [&](const int& k, Real& local_result)
                 {
-                    local_result += isnan(P(m_p.U3, k, jf, i)) ? 0. : P(m_p.U3, k, jf, i);
+                    local_result +=
+                        m::isnan(P(m_p.U3, k, jf, i)) ? 0. : P(m_p.U3, k, jf, i);
                 },
                 sum_reducer);
             member.team_barrier();
@@ -704,7 +761,8 @@ void CancelBoundaryT3(MeshBlockData<Real>* rc, IndexDomain domain, bool coarse)
                 inner_loop_pattern_ttr_tag, member, bi.ks, bi.ke,
                 [&](const int& k, Real& local_result)
                 {
-                    local_result += isnan(U(m_u.U3, k, jf, i)) ? 0. : U(m_u.U3, k, jf, i);
+                    local_result +=
+                        m::isnan(U(m_u.U3, k, jf, i)) ? 0. : U(m_u.U3, k, jf, i);
                 },
                 sum_reducer);
             member.team_barrier();
@@ -717,7 +775,7 @@ void CancelBoundaryT3(MeshBlockData<Real>* rc, IndexDomain domain, bool coarse)
                     U(m_u.U3, k, jf, i) -= T3_avg;
                     // Recover primitive GRMHD variables from our modified U
                     Inverter::u_to_p<Inverter::Type::kastaun>(
-                        G, U, m_u, gam, k, jf, i, P, m_p, Loci::center, 25, 1e-12, false);
+                        G, U, m_u, gam, k, jf, i, P, m_p, Loci::center, 25, 1e-12);
                     // Floor them
                     int fflag = Floors::apply_geo_floors(
                         G, P, m_p, gam, k, jf, i, floors, floors, Loci::center);
@@ -753,7 +811,7 @@ void UpdateAveragedCtop(MeshData<Real>* md)
                 params.Get<bool>("cancel_U3_" + bname) || b3_is_reconnected ||
                 params.Get<bool>("excise_flux_" + bname)) {
                 // ...and if this face of the block corresponds to a global boundary...
-                if (pmb->boundary_flag[bface] == BoundaryFlag::user) {
+                if (KBoundaries::IsPhysicalBoundary(pmb, bface)) {
                     PackIndexMap prims_map, cons_map;
                     auto P = rc->PackVariables(
                         {Metadata::GetUserFlag("Primitive"), Metadata::Cell}, prims_map);

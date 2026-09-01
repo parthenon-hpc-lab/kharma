@@ -215,7 +215,11 @@ TaskStatus MeshUtoP(MeshData<Real>* md, IndexDomain domain, bool coarse)
 
     pmb0->par_for("UtoP_B_FluxCT_Mesh", block.s, block.e, vec.s, vec.e, kb.s, kb.e, jb.s,
         jb.e, ib.s, ib.e,
-        KOKKOS_LAMBDA (const int& b, const int &mu, const int &k, const int &j, const int &i)
+        KOKKOS_LAMBDA(const int& b,
+                      const int& mu,
+                      const int& k,
+                      const int& j,
+                      const int& i)
         {
             const auto& G = B_U.GetCoords(b);
             // Update the primitive B-fields
@@ -239,7 +243,7 @@ TaskStatus BlockUtoP(MeshBlockData<Real>* rc, IndexDomain domain, bool coarse)
     const IndexRange vec = IndexRange({0, B_U.GetDim(4) - 1});
 
     pmb->par_for("UtoP_B_FluxCT_Block", vec.s, vec.e, kb.s, kb.e, jb.s, jb.e, ib.s, ib.e,
-        KOKKOS_LAMBDA (const int &mu, const int &k, const int &j, const int &i)
+                 KOKKOS_LAMBDA(const int& mu, const int& k, const int& j, const int& i)
         {
             // Update the primitive B-fields
             B_P(mu, k, j, i) = B_U(mu, k, j, i) / G.gdet(Loci::center, j, i);
@@ -263,7 +267,11 @@ void MeshPtoU(MeshData<Real>* md, IndexDomain domain, bool coarse)
 
     pmb0->par_for("PtoU_B_FluxCT_Mesh", block.s, block.e, vec.s, vec.e, kb.s, kb.e, jb.s,
         jb.e, ib.s, ib.e,
-        KOKKOS_LAMBDA (const int& b, const int &mu, const int &k, const int &j, const int &i)
+        KOKKOS_LAMBDA(const int& b,
+                      const int& mu,
+                      const int& k,
+                      const int& j,
+                      const int& i)
         {
             const auto& G = B_U.GetCoords(b);
             // Update the primitive B-fields
@@ -286,7 +294,7 @@ void BlockPtoU(MeshBlockData<Real>* rc, IndexDomain domain, bool coarse)
     const IndexRange vec = IndexRange({0, B_U.GetDim(4) - 1});
 
     pmb->par_for("PtoU_B_FluxCT_Block", vec.s, vec.e, kb.s, kb.e, jb.s, jb.e, ib.s, ib.e,
-        KOKKOS_LAMBDA (const int &mu, const int &k, const int &j, const int &i)
+                 KOKKOS_LAMBDA(const int& mu, const int& k, const int& j, const int& i)
         {
             // Update the conserved B-fields
             B_U(mu, k, j, i) = B_P(mu, k, j, i) * G.gdet(Loci::center, j, i);
@@ -361,7 +369,7 @@ void FluxCT(MeshData<Real>* md)
 
     // Calculate emf around each face
     pmb0->par_for("flux_ct_emf", block.s, block.e, kl.s, kl.e, jl.s, jl.e, il.s, il.e,
-        KOKKOS_LAMBDA (const int& b, const int &k, const int &j, const int &i)
+        KOKKOS_LAMBDA(const int& b, const int& k, const int& j, const int& i)
         {
             if (ndim > 2) {
                 emf_pack(b, V1, k, j, i) =
@@ -386,7 +394,7 @@ void FluxCT(MeshData<Real>* md)
     // Note these each have different domains, eg il vs ib.  The former extends one index
     // farther if appropriate
     pmb0->par_for("flux_ct_1", block.s, block.e, kb.s, kb.e, jb.s, jb.e, il.s, il.e,
-        KOKKOS_LAMBDA (const int& b, const int &k, const int &j, const int &i)
+                  KOKKOS_LAMBDA(const int& b, const int& k, const int& j, const int& i)
         {
             B_F(b).flux(X1DIR, V1, k, j, i) = 0.0;
             B_F(b).flux(X1DIR, V2, k, j, i) =
@@ -396,7 +404,7 @@ void FluxCT(MeshData<Real>* md)
                     -0.5 * (emf_pack(b, V2, k, j, i) + emf_pack(b, V2, k + 1, j, i));
         });
     pmb0->par_for("flux_ct_2", block.s, block.e, kb.s, kb.e, jl.s, jl.e, ib.s, ib.e,
-        KOKKOS_LAMBDA (const int& b, const int &k, const int &j, const int &i)
+        KOKKOS_LAMBDA(const int& b, const int& k, const int& j, const int& i)
         {
             B_F(b).flux(X2DIR, V1, k, j, i) =
                 -0.5 * (emf_pack(b, V3, k, j, i) + emf_pack(b, V3, k, j, i + 1));
@@ -407,7 +415,7 @@ void FluxCT(MeshData<Real>* md)
         });
     if (ndim > 2) {
         pmb0->par_for("flux_ct_3", block.s, block.e, kl.s, kl.e, jb.s, jb.e, ib.s, ib.e,
-            KOKKOS_LAMBDA (const int& b, const int &k, const int &j, const int &i)
+            KOKKOS_LAMBDA(const int& b, const int& k, const int& j, const int& i)
             {
                 B_F(b).flux(X3DIR, V1, k, j, i) =
                     0.5 * (emf_pack(b, V2, k, j, i) + emf_pack(b, V2, k, j, i + 1));
@@ -463,9 +471,9 @@ void ZeroBoundaryFlux(MeshData<Real>* md, IndexDomain domain, bool coarse)
         auto& B_F = rc->PackVariablesAndFluxes(std::vector<std::string>{"cons.B"});
 
         if (domain == IndexDomain::inner_x2 &&
-            pmb->boundary_flag[BoundaryFace::inner_x2] == BoundaryFlag::user) {
+            KBoundaries::IsPhysicalBoundary(pmb, BoundaryFace::inner_x2)) {
             pmb->par_for("fix_flux_b_l", kbs.s, kbs.e, jbf.s, jbf.s, ibs.s, ibs.e,
-                KOKKOS_LAMBDA (const int &k, const int &j, const int &i)
+                         KOKKOS_LAMBDA(const int& k, const int& j, const int& i)
                 {
                     B_F.flux(X2DIR, V1, k, j, i) = 0.;
                     B_F.flux(X2DIR, V3, k, j, i) = 0.;
@@ -476,9 +484,9 @@ void ZeroBoundaryFlux(MeshData<Real>* md, IndexDomain domain, bool coarse)
         }
 
         if (domain == IndexDomain::outer_x2 &&
-            pmb->boundary_flag[BoundaryFace::outer_x2] == BoundaryFlag::user) {
+            KBoundaries::IsPhysicalBoundary(pmb, BoundaryFace::outer_x2)) {
             pmb->par_for("fix_flux_b_r", kbs.s, kbs.e, jbf.e, jbf.e, ibs.s, ibs.e,
-                KOKKOS_LAMBDA (const int &k, const int &j, const int &i)
+                         KOKKOS_LAMBDA(const int& k, const int& j, const int& i)
                 {
                     B_F.flux(X2DIR, V1, k, j, i) = 0.;
                     B_F.flux(X2DIR, V3, k, j, i) = 0.;
@@ -497,9 +505,9 @@ void ZeroBoundaryFlux(MeshData<Real>* md, IndexDomain domain, bool coarse)
         // the outflow
         //    conditions will set them equal to the last zone.
         if (domain == IndexDomain::inner_x1 &&
-            pmb->boundary_flag[BoundaryFace::inner_x1] == BoundaryFlag::user) {
+            KBoundaries::IsPhysicalBoundary(pmb, BoundaryFace::inner_x1)) {
             pmb->par_for("fix_flux_b_in_old", kbs.s, kbs.e, jbs.s, jbs.e, ibf.s, ibf.s,
-                KOKKOS_LAMBDA (const int &k, const int &j, const int &i)
+                         KOKKOS_LAMBDA(const int& k, const int& j, const int& i)
                 {
                     B_F.flux(X1DIR, V2, k, j, i) = 0.;
                     B_F.flux(X1DIR, V3, k, j, i) = 0.;
@@ -510,9 +518,9 @@ void ZeroBoundaryFlux(MeshData<Real>* md, IndexDomain domain, bool coarse)
         }
 
         if (domain == IndexDomain::outer_x1 &&
-            pmb->boundary_flag[BoundaryFace::outer_x1] == BoundaryFlag::user) {
+            KBoundaries::IsPhysicalBoundary(pmb, BoundaryFace::outer_x1)) {
             pmb->par_for("fix_flux_b_out_old", kbs.s, kbs.e, jbs.s, jbs.e, ibf.e, ibf.e,
-                KOKKOS_LAMBDA (const int &k, const int &j, const int &i)
+                         KOKKOS_LAMBDA(const int& k, const int& j, const int& i)
                 {
                     B_F.flux(X1DIR, V2, k, j, i) = 0.;
                     B_F.flux(X1DIR, V3, k, j, i) = 0.;
@@ -558,13 +566,13 @@ void Bflux0(MeshData<Real>* md, IndexDomain domain, bool coarse)
         // across X1 boundary but still keeps divB=0 (turns out effectively to have 0
         // flux) Usable only for Dirichlet conditions
         if (domain == IndexDomain::inner_x1 &&
-            pmb->boundary_flag[BoundaryFace::inner_x1] == BoundaryFlag::user) {
+            KBoundaries::IsPhysicalBoundary(pmb, BoundaryFace::inner_x1)) {
             pmb->par_for("fix_flux_b_in", kbs.s, kbs.e, jbs.s, jbs.e, ibf.s,
                 ibf.s, // Hyerin (12/28/22) for 1st & 2nd prescription
-                KOKKOS_LAMBDA (const int &k, const int &j, const int &i)
+                         KOKKOS_LAMBDA(const int& k, const int& j, const int& i)
                 {
-                    // Allows nonzero flux across X1 boundary but still keeps divB=0
-                    // (turns out effectively to have 0 flux)
+                    // Allows nonzero flux across X1 boundary but still keeps
+                    // divB=0 (turns out effectively to have 0 flux)
                     if (ndim > 1)
                         B_F.flux(X2DIR, V1, k, j, i - 1) =
                             -B_F.flux(X2DIR, V1, k, j, i) + B_F.flux(X1DIR, V2, k, j, i) +
@@ -576,9 +584,9 @@ void Bflux0(MeshData<Real>* md, IndexDomain domain, bool coarse)
                 });
         }
         if (domain == IndexDomain::inner_x2 &&
-            pmb->boundary_flag[BoundaryFace::inner_x2] == BoundaryFlag::user) {
+            KBoundaries::IsPhysicalBoundary(pmb, BoundaryFace::inner_x2)) {
             pmb->par_for("fix_flux_b_in", kbs.s, kbs.e, jbf.s, jbf.s, ibs.s, ibs.e,
-                KOKKOS_LAMBDA (const int &k, const int &j, const int &i)
+                         KOKKOS_LAMBDA(const int& k, const int& j, const int& i)
                 {
                     if (ndim > 2)
                         B_F.flux(X3DIR, V2, k, j - 1, i) =
@@ -593,13 +601,13 @@ void Bflux0(MeshData<Real>* md, IndexDomain domain, bool coarse)
 
         // OUTER
         if (domain == IndexDomain::outer_x1 &&
-            pmb->boundary_flag[BoundaryFace::outer_x1] == BoundaryFlag::user) {
+            KBoundaries::IsPhysicalBoundary(pmb, BoundaryFace::outer_x1)) {
             pmb->par_for("fix_flux_b_out", kbs.s, kbs.e, jbs.s, jbs.e, ibf.e,
                 ibf.e, // Hyerin (12/28/22) for 1st & 2nd prescription
-                KOKKOS_LAMBDA (const int &k, const int &j, const int &i)
+                         KOKKOS_LAMBDA(const int& k, const int& j, const int& i)
                 {
-                    // (02/06/23) 2nd prescription that allows nonzero flux across X1
-                    // boundary but still keeps divB=0
+                    // (02/06/23) 2nd prescription that allows nonzero flux
+                    // across X1 boundary but still keeps divB=0
                     if (ndim > 1)
                         B_F.flux(X2DIR, V1, k, j, i) = -B_F.flux(X2DIR, V1, k, j, i - 1) +
                                                        B_F.flux(X1DIR, V2, k, j, i) +
@@ -611,9 +619,9 @@ void Bflux0(MeshData<Real>* md, IndexDomain domain, bool coarse)
                 });
         }
         if (domain == IndexDomain::outer_x2 &&
-            pmb->boundary_flag[BoundaryFace::outer_x2] == BoundaryFlag::user) {
+            KBoundaries::IsPhysicalBoundary(pmb, BoundaryFace::outer_x2)) {
             pmb->par_for("fix_flux_b_out", kbs.s, kbs.e, jbf.e, jbf.e, ibs.s, ibs.e,
-                KOKKOS_LAMBDA (const int &k, const int &j, const int &i)
+                         KOKKOS_LAMBDA(const int& k, const int& j, const int& i)
                 {
                     if (ndim > 2)
                         B_F.flux(X3DIR, V2, k, j, i) = -B_F.flux(X3DIR, V2, k, j - 1, i) +
@@ -637,10 +645,10 @@ IndexRange ValidDivBX1(MeshBlock* pmb)
         pmb->meshblock_data.Get("base")->GetBoundsI(IndexDomain::interior);
     bool avoid_inner =
         (!pmb->packages.Get("B_FluxCT")->Param<bool>("fix_flux_inner_x1") &&
-            pmb->boundary_flag[BoundaryFace::inner_x1] == BoundaryFlag::user);
+            KBoundaries::IsPhysicalBoundary(pmb, BoundaryFace::inner_x1));
     bool avoid_outer =
         (!pmb->packages.Get("B_FluxCT")->Param<bool>("fix_flux_outer_x1") &&
-            pmb->boundary_flag[BoundaryFace::outer_x1] == BoundaryFlag::user);
+            KBoundaries::IsPhysicalBoundary(pmb, BoundaryFace::outer_x1));
     return IndexRange{ibl.s + (avoid_inner), ibl.e + (!avoid_outer)};
 }
 
@@ -753,7 +761,7 @@ void CalcDivB(MeshData<Real>* md, std::string divb_field_name)
         const IndexRange ib = ValidDivBX1(pmb);
 
         pmb->par_for("calc_divB", kb.s, kb.e, jb.s, jb.e, ib.s, ib.e,
-            KOKKOS_LAMBDA (const int &k, const int &j, const int &i)
+                     KOKKOS_LAMBDA(const int& k, const int& j, const int& i)
             {
                 const auto& G = B_U.GetCoords(b);
                 divB(b, 0, k, j, i) = corner_div(G, B_U(b), k, j, i, ndim > 2);
@@ -779,7 +787,7 @@ void FillOutput(MeshBlock* pmb, ParameterInput* pin)
     const IndexRange ib = ValidDivBX1(pmb);
 
     pmb->par_for("divB_output", kb.s, kb.e, jb.s, jb.e, ib.s, ib.e,
-        KOKKOS_LAMBDA (const int &k, const int &j, const int &i)
+                 KOKKOS_LAMBDA(const int& k, const int& j, const int& i)
         {
             const auto& G = B_U.GetCoords();
             divB(0, k, j, i) = corner_div(G, B_U, k, j, i, ndim > 2);

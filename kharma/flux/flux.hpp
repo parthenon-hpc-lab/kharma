@@ -68,7 +68,7 @@ TaskStatus FOFC(MeshData<Real>* md, MeshData<Real>* guess);
  */
 void AddGeoSource(MeshData<Real>* md, MeshData<Real>* mdudt, IndexDomain domain);
 // Version returning TaskStatus, for calling alone in FOFC "update"
-// TODO(BSP) switch KHARMAPackage (and Parthenon packages?) to expect all TaskStatus
+// TODO(CEP) switch KHARMAPackage (and Parthenon packages?) to expect all TaskStatus
 inline TaskStatus AddGeoSourceTask(
     MeshData<Real>* md, MeshData<Real>* mdudt, IndexDomain domain)
 {

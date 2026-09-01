@@ -237,7 +237,8 @@ TaskStatus B_CleanupGMG::CleanupDivergence(std::shared_ptr<MeshData<Real>>& md)
         const IndexRange kb = md->GetBoundsK(IndexDomain::entire);
         pmb0->par_for("normalize_divB", 0, divb_rhs.GetDim(5) - 1, kb.s, kb.e, jb.s, jb.e,
             ib.s, ib.e,
-            KOKKOS_LAMBDA (const int& b, const int &k, const int &j, const int &i)
+                      KOKKOS_LAMBDA(const int& b, const int& k, const int& j,
+                                    const int& i)
             {
                 const auto& G = divb_rhs.GetCoords(b);
                 divb_rhs(b, CC, 0, k, j, i) /= G.gdet(Loci::center, j, i);
@@ -301,7 +302,7 @@ TaskStatus B_CleanupGMG::ApplyPFace(MeshData<Real>* msolve, MeshData<Real>* md)
     // Apply on all physical faces, we'll be syncing/updating ghosts
     const IndexRange3 b = KDomain::GetRange(msolve, IndexDomain::interior, 0, 1);
     pmb0->par_for("gradient_P", 0, P.GetDim(5) - 1, b.ks, b.ke, b.js, b.je, b.is, b.ie,
-        KOKKOS_LAMBDA (const int& b, const int &k, const int &j, const int &i)
+                  KOKKOS_LAMBDA(const int& b, const int& k, const int& j, const int& i)
         {
             const auto& G = P.GetCoords(b);
             B(b, F1, 0, k, j, i) += P(b).flux(X1DIR, 0, k, j, i);

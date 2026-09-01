@@ -75,7 +75,9 @@ std::shared_ptr<KHARMAPackage> KHARMA::InitializeGlobals(
     // or preventing bad outcomes at known times
     params.Add("time", 0.0, true);
     // Last step's dt (Parthenon SimTime tm.dt), which must be preserved to output jcon
-    params.Add("dt_last", 0.0, true);
+    // Also sets max step increase, so we initialize it to max value to allow any first
+    // step size
+    params.Add("dt_last", std::numeric_limits<double>::max(), true);
     // Whether we are computing initial outputs/timestep, or versions in the execution
     // loop
     params.Add("in_loop", false, true);
@@ -202,7 +204,7 @@ void KHARMA::FixParameters(ParameterInput* pin, bool is_parthenon_restart)
             GReal x1max = tmp_coords.r_to_native(Rout);
             pin->GetOrAddReal("parthenon/mesh", "x1max", x1max);
 
-            if (mpark::holds_alternative<SphMinkowskiCoords>(tmp_coords.base)) {
+            if (PortsOfCall::holds_alternative<SphMinkowskiCoords>(tmp_coords.base)) {
                 // In Minkowski coordinates, require Rin so the singularity is at user
                 // option
                 GReal Rin = pin->GetReal("coordinates", "r_in");
@@ -234,6 +236,8 @@ void KHARMA::FixParameters(ParameterInput* pin, bool is_parthenon_restart)
                     // then we want xeh = xin + 5.5 * (xout - xin) / N1TOT:
                     const GReal x1min = (nx1 * x1hor / 5.5 - x1max) / (-1. + nx1 / 5.5);
                     if (x1min < 0.0) {
+                        std::cout << std::endl; // flush messages in output buffer before
+                                                // we error
                         throw std::invalid_argument(
                             "Not enough radial zones were specified to put 5 zones "
                             "inside EH!");
@@ -301,48 +305,43 @@ void KHARMA::FixParameters(ParameterInput* pin, bool is_parthenon_restart)
         pin->GetOrAddReal("parthenon/mesh", "x3max", tmp_coords.stopx(3));
 
     // Also set x1 refinements as a proportion of size
-    InputBlock* pib = pin->pfirst_block;
-    while (pib != nullptr) {
-        if (pib->block_name.compare(0, 27, "parthenon/static_refinement") == 0) {
-            Real startx1 = pin->GetReal("parthenon/mesh", "x1min");
-            Real stopx1 = pin->GetReal("parthenon/mesh", "x1max");
-            Real lx1 = stopx1 - startx1;
-            Real startx1_prop = pin->GetReal(pib->block_name, "x1min");
-            Real stopx1_prop = pin->GetReal(pib->block_name, "x1max");
-            // std::cerr << "StartX1 " << startx1 << " lx1 " << lx1 << "Prop " <<
-            // startx1_prop << " " << stopx1_prop << std::endl; std::cerr << "Adjust X1 "
-            // << startx1_prop*lx1 + startx1 << " to " << stopx1_prop*lx1 + startx1 <<
-            // std::endl;
-            pin->SetReal(pib->block_name, "x1min",
-                std::max(startx1_prop * lx1 + startx1, startx1));
+    auto block_names = pin->GetBlockNamesWithPrefix("parthenon/static_refinement");
+    for (auto block_name : block_names) {
+        Real startx1 = pin->GetReal("parthenon/mesh", "x1min");
+        Real stopx1 = pin->GetReal("parthenon/mesh", "x1max");
+        Real lx1 = stopx1 - startx1;
+        Real startx1_prop = pin->GetReal(block_name, "x1min");
+        Real stopx1_prop = pin->GetReal(block_name, "x1max");
+        // std::cerr << "StartX1 " << startx1 << " lx1 " << lx1 << "Prop " << startx1_prop
+        // << " " << stopx1_prop << std::endl; std::cerr << "Adjust X1 " <<
+        // startx1_prop*lx1 + startx1 << " to " << stopx1_prop*lx1 + startx1 << std::endl;
+        pin->SetReal(
+            block_name, "x1min", std::max(startx1_prop * lx1 + startx1, startx1));
+        pin->SetReal(block_name, "x1max", std::min(stopx1_prop * lx1 + startx1, stopx1));
+
+        if (pin->DoesParameterExist(block_name, "x2min")) {
+            Real startx2 = pin->GetReal("parthenon/mesh", "x2min");
+            Real stopx2 = pin->GetReal("parthenon/mesh", "x2max");
+            Real lx2 = stopx2 - startx2;
+            Real startx2_prop = pin->GetReal(block_name, "x2min");
+            Real stopx2_prop = pin->GetReal(block_name, "x2max");
             pin->SetReal(
-                pib->block_name, "x1max", std::min(stopx1_prop * lx1 + startx1, stopx1));
-
-            if (pin->DoesParameterExist(pib->block_name, "x2min")) {
-                Real startx2 = pin->GetReal("parthenon/mesh", "x2min");
-                Real stopx2 = pin->GetReal("parthenon/mesh", "x2max");
-                Real lx2 = stopx2 - startx2;
-                Real startx2_prop = pin->GetReal(pib->block_name, "x2min");
-                Real stopx2_prop = pin->GetReal(pib->block_name, "x2max");
-                pin->SetReal(pib->block_name, "x2min",
-                    std::max(startx2_prop * lx2 + startx2, startx2));
-                pin->SetReal(pib->block_name, "x2max",
-                    std::min(stopx2_prop * lx2 + startx2, stopx2));
-            }
-
-            if (pin->DoesParameterExist(pib->block_name, "x3min")) {
-                Real startx3 = pin->GetReal("parthenon/mesh", "x3min");
-                Real stopx3 = pin->GetReal("parthenon/mesh", "x3max");
-                Real lx3 = stopx3 - startx3;
-                Real startx3_prop = pin->GetReal(pib->block_name, "x3min");
-                Real stopx3_prop = pin->GetReal(pib->block_name, "x3max");
-                pin->SetReal(pib->block_name, "x3min",
-                    std::max(startx3_prop * lx3 + startx3, startx3));
-                pin->SetReal(pib->block_name, "x3max",
-                    std::min(stopx3_prop * lx3 + startx3, stopx3));
-            }
+                block_name, "x2min", std::max(startx2_prop * lx2 + startx2, startx2));
+            pin->SetReal(
+                block_name, "x2max", std::min(stopx2_prop * lx2 + startx2, stopx2));
         }
-        pib = pib->pnext;
+
+        if (pin->DoesParameterExist(block_name, "x3min")) {
+            Real startx3 = pin->GetReal("parthenon/mesh", "x3min");
+            Real stopx3 = pin->GetReal("parthenon/mesh", "x3max");
+            Real lx3 = stopx3 - startx3;
+            Real startx3_prop = pin->GetReal(block_name, "x3min");
+            Real stopx3_prop = pin->GetReal(block_name, "x3max");
+            pin->SetReal(
+                block_name, "x3min", std::max(startx3_prop * lx3 + startx3, startx3));
+            pin->SetReal(
+                block_name, "x3max", std::min(stopx3_prop * lx3 + startx3, stopx3));
+        }
     }
 
     EndFlag();
@@ -403,16 +402,6 @@ Packages_t KHARMA::ProcessPackages(std::unique_ptr<ParameterInput>& pin)
         t_inverter = tl.AddTask(
             t_grmhd, KHARMA::AddPackage, packages, Inverter::Initialize, pin.get());
     }
-    // Floors package is only loaded if floors aren't disabled
-    // Respect legacy version for a while
-    bool floors_on_default = true;
-    if (pin->DoesParameterExist("floors", "disable_floors")) {
-        floors_on_default = !pin->GetBoolean("floors", "disable_floors");
-    }
-    if (pin->GetOrAddBoolean("floors", "on", floors_on_default)) {
-        auto t_floors = tl.AddTask(
-            t_inverter, KHARMA::AddPackage, packages, Floors::Initialize, pin.get());
-    }
     // Reductions, needed by most other packages
     auto t_reductions = tl.AddTask(
         t_none, KHARMA::AddPackage, packages, Reductions::Initialize, pin.get());
@@ -443,6 +432,7 @@ Packages_t KHARMA::ProcessPackages(std::unique_ptr<ParameterInput>& pin)
             t_grmhd, KHARMA::AddPackage, packages, B_FluxCT::Initialize, pin.get());
         have_b_transport = true;
     } else {
+        std::cout << std::endl; // flush messages in output buffer before we error
         throw std::invalid_argument(
             "Invalid solver! Must be e.g., flux_ct, face_ct, cd, cleanup...");
     }
@@ -459,6 +449,7 @@ Packages_t KHARMA::ProcessPackages(std::unique_ptr<ParameterInput>& pin)
     bool use_b_cleanup = b_cleanup_package || is_resize || initial_cleanup;
     pin->SetBoolean("b_cleanup", "on", use_b_cleanup);
     auto t_b_cleanup = t_none;
+    // Load GMG cleanup only if we're using face-centered fields, that's all it supports
     if (use_b_cleanup) {
         if (face_centered_b) {
             t_b_cleanup = tl.AddTask(t_grmhd, KHARMA::AddPackage, packages,
@@ -499,11 +490,19 @@ Packages_t KHARMA::ProcessPackages(std::unique_ptr<ParameterInput>& pin)
     // There are some packages which must be loaded after all physics
     // Easier to load them separately than list dependencies
 
+    // Now we always load floors package -- "floors/on=false" and
+    // "floors/disable_floors=true" now map to "disable_call"!
+    KHARMA::AddPackage(packages, Floors::Initialize, pin.get());
+
     // Flux temporaries must be full size
     KHARMA::AddPackage(packages, Flux::Initialize, pin.get());
 
     // ISMR temporaries must be full size
-    if (pin->GetOrAddBoolean("ismr", "on", false)) {
+    // TODO(CEP) check nlevels > 0 -- better yet provenance, guarantee specific
+    // ismr/on=false ALWAYS disables
+    if (pin->GetOrAddBoolean("ismr", "on", false) ||
+        pin->DoesParameterExist("ismr", "nlevels")) {
+        pin->SetBoolean("ismr", "on", true);
         KHARMA::AddPackage(packages, ISMR::Initialize, pin.get());
     }
 

@@ -90,7 +90,7 @@ void FixParameters(ParameterInput* pin, bool is_parthenon_restart);
  */
 Packages_t ProcessPackages(std::unique_ptr<ParameterInput>& pin);
 
-// TODO(BSP) not sure where to put these
+// TODO(CEP) not sure where to put these
 
 /**
  * Check whether a given field is anywhere in outputs.
@@ -102,17 +102,18 @@ Packages_t ProcessPackages(std::unique_ptr<ParameterInput>& pin);
  */
 inline bool FieldIsOutput(ParameterInput* pin, std::string name)
 {
-    InputBlock* pib = pin->pfirst_block;
-    while (pib != nullptr) {
+    auto block_names = pin->GetBlockNamesWithPrefix("parthenon/output");
+    for (auto block_name : block_names) {
         // For every output block with a 'variables' entry...
-        if (pib->block_name.find("parthenon/output") != std::string::npos &&
-            pin->DoesParameterExist(pib->block_name, "variables")) {
-            std::string allvars = pin->GetString(pib->block_name, "variables");
-            if (allvars.find(name) != std::string::npos) {
-                return true;
+        if (pin->DoesParameterExist(block_name, "variables")) {
+            std::vector<std::string> allvars =
+                pin->GetVector<std::string>(block_name, "variables");
+            for (std::string var : allvars) {
+                if (var.find(name) != std::string::npos) {
+                    return true;
+                }
             }
         }
-        pib = pib->pnext;
     }
     return false;
 }

@@ -92,8 +92,6 @@ KOKKOS_INLINE_FUNCTION void Xtoijk_nearest(const GReal X[GR_DIM],
  * Dumb linear interpolation: no special cases for boundaries.
  * Takes indices i,j,k and a block size n1, n2, n3,
  * as well as a flat array var.
- *
- * TODO version(s) with View(s) for real device-side operation
  */
 KOKKOS_INLINE_FUNCTION Real linear(const int& i, const int& j, const int& k,
     const int& n1, const int& n2, const int& n3, const double del[4], const double* var)
@@ -119,8 +117,6 @@ KOKKOS_INLINE_FUNCTION Real linear(const int& i, const int& j, const int& k,
  * Dumb linear interpolation: no special cases for boundaries.
  * Takes indices i,j,k and a block size n1, n2, n3,
  * as well as a flat array var.
- *
- * TODO version(s) with View(s) for real device-side operation
  */
 KOKKOS_INLINE_FUNCTION Real linear(const int& i, const int& j, const int& k,
     const double del[4], const int& p, const VariablePack<Real>& var)

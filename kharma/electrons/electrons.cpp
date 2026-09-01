@@ -245,7 +245,7 @@ TaskStatus InitElectrons(MeshBlockData<Real>* rc, ParameterInput* pin)
     int js = pmb->cellbounds.js(domain), je = pmb->cellbounds.je(domain);
     int ks = pmb->cellbounds.ks(domain), ke = pmb->cellbounds.ke(domain);
     pmb->par_for("UtoP_electrons", 0, e_P.GetDim(4) - 1, ks, ke, js, je, is, ie,
-        KOKKOS_LAMBDA (const int &p, const int &k, const int &j, const int &i)
+                 KOKKOS_LAMBDA(const int& p, const int& k, const int& j, const int& i)
         {
             if (p == ktot_index) {
                 // Initialize total entropy by definition,
@@ -277,7 +277,7 @@ void BlockUtoP(MeshBlockData<Real>* rc, IndexDomain domain, bool coarse)
     int js = bounds.js(domain), je = bounds.je(domain);
     int ks = bounds.ks(domain), ke = bounds.ke(domain);
     pmb->par_for("UtoP_electrons", 0, e_P.GetDim(4) - 1, ks, ke, js, je, is, ie,
-        KOKKOS_LAMBDA (const int &p, const int &k, const int &j, const int &i)
+                 KOKKOS_LAMBDA(const int& p, const int& k, const int& j, const int& i)
         {
             e_P(p, k, j, i) = e_U(p, k, j, i) / rho_U(k, j, i);
         });
@@ -300,7 +300,7 @@ void BlockPtoU(MeshBlockData<Real>* rc, IndexDomain domain, bool coarse)
     int js = bounds.js(domain), je = bounds.je(domain);
     int ks = bounds.ks(domain), ke = bounds.ke(domain);
     pmb->par_for("PtoU_electrons", ks, ke, js, je, is, ie,
-        KOKKOS_LAMBDA (const int &k, const int &j, const int &i)
+                 KOKKOS_LAMBDA(const int& k, const int& j, const int& i)
         {
             Electrons::p_to_u(G, P, m_p, k, j, i, U, m_u);
         });
@@ -343,7 +343,7 @@ TaskStatus ApplyElectronHeating(
     const IndexRange jb = rc->GetBoundsJ(IndexDomain::entire);
     const IndexRange kb = rc->GetBoundsK(IndexDomain::entire);
     pmb->par_for("heat_electrons", kb.s, kb.e, jb.s, jb.e, ib.s, ib.e,
-        KOKKOS_LAMBDA (const int &k, const int &j, const int &i)
+        KOKKOS_LAMBDA(const int& k, const int& j, const int& i)
         {
             FourVectors Dtmp;
             GRMHD::calc_4vecs(G, P, m_p, k, j, i, Loci::center, Dtmp);
@@ -391,7 +391,8 @@ TaskStatus ApplyElectronHeating(
             // The ion temperature is useful for a few models, cache it too.
             // The minimum values on Tpr & Tel here ensure that for un-initialized zones,
             // Tpr/Tel == Tel/Tpr == 1 != NaN.  This condition should not be hit after
-            // step 1
+            // step
+            // 1
             const Real Tpr =
                 m::max((gamp - 1.) * P(m_p.UU, k, j, i) / P(m_p.RHO, k, j, i), SMALL_NUM);
 
@@ -420,8 +421,8 @@ TaskStatus ApplyElectronHeating(
 
                 const Real Trat = Tpr / Tel;
                 const Real pres = P(m_p.RHO, k, j, i) * Tpr; // Proton pressure
-                const Real beta = m::min(
-                    pres / bsq * 2, 1.e20); // If somebody enables electrons in a GRHD sim
+                const Real beta = m::min(pres / bsq * 2,
+                    1.e20); // If somebody enables electrons in a GRHD sim
 
                 const Real logTrat = log10(Trat);
                 const Real mbeta = 2. - 0.2 * logTrat;
@@ -444,8 +445,8 @@ TaskStatus ApplyElectronHeating(
 
                 const Real Trat = Tpr / Tel;
                 const Real pres = P(m_p.RHO, k, j, i) * Tpr; // Proton pressure
-                const Real beta = m::min(
-                    pres / bsq * 2, 1.e20); // If somebody enables electrons in a GRHD sim
+                const Real beta = m::min(pres / bsq * 2,
+                    1.e20); // If somebody enables electrons in a GRHD sim
 
                 const Real QiQe =
                     35. / (1. + m::pow(beta / 15., -1.4) * m::exp(-0.1 / Trat));
@@ -678,10 +679,11 @@ void ApplyFloors(MeshBlockData<Real>* mbd, IndexDomain domain)
 
     const IndexRange3 b = KDomain::GetRange(mbd, domain);
     pmb->par_for("apply_electrons_floors", b.ks, b.ke, b.js, b.je, b.is, b.ie,
-        KOKKOS_LAMBDA (const int &k, const int &j, const int &i)
+                 KOKKOS_LAMBDA(const int& k, const int& j, const int& i)
         {
-            // Also apply the ceiling to the advected entropy KTOT, if we're keeping track
-            // of that (either for electrons, or robust primitive inversions in future)
+            // Also apply the ceiling to the advected entropy KTOT, if we're
+            // keeping track of that (either for electrons, or robust primitive
+            // inversions in future)
             Real ktot_max;
             if (m_p.KTOT >= 0) {
                 if (floors.radius_dependent_floors && G.coords.is_spherical() &&
@@ -697,22 +699,23 @@ void ApplyFloors(MeshBlockData<Real>* mbd, IndexDomain domain)
                 }
             }
 
-            // TODO(BSP) restore Ressler adjustment option
+            // TODO(CEP) restore Ressler adjustment option
             // Ressler adjusts KTOT & KEL to conserve u whenever adjusting rho
-            // but does *not* recommend adjusting them when u hits floors/ceilings
-            // This is in contrast to ebhlight, which heats electrons before applying
-            // *any* floors, and resets KTOT during floor application without touching KEL
-            // if (floors.adjust_k && (fflag() & FFlag::GEOM_RHO || fflag() &
-            // FFlag::B_RHO)) {
+            // but does *not* recommend adjusting them when u hits
+            // floors/ceilings This is in contrast to ebhlight, which heats
+            // electrons before applying *any* floors, and resets KTOT during
+            // floor application without touching KEL if (floors.adjust_k &&
+            // (fflag() & FFlag::GEOM_RHO || fflag() & FFlag::B_RHO)) {
             //     const Real reduce   = m::pow(rho / P(m_p.RHO, k, j, i), gam);
-            //     const Real reduce_e = m::pow(rho / P(m_p.RHO, k, j, i), 4./3); // TODO
-            //     pipe in real gam_e if (m_p.KTOT >= 0) P(m_p.KTOT, k, j, i) *= reduce;
-            //     if (m_p.K_CONSTANT >= 0) P(m_p.K_CONSTANT, k, j, i) *= reduce_e;
-            //     if (m_p.K_HOWES >= 0)    P(m_p.K_HOWES, k, j, i)    *= reduce_e;
-            //     if (m_p.K_KAWAZURA >= 0) P(m_p.K_KAWAZURA, k, j, i) *= reduce_e;
-            //     if (m_p.K_WERNER >= 0)   P(m_p.K_WERNER, k, j, i)   *= reduce_e;
-            //     if (m_p.K_ROWAN >= 0)    P(m_p.K_ROWAN, k, j, i)    *= reduce_e;
-            //     if (m_p.K_SHARMA >= 0)   P(m_p.K_SHARMA, k, j, i)   *= reduce_e;
+            //     const Real reduce_e = m::pow(rho / P(m_p.RHO, k, j, i), 4./3);
+            //     // TODO pipe in real gam_e if (m_p.KTOT >= 0) P(m_p.KTOT, k,
+            //     j, i) *= reduce; if (m_p.K_CONSTANT >= 0) P(m_p.K_CONSTANT, k,
+            //     j, i) *= reduce_e; if (m_p.K_HOWES >= 0)    P(m_p.K_HOWES, k,
+            //     j, i)    *= reduce_e; if (m_p.K_KAWAZURA >= 0)
+            //     P(m_p.K_KAWAZURA, k, j, i) *= reduce_e; if (m_p.K_WERNER >= 0)
+            //     P(m_p.K_WERNER, k, j, i)   *= reduce_e; if (m_p.K_ROWAN >= 0)
+            //     P(m_p.K_ROWAN, k, j, i)    *= reduce_e; if (m_p.K_SHARMA >= 0)
+            //     P(m_p.K_SHARMA, k, j, i)   *= reduce_e;
             // }
         });
     Flux::BlockPtoU(mbd, domain);

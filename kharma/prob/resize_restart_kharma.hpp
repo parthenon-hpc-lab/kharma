@@ -87,7 +87,7 @@ KOKKOS_INLINE_FUNCTION void Xtoindex(const GReal XG[GR_DIM],
 #endif
 }
 
-// TOOD(BSP) these can be merged and moved back into the fn body now
+// TOOD(CEP) these can be merged and moved back into the fn body now
 
 KOKKOS_INLINE_FUNCTION void get_prim_restart_kharma(const GRCoordinates& G,
     const VariablePack<Real>& P, const VarMap& m_p, const Real fx1min, const Real fx1max,

@@ -35,6 +35,7 @@
 #include "flux.hpp"
 
 #include "domain.hpp"
+#include "floors_functions.hpp"
 #include "inverter.hpp"
 
 using namespace parthenon;
@@ -52,6 +53,30 @@ TaskStatus Flux::MarkFOFC(MeshData<Real>* guess)
     auto pflag = guess->PackVariables(std::vector<std::string>{"pflag"});
     auto fofcflag = guess->PackVariables(std::vector<std::string>{"fofcflag"});
 
+    PackIndexMap cons_map, prims_map;
+    std::vector<MetadataFlag> prims_flags = {
+        Metadata::GetUserFlag("Primitive"), Metadata::Cell};
+    std::vector<MetadataFlag> cons_flags = {Metadata::WithFluxes, Metadata::Cell};
+    const auto& P = guess->PackVariables(prims_flags, prims_map);
+    const auto& U = guess->PackVariablesAndFluxes(cons_flags, cons_map);
+    const VarMap m_u(cons_map, true), m_p(prims_map, false);
+
+    const Real gam = pmb0->packages.Get("GRMHD")->Param<Real>("gamma");
+
+    // Use values from floors package if it's enabled, otherwise any we've been asked to
+    // apply
+    const Floors::Prescription floors =
+        pmb0->packages.AllPackages().count("Floors")
+            ? pmb0->packages.Get("Floors")->Param<Floors::Prescription>("prescription")
+            : pmb0->packages.Get("Inverter")
+                  ->Param<Floors::Prescription>("inverter_prescription");
+    const Floors::Prescription floors_inner =
+        pmb0->packages.AllPackages().count("Floors")
+            ? pmb0->packages.Get("Floors")->Param<Floors::Prescription>(
+                  "prescription_inner")
+            : pmb0->packages.Get("Inverter")
+                  ->Param<Floors::Prescription>("inverter_prescription");
+
     // Parameters
     const auto& pars = pmb0->packages.Get("Fluxes")->AllParams();
     const bool spherical = pmb0->coords.coords.is_spherical();
@@ -68,17 +93,22 @@ TaskStatus Flux::MarkFOFC(MeshData<Real>* guess)
     const IndexRange3 b = KDomain::GetRange(guess, IndexDomain::entire);
     const IndexRange block = IndexRange{0, fofcflag.GetDim(5) - 1};
     pmb0->par_for("fofc_mark", block.s, block.e, b.ks, b.ke, b.js, b.je, b.is, b.ie,
-        KOKKOS_LAMBDA (const int &b, const int &k, const int &j, const int &i)
+        KOKKOS_LAMBDA (const int &bl, const int &k, const int &j, const int &i)
         {
-            const auto& G = fofcflag.GetCoords(b);
+            const auto& G = fofcflag.GetCoords(bl);
             // if cell failed to invert or would call floors...
             // TODO preserve cause in the fofcflag
-            if (static_cast<int>(
-                    fflag(b, 0, k, j, i)) || // Inverter::failed(pflag(b, 0, k, j, i)) ||
-                (spherical && G.r(k, j, i) < fofc_radius)) {
-                fofcflag(b, 0, k, j, i) = 1;
+            // If the solve failed, because we reconstructed a
+            // negative or zero internal energy (even after floors!)
+            Real rhomin_geom, umin_geom;
+            determine_geo_floors(G, P(bl), m_p, gam, k, j, i, floors, floors_inner,
+                rhomin_geom, umin_geom);
+            const Real umin = umin_geom;
+            if (Inverter::failed(pflag(bl, 0, k, j, i)) &&
+                (P(bl, m_p.UU, k, j, i) < umin)) {
+                fofcflag(bl, 0, k, j, i) = 1;
             } else {
-                fofcflag(b, 0, k, j, i) = 0;
+                fofcflag(bl, 0, k, j, i) = 0;
             }
         });
 
@@ -87,9 +117,9 @@ TaskStatus Flux::MarkFOFC(MeshData<Real>* guess)
             auto& rc = guess->GetBlockData(i_block);
             auto pmb = rc->GetBlockPointer();
             const bool is_inner_x2 =
-                pmb->boundary_flag[BoundaryFace::inner_x2] == BoundaryFlag::user;
+                KBoundaries::IsPhysicalBoundary(pmb, BoundaryFace::inner_x2);
             const bool is_outer_x2 =
-                pmb->boundary_flag[BoundaryFace::outer_x2] == BoundaryFlag::user;
+                KBoundaries::IsPhysicalBoundary(pmb, BoundaryFace::outer_x2);
             if (is_inner_x2 || is_outer_x2) {
                 auto lfofcflag = rc->PackVariables(std::vector<std::string>{"fofcflag"});
                 if (is_inner_x2) {
@@ -98,7 +128,7 @@ TaskStatus Flux::MarkFOFC(MeshData<Real>* guess)
                     int jend = jstart + polar_cells - 1;
                     pmb0->par_for("fofc_mark_inner_x2", b.ks, b.ke, jstart, jend, b.is,
                         b.ie,
-                        KOKKOS_LAMBDA (const int &k, const int &j, const int &i)
+                                  KOKKOS_LAMBDA(const int& k, const int& j, const int& i)
                         {
                             lfofcflag(0, k, j, i) = 1;
                         });
@@ -109,7 +139,7 @@ TaskStatus Flux::MarkFOFC(MeshData<Real>* guess)
                     int jstart = jend - polar_cells + 1;
                     pmb0->par_for("fofc_mark_outer_x2", b.ks, b.ke, jstart, jend, b.is,
                         b.ie,
-                        KOKKOS_LAMBDA (const int &k, const int &j, const int &i)
+                                  KOKKOS_LAMBDA(const int& k, const int& j, const int& i)
                         {
                             lfofcflag(0, k, j, i) = 1;
                         });
@@ -147,7 +177,7 @@ TaskStatus Flux::FOFC(MeshData<Real>* md, MeshData<Real>* guess)
     PackIndexMap cons_map, prims_map;
     std::vector<MetadataFlag> prims_flags = {
         Metadata::GetUserFlag("Primitive"), Metadata::Cell};
-    std::vector<MetadataFlag> cons_flags = {Metadata::Conserved, Metadata::Cell};
+    std::vector<MetadataFlag> cons_flags = {Metadata::WithFluxes, Metadata::Cell};
     const auto& P_all = md->PackVariables(prims_flags, prims_map);
     const auto& U_all = md->PackVariablesAndFluxes(cons_flags, cons_map);
     const VarMap m_u(cons_map, true), m_p(prims_map, false);
@@ -170,11 +200,12 @@ TaskStatus Flux::FOFC(MeshData<Real>* md, MeshData<Real>* guess)
         const IndexRange block = IndexRange{0, P_all.GetDim(5) - 1};
         pmb0->par_for("fofc_replacement", block.s, block.e, b.ks, b.ke, b.js, b.je, b.is,
             b.ie,
-            KOKKOS_LAMBDA (const int &b, const int &k, const int &j, const int &i)
+            KOKKOS_LAMBDA(const int& b, const int& k, const int& j, const int& i)
             {
                 const auto& G = P_all.GetCoords(b);
 
-                // Face i,j,k borders cell with same index and 1 left with index:
+                // Face i,j,k borders cell with same index and 1 left with
+                // index:
                 int kk = (dir == 3) ? k - 1 : k;
                 int jj = (dir == 2) ? j - 1 : j;
                 int ii = (dir == 1) ? i - 1 : i;
@@ -183,8 +214,8 @@ TaskStatus Flux::FOFC(MeshData<Real>* md, MeshData<Real>* guess)
                     static_cast<int>(
                         fofcflag(b, 0, kk, jj, ii))) { // TODO allow customizing
 
-                    // "Reconstruct" left & right of this face: left is left cell, right
-                    // is shared-index
+                    // "Reconstruct" left & right of this face: left is left
+                    // cell, right is shared-index
                     PLOOP
                         Pl_all(b, ip, k, j, i) = P_all(b, ip, kk, jj, ii);
                     PLOOP
@@ -229,15 +260,16 @@ TaskStatus Flux::FOFC(MeshData<Real>* md, MeshData<Real>* guess)
                         cmin(b, dir - 1, k, j, i) =
                             -m::min(cmin(b, dir - 1, k, j, i), cminR);
                     } else {
-                        // This conveniently also reduces the timestep if necessary
-                        // Though, you should almost certainly set use_dt_light w/this
+                        // This conveniently also reduces the timestep if
+                        // necessary -- though, you should almost certainly set
+                        // use_dt_light w/this
                         cmax(b, dir - 1, k, j, i) = 1.;
                         cmin(b, dir - 1, k, j, i) = 1.;
                     }
 
-                    // Use LLF flux. Note we replace fluxes of all variables (including
-                    // B!) This is for a consistent scheme, i.e. all cells FOFC == using
-                    // DC+LLF
+                    // Use LLF flux. Note we replace fluxes of all variables
+                    // (including B!) This is for a consistent scheme, i.e. all
+                    // cells FOFC == using DC+LLF
                     PLOOP
                         U_all(b).flux(dir, ip, k, j, i) =
                             llf(Fl_all(b, ip, k, j, i), Fr_all(b, ip, k, j, i),

@@ -1,31 +1,26 @@
 # The Magnetically Arrested Disk (MAD) accretion flow
 # This is a normal large-disk (20/41 r_g) MAD with gamma=5/3,
 # like the "Illinois v5" simulation library.
-# It uses KHARMA's features such as transmitting boundary
-# conditions, Kastaun inverter, and first-order flux corrections
-# in order to set very low floors, yet with no observed
-# instability in tests.
+# Very low floors now that we have good recovery
 
 <parthenon/job>
 problem_id = torus
 archive_parameters = timestamp
 
 <parthenon/mesh>
-nx1 = 128
-nx2 = 64
-nx3 = 64
+nx1 = 192
+nx2 = 128
+nx3 = 128
 
 <parthenon/meshblock>
-nx1 = 128
+nx1 = 96
 nx2 = 64
-# Cannot break up phi with transmitting boundaries
-nx3 = 64
+# Many boundary options are incompatible with multiple phi blocks
+nx3 = 128
 
 <coordinates>
 base = spherical_ks
-# FMKS coordinates and transmitting polar bounds
-# are not compatible
-transform = mks
+transform = fmks
 r_out = 1000
 a = 0.9375
 hslope = 0.3
@@ -37,8 +32,6 @@ nlim = -1
 <torus>
 rin = 20.0
 rmax = 41.0
-# Tilt in degrees, rotates initial torus CC about +y. YMMV.
-tilt = 0.
 
 <perturbation>
 u_jitter = 0.04
@@ -60,31 +53,31 @@ reconstruction = weno5_linear
 
 <driver>
 type = kharma
-# Second sync at the end of each step. This is still
-# enabled by default, but with KHARMA driver and Face-CT
-# it's been safe to disable in tests. YMMV
+# Second sync at the end of each step
+# Can skip this with the robust inverter & face_ct B fields
 two_sync = false
 
 <boundaries>
-inner_x2 = transmitting
-outer_x2 = transmitting
-# This reduces the polar "wake," but shrinks the timestep,
-# and has caused instabilities. YMMV.
-#excise_polar_flux = true
-# Reconnect phi component of B at the pole, as if it were one zone
-# Dramatically reduces instabilities
-reconnect_B3_inner_x2 = true
-reconnect_B3_outer_x2 = true
+inner_x2 = reflecting
+outer_x2 = reflecting
 
 <floors>
-frame        = drift
+# Minimal floors, leveraging inversion recovery.
+# Normal frame is now the only supported injection frame --
+# material added is so minimal that drag effects are negligible
+frame = normal
 rho_min_geom = 1e-6
 u_min_geom   = 1e-8
-bsq_over_rho_max = 1e3
-bsq_over_u_max   = 1e4
-gamma_max    = 32
+# Enable to preserve momentum in all cases at the cost of much more
+# density injection
+use_rho_to_slow = false
+# Note there is a hard cap on Lorentz factor at 50 in the source code,
+# but in practice simulations do not reproduce fast enough gamma for
+# this to matter
 
 <fofc>
+# FOFC is disabled by default because of tests but recommended
+# for most production runs
 on = true
 
 <debug>
@@ -107,3 +100,4 @@ dt = 100.0
 <parthenon/output2>
 file_type = hst
 dt = 0.1
+variables = all_reductions

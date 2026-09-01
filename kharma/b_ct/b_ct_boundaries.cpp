@@ -340,7 +340,7 @@ void B_CT::ReconnectBoundaryB3(MeshBlockData<Real>* rc, IndexDomain domain,
     IndexRange3 bi = KDomain::GetRange(rc, IndexDomain::interior, F3, coarse);
     const int jf = (binner) ? bi.js : bi.je; // j index of last zone next to pole
     parthenon::par_for_outer(DEFAULT_OUTER_LOOP_PATTERN, "reduce_B3_" + bname,
-        pmb->exec_space, 0, 1, 0, fpack.GetDim(4) - 1, b.is + 6,
+        pmb->exec_space, 0, 1, 0, fpack.GetDim(4) - 1, b.is,
         b.ie - reconnection_outer_buffer,
         KOKKOS_LAMBDA(parthenon::team_mbr_t member, const int &v, const int& i)
         {
@@ -380,7 +380,7 @@ void B_CT::ReconnectBoundaryB3(MeshBlockData<Real>* rc, IndexDomain domain,
 
                     // Recover primitive GRMHD variables from our modified U
                     Inverter::u_to_p<Inverter::Type::kastaun>(
-                        G, U, m_u, gam, k, jf, i, P, m_p, Loci::center, 25, 1e-12, false);
+                        G, U, m_u, gam, k, jf, i, P, m_p, Loci::center, 25, 1e-12);
                     // Floor them
                     // TODO THIS IS IN FLUID FRAME
                     int fflag = Floors::apply_geo_floors(

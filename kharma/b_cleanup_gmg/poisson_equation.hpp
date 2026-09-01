@@ -65,7 +65,7 @@ class PoissonEquation
         if (set_flux_boundary) {
             flux_res = tl.AddTask(flux_res, SetFluxBoundariesZero, md_in);
         }
-        // if (do_flux_cor && !(md_mat->grid.type ==
+        // if (do_flux_cor && !(md_mat->grid.type() ==
         // parthenon::GridType::two_level_composite)) {
         //   auto start_flxcor =
         //       tl.AddTask(flux_res, parthenon::StartReceiveFluxCorrections, md_in);
@@ -76,7 +76,7 @@ class PoissonEquation
         //   flux_res = tl.AddTask(recv_flxcor, parthenon::SetFluxCorrections, md_in);
         // }
         if (do_flux_cor &&
-            !(md_mat->grid.type == parthenon::GridType::two_level_composite)) {
+            !(md_mat->grid.type() == parthenon::GridType::two_level_composite)) {
             flux_res = parthenon::AddBoundaryExchangeTasks(
                 flux_res, tl, md_in, md_in->GetMeshPointer()->multilevel);
         }
@@ -110,7 +110,8 @@ class PoissonEquation
         using TE = parthenon::TopologicalElement;
         parthenon::par_for("StoreDiagonal", 0, pack_diag.GetNBlocks() - 1, kb.s, kb.e,
             jb.s, jb.e, ib.s, ib.e,
-        KOKKOS_LAMBDA(const int b, const int k, const int j, const int i)
+                           KOKKOS_LAMBDA(const int b, const int k, const int j,
+                                         const int i)
             {
                 const auto& coords = pack_diag.GetCoordinates(b);
                 // Build the unigrid diagonal of the matrix
@@ -149,7 +150,8 @@ class PoissonEquation
         auto pack = desc.GetPack(md.get(), include_block);
         parthenon::par_for("CaclulateFluxes", 0, pack.GetNBlocks() - 1, kb.s, kb.e, jb.s,
             jb.e, ib.s, ib.e,
-        KOKKOS_LAMBDA(const int b, const int k, const int j, const int i)
+                           KOKKOS_LAMBDA(const int b, const int k, const int j,
+                                         const int i)
             {
                 const auto& coords = pack.GetCoordinates(b);
                 Real dx1 = coords.template Dxc<X1DIR>(k, j, i);
@@ -225,13 +227,14 @@ class PoissonEquation
         parthenon::par_for_outer(DEFAULT_OUTER_LOOP_PATTERN, "SetFluxBoundaries",
             DevExecSpace(), scratch_size_in_bytes, scratch_level, 0,
             pack.GetNBlocks() - 1,
-        KOKKOS_LAMBDA(parthenon::team_mbr_t member, const int b)
+            KOKKOS_LAMBDA(parthenon::team_mbr_t member, const int b)
             {
                 const auto& coords = pack.GetCoordinates(b);
                 for (int face = 0; face < ndim * 2; ++face) {
                     const auto& idxer = idxers[face];
                     const auto dir = dirs[face];
-                    // Impose the zero Dirichlet boundary condition at the actual boundary
+                    // Impose the zero Dirichlet boundary condition
+                    // at the actual boundary
                     if (pack.IsPhysicalBoundary(
                             b, x3off[face], x2off[face], x1off[face]) &&
                         do_side[face]) {

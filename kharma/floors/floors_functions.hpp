@@ -70,6 +70,7 @@ KOKKOS_INLINE_FUNCTION void apply_ceilings(const GRCoordinates& G,
     Real u_over_rho = P(m_p.UU, k, j, i) / P(m_p.RHO, k, j, i);
 
     // 1. Limit gamma with respect to normal observer
+    // TODO ADJUST RHO
     if (gamma > myfloors.gamma_max) {
         Real f = m::sqrt((SQR(myfloors.gamma_max) - 1.) / (SQR(gamma) - 1.));
         VLOOP
@@ -105,7 +106,7 @@ KOKKOS_INLINE_FUNCTION int determine_floors(const GRCoordinates& G,
 
     // Calculate the different floor values in play:
     // 1. Geometric hard floors, not based on fluid relationships
-    // TODO(BSP) can this be cached if it's slow?
+    // TODO(CEP) can this be cached if it's slow?
     Real rhoflr_geom, uflr_geom;
     if (G.coords.is_spherical()) {
         const GReal r = G.r(k, j, i);
@@ -191,8 +192,6 @@ KOKKOS_INLINE_FUNCTION int determine_floors(const GRCoordinates& G,
  *
  * @return pflag: in NOF, a number <32 representing any failure of the U->P solve.
  * Otherwise 0.
- *
- * LOCKSTEP: this function respects P and ignores U in order to return consistent P<->U
  */
 template<InjectionFrame frame>
 KOKKOS_INLINE_FUNCTION int apply_floors(FLOOR_ONE_ARGS);
@@ -202,7 +201,9 @@ KOKKOS_INLINE_FUNCTION int apply_floors<InjectionFrame::fluid>(FLOOR_ONE_ARGS)
 {
     P(m_p.RHO, k, j, i) += m::max(0., rhoflr_max - P(m_p.RHO, k, j, i));
     P(m_p.UU, k, j, i) += m::max(0., uflr_max - P(m_p.UU, k, j, i));
-    return 0;
+
+    // Indicates no primitive variable inversion was performed
+    return -1;
 }
 
 template<>
@@ -282,7 +283,7 @@ KOKKOS_INLINE_FUNCTION int apply_floors<InjectionFrame::drift>(FLOOR_ONE_ARGS)
     P(m_p.U1, k, j, i) = Dtmp.ucon[1] + (beta[1] * Dtmp.ucon[0]);
     P(m_p.U2, k, j, i) = Dtmp.ucon[2] + (beta[2] * Dtmp.ucon[0]);
     P(m_p.U3, k, j, i) = Dtmp.ucon[3] + (beta[3] * Dtmp.ucon[0]);
-    return 0;
+    return -1;
 }
 
 // There's a way to avoid code duplication here, but it imposes more template madness
@@ -309,14 +310,14 @@ KOKKOS_INLINE_FUNCTION int apply_floors<InjectionFrame::normal_onedw>(FLOOR_ONE_
 
     // 3. Add new conserved mass/energy to the current "conserved" state.
     U(m_u.RHO, k, j, i) += rho_ut;
-    U(m_u.UU, k, j, i) += T[0];
+    U(m_u.UU, k, j, i) += T[0]; // Actually T^0_0 + rho u^t
     // Also add to the local primitives to produce a better guess
     P(m_p.RHO, k, j, i) += rho_add;
     P(m_p.UU, k, j, i) += u_add;
 
     // Recover primitive variables from conserved versions
     return Inverter::u_to_p<Inverter::Type::onedw>(
-        G, U, m_u, gam, k, j, i, P, m_p, Loci::center, 8, 1e-8, false);
+        G, U, m_u, gam, k, j, i, P, m_p, Loci::center, 8, 1e-8);
 }
 
 template<>
@@ -324,14 +325,14 @@ KOKKOS_INLINE_FUNCTION int apply_floors<InjectionFrame::normal_kastaun>(FLOOR_ON
 {
     // Add the material in the normal observer frame.
     // 1. Calculate how much material we're adding.
-    // By using the existing velocities for the rho*u^0 and T^0_0 contributions,
-    // We produce a guaranteed overestimate (since NOF floors will slow the material,
-    // reducing the Lorentz factor)
     const Real rho_add = m::max(0., rhoflr_max - P(m_p.RHO, k, j, i));
     const Real u_add = m::max(0., uflr_max - P(m_p.UU, k, j, i));
-    // TODO turn this into an option maybe? Or maybe set rhoflr/uflr using it
+    // We compute rho u^0 and T^00 using the existing velocities to determine Lorentz
+    // factor. This is a guaranteed overestimate of the fluid contributions to these
+    // quantities
     // const Real uvec[NVEC] = {P(m_p.U1, k, j, i), P(m_p.U2, k, j, i), P(m_p.U3, k, j,
     // i)};
+    // Alternatively, add less than will produce our floored values
     const Real uvec[NVEC] = {0.};
     const Real B[NVEC] = {0.};
 
@@ -343,12 +344,11 @@ KOKKOS_INLINE_FUNCTION int apply_floors<InjectionFrame::normal_kastaun>(FLOOR_ON
     // 3. Add new conserved mass/energy to the current "conserved" state.
     // (no need to modify the guess for Kastaun, esp once we sync mu)
     U(m_u.RHO, k, j, i) += rho_ut;
-    U(m_u.UU, k, j, i) += T[0];
+    U(m_u.UU, k, j, i) += T[0]; // Actually T^0_0 + rho u^t
 
-    // Recover new primitive variables.  Use Kastaun with safe parameters so we don't fail
-    // often
+    // Recover new primitive variables
     return Inverter::u_to_p<Inverter::Type::kastaun>(
-        G, U, m_u, gam, k, j, i, P, m_p, Loci::center, 25, 1e-12, true);
+        G, U, m_u, gam, k, j, i, P, m_p, Loci::center, 25, 1e-14);
 }
 
 // These are implemented as special cases in the kernel in floors_impl.hpp
@@ -357,14 +357,112 @@ template<>
 KOKKOS_INLINE_FUNCTION int apply_floors<InjectionFrame::mixed_fluid_normal>(
     FLOOR_ONE_ARGS)
 {
-    return 0;
+    return -1;
 }
 template<>
 KOKKOS_INLINE_FUNCTION int apply_floors<InjectionFrame::mixed_normal_drift>(
     FLOOR_ONE_ARGS)
 {
-    return 0;
+    return -1;
 }
+
+// KOKKOS_INLINE_FUNCTION rho_to_slow()
+// {
+
+//     // No floors/floors_inner distinction, TODO?
+//     const Real rhoh_denom_max = SQR(floors.gamma_max) *
+//                                 m::sqrt(1 - 1 / SQR(floors.gamma_max));
+
+//     //const Real rho = std::max(P(m_p.RHO, k, j, i), rhoflr_max);
+//     //const Real u = std::max(P(m_p.UU, k, j, i), uflr_max);
+//     const Real rho = P(m_p.RHO, k, j, i);
+//     const Real u = P(m_p.UU, k, j, i);
+//     const Real rhoh = rho + gam * u;
+//     const Real alpha  = 1. / m::sqrt(-G.gcon(Loci::center, j, i, 0, 0));
+//     const Real a_over_g = alpha / G.gdet(Loci::center, j, i);
+//     Real Scov[3] = {U(m_u.U1, k, j, i) * a_over_g,
+//                     U(m_u.U2, k, j, i) * a_over_g,
+//                     U(m_u.U3, k, j, i) * a_over_g};
+//     Real Scon[3];
+//     Real gupper[GR_DIM][GR_DIM], glower[GR_DIM][GR_DIM];
+//     G.gcon(Loci::center, j, i, gupper);
+//     G.gcov(Loci::center, j, i, glower);
+//     Scon[0] = ((gupper[1][1] - gupper[0][1]*gupper[0][1]/gupper[0][0])*Scov[0] +
+//                 (gupper[1][2] - gupper[0][1]*gupper[0][2]/gupper[0][0])*Scov[1] +
+//                 (gupper[1][3] - gupper[0][1]*gupper[0][3]/gupper[0][0])*Scov[2]);
+
+//     Scon[1] = ((gupper[2][1] - gupper[0][2]*gupper[0][1]/gupper[0][0])*Scov[0] +
+//                 (gupper[2][2] - gupper[0][2]*gupper[0][2]/gupper[0][0])*Scov[1] +
+//                 (gupper[2][3] - gupper[0][2]*gupper[0][3]/gupper[0][0])*Scov[2]);
+
+//     Scon[2] = ((gupper[3][1] - gupper[0][3]*gupper[0][1]/gupper[0][0])*Scov[0] +
+//                 (gupper[3][2] - gupper[0][3]*gupper[0][2]/gupper[0][0])*Scov[1] +
+//                 (gupper[3][3] - gupper[0][3]*gupper[0][3]/gupper[0][0])*Scov[2]);
+//     Real Ssq = 0.0;
+//     SPACELOOP(ii) Ssq += Scon[ii] * Scov[ii];
+
+//     const Real rhoh_min = m::sqrt(Ssq) / rhoh_denom_max;
+//     if (rhoh < rhoh_min) {
+//         fflagl |= Floors::FFlag::INVERTER_GAMMA;
+//         // Proportional increases to rho,u preserve temperature
+//         // TODO could play with this ratio
+//         P(m_p.RHO, k, j, i) = rho * rhoh_min/rhoh;
+//         P(m_p.UU, k, j, i) = u * rhoh_min/rhoh;
+
+//         Real Bvec[] = {0.0, 0.0, 0.0};
+//         SPACELOOP(ii) Bvec[ii] = P(m_u.B1 + ii, k, j, i) * alpha;
+//         Real BdotS = 0.;
+//         SPACELOOP(ii) BdotS += Bvec[ii] * Scov[ii];
+//         Real Bsq = 0.;
+//         SPACELOOP2(ii, jj) Bsq += glower[ii + 1][jj + 1] * Bvec[ii] * Bvec[jj];
+//         Real Sparsq = BdotS * BdotS / Bsq;
+//         Real Sperpsq = Ssq - Sparsq;
+//         Real Spar[3], Sperp[3];
+//         SPACELOOP(ii) Spar[ii] = BdotS * Bvec[ii] / Bsq;
+//         SPACELOOP(ii) Sperp[ii] = Scon[ii] - Spar[ii];
+
+//         auto func_W = [&] (Real W) {
+//             const Real rhohW2 = rhoh_min * W * W;
+//             return Sparsq / SQR(rhohW2) +
+//             Sperpsq / SQR(rhohW2 + Bsq) +
+//             1. / (W * W) - 1.;
+//         };
+
+//         Real zm = 1.;
+//         Real zp = floors.gamma_max;
+//         Real z = 0.5*(zm + zp);
+
+//         Real fm = func_W(zm);
+//         Real fp = func_W(zp);
+
+//         bool vel_solve_failed = false;
+//         for (int iter = 0; iter < 30; ++iter) {
+//             z =  (zm*fp - zp*fm) / (fp-fm);  // linear interpolation to point f(z)=0
+//             Real f = func_W(z);
+//             // Quit if convergence reached
+//             if ((m::abs(f) < 1e-8) || (m::abs(zm-zp) < 1e-10)) {
+//                 // Return failure if out of tolerance
+//                 vel_solve_failed = m::abs(f) > 1e-8;
+//                 break;
+//             }
+//             // assign zm-->zp if root bracketed by [z,zp]
+//             if (f*fp < 0.0) {
+//                 zm = zp;
+//                 fm = fp;
+//                 zp = z;
+//                 fp = f;
+//             } else {  // assign zp-->z if root bracketed by [zm,z]
+//                 fm = 0.5*fm; // 1/2 comes from "Illinois algorithm" to accelerate
+//                 convergence zp = z; fp = f;
+//             }
+//         }
+
+//         SPACELOOP(ii) P(m_p.U1+ii, k, j, i) = z * (Spar[ii] / (rhoh_min * z * z) +
+//                                                 Sperp[ii] / (rhoh_min * z * z + Bsq));
+//         // TODO(CEP) record when solve fails?
+//         // TODO(CEP) Fallthrough
+//     }
+// }
 
 /**
  * Apply just the geometric floors to a set of local primitives.
@@ -411,6 +509,19 @@ KOKKOS_INLINE_FUNCTION int apply_geo_floors(const GRCoordinates& G, Local& P,
 
     P(m.RHO) += m::max(0., rhoflr_geom - P(m.RHO));
     P(m.UU) += m::max(0., uflr_geom - P(m.UU));
+    // These are a last-ditch *after* the usual floor applications.  Keep them stable
+    if (fflag) {
+        P(m.U1) = 0.;
+        P(m.U2) = 0.;
+        P(m.U3) = 0.;
+    }
+
+    // These are a last-ditch *after* the usual floor applications.  Keep them stable
+    if (fflag) {
+        P(m.U1) = 0.;
+        P(m.U2) = 0.;
+        P(m.U3) = 0.;
+    }
 
     return fflag;
 }
@@ -450,7 +561,55 @@ KOKKOS_INLINE_FUNCTION int apply_geo_floors(const GRCoordinates& G, Global& P,
 
     P(m.RHO, k, j, i) += m::max(0., rhoflr_geom - P(m.RHO, k, j, i));
     P(m.UU, k, j, i) += m::max(0., uflr_geom - P(m.UU, k, j, i));
+    // These are a last-ditch *after* the usual floor applications.  Keep them stable
+    if (fflag) {
+        P(m.U1, k, j, i) = 0.;
+        P(m.U2, k, j, i) = 0.;
+        P(m.U3, k, j, i) = 0.;
+    }
 
+    // These are a last-ditch *after* the usual floor applications.  Keep them stable
+    if (fflag) {
+        P(m.U1, k, j, i) = 0.;
+        P(m.U2, k, j, i) = 0.;
+        P(m.U3, k, j, i) = 0.;
+    }
+
+    return fflag;
+}
+
+template<typename Global>
+KOKKOS_INLINE_FUNCTION int determine_geo_floors(const GRCoordinates& G, Global& P,
+    const VarMap& m, const Real& gam, const int& k, const int& j, const int& i,
+    const Floors::Prescription& floors, const Floors::Prescription& floors_inner,
+    Real& rhoflr_geom, Real& uflr_geom, const Loci loc = Loci::center)
+{
+    // Choose our floor scheme
+    const Floors::Prescription& myfloors =
+        (floors.radius_dependent_floors && G.r(0, j, i) < floors.floors_switch_r)
+            ? floors_inner
+            : floors;
+
+    // Apply only the geometric floors
+    if (G.coords.is_spherical()) {
+        const GReal r = G.r(0, j, i);
+        // r_char sets more aggressive floor close to EH but backs off
+        Real rhoscal = (myfloors.use_r_char) ? 1. / ((r * r) * (1 + r / myfloors.r_char))
+                                             : 1. / m::sqrt(r * r * r);
+        rhoflr_geom = m::max(myfloors.rho_min_geom * rhoscal, myfloors.rho_min_const);
+        uflr_geom =
+            m::max(myfloors.u_min_geom * m::pow(rhoscal, gam), myfloors.u_min_const);
+    } else {
+        rhoflr_geom = myfloors.rho_min_const;
+        uflr_geom = myfloors.u_min_const;
+    }
+
+    // TODO(CEP) really needed?  Not used in the only call
+    int fflag = 0;
+    // Record all the floors that were hit, using bitflags
+    // Record Geometric floor hits
+    fflag |= (rhoflr_geom > P(m.RHO, k, j, i)) * FFlag::GEOM_RHO_FLUX;
+    fflag |= (uflr_geom > P(m.UU, k, j, i)) * FFlag::GEOM_U_FLUX;
     return fflag;
 }
 

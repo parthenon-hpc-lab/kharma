@@ -96,7 +96,7 @@ TaskStatus Wind::AddSource(MeshData<Real>* md, MeshData<Real>* mdudt, IndexDomai
             : n;
 
     pmb0->par_for("add_wind", block.s, block.e, kb.s, kb.e, jb.s, jb.e, ib.s, ib.e,
-        KOKKOS_LAMBDA (const int& b, const int &k, const int &j, const int &i)
+        KOKKOS_LAMBDA(const int& b, const int& k, const int& j, const int& i)
         {
             const auto& G = dUdt.GetCoords(b);
             // Need coordinates to evaluate particle addtn rate

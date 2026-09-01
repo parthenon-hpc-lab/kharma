@@ -31,7 +31,7 @@ ix3_bc = periodic
 ox3_bc = periodic
 
 <parthenon/meshblock>
-nx1 = 256
+nx1 = 128
 nx2 = 128
 nx3 = 1
 
@@ -50,6 +50,10 @@ gamma = 1.666667
 <flux>
 type = llf
 reconstruction = weno5
+
+<b_field>
+# TODO properly support resizing face_ct restart files
+solver = flux_ct
 
 <driver>
 type = imex

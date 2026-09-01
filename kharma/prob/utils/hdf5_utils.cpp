@@ -41,7 +41,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-// This lib uses a global debug flag if one exists
+// KHARMA uses unset/set, but this file used 0/1. Convert.
 #ifndef DEBUG
 #define DEBUG 0
 #endif
@@ -134,8 +134,8 @@ int hdf5_create(const char* fname)
 {
     hid_t plist_id = H5Pcreate(H5P_FILE_ACCESS);
 #if USE_MPI
-    H5Pset_fapl_mpio(
-        plist_id, MPI_COMM_WORLD, MPI_INFO_NULL); // TODO tune HDF with an MPI info object
+    H5Pset_fapl_mpio(plist_id, MPI_COMM_WORLD,
+        MPI_INFO_NULL); // TODO tune HDF with an MPI info object
 #endif
     file_id = H5Fcreate(fname, H5F_ACC_TRUNC, H5P_DEFAULT, plist_id);
     H5Pclose(plist_id);

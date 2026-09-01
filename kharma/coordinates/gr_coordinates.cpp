@@ -75,7 +75,6 @@ GRCoordinates::GRCoordinates(const RegionSize& rs, ParameterInput* pin)
     n1 = rs.nx(X1DIR) + 2 * Globals::nghost;
     n2 = rs.nx(X2DIR) > 1 ? rs.nx(X2DIR) + 2 * Globals::nghost : 1;
     n3 = rs.nx(X3DIR) > 1 ? rs.nx(X3DIR) + 2 * Globals::nghost : 1;
-    ng = Globals::nghost;
     // cout << "Initialized coordinates with nghost " << Globals::nghost << std::endl;
 
     connection_average_points =
@@ -92,7 +91,6 @@ GRCoordinates::GRCoordinates(const GRCoordinates& src, int coarsen)
     , n1(src.n1 / coarsen)
     , n2(src.n2 / coarsen)
     , n3(src.n3 / coarsen)
-    , ng(src.ng)
     , connection_average_points(src.connection_average_points)
     , correct_connections(src.correct_connections)
 {
@@ -134,7 +132,7 @@ void init_GRCoordinates(GRCoordinates& G)
     auto gdet_conn_local = G.gdet_conn_direct;
 
     Kokkos::parallel_for("init_geom", MDRangePolicy<Rank<2>>({0, 0}, {n2 + 1, n1 + 1}),
-        KOKKOS_LAMBDA (const int& j, const int& i)
+        KOKKOS_LAMBDA(const int& j, const int& i)
         {
             // Iterate through locations. This could be done in fancy ways, but
             // this highlights what's actually going on.
@@ -229,7 +227,7 @@ void init_GRCoordinates(GRCoordinates& G)
         });
     if (correct_connections) {
         Kokkos::parallel_for("geom_corrections", MDRangePolicy<Rank<2>>({0, 0}, {n2, n1}),
-            KOKKOS_LAMBDA (const int& j, const int& i)
+            KOKKOS_LAMBDA(const int& j, const int& i)
             {
                 // In the two directions the grid changes, make sure that we *exactly*
                 // satisfy the req't gdet*conn^mu_mu_nu = d_nu gdet, when evaluated on
@@ -253,7 +251,8 @@ void init_GRCoordinates(GRCoordinates& G)
                         // Then sum the coefficients and record nonzero ones for
                         // modification
                         GReal test_sum = 0;
-                        GReal sum_portions, portions[GR_DIM] = {0};
+                        GReal sum_portions = 0;
+                        GReal portions[GR_DIM] = {0};
                         DLOOP1 {
                             test_sum += gdet_conn_local(j, i, mu, mu, lam);
                             portions[mu] = m::abs(gdet_conn_local(j, i, mu, mu, lam));

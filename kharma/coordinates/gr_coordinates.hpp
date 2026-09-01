@@ -106,7 +106,6 @@ class GRCoordinates : public parthenon::UniformCartesian
         , n1(src.n1)
         , n2(src.n2)
         , n3(src.n3)
-        , ng(src.ng)
         , coords(src.coords)
         , connection_average_points(src.connection_average_points)
         , correct_connections(src.correct_connections)
@@ -122,7 +121,7 @@ class GRCoordinates : public parthenon::UniformCartesian
 #endif
     };
 
-    // TODO(BSP) eliminate calls to this from Parthenon, grid should be const
+    // TODO(CEP) eliminate calls to this from Parthenon, grid should be const
     KOKKOS_FUNCTION GRCoordinates operator=(const GRCoordinates& src)
     {
         // std::cerr << "Calling assignment operator size " << src.n1 << " " << src.n2 <<

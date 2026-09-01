@@ -20,7 +20,7 @@ do
     exit_code=0
     par=$(basename $fil)
     prob=${par%.*}
-    ../../run.sh -n 1 -i $fil parthenon/time/nlim=2 parthenon/job/archive_parameters=false &>log_${prob}.txt || exit_code=$?
+    ../../run.sh -n 1 -d . -i $fil parthenon/time/nlim=2 parthenon/job/archive_parameters=false &>log_${prob}.txt || exit_code=$?
     rm -f *.{hst,phdf,rhdf,xdmf}
     if [ $exit_code -ne 0 ]; then
       printf "%-40s %s\n" $par FAIL

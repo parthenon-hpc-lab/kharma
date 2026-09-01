@@ -83,11 +83,12 @@ TaskStatus ApplyFloorsInFrame(MeshData<Real>* md, IndexDomain domain)
     pmb0->par_for("apply_floors", block.s, block.e, b.ks, b.ke, b.js, b.je, b.is, b.ie,
         KOKKOS_LAMBDA (const int &b, const int &k, const int &j, const int &i)
         {
-            if (static_cast<int>(fflag(b, 0, k, j, i))) {
+            if (static_cast<int>(fflag(b, 0, k, j, i)) ||
+                static_cast<int>(pflag(b, 0, k, j, i))) {
                 const auto& G = P.GetCoords(b);
-                // apply_floors can involve another U_to_P call.  Hide the pflag in bottom
-                // 5 bits and retrieve both
-                int pflag_l = 0;
+                // apply_floors can involve another U_to_P call, capture that flag
+                // this is the default return for "no inversion"
+                int pflag_l = -1;
                 // These would be constexpr except Nvidia doesn't like lambda-capture in
                 // constexpr ifs
                 if (frame == InjectionFrame::mixed_fluid_normal) {
@@ -124,18 +125,18 @@ TaskStatus ApplyFloorsInFrame(MeshData<Real>* md, IndexDomain domain)
                         m_u);
                 }
 
-                // Record the pflag if nonzero, that is, if *either* the initial inversion
-                // or post-floor inversion failed.
-                if (pflag_l) pflag(b, 0, k, j, i) = pflag_l;
+                // Record the pflag if we applied normal floors -- successful or not
+                if (pflag_l >= 0) pflag(b, 0, k, j, i) = pflag_l;
 
                 // Apply ceilings *after* floors, to make the temperature ceiling
                 // better-behaved
                 apply_ceilings(
                     G, P(b), m_p, gam, k, j, i, floors, floors_inner, U(b), m_u);
 
-                // P->U for any modified zones
-                Flux::p_to_u_mhd(
-                    G, P(b), m_p, emhd_params, gam, k, j, i, U(b), m_u, Loci::center);
+                // P->U if we inverted *correctly* (or didn't invert)
+                if (pflag_l <= 0)
+                    Flux::p_to_u_mhd(
+                        G, P(b), m_p, emhd_params, gam, k, j, i, U(b), m_u, Loci::center);
             }
         });
 

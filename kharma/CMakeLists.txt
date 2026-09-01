@@ -162,3 +162,15 @@ if (Kokkos_ENABLE_HWLOC)
     target_compile_definitions(${EXE_NAME} PUBLIC Kokkos_ENABLE_HWLOC)
     target_link_libraries(${EXE_NAME} PUBLIC hwloc)
 endif()
+
+target_link_libraries(${EXE_NAME} 
+PUBLIC
+    singularity-eos::singularity-eos
+    singularity-opac::flags    
+)
+
+# Installation
+# Install binary
+install(TARGETS ${EXE_NAME} TYPE RUNTIME)
+
+# TODO could do headers, library, tests, or parameter files in share/docs...

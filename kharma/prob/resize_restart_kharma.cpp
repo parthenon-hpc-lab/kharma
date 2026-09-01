@@ -87,7 +87,7 @@ void ReadKharmaRestartHeader(std::string fname, ParameterInput* pin)
     std::istringstream is(inputString);
     fpinput->LoadFromStream(is);
 
-    // TODO(BSP) is there a way to copy all parameters finput->pin and fine-tune later?
+    // TODO(CEP) is there a way to copy all parameters finput->pin and fine-tune later?
     int fnx1, fnx2, fnx3, fmbnx1, fmbnx2, fmbnx3;
     fnx1 = fpinput->GetInteger("parthenon/mesh", "nx1");
     fnx2 = fpinput->GetInteger("parthenon/mesh", "nx2");
@@ -617,7 +617,7 @@ TaskStatus ReadKharmaRestart(std::shared_ptr<MeshBlockData<Real>> rc, ParameterI
     int ks = pmb->cellbounds.ks(domain), ke = pmb->cellbounds.ke(domain);
 
     pmb->par_for("copy_restart_state_kharma", ks, ke, js, je, is, ie,
-        KOKKOS_LAMBDA (const int &k, const int &j, const int &i)
+                 KOKKOS_LAMBDA(const int& k, const int& j, const int& i)
         {
             get_prim_restart_kharma(G, P, m_p, fx1min_ghost, fx1max_ghost, should_fill,
                 is_spherical, gam, rs, mdot, ur_frac, uphi, rin_bondi, length, f_length,
@@ -634,7 +634,7 @@ TaskStatus ReadKharmaRestart(std::shared_ptr<MeshBlockData<Real>> rc, ParameterI
                 loc = Loci::center;
             pmb->par_for("copy_B_restart_state_kharma", ks, ke + (dir_of(loc) == 3), js,
                 je + (dir_of(loc) == 2), is, ie + (dir_of(loc) == 1),
-                KOKKOS_LAMBDA (const int &k, const int &j, const int &i)
+                         KOKKOS_LAMBDA(const int& k, const int& j, const int& i)
                 {
                     get_B_restart_kharma(G, fx1min_ghost, fx1max_ghost, should_fill, loc,
                         length, f_length, lengthB, f_lengthB, x1_f_device, x2_f_device,

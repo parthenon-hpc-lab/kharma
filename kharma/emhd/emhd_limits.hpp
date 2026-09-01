@@ -38,7 +38,7 @@
 #include "flux_functions.hpp"
 
 // Flags for the extended MHD limits
-// TODO(BSP) name/list and print like FFlag
+// TODO(CEP) name/list and print like FFlag
 #define HIT_Q_LIMIT 1
 #define HIT_DP_MAX_LIMIT 2
 #define HIT_DP_MIN_LIMIT 4

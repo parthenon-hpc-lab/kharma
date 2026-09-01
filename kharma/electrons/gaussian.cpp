@@ -104,8 +104,8 @@ void create_grf(int Nx1, int Nx2, double lx1, double lx2, double* dv1, double* d
     }
 
     fftw_plan p_x1, p_x2;
-    p_x1 = fftw_plan_dft_2d(
-        Nx1, Nx2, dvkx1, dvkx1, FFTW_BACKWARD, FFTW_ESTIMATE); // in-place
+    p_x1 = fftw_plan_dft_2d(Nx1, Nx2, dvkx1, dvkx1, FFTW_BACKWARD,
+        FFTW_ESTIMATE); // in-place
     p_x2 = fftw_plan_dft_2d(Nx1, Nx2, dvkx2, dvkx2, FFTW_BACKWARD, FFTW_ESTIMATE);
     fftw_execute(p_x1); // look for threads documentation
     fftw_execute(p_x2);

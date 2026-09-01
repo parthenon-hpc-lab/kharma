@@ -138,7 +138,7 @@ TaskStatus CoordinateOutput::BlockUserWorkBeforeOutput(
 
         IndexRange3 b = KDomain::GetRange(rc, IndexDomain::entire);
         pmb->par_for("set_geometry", b.ks, b.ke, b.js, b.je, b.is, b.ie,
-            KOKKOS_LAMBDA (const int &k, const int &j, const int &i)
+            KOKKOS_LAMBDA(const int& k, const int& j, const int& i)
             {
                 // Native
                 GReal Xnative[GR_DIM];

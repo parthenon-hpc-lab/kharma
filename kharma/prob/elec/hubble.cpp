@@ -104,8 +104,8 @@ TaskStatus SetHubbleImpl(
     // first time this is called in boundary conditions inside the time stepping cycle is
     // when counter == 0
     int counter = pmb->packages.Get("GRMHD")->Param<int>("counter");
-    const Real tt = pmb->packages.Get("Globals")->Param<Real>("time");
-    const Real dt = pmb->packages.Get("Globals")->Param<Real>("dt_last");
+    const double tt = pmb->packages.Get("Globals")->Param<double>("time");
+    const double dt = pmb->packages.Get("Globals")->Param<double>("dt_last");
 
     Real t = tt + 0.5 * dt;
     if ((counter % 4) > 1) t = tt + dt;
@@ -122,7 +122,7 @@ TaskStatus SetHubbleImpl(
         Real tobeu = ug0 / pow(1 + v0 * t, 2);
         if (!cooling) tobeu = ug0 / pow(1 + v0 * t, gam);
         pmb->par_for("hubble_init", kb.s, kb.e, jb.s, jb.e, ib.s, ib.e,
-            KOKKOS_LAMBDA (const int &k, const int &j, const int &i)
+                     KOKKOS_LAMBDA(const int& k, const int& j, const int& i)
             {
                 Real X[GR_DIM];
                 G.coord_embed(k, j, i, Loci::center, X);
@@ -145,7 +145,7 @@ TaskStatus SetHubbleImpl(
             if (!cooling)
                 tobeke = (gam - 2) * (game - 1) / (game - 2) * ue0 / pow(rho0, game);
             pmb->par_for("hubble_init", kb.s, kb.e, jb.s, jb.e, ib.s, ib.e,
-                KOKKOS_LAMBDA (const int &k, const int &j, const int &i)
+                         KOKKOS_LAMBDA(const int& k, const int& j, const int& i)
                 {
                     ktot(k, j, i) = tobeke;
                     kel_const(k, j, i) = tobeke; // Since we are using fel = 1
@@ -167,7 +167,7 @@ TaskStatus SetHubbleImpl(
                          (uvec(0, 0, context_index) * v0);
 
         pmb->par_for("hubble_init", kb.s, kb.e, jb.s, jb.e, ib.s, ib.e,
-            KOKKOS_LAMBDA (const int &k, const int &j, const int &i)
+                     KOKKOS_LAMBDA(const int& k, const int& j, const int& i)
             {
                 Real X[GR_DIM];
                 G.coord_embed(k, j, i, Loci::center, X);
@@ -178,7 +178,7 @@ TaskStatus SetHubbleImpl(
         if (pmb->packages.AllPackages().count("Electrons")) {
             GridScalar kel_const = rc->Get("prims.Kel_Constant").data;
             pmb->par_for("hubble_init", kb.s, kb.e, jb.s, jb.e, ib.s, ib.e,
-                KOKKOS_LAMBDA (const int &k, const int &j, const int &i)
+                         KOKKOS_LAMBDA(const int& k, const int& j, const int& i)
                 {
                     kel_const(k, j, i) = kel_const(k, j, context_index);
                 });
@@ -188,7 +188,7 @@ TaskStatus SetHubbleImpl(
     return TaskStatus::complete;
 }
 
-// TODO(BSP) Add MeshApplySource callback & convert this
+// TODO(CEP) Add MeshApplySource callback & convert this
 void ApplyHubbleHeating(MeshBlockData<Real>* mbase)
 {
     auto pmb0 = mbase->GetBlockPointer();
@@ -198,8 +198,8 @@ void ApplyHubbleHeating(MeshBlockData<Real>* mbase)
     const VarMap m_p(prims_map, false);
 
     Real Q = 0;
-    const Real dt =
-        pmb0->packages.Get("Globals")->Param<Real>("dt_last"); // Close enough?
+    const auto dt =
+        pmb0->packages.Get("Globals")->Param<double>("dt_last"); // Close enough?
     const Real t = pmb0->packages.Get("Globals")->Param<Real>("time") + 0.5 * dt;
     const Real v0 = pmb0->packages.Get("GRMHD")->Param<Real>("v0");
     const Real ug0 = pmb0->packages.Get("GRMHD")->Param<Real>("ug0");
@@ -212,7 +212,7 @@ void ApplyHubbleHeating(MeshBlockData<Real>* mbase)
     auto block = IndexRange{0, P_mbase.GetDim(5) - 1};
 
     pmb0->par_for("heating_substep", kb.s, kb.e, jb.s, jb.e, ib.s, ib.e,
-        KOKKOS_LAMBDA (const int &k, const int &j, const int &i)
+                  KOKKOS_LAMBDA(const int& k, const int& j, const int& i)
         {
             P_mbase(m_p.UU, k, j, i) += Q * dt * 0.5;
         });

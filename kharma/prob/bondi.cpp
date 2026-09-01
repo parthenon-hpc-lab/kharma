@@ -36,6 +36,7 @@
 
 #include "boundaries.hpp"
 #include "floors.hpp"
+#include "flux.hpp"
 #include "flux_functions.hpp"
 
 void AddBondiParameters(ParameterInput* pin, Packages_t& packages)
@@ -53,8 +54,8 @@ void AddBondiParameters(ParameterInput* pin, Packages_t& packages)
     const Real bondi_clear_angle = pin->GetOrAddReal("bondi", "bondi_clear_angle", 0.);
 
     const bool fill_interior = pin->GetOrAddBoolean("bondi", "fill_interior", false);
-    const bool diffinit = pin->GetOrAddBoolean(
-        "bondi", "diffinit", false); // uses r^-1 density initialization instead
+    const bool diffinit = pin->GetOrAddBoolean("bondi", "diffinit",
+        false); // uses r^-1 density initialization instead
 
     // Add these to package properties, since they continue to be needed on boundaries
     // TODO Problems NEED params
@@ -136,8 +137,8 @@ TaskStatus SetBondiImpl(
 {
     auto pmb = rc->GetBlockPointer();
 
-    // std::cerr << "Bondi on domain: " <<
-    // KBoundaries::BoundaryName(KBoundaries::BoundaryFaceOf(domain)) << "coarse: " <<
+    // std::cout << "Setting bondi on domain: " <<
+    // KBoundaries::BoundaryName(KBoundaries::BoundaryFaceOf(domain)) << " coarse: " <<
     // coarse << std::endl;
 
     PackIndexMap prims_map, cons_map;
@@ -174,34 +175,39 @@ TaskStatus SetBondiImpl(
     const IndexRange jb = bounds.GetBoundsJ(domain);
     const IndexRange kb = bounds.GetBoundsK(domain);
 
+    // std::cout << "Setting Bondi on range: (" << ib.s << " " << ib.e << " " << jb.s << "
+    // " << jb.e << " " << kb.s << " " << kb.e << ")" << std::endl; std::cout << "nghost
+    // is " << Globals::nghost << std::endl;
+
     pmb->par_for("bondi_boundary", kb.s, kb.e, jb.s, jb.e, ib.s, ib.e,
-        KOKKOS_LAMBDA (const int &k, const int &j, const int &i)
+                 KOKKOS_LAMBDA(const int& k, const int& j, const int& i)
         {
             Real rho, u;
             Real u_prim[NVEC];
             get_prim_bondi(G, diffinit, rs, mdot, gam, ur_frac, uphi, rin_bondi,
                 bondi_clear_angle, fill_interior, rho, u, u_prim, k, j, i);
 
-            // Note that NaN guards, including these, are ignored (!) under -ffast-math
-            // flag. Thus we stay away from initializing at EH where this could happen
-            if (!isnan(rho)) P(m_p.RHO, k, j, i) = rho;
-            if (!isnan(u)) P(m_p.UU, k, j, i) = u;
-            if (!isnan(u_prim[0])) P(m_p.U1, k, j, i) = u_prim[0];
-            if (!isnan(u_prim[1])) P(m_p.U2, k, j, i) = u_prim[1];
-            if (!isnan(u_prim[2])) P(m_p.U3, k, j, i) = u_prim[2];
+            // Note that NaN guards, including these, are ignored (!) under
+            // -ffast-math flag. Thus we stay away from initializing at EH where
+            // this could happen
+            if (!m::isnan(rho)) P(m_p.RHO, k, j, i) = rho;
+            if (!m::isnan(u)) P(m_p.UU, k, j, i) = u;
+            if (!m::isnan(u_prim[0])) P(m_p.U1, k, j, i) = u_prim[0];
+            if (!m::isnan(u_prim[1])) P(m_p.U2, k, j, i) = u_prim[1];
+            if (!m::isnan(u_prim[2])) P(m_p.U3, k, j, i) = u_prim[2];
         });
 
     // Generally I avoid this, but the viscous Bondi test problem has very unique
     // boundary requirements to converge.  The GRMHD vars must be held constant,
     // but the pressure anisotropy allowed to change as necessary with outflow conditions
-    // TODO(BSP) this doesn't properly support face_ct, yell if enabled?
+    // TODO(CEP) this doesn't properly support face_ct, yell if enabled?
     if (pmb->packages.Get("Globals")->Param<std::string>("problem") == "bondi_viscous") {
         BoundaryFace bface = KBoundaries::BoundaryFaceOf(domain);
         bool inner = KBoundaries::BoundaryIsInner(bface);
         IndexRange ib_i = bounds.GetBoundsI(domain);
         int ref = inner ? ib_i.s : ib_i.e;
         pmb->par_for("bondi_viscous_boundary", kb.s, kb.e, jb.s, jb.e, ib.s, ib.e,
-            KOKKOS_LAMBDA (const int &k, const int &j, const int &i)
+                     KOKKOS_LAMBDA(const int& k, const int& j, const int& i)
             {
                 GReal Xembed[GR_DIM];
                 G.coord_embed(k, j, i, Loci::center, Xembed);

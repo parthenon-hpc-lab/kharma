@@ -116,6 +116,7 @@ TaskStatus SeedBFieldType(MeshBlockData<Real>* rc, ParameterInput* pin,
 
     // Shortcut to field values for easy fields
     if constexpr (Seed == BSeedType::constant || Seed == BSeedType::monopole ||
+                  Seed == BSeedType::split_monopole_const ||
                   Seed == BSeedType::orszag_tang || Seed == BSeedType::wave ||
                   Seed == BSeedType::shock_tube) {
         // All custom B fields should set what they need of these.
@@ -141,7 +142,7 @@ TaskStatus SeedBFieldType(MeshBlockData<Real>* rc, ParameterInput* pin,
             // Avoid overstepping even as we fill *every face*
             IndexRange3 b1 = KDomain::GetRange(rc, domain, F1);
             pmb->par_for("B_field_B1", b1.ks, b1.ke, b1.js, b1.je, b1.is, b1.ie,
-                KOKKOS_LAMBDA(const int &k, const int &j, const int &i)
+                         KOKKOS_LAMBDA(const int& k, const int& j, const int& i)
                 {
                     GReal Xembed[GR_DIM];
                     double null1, null2;
@@ -155,7 +156,7 @@ TaskStatus SeedBFieldType(MeshBlockData<Real>* rc, ParameterInput* pin,
                 });
             IndexRange3 b2 = KDomain::GetRange(rc, domain, F2);
             pmb->par_for("B_field_B2", b2.ks, b2.ke, b2.js, b2.je, b2.is, b2.ie,
-                KOKKOS_LAMBDA(const int &k, const int &j, const int &i)
+                         KOKKOS_LAMBDA(const int& k, const int& j, const int& i)
                 {
                     GReal Xembed[GR_DIM];
                     double null1, null2;
@@ -168,7 +169,7 @@ TaskStatus SeedBFieldType(MeshBlockData<Real>* rc, ParameterInput* pin,
                 });
             IndexRange3 b3 = KDomain::GetRange(rc, domain, F3);
             pmb->par_for("B_field_B2", b3.ks, b3.ke, b3.js, b3.je, b3.is, b3.ie,
-                KOKKOS_LAMBDA(const int &k, const int &j, const int &i)
+                         KOKKOS_LAMBDA(const int& k, const int& j, const int& i)
                 {
                     GReal Xembed[GR_DIM];
                     double null1, null2;
@@ -184,7 +185,7 @@ TaskStatus SeedBFieldType(MeshBlockData<Real>* rc, ParameterInput* pin,
         } else if (pkgs.count("B_FluxCT")) {
             GridVector B_P = rc->Get("prims.B").data;
             pmb->par_for("B_field_B", b.ks, b.ke, b.js, b.je, b.is, b.ie,
-                KOKKOS_LAMBDA(const int &k, const int &j, const int &i)
+                         KOKKOS_LAMBDA(const int& k, const int& j, const int& i)
                 {
                     GReal Xembed[GR_DIM];
                     G.coord_embed(k, j, i, Loci::center, Xembed);
@@ -211,7 +212,9 @@ TaskStatus SeedBFieldType(MeshBlockData<Real>* rc, ParameterInput* pin,
             case BSeedType::sane:
             case BSeedType::mad:
             case BSeedType::mad_quadrupole:
+            case BSeedType::mcaf:
             case BSeedType::r3s3:
+            case BSeedType::r3s3_min_rho:
             case BSeedType::r5s5:
             case BSeedType::gaussian:
                 // Torus parameters
@@ -244,13 +247,13 @@ TaskStatus SeedBFieldType(MeshBlockData<Real>* rc, ParameterInput* pin,
         // For all other fields...
         // Find the magnetic vector potential.  In X3 symmetry only A_phi is non-zero,
         // But for tilted conditions we must keep track of all components
-        // TODO(BSP) Make the vector potential a proper edge-centered field, sync it
+        // TODO(CEP) Make the vector potential a proper edge-centered field, sync it
         // before B calc
         IndexRange3 be = KDomain::GetRange(rc, domain, E3);
         IndexSize3 sz = KDomain::GetBlockSize(rc);
         ParArrayND<double> A("A", NVEC, sz.n3 + 1, sz.n2 + 1, sz.n1 + 1);
         pmb->par_for("B_field_A", be.ks, be.ke, be.js, be.je, be.is, be.ie,
-            KOKKOS_LAMBDA(const int &k, const int &j, const int &i)
+            KOKKOS_LAMBDA(const int& k, const int& j, const int& i)
             {
                 GReal Xnative[GR_DIM];
                 GReal Xembed[GR_DIM], Xmidplane[GR_DIM];
@@ -356,13 +359,13 @@ TaskStatus SeedBFieldType(MeshBlockData<Real>* rc, ParameterInput* pin,
             IndexRange3 bl = KDomain::GetRange(rc, domain);
             if (ndim > 2) {
                 pmb->par_for("B_field_B_3D", bl.ks, bl.ke, bl.js, bl.je, bl.is, bl.ie,
-                    KOKKOS_LAMBDA(const int &k, const int &j, const int &i)
+                             KOKKOS_LAMBDA(const int& k, const int& j, const int& i)
                     {
                         B_FluxCT::averaged_curl_3D(G, A, B_U, k, j, i);
                     });
             } else if (ndim > 1) {
                 pmb->par_for("B_field_B_2D", bl.ks, bl.ke, bl.js, bl.je, bl.is, bl.ie,
-                    KOKKOS_LAMBDA(const int &k, const int &j, const int &i)
+                             KOKKOS_LAMBDA(const int& k, const int& j, const int& i)
                     {
                         B_FluxCT::averaged_curl_2D(G, A, B_U, k, j, i);
                     });
@@ -374,7 +377,7 @@ TaskStatus SeedBFieldType(MeshBlockData<Real>* rc, ParameterInput* pin,
                 GridVector B_Save = rc->Get("B_Save").data;
                 // Hyerin (12/19/22) copy over data after initialization
                 pmb->par_for("B_field_B_3D", bl.ks, bl.ke, bl.js, bl.je, bl.is, bl.ie,
-                    KOKKOS_LAMBDA(const int &k, const int &j, const int &i)
+                    KOKKOS_LAMBDA(const int& k, const int& j, const int& i)
                     {
                         GReal X[GR_DIM];
                         G.coord(k, j, i, Loci::center, X);
@@ -415,7 +418,6 @@ TaskStatus SeedBField(MeshData<Real>* md, ParameterInput* pin)
         // I could make this a map or something,
         // but this is the only place I decode it.
         // TODO could also save it to a package...
-        // TODO accumulate TaskStatus properly?
         if (b_field_type == "constant") {
             status = SeedBFieldType<BSeedType::constant>(rc, pin);
         } else if (b_field_type == "monopole") {
@@ -429,14 +431,22 @@ TaskStatus SeedBField(MeshData<Real>* md, ParameterInput* pin)
             status = SeedBFieldType<BSeedType::mad>(rc, pin);
         } else if (b_field_type == "mad_quadrupole") {
             status = SeedBFieldType<BSeedType::mad_quadrupole>(rc, pin);
+        } else if (b_field_type == "mcaf") {
+            status = SeedBFieldType<BSeedType::mcaf>(rc, pin);
         } else if (b_field_type == "r3s3") {
             status = SeedBFieldType<BSeedType::r3s3>(rc, pin);
+        } else if (b_field_type == "r3s3_min_rho") {
+            status = SeedBFieldType<BSeedType::r3s3_min_rho>(rc, pin);
         } else if (b_field_type == "steep" || b_field_type == "r5s5") {
             status = SeedBFieldType<BSeedType::r5s5>(rc, pin);
         } else if (b_field_type == "gaussian") {
             status = SeedBFieldType<BSeedType::gaussian>(rc, pin);
         } else if (b_field_type == "bz_monopole") {
             status = SeedBFieldType<BSeedType::bz_monopole>(rc, pin);
+        } else if (b_field_type == "split_monopole") {
+            status = SeedBFieldType<BSeedType::split_monopole>(rc, pin);
+        } else if (b_field_type == "split_monopole_const") {
+            status = SeedBFieldType<BSeedType::split_monopole_const>(rc, pin);
         } else if (b_field_type == "vertical") {
             status = SeedBFieldType<BSeedType::vertical>(rc, pin);
         } else if (b_field_type == "r1s2") {

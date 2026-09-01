@@ -38,6 +38,7 @@
 #include "b_ct.hpp"
 #include "grmhd.hpp"
 #include "kharma.hpp"
+#include <stdexcept>
 
 using namespace parthenon;
 
@@ -76,6 +77,8 @@ std::shared_ptr<KHARMAPackage> Flux::Initialize(
     } else if (pin->DoesParameterExist("GRMHD", "reconstruction")) {
         default_recon_s = pin->GetString("GRMHD", "reconstruction");
     }
+    // Probably nobody has specified donor_cell_c in years, should remove
+    // Indicated cell-wise vs row-wise donor cell recon
     std::vector<std::string> recon_allowed_vals = {"donor_cell", "donor_cell_c",
         "linear_vl", "linear_mc", "weno5", "weno5_linear", "ppm", "ppmx", "mp5"};
     std::string recon = pin->GetOrAddString(
@@ -90,11 +93,8 @@ std::shared_ptr<KHARMAPackage> Flux::Initialize(
             "Lowered reconstructions can only be enabled with weno5!");
 
     int stencil = 0;
-    if (recon == "donor_cell") {
+    if (recon == "donor_cell" || recon == "donor_cell_c") {
         params.Add("recon", KReconstruction::Type::donor_cell);
-        stencil = 1;
-    } else if (recon == "donor_cell_c") {
-        params.Add("recon", KReconstruction::Type::donor_cell_c);
         stencil = 1;
     } else if (recon == "linear_vl") {
         params.Add("recon", KReconstruction::Type::linear_vl);
@@ -135,8 +135,8 @@ std::shared_ptr<KHARMAPackage> Flux::Initialize(
 
     // Fallback to TVD reconstruction when these algorithms reconstruct something outside
     // the floors
-    bool default_recon_fallback =
-        (recon == "weno5" || recon == "weno5_linear" || recon == "mp5");
+    bool default_recon_fallback = (recon == "weno5" || recon == "weno5_linear" ||
+                                   recon == "mp5" || recon == "ppmx");
     bool reconstruction_fallback =
         pin->GetOrAddBoolean("flux", "reconstruction_fallback", default_recon_fallback);
     params.Add("reconstruction_fallback", reconstruction_fallback);
@@ -198,7 +198,9 @@ std::shared_ptr<KHARMAPackage> Flux::Initialize(
     params.Add("use_fofc", use_fofc);
 
     if (use_fofc) {
-        // TODO check floors are enabled!  We can't do fofc without them
+        if (!packages->AllPackages().count("Floors"))
+            throw std::runtime_error(
+                "First-order Flux Corrections cannot be used without floors!");
 
         // FOFC-specific options
         bool use_glf = pin->GetOrAddBoolean("fofc", "use_glf", false);
@@ -301,7 +303,7 @@ TaskStatus Flux::BlockPtoUMHD(MeshBlockData<Real>* rc, IndexDomain domain, bool 
     const auto& G = pmb->coords;
 
     pmb->par_for("p_to_u_mhd", kb.s, kb.e, jb.s, jb.e, ib.s, ib.e,
-        KOKKOS_LAMBDA (const int &k, const int &j, const int &i)
+                 KOKKOS_LAMBDA(const int& k, const int& j, const int& i)
         {
             Flux::p_to_u_mhd(G, P, m_p, emhd_params, gam, k, j, i, U, m_u);
         });
@@ -341,7 +343,7 @@ TaskStatus Flux::BlockPtoU(MeshBlockData<Real>* rc, IndexDomain domain, bool coa
     const auto& G = pmb->coords;
 
     pmb->par_for("p_to_u", kb.s, kb.e, jb.s, jb.e, ib.s, ib.e,
-        KOKKOS_LAMBDA (const int &k, const int &j, const int &i)
+                 KOKKOS_LAMBDA(const int& k, const int& j, const int& i)
         {
             Flux::p_to_u(G, P, m_p, emhd_params, gam, k, j, i, U, m_u);
         });
@@ -417,12 +419,12 @@ TaskStatus Flux::BlockPtoU_Send(MeshBlockData<Real>* rc, IndexDomain domain, boo
         if (ndim < 3) return TaskStatus::complete;
         kb.s -= ng;
         kb.e -= ng;
-    } // TODO(BSP) error?
+    } // TODO(CEP) error?
 
     const auto& G = pmb->coords;
 
     pmb->par_for("p_to_u_send", kb.s, kb.e, jb.s, jb.e, ib.s, ib.e,
-        KOKKOS_LAMBDA (const int &k, const int &j, const int &i)
+                 KOKKOS_LAMBDA(const int& k, const int& j, const int& i)
         {
             Flux::p_to_u(G, P, m_p, emhd_params, gam, k, j, i, U, m_u);
         });
@@ -461,20 +463,20 @@ void Flux::AddGeoSource(MeshData<Real>* md, MeshData<Real>* mdudt, IndexDomain d
 
     pmb0->par_for("tmunu_source", block.s, block.e, bd.ks, bd.ke, bd.js, bd.je, bd.is,
         bd.ie,
-        KOKKOS_LAMBDA (const int& b, const int &k, const int &j, const int &i)
+        KOKKOS_LAMBDA(const int& b, const int& k, const int& j, const int& i)
         {
             const auto& G = dUdt.GetCoords(b);
             FourVectors D;
             GRMHD::calc_4vecs(G, P(b), m_p, k, j, i, Loci::center, D);
-            // Call Flux::calc_tensor which will in turn call the right calc_tensor based
-            // on the number of primitives
+            // Call Flux::calc_tensor which will in turn call the right
+            // calc_tensor based on the number of primitives
             Real Tmu[GR_DIM] = {0};
             Real new_du[GR_DIM] = {0};
             for (int mu = 0; mu < GR_DIM; ++mu) {
                 Flux::calc_tensor(P(b), m_p, D, emhd_params, gam, k, j, i, mu, Tmu);
                 for (int nu = 0; nu < GR_DIM; ++nu) {
-                    // Contract mhd stress tensor with connection, and multiply by metric
-                    // determinant
+                    // Contract mhd stress tensor with connection, and multiply
+                    // by metric determinant
                     for (int lam = 0; lam < GR_DIM; ++lam) {
                         new_du[lam] += Tmu[nu] * G.gdet_conn(j, i, nu, lam, mu);
                     }

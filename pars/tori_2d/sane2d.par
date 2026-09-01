@@ -18,18 +18,14 @@ nx3 = 1
 
 <coordinates>
 base = spherical_ks
-transform = fmks
+transform = mks
 r_out = 50
 a = 0.9375
 hslope = 0.3
-mks_smooth = 0.5
-poly_xt = 0.82
-poly_alpha = 14.0
 
 <parthenon/time>
 tlim = 3000.0
 nlim = -1
-integrator = vl2
 
 <debug>
 verbose = 1
@@ -40,9 +36,6 @@ flag_verbose = 0
 cfl = 0.9
 gamma = 1.666667
 reconstruction = weno5
-
-<b_field>
-solver = flux_ct
 
 <driver>
 type = kharma
@@ -59,10 +52,8 @@ type = sane
 beta_min = 100.
 
 <floors>
-rho_min_geom = 1e-5
-u_min_geom = 1e-7
-u_over_rho_max = 100
-bsq_over_rho_max = 100
+rho_min_geom = 1e-6
+u_min_geom = 1e-8
 
 <parthenon/output0>
 file_type = hdf5
@@ -72,7 +63,7 @@ single_precision_output = true
 # Fields beginning with a specifier here will be included (e.g., all prims.XXX)
 # Fields specified but not present are silently skipped
 # If you need a line break, use '&' at line end
-variables = prims, jcon, pflag, fflag
+variables = prims, divB, jcon, pflag, fflag
 
 <parthenon/output1>
 file_type = rst

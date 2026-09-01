@@ -73,7 +73,7 @@ TaskStatus InitializeNoh(std::shared_ptr<MeshBlockData<Real>>& rc, ParameterInpu
     IndexRange jb = pmb->cellbounds.GetBoundsJ(domain);
     IndexRange kb = pmb->cellbounds.GetBoundsK(domain);
     pmb->par_for("noh_init", kb.s, kb.e, jb.s, jb.e, ib.s, ib.e,
-        KOKKOS_LAMBDA (const int &k, const int &j, const int &i)
+                 KOKKOS_LAMBDA(const int& k, const int& j, const int& i)
         {
             rho(k, j, i) = rho0;
             u(k, j, i) = P / (gam - 1.);
@@ -83,7 +83,7 @@ TaskStatus InitializeNoh(std::shared_ptr<MeshBlockData<Real>>& rc, ParameterInpu
     const auto& G = pmb->coords;
     if (centered) {
         pmb->par_for("noh_cent", kb.s, kb.e, jb.s, jb.e, ib.s, ib.e,
-            KOKKOS_LAMBDA (const int &k, const int &j, const int &i)
+                     KOKKOS_LAMBDA(const int& k, const int& j, const int& i)
             {
                 Real X[GR_DIM];
                 G.coord_embed(k, j, i, Loci::center, X);
@@ -92,7 +92,7 @@ TaskStatus InitializeNoh(std::shared_ptr<MeshBlockData<Real>>& rc, ParameterInpu
             });
     } else {
         pmb->par_for("noh_left", kb.s, kb.e, jb.s, jb.e, ib.s, ib.e,
-            KOKKOS_LAMBDA (const int &k, const int &j, const int &i)
+                     KOKKOS_LAMBDA(const int& k, const int& j, const int& i)
             {
                 u(k, j, i) = P / (gam - 1.);
                 uvec(0, k, j, i) = -v0 * gamma;

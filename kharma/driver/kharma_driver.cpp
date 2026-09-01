@@ -238,7 +238,7 @@ TaskID KHARMADriver::AddFluxCalculations(
     // Calculate fluxes in each direction using given reconstruction
     // Must be spelled out so as to generate each templated version of GetFlux<> to be
     // available at runtime Details in flux/get_flux.hpp
-    // TODO(BSP) This could be a macro, maybe... But there's no easy foreach(enum_val):
+    // TODO(CEP) This could be a macro, maybe... But there's no easy foreach(enum_val):
     // instantiate pattern
     using RType = KReconstruction::Type;
     TaskID t_calculate_flux1, t_calculate_flux2, t_calculate_flux3;
@@ -250,14 +250,6 @@ TaskID KHARMADriver::AddFluxCalculations(
                 tl.AddTask(t_start_fluxes, Flux::GetFlux<RType::donor_cell, X2DIR>, md);
             t_calculate_flux3 =
                 tl.AddTask(t_start_fluxes, Flux::GetFlux<RType::donor_cell, X3DIR>, md);
-            break;
-        case RType::donor_cell_c:
-            t_calculate_flux1 =
-                tl.AddTask(t_start_fluxes, Flux::GetFlux<RType::donor_cell_c, X1DIR>, md);
-            t_calculate_flux2 =
-                tl.AddTask(t_start_fluxes, Flux::GetFlux<RType::donor_cell_c, X2DIR>, md);
-            t_calculate_flux3 =
-                tl.AddTask(t_start_fluxes, Flux::GetFlux<RType::donor_cell_c, X3DIR>, md);
             break;
         case RType::linear_vl:
             t_calculate_flux1 =
@@ -332,11 +324,9 @@ TaskID KHARMADriver::AddFluxCalculations(
                 tl.AddTask(t_start_fluxes, Flux::GetFlux<RType::mp5, X3DIR>, md);
             break;
         default:
-            std::cerr
-                << "Reconstruction type not supported!  Main supported reconstructions:"
-                << std::endl
-                << "donor_cell, linear_mc, weno5" << std::endl;
-            throw std::invalid_argument("Unsupported reconstruction algorithm!");
+            throw std::invalid_argument(
+                "Unsupported reconstruction algorithm! Main supported algorithms: "
+                "linear_mc, weno5, weno5_linear");
     }
     auto t_calc_fluxes = t_calculate_flux1 | t_calculate_flux2 | t_calculate_flux3;
 
@@ -447,13 +437,13 @@ TaskID KHARMADriver::AddStateUpdate(TaskID& t_start, TaskList& tl,
     auto t_copy_prims = t_update;
     auto pmb0 = md_full_step_init->GetBlockData(0)->GetBlockPointer();
     auto& pkgs = pmb0->packages.AllPackages();
-    // If we're explicitly evolving, UtoP needs a guess (except Kastaun inverter)
-    if (!pkgs.at("GRMHD")->Param<bool>("implicit") &&
-        pkgs.at("Inverter")->Param<Inverter::Type>("inverter_type") !=
-            Inverter::Type::kastaun) {
+
+    // If we're explicitly evolving, UtoP needs a guess
+    // TODO why is this necessary still?  Is it necessary on every AddStateUpdate?
+    if (!pkgs.at("GRMHD")->Param<bool>("implicit")) {
         t_copy_prims = tl.AddTask(t_start, Copy<MeshData<Real>>,
             std::vector<MetadataFlag>(
-                {Metadata::GetUserFlag("HD"), Metadata::GetUserFlag("Primitive")}),
+                {Metadata::GetUserFlag("MHD"), Metadata::GetUserFlag("Primitive")}),
             md_sub_step_init, md_update);
     }
 
@@ -509,28 +499,43 @@ TaskID KHARMADriver::AddStateUpdateIdealGuess(TaskID& t_start, TaskList& tl,
     return t_copy_prims | t_update;
 }
 
-void KHARMADriver::SetGlobalTimeStep()
-{
-    // TODO(BSP) apply the limits from GRMHD package here
-    if (tm.dt < 0.1 * std::numeric_limits<Real>::max()) {
-        tm.dt *= 2.0;
-    }
-    Real big = std::numeric_limits<Real>::max();
-    for (auto const& pmb : pmesh->block_list) {
-        tm.dt = std::min(tm.dt, pmb->NewDt());
-        pmb->SetAllowedDt(big);
-    }
-
-    // TODO(BSP) start reduce at the end of the per-meshblock stuff, then check it here
-#ifdef MPI_PARALLEL
-    PARTHENON_MPI_CHECK(MPI_Allreduce(
-        MPI_IN_PLACE, &tm.dt, 1, MPI_PARTHENON_REAL, MPI_MIN, MPI_COMM_WORLD));
-#endif
-
-    if (tm.time < tm.tlim &&
-        (tm.tlim - tm.time) < tm.dt) // timestep would take us past desired endpoint
-        tm.dt = tm.tlim - tm.time;
-}
+// TODO(CEP) bring back as extra prints/limits only, calling up to
+// EvolutionDriver::SetGlobalTimeStep? void KHARMADriver::SetGlobalTimeStep()
+// {
+//     if (tm.dt < 0.1 * std::numeric_limits<Real>::max()) {
+//         tm.dt *= 2.0;
+//     }
+//     Real big = std::numeric_limits<Real>::max();
+//     auto pmb_dt = pmesh->block_list[0];
+//     bool set_block = false;
+//     for (auto const& pmb : pmesh->block_list) {
+//         if (pmb->NewDt() < tm.dt) {
+//             tm.dt = pmb->NewDt();
+//             pmb_dt = pmb;
+//         }
+//         pmb->SetAllowedDt(big);
+//     }
+//     const int& verbose = pmesh->packages.Get("Globals")->Param<int>("verbose");
+//     if (verbose > 1) {
+//         if (set_block) {
+//             fprintf(stderr, "Dt set by %d w/range X1 %g %g, X2 %g %g, X3 %g %g\n",
+//                 pmb_dt->gid, pmb_dt->block_size.xmin(X1DIR),
+//                 pmb_dt->block_size.xmax(X1DIR), pmb_dt->block_size.xmin(X2DIR),
+//                 pmb_dt->block_size.xmax(X2DIR), pmb_dt->block_size.xmin(X3DIR),
+//                 pmb_dt->block_size.xmax(X3DIR));
+//         } else {
+//             fprintf(stderr, "Dt set by doubling\n");
+//         }
+//     }
+//     // TODO(CEP) start reduce at the end of the per-meshblock stuff, then check it here
+// #ifdef MPI_PARALLEL
+//     PARTHENON_MPI_CHECK(MPI_Allreduce(
+//         MPI_IN_PLACE, &tm.dt, 1, MPI_PARTHENON_REAL, MPI_MIN, MPI_COMM_WORLD));
+// #endif
+//     if (tm.time < tm.tlim &&
+//         (tm.tlim - tm.time) < tm.dt) // timestep would take us past desired endpoint
+//         tm.dt = tm.tlim - tm.time;
+// }
 
 void KHARMADriver::PostExecute(DriverStatus status)
 {

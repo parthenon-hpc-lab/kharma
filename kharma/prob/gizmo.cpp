@@ -115,7 +115,8 @@ TaskStatus SetGIZMO(
     Real* Mencarr = new double[datlen];
     int length = 0, itemp = 0;
     while (fscanf(fptr, "%lf %lf %lf %lf %lf\n", &(rarr[itemp]), &(rhoarr[itemp]),
-               &(Tarr[itemp]), &(vrarr[itemp]), &(Mencarr[itemp])) ==
+               &(Tarr[itemp]), &(vrarr[itemp]),
+               &(Mencarr[itemp])) ==
            5) { // assign the read value to variable, and enter it in array
         itemp++;
     }
@@ -144,7 +145,7 @@ TaskStatus SetGIZMO(
     Kokkos::fence();
 
     pmb->par_for("gizmo_shell", kb.s, kb.e, jb.s, jb.e, ib.s, ib.e,
-        KOKKOS_LAMBDA (const int &k, const int &j, const int &i)
+                 KOKKOS_LAMBDA(const int& k, const int& j, const int& i)
         {
             // same vacuum conditions at rin_init
             GReal Xshell[GR_DIM] = {0, rin_init, 0, 0};

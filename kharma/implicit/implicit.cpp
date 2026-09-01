@@ -54,17 +54,20 @@ std::shared_ptr<KHARMAPackage> Implicit::Initialize(
 TaskStatus Implicit::Step(MeshData<Real>* md_full_step_init,
     MeshData<Real>* md_sub_step_init, MeshData<Real>* md_flux_src,
     MeshData<Real>* md_linesearch, MeshData<Real>* md_solver, const Real& dt)
-{}
+{
+    return TaskStatus::complete;
+}
 
 #else
 
 // Implicit nonlinear solve requires several linear solves per-zone
 // Use Kokkos-kernels QR decomposition & triangular solve, they're fast.
-#include <KokkosBatched_ApplyPivot_Decl.hpp>
-#include <KokkosBatched_ApplyQ_Decl.hpp>
-#include <KokkosBatched_LU_Decl.hpp>
-#include <KokkosBatched_QR_Decl.hpp>
-#include <KokkosBatched_Trsv_Decl.hpp>
+// #include <batched/dense/src/KokkosBatched_ApplyPivot_Decl.hpp>
+#include <batched/dense/src/KokkosBatched_ApplyQ_Decl.hpp>
+#include <batched/dense/src/KokkosBatched_LU_Decl.hpp>
+// #include <batched/dense/src/KokkosBatched_QR_Decl.hpp>
+#include "KokkosKernels_PivotedQR.hpp"
+#include <batched/dense/src/KokkosBatched_Trsv_Decl.hpp>
 
 std::vector<std::string> Implicit::GetOrderedNames(
     MeshBlockData<Real>* rc, const MetadataFlag& flag, bool only_implicit)
@@ -181,7 +184,7 @@ TaskStatus Implicit::Step(MeshData<Real>* md_full_step_init,
 {
     Flag("Implicit::Step");
     // Pull out the block pointers for each sub-step, as we need the *mutable parameters*
-    // of the EMHD package.  TODO(BSP) restrict state back to the variables...
+    // of the EMHD package.  TODO(CEP) restrict state back to the variables...
     auto pmb_full_step_init = md_full_step_init->GetBlockData(0)->GetBlockPointer();
     auto pmb_sub_step_init = md_sub_step_init->GetBlockData(0)->GetBlockPointer();
     auto pmb_solver = md_solver->GetBlockData(0)->GetBlockPointer();
@@ -288,7 +291,7 @@ TaskStatus Implicit::Step(MeshData<Real>* md_full_step_init,
     const int n3 = bounds.ncellsk(IndexDomain::entire);
 
     // RETURN if there aren't any implicit variables to evolve
-    // TODO(BSP) probably redundant with not loading package, see kharma.cpp
+    // TODO(CEP) probably redundant with not loading package, see kharma.cpp
     // std::cerr << "Solve size " << nfvar << " on prim size " << nvar << std::endl;
     if (nfvar == 0) return TaskStatus::complete;
 
@@ -392,8 +395,8 @@ TaskStatus Implicit::Step(MeshData<Real>* md_full_step_init,
                 // Scratchpads for implicit vars
                 ScratchPad3D<Real> jacobian_s(
                     member.team_scratch(scratch_level), n1, nfvar, nfvar);
-                ScratchPad2D<Real> delta_prim_s(
-                    member.team_scratch(scratch_level), n1, nfvar);
+                ScratchPad3D<Real> delta_prim_s(
+                    member.team_scratch(scratch_level), n1, nfvar, 1);
                 ScratchPad2D<Real> trans_s(member.team_scratch(scratch_level), n1, nfvar);
                 ScratchPad2D<Real> work_s(
                     member.team_scratch(scratch_level), n1, 2 * nfvar);
@@ -405,7 +408,7 @@ TaskStatus Implicit::Step(MeshData<Real>* md_full_step_init,
                     parthenon::par_for_inner(member, 0, n1 - 1,
                         [&](const int& i)
                         {
-                            delta_prim_s(i, ip) = -residual_all(b)(ip, k, j, i);
+                            delta_prim_s(i, 0, ip) = -residual_all(b)(ip, k, j, i);
                         });
                 }
                 FLOOP2
@@ -419,7 +422,7 @@ TaskStatus Implicit::Step(MeshData<Real>* md_full_step_init,
                 }
                 member.team_barrier();
 
-                // TODO(BSP) even still worth keeping non-QR version?  Much less stable
+                // TODO(CEP) even still worth keeping non-QR version?  Much less stable
                 if (use_qr) {
                     parthenon::par_for_inner(member, ib.s, ib.e,
                         [&](const int& i)
@@ -427,15 +430,17 @@ TaskStatus Implicit::Step(MeshData<Real>* md_full_step_init,
                             // Solver variables
                             auto jacobian = Kokkos::subview(
                                 jacobian_s, i, Kokkos::ALL(), Kokkos::ALL());
-                            auto delta_prim =
-                                Kokkos::subview(delta_prim_s, i, Kokkos::ALL());
+                            auto delta_prim = Kokkos::subview(
+                                delta_prim_s, i, Kokkos::ALL(), Kokkos::ALL());
+                            auto delta_prim_one =
+                                Kokkos::subview(delta_prim_s, i, Kokkos::ALL(), 0);
                             auto pivot = Kokkos::subview(pivot_s, i, Kokkos::ALL());
                             auto trans = Kokkos::subview(trans_s, i, Kokkos::ALL());
                             auto work = Kokkos::subview(work_s, i, Kokkos::ALL());
 
                             if (solve_fail_all(b, 0, k, j, i) != SolverStatusR::fail) {
                                 // Linear solve by QR decomposition
-                                KokkosBatched::SerialQR<
+                                KokkosBatched::SerialPivotedQR<
                                     KokkosBatched::Algo::QR::Unblocked>::invoke(jacobian,
                                     trans, pivot, work);
                                 KokkosBatched::SerialApplyQ<KokkosBatched::Side::Left,
@@ -446,11 +451,11 @@ TaskStatus Implicit::Step(MeshData<Real>* md_full_step_init,
                                     KokkosBatched::Trans::NoTranspose,
                                     KokkosBatched::Diag::NonUnit,
                                     KokkosBatched::Algo::Trsv::Unblocked>::invoke(alpha,
-                                    jacobian, delta_prim);
+                                    jacobian, delta_prim_one);
                                 // Linear solve by QR decomposition
                                 KokkosBatched::SerialApplyPivot<KokkosBatched::Side::Left,
                                     KokkosBatched::Direct::Backward>::invoke(pivot,
-                                    delta_prim);
+                                    delta_prim_one);
                             }
                         });
                 } else {
@@ -461,7 +466,7 @@ TaskStatus Implicit::Step(MeshData<Real>* md_full_step_init,
                             auto jacobian = Kokkos::subview(
                                 jacobian_s, i, Kokkos::ALL(), Kokkos::ALL());
                             auto delta_prim =
-                                Kokkos::subview(delta_prim_s, i, Kokkos::ALL());
+                                Kokkos::subview(delta_prim_s, i, 0, Kokkos::ALL());
 
                             if (solve_fail_all(b, 0, k, j, i) != SolverStatusR::fail) {
                                 KokkosBatched::SerialLU<
@@ -483,7 +488,7 @@ TaskStatus Implicit::Step(MeshData<Real>* md_full_step_init,
                     parthenon::par_for_inner(member, ib.s, ib.e,
                         [&](const int& i)
                         {
-                            delta_prim_all(b)(ip, k, j, i) = delta_prim_s(i, ip);
+                            delta_prim_all(b)(ip, k, j, i) = delta_prim_s(i, 0, ip);
                         });
                 }
 #if SPLIT_IMPLICIT_SOLVE
@@ -601,7 +606,7 @@ TaskStatus Implicit::Step(MeshData<Real>* md_full_step_init,
                 // Did we converge to required tolerance? If not, update solve_fail
                 // accordingly
                 if (m::isnan(solve_norm)) {
-                    // TODO(BSP) this can probably be detected/implemented alongside the
+                    // TODO(CEP) this can probably be detected/implemented alongside the
                     // floors above
                     solve_fail = SolverStatusR::fail;
                     FLOOP P_solver_all(b, ip, k, j, i) =

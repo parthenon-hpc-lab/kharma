@@ -56,8 +56,6 @@ r_out = 1.0
 rho_out = 1e-4
 
 <floors>
-disable_floors = false
-frame = drift
 rho_min_const = 1e-10
 u_min_const = 1e-10
 

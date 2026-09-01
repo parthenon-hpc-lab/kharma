@@ -67,6 +67,6 @@ TaskStatus SetHubble(std::shared_ptr<MeshBlockData<Real>>& rc, bool coarse = fal
 /**
  * Apply the source term.  Registered as ApplyPrimSource to run at end of step, once per
  * step operator-split
- * TODO(BSP) NAMESPACE. Needs problems as packages?
+ * TODO(CEP) NAMESPACE. Needs problems as packages?
  */
 void ApplyHubbleHeating(MeshBlockData<Real>* mbase);
