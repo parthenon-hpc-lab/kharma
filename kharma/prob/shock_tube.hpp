@@ -7,10 +7,11 @@ using namespace parthenon;
 /**
  * Generic initializer for shock tubes
  * Particular problems in pars/shocks/
- * 
+ *
  * Stolen directly from iharm3D
  */
-TaskStatus InitializeShockTube(std::shared_ptr<MeshBlockData<Real>>& rc, ParameterInput *pin)
+TaskStatus InitializeShockTube(
+    std::shared_ptr<MeshBlockData<Real>>& rc, ParameterInput* pin)
 {
     auto pmb = rc->GetBlockPointer();
     GridScalar rho = rc->Get("prims.rho").data;
@@ -58,18 +59,18 @@ TaskStatus InitializeShockTube(std::shared_ptr<MeshBlockData<Real>>& rc, Paramet
     pin->GetOrAddReal("b_field", "amp2_B3", B3R);
 
     pmb->par_for("ot_init", kb.s, kb.e, jb.s, jb.e, ib.s, ib.e,
-        KOKKOS_LAMBDA (const int &k, const int &j, const int &i) {
+        KOKKOS_LAMBDA (const int &k, const int &j, const int &i)
+        {
             Real X[GR_DIM];
             G.coord(k, j, i, Loci::center, X);
 
             const bool lhs = X[1] < center;
             rho(k, j, i) = (lhs) ? rhoL : rhoR;
-            u(k, j, i)   = ((lhs) ? PL : PR) / (gam - 1.);
+            u(k, j, i) = ((lhs) ? PL : PR) / (gam - 1.);
             uvec(0, k, j, i) = (lhs) ? u1L : u1R;
             uvec(1, k, j, i) = (lhs) ? u2L : u2R;
             uvec(2, k, j, i) = (lhs) ? u3L : u3R;
-        }
-    );
+        });
 
     return TaskStatus::complete;
 }

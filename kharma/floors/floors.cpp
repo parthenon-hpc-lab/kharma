@@ -1,25 +1,25 @@
-/* 
+/*
  *  File: floors.cpp
- *  
+ *
  *  BSD 3-Clause License
- *  
+ *
  *  Copyright (c) 2020, AFD Group at UIUC
  *  All rights reserved.
- *  
+ *
  *  Redistribution and use in source and binary forms, with or without
  *  modification, are permitted provided that the following conditions are met:
- *  
+ *
  *  1. Redistributions of source code must retain the above copyright notice, this
  *     list of conditions and the following disclaimer.
- *  
+ *
  *  2. Redistributions in binary form must reproduce the above copyright notice,
  *     this list of conditions and the following disclaimer in the documentation
  *     and/or other materials provided with the distribution.
- *  
+ *
  *  3. Neither the name of the copyright holder nor the names of its
  *     contributors may be used to endorse or promote products derived from
  *     this software without specific prior written permission.
- *  
+ *
  *  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  *  AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  *  IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -43,15 +43,17 @@
 
 // Floors.  Apply limits to fluid values to maintain integrable state
 
-int Floors::CountFFlags(MeshData<Real> *md)
+int Floors::CountFFlags(MeshData<Real>* md)
 {
-    return Reductions::CountFlags(md, "fflag", FFlag::flag_names, IndexDomain::interior, true)[0];
+    return Reductions::CountFlags(
+        md, "fflag", FFlag::flag_names, IndexDomain::interior, true)[0];
 }
 
-std::shared_ptr<KHARMAPackage> Floors::Initialize(ParameterInput *pin, std::shared_ptr<Packages_t>& packages)
+std::shared_ptr<KHARMAPackage> Floors::Initialize(
+    ParameterInput* pin, std::shared_ptr<Packages_t>& packages)
 {
     auto pkg = std::make_shared<KHARMAPackage>("Floors");
-    Params &params = pkg->AllParams();
+    Params& params = pkg->AllParams();
 
     // Parse all the particular floor values into a nice struct we can pass device-side
     params.Add("prescription", MakePrescription(pin));
@@ -60,12 +62,14 @@ std::shared_ptr<KHARMAPackage> Floors::Initialize(ParameterInput *pin, std::shar
     // the option exists to use the fluid frame exclusively 'fluid' or outside a
     // certain radius 'mixed'. This option adds fluid at speed, making results
     // less reliable but velocity reconstructions potentially more robust.
-    // Drift frame floors are now available and preferred when using 
+    // Drift frame floors are now available and preferred when using
     // the implicit solver to avoid UtoP calls.
-    // TODO(BSP) automate/standardize parsing enums like this: classes w/tables like the flags?
-    std::vector<std::string> allowed_floor_frames = {"normal", "fluid", "mixed",
-                                                     "mixed_fluid_normal", "mixed_normal_drift", "drift"};
-    std::string frame_s = pin->GetOrAddString("floors", "frame", "normal", allowed_floor_frames);
+    // TODO(BSP) automate/standardize parsing enums like this: classes w/tables like the
+    // flags?
+    std::vector<std::string> allowed_floor_frames = {
+        "normal", "fluid", "mixed", "mixed_fluid_normal", "mixed_normal_drift", "drift"};
+    std::string frame_s =
+        pin->GetOrAddString("floors", "frame", "normal", allowed_floor_frames);
     InjectionFrame frame;
     if (frame_s == "normal") {
         if (pin->GetOrAddString("inverter", "type", "kastaun") == "onedw") {
@@ -102,26 +106,31 @@ std::shared_ptr<KHARMAPackage> Floors::Initialize(ParameterInput *pin, std::shar
     // the values will simply be the same if radius-dependent floors are not enabled.
     // Avoids a bunch of if (radius_dependent_floors) else while determining floors.
     if (pin->DoesBlockExist("floors_inner"))
-        params.Add("prescription_inner", MakePrescriptionInner(pin, MakePrescription(pin)));
+        params.Add(
+            "prescription_inner", MakePrescriptionInner(pin, MakePrescription(pin)));
     else
-        params.Add("prescription_inner", MakePrescriptionInner(pin, MakePrescription(pin)), "floors");
+        params.Add("prescription_inner",
+            MakePrescriptionInner(pin, MakePrescription(pin)), "floors");
 
     // Sometimes we want the floors package, but don't want to apply anything, for tests
     bool disable_call = pin->GetOrAddBoolean("floors", "disable_call", false);
     params.Add("disable_call", disable_call);
 
-    // These preserve floor values between the "mark" pass and the actual floor application
-    // We need them even if floors are disabled, to apply initial values based on some prescription
-    // as a part of problem setup
-    Metadata m = Metadata({Metadata::Real, Metadata::Cell, Metadata::Derived, Metadata::OneCopy});
+    // These preserve floor values between the "mark" pass and the actual floor
+    // application We need them even if floors are disabled, to apply initial values based
+    // on some prescription as a part of problem setup
+    Metadata m =
+        Metadata({Metadata::Real, Metadata::Cell, Metadata::Derived, Metadata::OneCopy});
     pkg->AddField("Floors.rho_floor", m);
     pkg->AddField("Floors.u_floor", m);
 
     // Flag for which floor conditions were violated.  Used for diagnostics
     // TODO(BSP) Should switch these to "Integer" fields when Parthenon supports it
     pkg->AddField("fflag", m);
-    // When not using UtoP, we still need a "dummy" copy of pflag to write the post-flooring flag to
-    m = Metadata({Metadata::Real, Metadata::Cell, Metadata::Derived, Metadata::OneCopy, Metadata::Overridable});
+    // When not using UtoP, we still need a "dummy" copy of pflag to write the
+    // post-flooring flag to
+    m = Metadata({Metadata::Real, Metadata::Cell, Metadata::Derived, Metadata::OneCopy,
+        Metadata::Overridable});
     pkg->AddField("pflag", m);
 
     // Don't actually call the usual floor function if we're using normal frame w/Kastaun,
@@ -137,24 +146,29 @@ std::shared_ptr<KHARMAPackage> Floors::Initialize(ParameterInput *pin, std::shar
     // List (vector) of HistoryOutputVars that will all be enrolled as output variables
     parthenon::HstVar_list hst_vars = {};
     // Count total floors as a history item
-    hst_vars.emplace_back(parthenon::HistoryOutputVar(UserHistoryOperation::sum, CountFFlags, "FFlags"));
+    hst_vars.emplace_back(
+        parthenon::HistoryOutputVar(UserHistoryOperation::sum, CountFFlags, "FFlags"));
     // TODO Domain::entire version?
     // TODO entries for each individual flag?
-    // add callbacks for HST output to the Params struct, identified by the `hist_param_key`
+    // add callbacks for HST output to the Params struct, identified by the
+    // `hist_param_key`
     pkg->AddParam<>(parthenon::hist_param_key, hst_vars);
 
     return pkg;
 }
 
-TaskStatus Floors::ApplyInitialFloors(ParameterInput *pin, MeshBlockData<Real> *mbd, IndexDomain domain)
+TaskStatus Floors::ApplyInitialFloors(
+    ParameterInput* pin, MeshBlockData<Real>* mbd, IndexDomain domain)
 {
     Flag("ApplyInitialFloors");
 
     auto pmb = mbd->GetBlockPointer();
 
     PackIndexMap prims_map, cons_map;
-    auto P = mbd->PackVariables({Metadata::GetUserFlag("Primitive"), Metadata::Cell}, prims_map);
-    auto U = mbd->PackVariables(std::vector<MetadataFlag>{Metadata::Conserved, Metadata::Cell}, cons_map);
+    auto P = mbd->PackVariables(
+        {Metadata::GetUserFlag("Primitive"), Metadata::Cell}, prims_map);
+    auto U = mbd->PackVariables(
+        std::vector<MetadataFlag>{Metadata::Conserved, Metadata::Cell}, cons_map);
     const VarMap m_u(cons_map, true), m_p(prims_map, false);
 
     const auto& G = pmb->coords;
@@ -165,25 +179,26 @@ TaskStatus Floors::ApplyInitialFloors(ParameterInput *pin, MeshBlockData<Real> *
     // Otherwise stick to specified/default geometric floors
     Floors::Prescription floors_tmp;
     if (pmb->packages.AllPackages().count("Floors")) {
-        floors_tmp = pmb->packages.Get("Floors")->Param<Floors::Prescription>("prescription");
+        floors_tmp =
+            pmb->packages.Get("Floors")->Param<Floors::Prescription>("prescription");
     } else {
         // JUST rho & u geometric
         floors_tmp.rho_min_geom = pin->GetOrAddReal("floors", "rho_min_geom", 1e-6);
-        floors_tmp.u_min_geom   = pin->GetOrAddReal("floors", "u_min_geom", 1e-8);
+        floors_tmp.u_min_geom = pin->GetOrAddReal("floors", "u_min_geom", 1e-8);
         floors_tmp.rho_min_const = pin->GetOrAddReal("floors", "rho_min_const", 1e-20);
-        floors_tmp.u_min_const   = pin->GetOrAddReal("floors", "u_min_const", 1e-20);
+        floors_tmp.u_min_const = pin->GetOrAddReal("floors", "u_min_const", 1e-20);
 
         // Disable everything else, even if it's specified
         floors_tmp.bsq_over_rho_max = 1e20;
-        floors_tmp.bsq_over_u_max   = 1e20;
-        floors_tmp.u_over_rho_max   = 1e20;
-        floors_tmp.ktot_max         = 1e20;
-        floors_tmp.gamma_max        = 1e20;
+        floors_tmp.bsq_over_u_max = 1e20;
+        floors_tmp.u_over_rho_max = 1e20;
+        floors_tmp.ktot_max = 1e20;
+        floors_tmp.gamma_max = 1e20;
 
-        floors_tmp.use_r_char    = false;
-        floors_tmp.r_char        = 0.; //unused
+        floors_tmp.use_r_char = false;
+        floors_tmp.r_char = 0.; // unused
         floors_tmp.temp_adjust_u = false;
-        floors_tmp.adjust_k      = false;
+        floors_tmp.adjust_k = false;
     }
     const Floors::Prescription floors = floors_tmp;
 
@@ -191,37 +206,42 @@ TaskStatus Floors::ApplyInitialFloors(ParameterInput *pin, MeshBlockData<Real> *
 
     const IndexRange3 b = KDomain::GetRange(mbd, domain);
     pmb->par_for("apply_initial_floors", b.ks, b.ke, b.js, b.je, b.is, b.ie,
-        KOKKOS_LAMBDA (const int &k, const int &j, const int &i) {
+        KOKKOS_LAMBDA (const int &k, const int &j, const int &i)
+        {
             Real rhoflr_max, uflr_max;
-            // Initial floors, so the radius-dependence of floors don't matter that much. 
-            int fflag = determine_floors(G, P, m_p, gam, k, j, i, floors, floors, rhoflr_max, uflr_max);
+            // Initial floors, so the radius-dependence of floors don't matter that much.
+            int fflag = determine_floors(
+                G, P, m_p, gam, k, j, i, floors, floors, rhoflr_max, uflr_max);
             if (fflag) {
-                apply_floors<InjectionFrame::fluid>(G, P, m_p, gam, k, j, i, rhoflr_max, uflr_max, U, m_u);
+                apply_floors<InjectionFrame::fluid>(
+                    G, P, m_p, gam, k, j, i, rhoflr_max, uflr_max, U, m_u);
                 apply_ceilings(G, P, m_p, gam, k, j, i, floors, floors, U, m_u);
                 // P->U for any modified zones
-                Flux::p_to_u_mhd(G, P, m_p, emhd_params, gam, k, j, i, U, m_u, Loci::center);
+                Flux::p_to_u_mhd(
+                    G, P, m_p, emhd_params, gam, k, j, i, U, m_u, Loci::center);
             }
-        }
-    );
+        });
 
     EndFlag();
     return TaskStatus::complete;
 }
 
-TaskStatus Floors::DetermineGRMHDFloors(MeshData<Real> *md, IndexDomain domain,
+TaskStatus Floors::DetermineGRMHDFloors(MeshData<Real>* md, IndexDomain domain,
     const Floors::Prescription& floors, const Floors::Prescription& floors_inner)
 {
     auto pmb0 = md->GetBlockData(0)->GetBlockPointer();
 
     // Packs of prims and cons
     PackIndexMap prims_map;
-    auto& P = md->PackVariables(std::vector<MetadataFlag>{Metadata::GetUserFlag("Primitive")}, prims_map);
+    auto& P = md->PackVariables(
+        std::vector<MetadataFlag>{Metadata::GetUserFlag("Primitive")}, prims_map);
     const VarMap m_p(prims_map, false);
 
     auto fflag = md->PackVariables(std::vector<std::string>{"fflag"});
     auto pflag = md->PackVariables(std::vector<std::string>{"pflag"});
     PackIndexMap floors_map;
-    auto floor_vals = md->PackVariables(std::vector<std::string>{"Floors.rho_floor", "Floors.u_floor"}, floors_map);
+    auto floor_vals = md->PackVariables(
+        std::vector<std::string>{"Floors.rho_floor", "Floors.u_floor"}, floors_map);
     const int rhofi = floors_map["Floors.rho_floor"].first;
     const int ufi = floors_map["Floors.u_floor"].first;
 
@@ -229,30 +249,35 @@ TaskStatus Floors::DetermineGRMHDFloors(MeshData<Real> *md, IndexDomain domain,
 
     const IndexRange3 b = KDomain::GetRange(md, domain);
     const IndexRange block = IndexRange{0, P.GetDim(5) - 1};
-    pmb0->par_for("determine_floors", block.s, block.e, b.ks, b.ke, b.js, b.je, b.is, b.ie,
-        KOKKOS_LAMBDA (const int &b, const int &k, const int &j, const int &i) {
+    pmb0->par_for("determine_floors", block.s, block.e, b.ks, b.ke, b.js, b.je, b.is,
+        b.ie,
+        KOKKOS_LAMBDA (const int &b, const int &k, const int &j, const int &i)
+        {
             const auto& G = P.GetCoords(b);
-            // The inverter might have set some floor flags, so we add to that non-destructively
-            fflag(b, 0, k, j, i) = static_cast<int>(fflag(b, 0, k, j, i)) |
-                                    determine_floors(G, P(b), m_p, gam, k, j, i, floors, floors_inner,
-                                                     floor_vals(b, rhofi, k, j, i), floor_vals(b, ufi, k, j, i));
-        }
-    );
+            // The inverter might have set some floor flags, so we add to that
+            // non-destructively
+            fflag(b, 0, k, j, i) =
+                static_cast<int>(fflag(b, 0, k, j, i)) |
+                determine_floors(G, P(b), m_p, gam, k, j, i, floors, floors_inner,
+                    floor_vals(b, rhofi, k, j, i), floor_vals(b, ufi, k, j, i));
+        });
 
     // TODO(BSP) if we can somehow guarantee one call/rank we can start the reduction here
-    //Reductions::StartFlagReduce(md, "fflag", FFlag::flag_names, IndexDomain::interior, true, 0);
+    // Reductions::StartFlagReduce(md, "fflag", FFlag::flag_names, IndexDomain::interior,
+    // true, 0);
 
     return TaskStatus::complete;
 }
 
-TaskStatus Floors::ApplyGRMHDFloors(MeshData<Real> *md, IndexDomain domain)
+TaskStatus Floors::ApplyGRMHDFloors(MeshData<Real>* md, IndexDomain domain)
 {
     auto pmesh = md->GetMeshPointer();
     const auto& pars = pmesh->packages.Get("Floors")->AllParams();
 
     // Determine floors
     const Floors::Prescription floors = pars.Get<Floors::Prescription>("prescription");
-    const Floors::Prescription floors_inner = pars.Get<Floors::Prescription>("prescription_inner");
+    const Floors::Prescription floors_inner =
+        pars.Get<Floors::Prescription>("prescription_inner");
     DetermineGRMHDFloors(md, domain, floors, floors_inner);
 
     if (pars.Get<InjectionFrame>("frame") == InjectionFrame::normal_kastaun) {
@@ -272,7 +297,7 @@ TaskStatus Floors::ApplyGRMHDFloors(MeshData<Real> *md, IndexDomain domain)
     }
 }
 
-TaskStatus Floors::PostStepDiagnostics(const SimTime& tm, MeshData<Real> *md)
+TaskStatus Floors::PostStepDiagnostics(const SimTime& tm, MeshData<Real>* md)
 {
     auto pmesh = md->GetMeshPointer();
     auto pmb0 = md->GetBlockData(0)->GetBlockPointer();
@@ -282,9 +307,11 @@ TaskStatus Floors::PostStepDiagnostics(const SimTime& tm, MeshData<Real> *md)
 
     // Debugging/diagnostic info about floor flags
     if (flag_verbose > 0) {
-        Reductions::StartFlagReduce(md, "fflag", FFlag::flag_names, IndexDomain::interior, true, 0);
+        Reductions::StartFlagReduce(
+            md, "fflag", FFlag::flag_names, IndexDomain::interior, true, 0);
         // Debugging/diagnostic info about floor and inversion flags
-        Reductions::CheckFlagReduceAndPrintHits(md, "fflag", FFlag::flag_names, IndexDomain::interior, true, 0);
+        Reductions::CheckFlagReduceAndPrintHits(
+            md, "fflag", FFlag::flag_names, IndexDomain::interior, true, 0);
     }
 
     // Anything else (energy conservation? Added material stats?)

@@ -1,25 +1,25 @@
-/* 
+/*
  *  File: dirichlet.cpp
- *  
+ *
  *  BSD 3-Clause License
- *  
+ *
  *  Copyright (c) 2020, AFD Group at UIUC
  *  All rights reserved.
- *  
+ *
  *  Redistribution and use in source and binary forms, with or without
  *  modification, are permitted provided that the following conditions are met:
- *  
+ *
  *  1. Redistributions of source code must retain the above copyright notice, this
  *     list of conditions and the following disclaimer.
- *  
+ *
  *  2. Redistributions in binary form must reproduce the above copyright notice,
  *     this list of conditions and the following disclaimer in the documentation
  *     and/or other materials provided with the distribution.
- *  
+ *
  *  3. Neither the name of the copyright holder nor the names of its
  *     contributors may be used to endorse or promote products derived from
  *     this software without specific prior written permission.
- *  
+ *
  *  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  *  AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  *  IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -41,28 +41,32 @@
 
 using namespace parthenon;
 
-void KBoundaries::DirichletImpl(MeshBlockData<Real> *rc, BoundaryFace bface, bool coarse, bool set)
+void KBoundaries::DirichletImpl(
+    MeshBlockData<Real>* rc, BoundaryFace bface, bool coarse, bool set)
 {
     // Get all cell-centered ghosts, minus anything just used at startup
     using FC = Metadata::FlagCollection;
-    FC ghost_vars = FC({Metadata::FillGhost, Metadata::Conserved})
-                  + FC({Metadata::FillGhost, Metadata::GetUserFlag("Primitive")})
-                  - FC({Metadata::GetUserFlag("StartupOnly")});
+    FC ghost_vars = FC({Metadata::FillGhost, Metadata::Conserved}) +
+                    FC({Metadata::FillGhost, Metadata::GetUserFlag("Primitive")}) -
+                    FC({Metadata::GetUserFlag("StartupOnly")});
     auto q = rc->PackVariables(ghost_vars, coarse);
-    auto bound = rc->PackVariables(std::vector<std::string>{"Boundaries." + BoundaryName(bface)});
+    auto bound =
+        rc->PackVariables(std::vector<std::string>{"Boundaries." + BoundaryName(bface)});
     DirichletSetFromField(rc, q, bound, bface, coarse, set, false);
 
-    FC ghost_vars_f = FC({Metadata::FillGhost, Metadata::Face})
-                  - FC({Metadata::GetUserFlag("StartupOnly")});
+    FC ghost_vars_f = FC({Metadata::FillGhost, Metadata::Face}) -
+                      FC({Metadata::GetUserFlag("StartupOnly")});
     auto q_f = rc->PackVariables(ghost_vars_f, coarse);
-    auto bound_f = rc->PackVariables(std::vector<std::string>{"Boundaries.f." + BoundaryName(bface)});
+    auto bound_f = rc->PackVariables(
+        std::vector<std::string>{"Boundaries.f." + BoundaryName(bface)});
     DirichletSetFromField(rc, q_f, bound_f, bface, coarse, set, true);
 }
 
-void KBoundaries::DirichletSetFromField(MeshBlockData<Real> *rc, VariablePack<Real> &q, VariablePack<Real> &bound,
-                                        BoundaryFace bface, bool coarse, bool set, bool do_face)
+void KBoundaries::DirichletSetFromField(MeshBlockData<Real>* rc, VariablePack<Real>& q,
+    VariablePack<Real>& bound, BoundaryFace bface, bool coarse, bool set, bool do_face)
 {
-    // We're sometimes called without any variables to sync (e.g. syncing flags, EMFs), just return
+    // We're sometimes called without any variables to sync (e.g. syncing flags, EMFs),
+    // just return
     if (q.GetDim(4) == 0) return;
 
     // Determine elements to run over
@@ -76,7 +80,8 @@ void KBoundaries::DirichletSetFromField(MeshBlockData<Real> *rc, VariablePack<Re
 
     // Warn when the cache doesn't match the variables we've been given
     if ((el_tot * q.GetDim(4)) != bound.GetDim(4)) {
-        std::cerr << "Dirichlet boundary mismatch! Boundary cache: " << bound.GetDim(4) << " for pack: " << el_tot * q.GetDim(4) << std::endl;
+        std::cerr << "Dirichlet boundary mismatch! Boundary cache: " << bound.GetDim(4)
+                  << " for pack: " << el_tot * q.GetDim(4) << std::endl;
     }
 
     // Indices
@@ -90,31 +95,34 @@ void KBoundaries::DirichletSetFromField(MeshBlockData<Real> *rc, VariablePack<Re
         IndexRange3 b = KDomain::GetBoundaryRange(rc, domain, el, coarse);
 
         // Flatten TopologicalElements when reading/writing to boundaries cache
-        pmb->par_for(
-            "dirichlet_boundary_" + bname, 0, q.GetDim(4)-1, b.ks, b.ke, b.js, b.je, b.is, b.ie,
-            KOKKOS_LAMBDA (const int &v, const int &k, const int &j, const int &i) {
+        pmb->par_for("dirichlet_boundary_" + bname, 0, q.GetDim(4) - 1, b.ks, b.ke, b.js,
+            b.je, b.is, b.ie,
+            KOKKOS_LAMBDA (const int &v, const int &k, const int &j, const int &i)
+            {
                 if (set) {
-                    bound(el_tot*v + (static_cast<int>(el) % el_tot), k - b.ks, j - b.js, i - b.is) = q(el, v, k, j, i);
+                    bound(el_tot * v + (static_cast<int>(el) % el_tot), k - b.ks,
+                        j - b.js, i - b.is) = q(el, v, k, j, i);
                 } else {
-                    q(el, v, k, j, i) = bound(el_tot*v + (static_cast<int>(el) % el_tot), k - b.ks, j - b.js, i - b.is);
+                    q(el, v, k, j, i) =
+                        bound(el_tot * v + (static_cast<int>(el) % el_tot), k - b.ks,
+                            j - b.js, i - b.is);
                 }
-            }
-        );
+            });
     }
 }
 
-void KBoundaries::FreezeDirichlet(std::shared_ptr<MeshData<Real>> &md)
+void KBoundaries::FreezeDirichlet(std::shared_ptr<MeshData<Real>>& md)
 {
     // For each face...
-    for (int i=0; i < BOUNDARY_NFACES; i++) {
-        BoundaryFace bface = (BoundaryFace) i;
+    for (int i = 0; i < BOUNDARY_NFACES; i++) {
+        BoundaryFace bface = (BoundaryFace)i;
         auto bname = BoundaryName(bface);
         auto pmesh = md->GetMeshPointer();
         // ...if this boundary is dirichlet...
         if (pmesh->packages.Get("Boundaries")->Param<std::string>(bname) == "dirichlet") {
-            //std::cout << "Freezing dirichlet " << bname << " on mesh." << std::endl;
-            // ...on all blocks...
-            for (int i=0; i < md->NumBlocks(); i++) {
+            // std::cout << "Freezing dirichlet " << bname << " on mesh." << std::endl;
+            //  ...on all blocks...
+            for (int i = 0; i < md->NumBlocks(); i++) {
                 auto rc = md->GetBlockData(i).get();
                 auto pmb = rc->GetBlockPointer();
                 auto domain = BoundaryDomain(bface);
@@ -124,16 +132,16 @@ void KBoundaries::FreezeDirichlet(std::shared_ptr<MeshData<Real>> &md)
         }
     }
 }
-void KBoundaries::FreezeDirichletBlock(MeshBlockData<Real> *rc)
+void KBoundaries::FreezeDirichletBlock(MeshBlockData<Real>* rc)
 {
     // For each face...
-    for (int i=0; i < BOUNDARY_NFACES; i++) {
-        BoundaryFace bface = (BoundaryFace) i;
+    for (int i = 0; i < BOUNDARY_NFACES; i++) {
+        BoundaryFace bface = (BoundaryFace)i;
         auto bname = BoundaryName(bface);
         auto pmb = rc->GetBlockPointer();
         // ...if this boundary is dirichlet...
         if (pmb->packages.Get("Boundaries")->Param<std::string>(bname) == "dirichlet") {
-            //std::cout << "Freezing dirichlet " << bname << " on block." << std::endl;
+            // std::cout << "Freezing dirichlet " << bname << " on block." << std::endl;
             auto domain = BoundaryDomain(bface);
             // Set whatever is in that domain as the Dirichlet bound
             SetDomainDirichlet(rc, domain, false);

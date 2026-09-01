@@ -45,18 +45,21 @@ using namespace parthenon;
 using parthenon::BoundaryFunction::BCSide;
 
 #define VARIABLE(ns, varname)                                                            \
-  struct varname : public parthenon::variable_names::base_t<false> {                     \
-    template <class... Ts>                                                               \
-    KOKKOS_INLINE_FUNCTION varname(Ts &&...args)                                         \
-        : parthenon::variable_names::base_t<false>(std::forward<Ts>(args)...) {}         \
-    static std::string name() { return #ns "." #varname; }                               \
-  }
+    struct varname : public parthenon::variable_names::base_t<false>                     \
+    {                                                                                    \
+        template<class... Ts>                                                            \
+        KOKKOS_INLINE_FUNCTION varname(Ts&&... args)                                     \
+            : parthenon::variable_names::base_t<false>(std::forward<Ts>(args)...)        \
+        {}                                                                               \
+        static std::string name() { return #ns "." #varname; }                           \
+    }
 
 /**
  * This physics package uses Parthenon's Geometric Multigrid (GMG) solver to
  * minimize magnetic field divergence.  Only useful for resizing face-centered fields.
  */
-namespace B_CleanupGMG {
+namespace B_CleanupGMG
+{
 
 // New type-based variables: pre-declare variable names and get the VarMap() for free!
 // All of KHARMA will be switching to these eventually...
@@ -66,37 +69,44 @@ VARIABLE(b_clean_gmg, rhs);
 // Build type that selects only variables within our namespace. Internal solver
 // variables have the namespace of input variables prepended, so they will also be
 // selected by this type.
-struct any_bclean : public parthenon::variable_names::base_t<true> {
-  template <class... Ts>
-  KOKKOS_INLINE_FUNCTION any_bclean(Ts &&...args)
-      : base_t<true>(std::forward<Ts>(args)...) {}
-  static std::string name() { return "b_clean_gmg[.].*"; }
+struct any_bclean : public parthenon::variable_names::base_t<true>
+{
+    template<class... Ts>
+    KOKKOS_INLINE_FUNCTION any_bclean(Ts&&... args)
+        : base_t<true>(std::forward<Ts>(args)...)
+    {}
+    static std::string name() { return "b_clean_gmg[.].*"; }
 };
 
 // Pointwise Dirichet boundaries adapted for GMG, if we need those
-template <CoordinateDirection DIR, BCSide SIDE>
-auto GetBCDirichlet() {
-  return [](std::shared_ptr<MeshBlockData<Real>> &rc, bool coarse) -> void {
-    using namespace parthenon;
-    using namespace parthenon::BoundaryFunction;
-    GenericBC<DIR, SIDE, BCType::FixedFace, any_bclean>(rc, coarse, 0.0);
-  };
+template<CoordinateDirection DIR, BCSide SIDE>
+auto GetBCDirichlet()
+{
+    return [](std::shared_ptr<MeshBlockData<Real>>& rc, bool coarse) -> void
+    {
+        using namespace parthenon;
+        using namespace parthenon::BoundaryFunction;
+        GenericBC<DIR, SIDE, BCType::FixedFace, any_bclean>(rc, coarse, 0.0);
+    };
 }
 
 // Pointwise Dirichet boundaries adapted for GMG, if we need those
-template <CoordinateDirection DIR, BCSide SIDE>
-auto GetBCReflecting() {
-  return [](std::shared_ptr<MeshBlockData<Real>> &rc, bool coarse) -> void {
-    using namespace parthenon;
-    using namespace parthenon::BoundaryFunction;
-    GenericBC<DIR, SIDE, BCType::Reflect, any_bclean>(rc, coarse);
-  };
+template<CoordinateDirection DIR, BCSide SIDE>
+auto GetBCReflecting()
+{
+    return [](std::shared_ptr<MeshBlockData<Real>>& rc, bool coarse) -> void
+    {
+        using namespace parthenon;
+        using namespace parthenon::BoundaryFunction;
+        GenericBC<DIR, SIDE, BCType::Reflect, any_bclean>(rc, coarse);
+    };
 }
 
 /**
  * Declare fields, initialize parameters
  */
-std::shared_ptr<KHARMAPackage> Initialize(ParameterInput *pin, std::shared_ptr<Packages_t>& packages);
+std::shared_ptr<KHARMAPackage> Initialize(
+    ParameterInput* pin, std::shared_ptr<Packages_t>& packages);
 
 /**
  * Single-call divergence cleanup.  Lots of MPI syncs, probably slow to use in task lists.
@@ -106,7 +116,7 @@ TaskStatus CleanupDivergence(std::shared_ptr<MeshData<Real>>& md);
 /**
  * Apply B -= grad(P) on faces to subtract divergence from the magnetic field
  */
-TaskStatus ApplyPFace(MeshData<Real> *msolve, MeshData<Real> *md);
+TaskStatus ApplyPFace(MeshData<Real>* msolve, MeshData<Real>* md);
 
 /**
  * Function to make this solver's task collection.

@@ -1,25 +1,25 @@
-/* 
+/*
  *  File: anisotropic_conduction.hpp
- *  
+ *
  *  BSD 3-Clause License
- *  
+ *
  *  Copyright (c) 2020, AFD Group at UIUC
  *  All rights reserved.
- *  
+ *
  *  Redistribution and use in source and binary forms, with or without
  *  modification, are permitted provided that the following conditions are met:
- *  
+ *
  *  1. Redistributions of source code must retain the above copyright notice, this
  *     list of conditions and the following disclaimer.
- *  
+ *
  *  2. Redistributions in binary form must reproduce the above copyright notice,
  *     this list of conditions and the following disclaimer in the documentation
  *     and/or other materials provided with the distribution.
- *  
+ *
  *  3. Neither the name of the copyright holder nor the names of its
  *     contributors may be used to endorse or promote products derived from
  *     this software without specific prior written permission.
- *  
+ *
  *  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  *  AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  *  IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -42,7 +42,8 @@ using namespace parthenon;
 /**
  * Anisotropic heat conduction problem, see Chandra+ 2017
  */
-TaskStatus InitializeAnisotropicConduction(std::shared_ptr<MeshBlockData<Real>>& rc, ParameterInput *pin)
+TaskStatus InitializeAnisotropicConduction(
+    std::shared_ptr<MeshBlockData<Real>>& rc, ParameterInput* pin)
 {
     auto pmb = rc->GetBlockPointer();
     GridScalar rho = rc->Get("prims.rho").data;
@@ -67,13 +68,14 @@ TaskStatus InitializeAnisotropicConduction(std::shared_ptr<MeshBlockData<Real>>&
     pin->GetOrAddReal("b_field", "B10", B0);
     // Amp & wavenumber of sin() for B2
     pin->GetOrAddReal("b_field", "amp2_B2", B0);
-    pin->GetOrAddReal("b_field", "k1", 2*M_PI*k0);
+    pin->GetOrAddReal("b_field", "k1", 2 * M_PI * k0);
 
     IndexRange ib = pmb->cellbounds.GetBoundsI(IndexDomain::entire);
     IndexRange jb = pmb->cellbounds.GetBoundsJ(IndexDomain::entire);
     IndexRange kb = pmb->cellbounds.GetBoundsK(IndexDomain::entire);
     pmb->par_for("anisotropic_init", kb.s, kb.e, jb.s, jb.e, ib.s, ib.e,
-        KOKKOS_LAMBDA (const int &k, const int &j, const int &i) {
+        KOKKOS_LAMBDA (const int &k, const int &j, const int &i)
+        {
             Real X[GR_DIM];
             G.coord_embed(k, j, i, Loci::center, X);
             GReal r = m::sqrt(m::pow((X[1] - 0.5), 2) + m::pow((X[2] - 0.5), 2));
@@ -86,8 +88,7 @@ TaskStatus InitializeAnisotropicConduction(std::shared_ptr<MeshBlockData<Real>>&
             uvec(2, k, j, i) = 0.;
             q(k, j, i) = 0.;
             dP(k, j, i) = 0.;
-        }
-    );
+        });
 
     return TaskStatus::complete;
 }

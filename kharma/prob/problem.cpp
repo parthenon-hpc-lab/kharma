@@ -48,18 +48,18 @@
 #include "bondi.hpp"
 #include "explosion.hpp"
 #include "fm_torus.hpp"
-#include "resize_restart.hpp"
-#include "resize_restart_kharma.hpp"
+#include "gizmo.hpp"
 #include "kelvin_helmholtz.hpp"
 #include "mhdmodes.hpp"
 #include "orszag_tang.hpp"
+#include "resize_restart.hpp"
+#include "resize_restart_kharma.hpp"
 #include "shock_tube.hpp"
-#include "gizmo.hpp"
 // EMHD problem headers
 #include "emhd/anisotropic_conduction.hpp"
+#include "emhd/conducting_atmosphere.hpp"
 #include "emhd/emhdmodes.hpp"
 #include "emhd/emhdshock.hpp"
-#include "emhd/conducting_atmosphere.hpp"
 // Electron problem headers
 #include "elec/driven_turbulence.hpp"
 #include "elec/hubble.hpp"
@@ -67,11 +67,11 @@
 
 using namespace parthenon;
 
-void KHARMA::ProblemGenerator(MeshBlock *pmb, ParameterInput *pin)
+void KHARMA::ProblemGenerator(MeshBlock* pmb, ParameterInput* pin)
 {
     auto rc = pmb->meshblock_data.Get("base");
     auto prob = pin->GetString("parthenon/job", "problem_id"); // Required parameter
-    Flag("ProblemGenerator_"+prob);
+    Flag("ProblemGenerator_" + prob);
     // Also just print this, it's important
     if (MPIRank0()) {
         // We have no way of tracking whether this is the first block we're initializing
@@ -94,17 +94,17 @@ void KHARMA::ProblemGenerator(MeshBlock *pmb, ParameterInput *pin)
         status = InitializeKelvinHelmholtz(rc, pin);
     } else if (prob == "shock") {
         status = InitializeShockTube(rc, pin);
-    // GRMHD
+        // GRMHD
     } else if (prob == "bondi") {
         status = InitializeBondi(rc, pin);
-    // Electrons
+        // Electrons
     } else if (prob == "noh") {
         status = InitializeNoh(rc, pin);
     } else if (prob == "hubble") {
         status = InitializeHubble(rc, pin);
     } else if (prob == "driven_turbulence") {
         status = InitializeDrivenTurbulence(rc, pin);
-    // Extended GRMHD
+        // Extended GRMHD
     } else if (prob == "emhdmodes") {
         status = InitializeEMHDModes(rc, pin);
     } else if (prob == "anisotropic_conduction") {
@@ -113,7 +113,7 @@ void KHARMA::ProblemGenerator(MeshBlock *pmb, ParameterInput *pin)
         status = InitializeEMHDShock(rc, pin);
     } else if (prob == "conducting_atmosphere") {
         status = InitializeAtmosphere(rc, pin);
-    // Everything
+        // Everything
     } else if (prob == "torus") {
         status = InitializeFMTorus(rc, pin);
     } else if (prob == "resize_restart") {
@@ -129,7 +129,7 @@ void KHARMA::ProblemGenerator(MeshBlock *pmb, ParameterInput *pin)
 
     // If we didn't initialize a problem, yell
     if (status != TaskStatus::complete) {
-        throw std::invalid_argument("Invalid or incomplete problem: "+prob);
+        throw std::invalid_argument("Invalid or incomplete problem: " + prob);
     }
 
     // If we're not restarting, do any grooming of the initial conditions
