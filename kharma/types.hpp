@@ -1,25 +1,25 @@
-/* 
+/*
  *  File: types.hpp
- *  
+ *
  *  BSD 3-Clause License
- *  
+ *
  *  Copyright (c) 2020, AFD Group at UIUC
  *  All rights reserved.
- *  
+ *
  *  Redistribution and use in source and binary forms, with or without
  *  modification, are permitted provided that the following conditions are met:
- *  
+ *
  *  1. Redistributions of source code must retain the above copyright notice, this
  *     list of conditions and the following disclaimer.
- *  
+ *
  *  2. Redistributions in binary form must reproduce the above copyright notice,
  *     this list of conditions and the following disclaimer in the documentation
  *     and/or other materials provided with the distribution.
- *  
+ *
  *  3. Neither the name of the copyright holder nor the names of its
  *     contributors may be used to endorse or promote products derived from
  *     this software without specific prior written permission.
- *  
+ *
  *  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  *  AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  *  IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -47,7 +47,7 @@ using parthenon::MeshBlockData;
 
 /**
  * Types, macros, and convenience functions
- * 
+ *
  * Anything potentially useful throughout KHARMA, but specific to it
  * (general copy/pastes from StackOverflow go in kharma_utils.hpp)
  */
@@ -74,28 +74,34 @@ constexpr TE NN = TE::NN;
 // Host-only because the templating/types are weird on device
 // TODO(CEP) make host/device?
 template<typename T>
-inline TE FaceOf(const T& dir) {
+inline TE FaceOf(const T& dir)
+{
     return (dir == X1DIR) ? F1 : ((dir == X2DIR) ? F2 : F3);
 }
 template<typename T>
-inline TE EdgeOf(const T& dir) {
+inline TE EdgeOf(const T& dir)
+{
     return (dir == X1DIR) ? E1 : ((dir == X2DIR) ? E2 : E3);
 }
 template<typename T>
-inline std::vector<TE> OrthogonalEdges(const T& dir) {
-    return (dir == X1DIR) ? std::vector<TE>{E2, E3} :
-        ((dir == X2DIR) ? std::vector<TE>{E1, E3} : std::vector<TE>{E1, E2});
+inline std::vector<TE> OrthogonalEdges(const T& dir)
+{
+    return (dir == X1DIR)
+               ? std::vector<TE>{E2, E3}
+               : ((dir == X2DIR) ? std::vector<TE>{E1, E3} : std::vector<TE>{E1, E2});
 }
 
 // Struct for derived 4-vectors at a point, usually calculated and needed together
-typedef struct {
+typedef struct
+{
     Real ucon[GR_DIM];
     Real ucov[GR_DIM];
     Real bcon[GR_DIM];
     Real bcov[GR_DIM];
 } FourVectors;
 
-typedef struct {
+typedef struct
+{
     int is;
     int ie;
     int js;
@@ -104,7 +110,8 @@ typedef struct {
     int ke;
 } IndexRange3;
 
-typedef struct {
+typedef struct
+{
     uint n1;
     uint n2;
     uint n3;
@@ -124,115 +131,116 @@ typedef struct {
  *
  * Note the values of any variables not present in the pack will be -1
  */
-class VarMap {
-    public:
-        // Use int8. 127 values ought to be enough for anybody, right?
-        // Basic primitive variables
-        int8_t RHO, UU, U1, U2, U3, B1, B2, B3, Bf1, Bf2, Bf3;
-        // Tracker variables
-        int8_t RHO_ADDED, UU_ADDED, PASSIVE;
-        // Electron entropy/energy tracking
-        int8_t KTOT, K_CONSTANT, K_HOWES, K_KAWAZURA, K_WERNER, K_ROWAN, K_SHARMA;
-        // Implicit-solver variables: constraint damping, EGRMHD
-        int8_t PSI, Q, DP;
-        // Added material
-        int8_t RHOADD, T0ADD, T1ADD, T2ADD, T3ADD;
-        // Total struct size ~20 bytes, < 1 vector of 4 doubles
+class VarMap
+{
+  public:
+    // Use int8. 127 values ought to be enough for anybody, right?
+    // Basic primitive variables
+    int8_t RHO, UU, U1, U2, U3, B1, B2, B3, Bf1, Bf2, Bf3;
+    // Tracker variables
+    int8_t RHO_ADDED, UU_ADDED, PASSIVE;
+    // Electron entropy/energy tracking
+    int8_t KTOT, K_CONSTANT, K_HOWES, K_KAWAZURA, K_WERNER, K_ROWAN, K_SHARMA;
+    // Implicit-solver variables: constraint damping, EGRMHD
+    int8_t PSI, Q, DP;
+    // Added material
+    int8_t RHOADD, T0ADD, T1ADD, T2ADD, T3ADD;
+    // Total struct size ~20 bytes, < 1 vector of 4 doubles
 
-        template<typename T>
-        VarMap(T& name_map, bool is_cons)
-        {
-            if (is_cons) {
-                // HD
-                RHO = name_map["cons.rho"].first;
-                UU = name_map["cons.u"].first;
-                U1 = name_map["cons.uvec"].first;
-                // B
-                B1 = name_map["cons.B"].first;
-                Bf1 = name_map["cons.fB"].first;
-                PSI = name_map["cons.psi_cd"].first;
-                // Floors
-                RHO_ADDED = name_map["cons.rho_added"].first;
-                UU_ADDED = name_map["cons.u_added"].first;
-                // Electrons
-                KTOT = name_map["cons.Ktot"].first;
-                K_CONSTANT = name_map["cons.Kel_Constant"].first;
-                K_HOWES = name_map["cons.Kel_Howes"].first;
-                K_KAWAZURA = name_map["cons.Kel_Kawazura"].first;
-                K_WERNER = name_map["cons.Kel_Werner"].first;
-                K_ROWAN = name_map["cons.Kel_Rowan"].first;
-                K_SHARMA = name_map["cons.Kel_Sharma"].first;
-                // Extended MHD
-                Q = name_map["cons.q"].first;
-                DP = name_map["cons.dP"].first;
+    template<typename T>
+    VarMap(T& name_map, bool is_cons)
+    {
+        if (is_cons) {
+            // HD
+            RHO = name_map["cons.rho"].first;
+            UU = name_map["cons.u"].first;
+            U1 = name_map["cons.uvec"].first;
+            // B
+            B1 = name_map["cons.B"].first;
+            Bf1 = name_map["cons.fB"].first;
+            PSI = name_map["cons.psi_cd"].first;
+            // Floors
+            RHO_ADDED = name_map["cons.rho_added"].first;
+            UU_ADDED = name_map["cons.u_added"].first;
+            // Electrons
+            KTOT = name_map["cons.Ktot"].first;
+            K_CONSTANT = name_map["cons.Kel_Constant"].first;
+            K_HOWES = name_map["cons.Kel_Howes"].first;
+            K_KAWAZURA = name_map["cons.Kel_Kawazura"].first;
+            K_WERNER = name_map["cons.Kel_Werner"].first;
+            K_ROWAN = name_map["cons.Kel_Rowan"].first;
+            K_SHARMA = name_map["cons.Kel_Sharma"].first;
+            // Extended MHD
+            Q = name_map["cons.q"].first;
+            DP = name_map["cons.dP"].first;
 
-                // Added material
-                RHOADD = name_map["Floors.rhou0add"].first;
-                T0ADD = name_map["Floors.Tadd"].first;
+            // Added material
+            RHOADD = name_map["Floors.rhou0add"].first;
+            T0ADD = name_map["Floors.Tadd"].first;
 
-            } else {
-                // HD
-                RHO = name_map["prims.rho"].first;
-                UU = name_map["prims.u"].first;
-                U1 = name_map["prims.uvec"].first;
-                // B
-                B1 = name_map["prims.B"].first;
-                Bf1 = name_map["prims.fB"].first;
-                PSI = name_map["prims.psi_cd"].first;
-                // Floors (TODO cons only?)
-                RHO_ADDED = name_map["prims.rho_added"].first;
-                UU_ADDED = name_map["prims.u_added"].first;
-                // Electrons
-                KTOT = name_map["prims.Ktot"].first;
-                K_CONSTANT = name_map["prims.Kel_Constant"].first;
-                K_HOWES = name_map["prims.Kel_Howes"].first;
-                K_KAWAZURA = name_map["prims.Kel_Kawazura"].first;
-                K_WERNER = name_map["prims.Kel_Werner"].first;
-                K_ROWAN = name_map["prims.Kel_Rowan"].first;
-                K_SHARMA = name_map["prims.Kel_Sharma"].first;
-                // Extended MHD
-                Q = name_map["prims.q"].first;
-                DP = name_map["prims.dP"].first;
-            }
-            if (U1 >= 0) {
-                U2 = U1 + 1;
-                U3 = U1 + 2;
-            } else {
-                U2 = -1;
-                U3 = -1;
-            }
-            if (B1 >= 0) {
-                B2 = B1 + 1;
-                B3 = B1 + 2;
-            } else {
-                B2 = -1;
-                B3 = -1;
-            }
-            if (Bf1 >= 0) {
-                Bf2 = Bf1 + 1;
-                Bf3 = Bf1 + 2;
-            } else {
-                Bf2 = -1;
-                Bf3 = -1;
-            }
-            if (T0ADD >= 0) {
-                T1ADD = T0ADD + 1;
-                T2ADD = T0ADD + 2;
-                T3ADD = T0ADD + 3;
-            } else {
-                T1ADD = -1;
-                T2ADD = -1;
-                T3ADD = -1;
-            }
+        } else {
+            // HD
+            RHO = name_map["prims.rho"].first;
+            UU = name_map["prims.u"].first;
+            U1 = name_map["prims.uvec"].first;
+            // B
+            B1 = name_map["prims.B"].first;
+            Bf1 = name_map["prims.fB"].first;
+            PSI = name_map["prims.psi_cd"].first;
+            // Floors (TODO cons only?)
+            RHO_ADDED = name_map["prims.rho_added"].first;
+            UU_ADDED = name_map["prims.u_added"].first;
+            // Electrons
+            KTOT = name_map["prims.Ktot"].first;
+            K_CONSTANT = name_map["prims.Kel_Constant"].first;
+            K_HOWES = name_map["prims.Kel_Howes"].first;
+            K_KAWAZURA = name_map["prims.Kel_Kawazura"].first;
+            K_WERNER = name_map["prims.Kel_Werner"].first;
+            K_ROWAN = name_map["prims.Kel_Rowan"].first;
+            K_SHARMA = name_map["prims.Kel_Sharma"].first;
+            // Extended MHD
+            Q = name_map["prims.q"].first;
+            DP = name_map["prims.dP"].first;
         }
-
-        void print() const
-        {
-            printf("VAR MAP:\n");
-            printf("prims: %d %d %d %d %d\n", RHO, UU, U1, U2, U3);
-            printf("B field cell: %d %d %d face: %d %d %d\n", B1, B2, B3, Bf1, Bf2, Bf3);
-            printf("EMHD q: %d dP: %d\n", Q, DP);
+        if (U1 >= 0) {
+            U2 = U1 + 1;
+            U3 = U1 + 2;
+        } else {
+            U2 = -1;
+            U3 = -1;
         }
+        if (B1 >= 0) {
+            B2 = B1 + 1;
+            B3 = B1 + 2;
+        } else {
+            B2 = -1;
+            B3 = -1;
+        }
+        if (Bf1 >= 0) {
+            Bf2 = Bf1 + 1;
+            Bf3 = Bf1 + 2;
+        } else {
+            Bf2 = -1;
+            Bf3 = -1;
+        }
+        if (T0ADD >= 0) {
+            T1ADD = T0ADD + 1;
+            T2ADD = T0ADD + 2;
+            T3ADD = T0ADD + 3;
+        } else {
+            T1ADD = -1;
+            T2ADD = -1;
+            T3ADD = -1;
+        }
+    }
+
+    void print() const
+    {
+        printf("VAR MAP:\n");
+        printf("prims: %d %d %d %d %d\n", RHO, UU, U1, U2, U3);
+        printf("B field cell: %d %d %d face: %d %d %d\n", B1, B2, B3, Bf1, Bf2, Bf3);
+        printf("EMHD q: %d dP: %d\n", Q, DP);
+    }
 };
 
 // Reasonable maximum number of fluid primitive or conserved variables being evolved
@@ -244,10 +252,10 @@ class VarMap {
 /**
  * Function to generate outputs wherever, whenever.
  */
-inline void OutputNow(Mesh *pmesh, std::string name)
+inline void OutputNow(Mesh* pmesh, std::string name)
 {
     auto tm = SimTime(0., 0., 0, 0, 0, 0, 0.);
-    ParameterInput *pin = pmesh->packages.Get("Globals")->Param<ParameterInput*>("pin");
+    ParameterInput* pin = pmesh->packages.Get("Globals")->Param<ParameterInput*>("pin");
     auto pouts = std::make_unique<Outputs>(pmesh, pin, &tm);
     pouts->MakeOutputs(pmesh, pin, &tm, SignalHandler::OutputSignal::now);
     // TODO: find most recently written "now" files and move them to "name"
@@ -257,7 +265,7 @@ inline void OutputNow(Mesh *pmesh, std::string name)
 /**
  * Functions for "tracing" execution by printing strings at each entry/exit.
  * Normally, they profile the code, but they can print a nested execution trace.
- * 
+ *
  * Don't laugh at my dumb mutex, it works.
  */
 #if TRACE
@@ -267,7 +275,7 @@ extern int kharma_debug_trace_mutex;
 #define MAX_INDENT_SPACES 80
 inline void Flag(std::string label)
 {
-    if(MPIRank0()) {
+    if (MPIRank0()) {
         int& indent = kharma_debug_trace_indent;
         int& mutex = kharma_debug_trace_mutex;
         // If no other thread is printing one of these...
@@ -276,37 +284,31 @@ inline void Flag(std::string label)
         mutex = 1;
         // Make very sure the indent does not exceed the available space.
         // Forgetting EndFlag() is easy and buffer overflows are bad.
-        indent = m::max(m::min(indent, MAX_INDENT_SPACES/2), 0);
+        indent = m::max(m::min(indent, MAX_INDENT_SPACES / 2), 0);
         char tab[MAX_INDENT_SPACES] = {0};
-        for (int i=0; i < indent; i++) tab[i*2] = tab[i*2+1] = ' ';
+        for (int i = 0; i < indent; i++) tab[i * 2] = tab[i * 2 + 1] = ' ';
         // Print everything in one call so we have the best chance of coherence
         fprintf(stderr, "%sStarting %s\n", tab, label.c_str());
-        indent = m::min(indent+1, MAX_INDENT_SPACES/2);
+        indent = m::min(indent + 1, MAX_INDENT_SPACES / 2);
         // Release mutex
         mutex = 0;
     }
 }
 inline void EndFlag()
 {
-    if(MPIRank0()) {
+    if (MPIRank0()) {
         int& indent = kharma_debug_trace_indent;
         int& mutex = kharma_debug_trace_mutex;
         while (mutex != 0);
         mutex = 1;
-        indent = m::min(m::max(indent-1, 0), MAX_INDENT_SPACES/2);
+        indent = m::min(m::max(indent - 1, 0), MAX_INDENT_SPACES / 2);
         char tab[MAX_INDENT_SPACES] = {0};
-        for (int i=0; i < indent; i++) tab[i*2] = tab[i*2+1] = ' ';
+        for (int i = 0; i < indent; i++) tab[i * 2] = tab[i * 2 + 1] = ' ';
         fprintf(stderr, "%sDone\n", tab);
         mutex = 0;
     }
 }
 #else
-inline void Flag(std::string label)
-{
-    Kokkos::Profiling::pushRegion(label);
-}
-inline void EndFlag()
-{
-    Kokkos::Profiling::popRegion();
-}
+inline void Flag(std::string label) { Kokkos::Profiling::pushRegion(label); }
+inline void EndFlag() { Kokkos::Profiling::popRegion(); }
 #endif
