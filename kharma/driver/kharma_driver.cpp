@@ -108,8 +108,8 @@ std::shared_ptr<KHARMAPackage> KHARMADriver::Initialize(
     Metadata::AddUserFlag("SplitVector");
 
     // Synchronize primitive variables unless we're using the KHARMA driver that
-    // specifically doesn't This includes for AMR w/ImEx driver Note the "conserved" B
-    // field is always sync'd.  The "primitive" version only differs by sqrt(-g)
+    // specifically doesn't. This includes for AMR w/ImEx driver. Note the "conserved"
+    // B field is always sync'd. The "primitive" version only differs by sqrt(-g).
     bool sync_prims = driver_type != DriverType::kharma;
     params.Add("sync_prims", sync_prims);
     if (sync_prims) {

@@ -21,7 +21,7 @@ noh_test() {
         cp noh.out0.final.phdf noh.out0.final.res$res.phdf
     done
     check_code=0
-    python check.py . . $ALL_RES 1.666667 || check_code=$?
+    python3 check.py . . $ALL_RES 1.666667 || check_code=$?
     if [[ $check_code != 0 ]]; then
         echo Noh shock test FAIL: $check_code
         exit_code=1

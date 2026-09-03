@@ -225,7 +225,12 @@ TaskStatus Inverter::Backstop(MeshBlockData<Real>* rc)
             Real rhomin_geom, umin_geom;
             determine_geo_floors(
                 G, P, m_p, gam, k, j, i, floors, floors_inner, rhomin_geom, umin_geom);
-            const Real umin = umin_geom;
+
+            const Real umin =
+                (m_p.KTOT >= 0)
+                    ? P(m_p.KTOT, k, j, i) * m::pow(P(m_p.RHO, k, j, i), gam) / (gam - 1.)
+                    : umin_geom;
+
             if (failed(pflag(k, j, i)) && (P(m_p.UU, k, j, i) < umin)) {
                 // const Real rho = P(m_p.RHO, k, j, i);
                 // const Real u = P(m_p.UU, k, j, i);

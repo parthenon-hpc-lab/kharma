@@ -148,6 +148,8 @@ class Prescription
     bool radius_dependent_floors;
     // Add density to respect the gamma ceiling?
     bool use_rho_to_slow;
+    // Minimum u based on no dissipation/entropy advection
+    bool use_u_min_entropy;
 };
 
 inline Prescription MakePrescription(
@@ -207,6 +209,8 @@ inline Prescription MakePrescription(
 
     p.use_rho_to_slow = pin->GetOrAddBoolean("floors", "use_rho_to_slow", false);
 
+    p.use_u_min_entropy = pin->GetOrAddBoolean("floors", "u_min_from_entropy", true);
+
     return p;
 }
 
@@ -264,6 +268,9 @@ inline Prescription MakePrescriptionInner(parthenon::ParameterInput* pin,
     p_inner.adjust_k = pin->GetOrAddBoolean(block, "adjust_k", p_outer.adjust_k);
 
     p_inner.gamma_max = pin->GetOrAddReal(block, "gamma_max", p_outer.gamma_max);
+
+    p_inner.use_u_min_entropy =
+        pin->GetOrAddBoolean("floors", "u_min_from_entropy", p_outer.use_u_min_entropy);
 
     // Always grab these from p_outer, they should never differ between outer/inner floors
     p_inner.radius_dependent_floors = p_outer.radius_dependent_floors;
