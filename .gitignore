@@ -44,6 +44,8 @@ build/
 
 # External directories
 external/hdf5*
+# Leftover clone of mpark/variant, replaced by singularity-eos' ports-of-call
+external/variant/
 
 # Prerequisites
 *.d
