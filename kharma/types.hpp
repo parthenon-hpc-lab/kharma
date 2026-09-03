@@ -246,8 +246,7 @@ class VarMap
         printf("B field cell: %d %d %d face: %d %d %d\n", B1, B2, B3, Bf1, Bf2, Bf3);
         printf("EMHD q: %d dP: %d\n", Q, DP);
     }
-}
-;
+};
 
 // Reasonable maximum number of fluid primitive or conserved variables being evolved
 // e.g. 8 for GRMHD, 10 for EMHD, and additional vars for e-/passives
