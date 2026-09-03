@@ -64,7 +64,7 @@ TaskStatus Inverter::FixUtoP(MeshBlockData<Real>* rc)
     // Only fixup the core 5 prims TODO build by flag, HD + anything implicit
     auto P = GRMHD::PackHDPrims(rc);
 
-    GridScalar pflag = rc->Get("pflag").data;
+    GridScalar pflag = rc->Get("flags.inverter").data;
 
     const auto& pars = pmb->packages.Get("GRMHD")->AllParams();
     const Real gam = pars.Get<Real>("gamma");
@@ -146,7 +146,7 @@ TaskStatus Inverter::FixUtoP(MeshBlockData<Real>* rc)
     const int nvar = P.GetDim(4);
 
     // Get floor flag
-    GridScalar fflag = rc->Get("fflag").data;
+    GridScalar fflag = rc->Get("flags.floors").data;
 
     pmb->par_for("fix_U_to_P_floors", b.ks, b.ke, b.js, b.je, b.is, b.ie,
         KOKKOS_LAMBDA (const int &k, const int &j, const int &i)
@@ -196,8 +196,8 @@ TaskStatus Inverter::Backstop(MeshBlockData<Real>* rc)
                   ->Param<Floors::Prescription>("inverter_prescription");
 
     // Get flags
-    GridScalar fflag = rc->Get("fflag").data;
-    GridScalar pflag = rc->Get("pflag").data;
+    GridScalar fflag = rc->Get("flags.floors").data;
+    GridScalar pflag = rc->Get("flags.inverter").data;
 
     // We need the full packs of prims/cons in order to fix internal energy
     // Pack new variables
@@ -225,7 +225,12 @@ TaskStatus Inverter::Backstop(MeshBlockData<Real>* rc)
             Real rhomin_geom, umin_geom;
             determine_geo_floors(
                 G, P, m_p, gam, k, j, i, floors, floors_inner, rhomin_geom, umin_geom);
-            const Real umin = umin_geom;
+
+            const Real umin =
+                (m_p.KTOT >= 0)
+                    ? P(m_p.KTOT, k, j, i) * m::pow(P(m_p.RHO, k, j, i), gam) / (gam - 1.)
+                    : umin_geom;
+
             if (failed(pflag(k, j, i)) && (P(m_p.UU, k, j, i) < umin)) {
                 // const Real rho = P(m_p.RHO, k, j, i);
                 // const Real u = P(m_p.UU, k, j, i);

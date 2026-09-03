@@ -177,7 +177,7 @@ std::shared_ptr<KHARMAPackage> Initialize(
     // we register zones where limits on q and dP are hit
     Metadata m =
         Metadata({Metadata::Real, Metadata::Cell, Metadata::Derived, Metadata::OneCopy});
-    pkg->AddField("eflag", m);
+    pkg->AddField("flags.emhd", m);
 
     // Callbacks
 

@@ -49,9 +49,9 @@ TaskStatus Flux::MarkFOFC(MeshData<Real>* guess)
 
     // flags of the guess indicate where we lower
     // (not that it matters, the flags are OneCopy)
-    auto fflag = guess->PackVariables(std::vector<std::string>{"fflag"});
-    auto pflag = guess->PackVariables(std::vector<std::string>{"pflag"});
-    auto fofcflag = guess->PackVariables(std::vector<std::string>{"fofcflag"});
+    auto fflag = guess->PackVariables(std::vector<std::string>{"flags.floors"});
+    auto pflag = guess->PackVariables(std::vector<std::string>{"flags.inverter"});
+    auto fofcflag = guess->PackVariables(std::vector<std::string>{"flags.fofc"});
 
     PackIndexMap cons_map, prims_map;
     std::vector<MetadataFlag> prims_flags = {
@@ -121,7 +121,7 @@ TaskStatus Flux::MarkFOFC(MeshData<Real>* guess)
             const bool is_outer_x2 =
                 KBoundaries::IsPhysicalBoundary(pmb, BoundaryFace::outer_x2);
             if (is_inner_x2 || is_outer_x2) {
-                auto lfofcflag = rc->PackVariables(std::vector<std::string>{"fofcflag"});
+                auto lfofcflag = rc->PackVariables(std::vector<std::string>{"flags.fofc"});
                 if (is_inner_x2) {
                     const IndexRange3 b = KDomain::GetRange(guess, IndexDomain::inner_x2);
                     int jstart = b.je + 1;
@@ -159,7 +159,7 @@ TaskStatus Flux::FOFC(MeshData<Real>* md, MeshData<Real>* guess)
     const int ndim = pmesh->ndim;
 
     // Pick up flag. Optionally synced
-    auto fofcflag = guess->PackVariables(std::vector<std::string>{"fofcflag"});
+    auto fofcflag = guess->PackVariables(std::vector<std::string>{"flags.fofc"});
 
     // But we're modifying the live temporaries, and eventually fluxes, here
     const auto& Pl_all = md->PackVariables(std::vector<std::string>{"Flux.Pl"});

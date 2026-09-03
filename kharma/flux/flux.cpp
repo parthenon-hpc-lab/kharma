@@ -47,7 +47,7 @@ using namespace parthenon;
 
 int Flux::CountFOFCFlags(MeshData<Real>* md)
 {
-    return Reductions::CountFlags(md, "fofcflag",
+    return Reductions::CountFlags(md, "flags.fofc",
         std::map<int, std::string>{{1, "Flux-corrected"}}, IndexDomain::interior,
         true)[0];
 }
@@ -254,7 +254,7 @@ std::shared_ptr<KHARMAPackage> Flux::Initialize(
         // This could be another bitflag in fflag, but that would be really confusing...
         Metadata m = Metadata({Metadata::Real, Metadata::Cell, Metadata::Derived,
             Metadata::OneCopy, Metadata::FillGhost});
-        pkg->AddField("fofcflag", m);
+        pkg->AddField("flags.fofc", m);
 
         // List (vector) of HistoryOutputVars that will all be enrolled as output
         // variables
@@ -512,10 +512,10 @@ TaskStatus Flux::PostStepDiagnostics(const SimTime& tm, MeshData<Real>* md)
     if (use_fofc && flag_verbose > 0) {
         std::map<int, std::string> fofc_label = {{1, "Flux-corrected"}};
         Reductions::StartFlagReduce(
-            md, "fofcflag", fofc_label, IndexDomain::interior, false, 10);
+            md, "flags.fofc", fofc_label, IndexDomain::interior, false, 10);
         // Debugging/diagnostic info about floor and inversion flags
         Reductions::CheckFlagReduceAndPrintHits(
-            md, "fofcflag", fofc_label, IndexDomain::interior, false, 10);
+            md, "flags.fofc", fofc_label, IndexDomain::interior, false, 10);
     }
 
     // Check for a soundspeed (ctop) of 0 or NaN

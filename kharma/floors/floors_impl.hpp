@@ -54,8 +54,8 @@ TaskStatus ApplyFloorsInFrame(MeshData<Real>* md, IndexDomain domain)
     auto U = md->PackVariables(std::vector<MetadataFlag>{Metadata::Conserved}, cons_map);
     const VarMap m_u(cons_map, true), m_p(prims_map, false);
 
-    auto fflag = md->PackVariables(std::vector<std::string>{"fflag"});
-    auto pflag = md->PackVariables(std::vector<std::string>{"pflag"});
+    auto fflag = md->PackVariables(std::vector<std::string>{"flags.floors"});
+    auto pflag = md->PackVariables(std::vector<std::string>{"flags.inverter"});
     PackIndexMap floors_map;
     auto floor_vals = md->PackVariables(
         std::vector<std::string>{"Floors.rho_floor", "Floors.u_floor"}, floors_map);

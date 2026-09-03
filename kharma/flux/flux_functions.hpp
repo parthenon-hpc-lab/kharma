@@ -36,6 +36,7 @@
 #include "decs.hpp"
 
 #include "emhd.hpp"
+#include "force_free_functions.hpp"
 #include "gr_coordinates.hpp"
 #include "grmhd_functions.hpp"
 #include "kharma_utils.hpp"
@@ -69,7 +70,7 @@ KOKKOS_FORCEINLINE_FUNCTION void calc_tensor(const Global& P, const VarMap& m_p,
         // Then calculate the tensor
         EMHD::calc_tensor(P(m_p.RHO, k, j, i), P(m_p.UU, k, j, i),
             (gam - 1) * P(m_p.UU, k, j, i), q, dP, D, dir, T);
-    } else if (m_p.B1 >= 0) {
+    } else if (m_p.B1 >= 0 && m_p.RHO >= 0) {
         // GRMHD stress-energy tensor w/ first index up, second index down
         GRMHD::calc_tensor(P(m_p.RHO, k, j, i), P(m_p.UU, k, j, i),
             (gam - 1) * P(m_p.UU, k, j, i), D, dir, T);
@@ -151,6 +152,9 @@ KOKKOS_FORCEINLINE_FUNCTION void prim_to_flux(const GRCoordinates& G, const Glob
         if (m_u.K_SHARMA >= 0)
             flux[m_u.K_SHARMA] = flux[m_u.RHO] * P(m_p.K_SHARMA, k, j, i);
     }
+    // Noble+ '09 entropy density S = p/rho^(gam-1): advects like q & dP, not like Ktot
+    if (m_u.KTOT_ADV >= 0)
+        flux[m_u.KTOT_ADV] = P(m_p.KTOT_ADV, k, j, i) * D.ucon[dir] * gdet;
 }
 
 template<typename Global>
@@ -160,15 +164,22 @@ KOKKOS_FORCEINLINE_FUNCTION void prim_to_flux(const GRCoordinates& G, const Glob
     const Global& flux, const VarMap& m_u, const Loci loc = Loci::center)
 {
     const Real gdet = G.gdet(loc, j, i);
-    // Particle number flux
-    flux(m_u.RHO, k, j, i) = P(m_p.RHO, k, j, i) * D.ucon[dir] * gdet;
 
-    Real T[GR_DIM];
-    calc_tensor(P, m_p, D, emhd_params, gam, k, j, i, dir, T);
-    flux(m_u.UU, k, j, i) = T[0] * gdet + flux(m_u.RHO, k, j, i);
-    flux(m_u.U1, k, j, i) = T[1] * gdet;
-    flux(m_u.U2, k, j, i) = T[2] * gdet;
-    flux(m_u.U3, k, j, i) = T[3] * gdet;
+    if (m_u.RHO >= 0) {
+        // Particle number flux
+        flux(m_u.RHO, k, j, i) = P(m_p.RHO, k, j, i) * D.ucon[dir] * gdet;
+    }
+    if (m_u.UU >= 0 || m_u.U1 >= 0) {
+        Real T[GR_DIM];
+        calc_tensor(P, m_p, D, emhd_params, gam, k, j, i, dir, T);
+        if (m_u.UU >= 0)
+            flux(m_u.UU, k, j, i) = T[0] * gdet + flux(m_u.RHO, k, j, i);
+        if (m_u.U1 >= 0) {
+            flux(m_u.U1, k, j, i) = T[1] * gdet;
+            flux(m_u.U2, k, j, i) = T[2] * gdet;
+            flux(m_u.U3, k, j, i) = T[3] * gdet;
+        }
+    }
 
     // Magnetic field
     if (m_u.B1 >= 0) {
@@ -204,9 +215,26 @@ KOKKOS_FORCEINLINE_FUNCTION void prim_to_flux(const GRCoordinates& G, const Glob
     if (m_u.Q >= 0) flux(m_u.Q, k, j, i) = P(m_p.Q, k, j, i) * D.ucon[dir] * gdet;
     if (m_u.DP >= 0) flux(m_u.DP, k, j, i) = P(m_p.DP, k, j, i) * D.ucon[dir] * gdet;
 
-    // Electrons: normalized by density
+    // Entropy: normalized by density
     if (m_u.KTOT >= 0) {
         flux(m_u.KTOT, k, j, i) = flux(m_u.RHO, k, j, i) * P(m_p.KTOT, k, j, i);
+
+        if (m_u.UUFF >= 0) {
+#ifdef FORCE_FREE_COLD
+            Real w_s = 1.;
+#else
+            Real w_s = 1 + gam * P(m_p.UU, k, j, i) / P(m_p.RHO, k, j, i);
+#endif
+
+            flux(m_u.UUFF, k, j, i) = w_s * D.bcon[dir] * gdet;
+
+            Real T_EM[GR_DIM];
+            Force_Free::calc_tensor(D, dir, T_EM);
+            flux(m_u.U1FF, k, j, i) = T_EM[1] * gdet;
+            flux(m_u.U2FF, k, j, i) = T_EM[2] * gdet;
+            flux(m_u.U3FF, k, j, i) = T_EM[3] * gdet;
+        }
+
         if (m_u.K_CONSTANT >= 0)
             flux(m_u.K_CONSTANT, k, j, i) =
                 flux(m_u.RHO, k, j, i) * P(m_p.K_CONSTANT, k, j, i);
@@ -224,6 +252,9 @@ KOKKOS_FORCEINLINE_FUNCTION void prim_to_flux(const GRCoordinates& G, const Glob
             flux(m_u.K_SHARMA, k, j, i) =
                 flux(m_u.RHO, k, j, i) * P(m_p.K_SHARMA, k, j, i);
     }
+    // Noble+ '09 entropy density S = p/rho^(gam-1): advects like q & dP, not like Ktot
+    if (m_u.KTOT_ADV >= 0)
+        flux(m_u.KTOT_ADV, k, j, i) = P(m_p.KTOT_ADV, k, j, i) * D.ucon[dir] * gdet;
 }
 
 /**

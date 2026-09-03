@@ -134,7 +134,7 @@ inline TaskStatus GetFlux(MeshData<Real>* md)
     const auto& Fl_all = md->PackVariables(std::vector<std::string>{"Flux.Fl"});
     const auto& Fr_all = md->PackVariables(std::vector<std::string>{"Flux.Fr"});
 
-    auto fflag = md->PackVariables(std::vector<std::string>{"fflag"});
+    auto fflag = md->PackVariables(std::vector<std::string>{"flags.floors"});
 
     // Get the domain size
     // We need fluxes outside the domain for flux-CT and FOFC: one extra zone update on

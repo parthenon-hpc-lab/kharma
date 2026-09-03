@@ -147,12 +147,12 @@ std::shared_ptr<KHARMAPackage> Floors::Initialize(
 
     // Flag for which floor conditions were violated.  Used for diagnostics
     // TODO(CEP) Should switch these to "Integer" fields when Parthenon supports it
-    pkg->AddField("fflag", m);
+    pkg->AddField("flags.floors", m);
     // When not using UtoP, we still need a "dummy" copy of pflag to write the
     // post-flooring flag to
     m = Metadata({Metadata::Real, Metadata::Cell, Metadata::Derived, Metadata::OneCopy,
         Metadata::Overridable});
-    pkg->AddField("pflag", m);
+    pkg->AddField("flags.inverter", m);
 
     if (track_additions) {
         // Track total additions to conserved variables
@@ -300,8 +300,8 @@ TaskStatus Floors::DetermineGRMHDFloors(MeshData<Real>* md, IndexDomain domain,
         std::vector<MetadataFlag>{Metadata::GetUserFlag("Primitive")}, prims_map);
     const VarMap m_p(prims_map, false);
 
-    auto fflag = md->PackVariables(std::vector<std::string>{"fflag"});
-    auto pflag = md->PackVariables(std::vector<std::string>{"pflag"});
+    auto fflag = md->PackVariables(std::vector<std::string>{"flags.floors"});
+    auto pflag = md->PackVariables(std::vector<std::string>{"flags.inverter"});
     PackIndexMap floors_map;
     auto floor_vals = md->PackVariables(
         std::vector<std::string>{"Floors.rho_floor", "Floors.u_floor"}, floors_map);
@@ -326,7 +326,7 @@ TaskStatus Floors::DetermineGRMHDFloors(MeshData<Real>* md, IndexDomain domain,
         });
 
     // TODO(CEP) if we can somehow guarantee one call/rank we can start the reduction here
-    // Reductions::StartFlagReduce(md, "fflag", FFlag::flag_names, IndexDomain::interior,
+    // Reductions::StartFlagReduce(md, "flags.floors", FFlag::flag_names, IndexDomain::interior,
     // true, 0);
 
     return TaskStatus::complete;
@@ -392,14 +392,14 @@ TaskStatus Floors::TrackAdditions(MeshData<Real>* md, MeshData<Real>* md_save)
 int Floors::CountFFlags(MeshData<Real>* md)
 {
     return Reductions::CountFlags(
-        md, "fflag", FFlag::flag_names, IndexDomain::interior, true)[0];
+        md, "flags.floors", FFlag::flag_names, IndexDomain::interior, true)[0];
 }
 
 void Floors::PreStepWork(Mesh* pmesh, ParameterInput* pin, const SimTime& tm)
 {
     // Clear all floor flags before each step
     auto md = pmesh->mesh_data.Get().get();
-    KHARMADriver::Scale(std::vector<std::string>{"fflag"}, md, 0.);
+    KHARMADriver::Scale(std::vector<std::string>{"flags.floors"}, md, 0.);
 }
 
 TaskStatus Floors::PostStepDiagnostics(const SimTime& tm, MeshData<Real>* md)
@@ -413,10 +413,10 @@ TaskStatus Floors::PostStepDiagnostics(const SimTime& tm, MeshData<Real>* md)
     // Debugging/diagnostic info about floor flags
     if (flag_verbose > 0) {
         Reductions::StartFlagReduce(
-            md, "fflag", FFlag::flag_names, IndexDomain::interior, true, 0);
+            md, "flags.floors", FFlag::flag_names, IndexDomain::interior, true, 0);
         // Debugging/diagnostic info about floor and inversion flags
         Reductions::CheckFlagReduceAndPrintHits(
-            md, "fflag", FFlag::flag_names, IndexDomain::interior, true, 0);
+            md, "flags.floors", FFlag::flag_names, IndexDomain::interior, true, 0);
     }
 
     // Anything else (energy conservation? Added material stats?)

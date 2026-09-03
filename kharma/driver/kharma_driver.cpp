@@ -108,8 +108,8 @@ std::shared_ptr<KHARMAPackage> KHARMADriver::Initialize(
     Metadata::AddUserFlag("SplitVector");
 
     // Synchronize primitive variables unless we're using the KHARMA driver that
-    // specifically doesn't This includes for AMR w/ImEx driver Note the "conserved" B
-    // field is always sync'd.  The "primitive" version only differs by sqrt(-g)
+    // specifically doesn't. This includes for AMR w/ImEx driver. Note the "conserved"
+    // B field is always sync'd. The "primitive" version only differs by sqrt(-g).
     bool sync_prims = driver_type != DriverType::kharma;
     params.Add("sync_prims", sync_prims);
     if (sync_prims) {
@@ -383,13 +383,14 @@ TaskID KHARMADriver::AddFOFC(TaskID& t_start, TaskList& tl, MeshData<Real>* md,
         IndexDomain::entire, fofc_floors, fofc_floors_inner);
     // Determine which cells are FOFC in our block
     auto t_mark_fofc = tl.AddTask(t_mark_floors, Flux::MarkFOFC, guess);
+
     // Sync the FOFC flag with neighbors
     // TODO this shouldn't be necessary, eliminate ASAP
     std::shared_ptr<MeshData<Real>> md_shr{md, [](MeshData<Real>*)
         {
         } /*No-Op Deleter*/};
     auto& md_fofc =
-        pmesh->mesh_data.AddShallow("FOFC", md_shr, std::vector<std::string>{"fofcflag"});
+        pmesh->mesh_data.AddShallow("FOFC", md_shr, std::vector<std::string>{"flags.fofc"});
     auto t_sync_fofc = KHARMADriver::AddBoundarySync(t_mark_fofc, tl, md_fofc);
     // Finally, replace any fluxes bordering marked zones with donor-cell/LLF versions
     auto t_fofc = tl.AddTask(t_sync_fofc, Flux::FOFC, md, guess);

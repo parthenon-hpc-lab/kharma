@@ -139,10 +139,14 @@ class VarMap
     int8_t RHO, UU, U1, U2, U3, B1, B2, B3, Bf1, Bf2, Bf3;
     // Tracker variables
     int8_t RHO_ADDED, UU_ADDED, PASSIVE;
+    // Total/idealized (advected, no-dissipation) fluid entropy tracking
+    int8_t KTOT, KTOT_ADV;
     // Electron entropy/energy tracking
-    int8_t KTOT, K_CONSTANT, K_HOWES, K_KAWAZURA, K_WERNER, K_ROWAN, K_SHARMA;
+    int8_t K_CONSTANT, K_HOWES, K_KAWAZURA, K_WERNER, K_ROWAN, K_SHARMA;
     // Implicit-solver variables: constraint damping, EGRMHD
     int8_t PSI, Q, DP;
+    // Force-free variables: FF-specific velocity and momentum
+    int8_t UUFF, U1FF, U2FF, U3FF;
     // Added material
     int8_t RHOADD, T0ADD, T1ADD, T2ADD, T3ADD;
     // Total struct size ~20 bytes, < 1 vector of 4 doubles
@@ -161,8 +165,10 @@ class VarMap
             // Floors
             RHO_ADDED = name_map["cons.rho_added"].first;
             UU_ADDED = name_map["cons.u_added"].first;
-            // Electrons
+            // Entropy tracking
             KTOT = name_map["cons.Ktot"].first;
+            KTOT_ADV = name_map["cons.Ktot_adv"].first;
+            // Electrons
             K_CONSTANT = name_map["cons.Kel_Constant"].first;
             K_HOWES = name_map["cons.Kel_Howes"].first;
             K_KAWAZURA = name_map["cons.Kel_Kawazura"].first;
@@ -172,6 +178,9 @@ class VarMap
             // Extended MHD
             Q = name_map["cons.q"].first;
             DP = name_map["cons.dP"].first;
+            // FF
+            UUFF = name_map["cons.ff.upar"].first;
+            U1FF = name_map["cons.ff.uvec"].first;
 
             // Added material
             RHOADD = name_map["Floors.rhou0add"].first;
@@ -189,8 +198,10 @@ class VarMap
             // Floors (TODO cons only?)
             RHO_ADDED = name_map["prims.rho_added"].first;
             UU_ADDED = name_map["prims.u_added"].first;
-            // Electrons
+            // Entropy tracking
             KTOT = name_map["prims.Ktot"].first;
+            KTOT_ADV = name_map["prims.Ktot_adv"].first;
+            // Electrons
             K_CONSTANT = name_map["prims.Kel_Constant"].first;
             K_HOWES = name_map["prims.Kel_Howes"].first;
             K_KAWAZURA = name_map["prims.Kel_Kawazura"].first;
@@ -200,6 +211,9 @@ class VarMap
             // Extended MHD
             Q = name_map["prims.q"].first;
             DP = name_map["prims.dP"].first;
+            // FF
+            UUFF = name_map["prims.ff.upar"].first;
+            U1FF = name_map["prims.ff.uvec"].first;
         }
         if (U1 >= 0) {
             U2 = U1 + 1;
@@ -207,6 +221,13 @@ class VarMap
         } else {
             U2 = -1;
             U3 = -1;
+        }
+        if (U1FF >= 0) {
+            U2FF = U1FF + 1;
+            U3FF = U1FF + 2;
+        } else {
+            U2FF = -1;
+            U3FF = -1;
         }
         if (B1 >= 0) {
             B2 = B1 + 1;

@@ -48,6 +48,8 @@ TaskCollection KHARMADriver::MakeSimpleTaskCollection(BlockList_t& blocks, int s
     // TODO require we're not using B_Cleanup as transport too
     PARTHENON_REQUIRE(
         !pkgs.count("Electrons"), "Electrons not compatible with simple driver!");
+    PARTHENON_REQUIRE(
+        !pkgs.count("Entropy"), "Entropy tracking not compatible with simple driver!");
     PARTHENON_REQUIRE(!flux_pkg.Get<bool>("use_fofc"),
         "Flux corrections not compatible with simple driver!");
     PARTHENON_REQUIRE(

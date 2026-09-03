@@ -135,6 +135,11 @@ KOKKOS_INLINE_FUNCTION int determine_floors(const GRCoordinates& G,
     // Evaluate max U floor, needed for temp ceiling below
     uflr_max = m::max(uflr_geom, uflr_b);
 
+    // Entropy floor on U, experimental
+    if (m_p.KTOT >= 0 && myfloors.use_u_min_entropy)
+        uflr_max = m::max(uflr_max,
+            P(m_p.KTOT, k, j, i) * m::pow(P(m_p.RHO, k, j, i), gam) / (gam - 1.));
+
     const auto& rho = P(m_p.RHO, k, j, i);
     const auto& u = P(m_p.UU, k, j, i);
 
