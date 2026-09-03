@@ -128,31 +128,41 @@ if [[ -z "$CXX_NATIVE" ]]; then
   elif which icpx >/dev/null 2>&1; then
     CXX_NATIVE=icpx
     C_NATIVE=icx
-    OMP_FLAG="-fiopenmp"
   elif which icpc >/dev/null 2>&1; then
     CXX_NATIVE=icpc
     C_NATIVE=icc
-    OMP_FLAG="-qopenmp"
   # Prefer NVHPC over generic compilers
   elif which nvc++ >/dev/null 2>&1; then
     CXX_NATIVE=nvc++
     C_NATIVE=nvc
-    OMP_FLAG="-mp"
   # Maybe we overwrote 'c++' to point to something
   # Usually this is GCC on Linux systems, which is fine
-  elif which cpp >/dev/null 2>&1; then
+  elif which c++ >/dev/null 2>&1; then
     CXX_NATIVE=c++
     C_NATIVE=cc
-    OMP_FLAG="-fopenmp"
   # Otherwise, trusty system GCC
   else
     CXX_NATIVE=g++
     C_NATIVE=gcc
-    OMP_FLAG="-fopenmp"
   fi
-  # clang/++ will never be used automatically;
-  # blame Apple, who don't support OpenMP
+  # TODO(CEP) finally use clang/++ automatically, just w/o OpenMP?
 fi
+
+# Set flags, incl. correct OpenMP flag for our compiler
+if [[ $CXX_NATIVE == *"icpx" ]]; then
+  # Avoid icpx's astonishing DEFAULT -ffast-math
+  export CXXFLAGS="-fno-fast-math $CXXFLAGS"
+  OMP_FLAG="-fiopenmp"
+elif [[ $CXX_NATIVE == *"icpc" ]]; then
+  # Avoid warning on nvcc pragmas Intel doesn't like
+  export CXXFLAGS="-Wno-unknown-pragmas $CXXFLAGS"
+  OMP_FLAG="-qopenmp"
+elif [[ $CXX_NATIVE == *"nvc++" ]]; then
+  OMP_FLAG="-mp"
+elif [[ $CXX_NATIVE == *"c++" || $CXX_NATIVE == *"g++" ]]; then
+  OMP_FLAG="-fopenmp"
+fi
+
 # Disable OpenMP for HIP compiles, it gets confused
 # and thinks we want to use OMP 5.0 offload stuff
 if ! option "hip"; then
@@ -205,6 +215,13 @@ elif option "nvc++"; then
   ENABLE_CUDA="ON"
   ENABLE_SYCL="OFF"
   ENABLE_HIP="OFF"
+elif option "noopenmp"; then
+  OUTER_LAYOUT="SIMDFOR_LOOP"
+  INNER_LAYOUT="SIMDFOR_INNER_LOOP"
+  ENABLE_OPENMP="OFF"
+  ENABLE_CUDA="OFF"
+  ENABLE_SYCL="OFF"
+  ENABLE_HIP="OFF"
 else
   OUTER_LAYOUT="MANUAL1D_LOOP"
   INNER_LAYOUT="SIMDFOR_INNER_LOOP"
@@ -221,15 +238,6 @@ if [[ -v LINKER ]]; then
 fi
 if option "special_link_line"; then
   EXTRA_FLAGS="$EXTRA_FLAGS -DCMAKE_CXX_LINK_EXECUTABLE='<CMAKE_LINKER> <FLAGS> <CMAKE_CXX_LINK_FLAGS> <LINK_FLAGS> <OBJECTS> -o <TARGET> <LINK_LIBRARIES>'"
-fi
-
-# Avoid warning on nvcc pragmas Intel doesn't like
-if [[ $CXX == "icpc" ]]; then
-  export CXXFLAGS="-Wno-unknown-pragmas $CXXFLAGS"
-fi
-# Avoid icpx's astonishing DEFAULT -ffast-math
-if [[ $CXX == "icpx" ]]; then
-  export CXXFLAGS="-fno-fast-math $CXXFLAGS"
 fi
 
 ### Build HDF5 ###
@@ -290,6 +298,8 @@ if option "hdf5" && option "clean" && ! option "dryrun"; then
 
   echo Built HDF5 version $H5VER
 fi
+
+# Compile against our hdf5 if specified
 if option "hdf5"; then
   PREFIX_PATH="$SOURCE_DIR/external/hdf5;$PREFIX_PATH"
   EXTRA_FLAGS="$EXTRA_FLAGS -DHDF5_USE_STATIC_LIBRARIES=ON"
@@ -317,14 +327,14 @@ if option "clean"; then
   cd -
 
   # Patches for ports-of-call
-  cd external/singularity-eos/utils/ports-of-call
-  if [[ $(( $(git --version | cut -d '.' -f 2) > 35 )) == "1" ]]; then
-    git apply --quiet ../../../patches/ports-of-call-*.patch
-  else
-    echo "make.sh note: You may see errors applying patches below. These are normal."
-    git apply ../../../patches/ports-of-call-*.patch
-  fi
-  cd -
+  #cd external/singularity-eos/utils/ports-of-call
+  #if [[ $(( $(git --version | cut -d '.' -f 2) > 35 )) == "1" ]]; then
+  #  git apply --quiet ../../../patches/ports-of-call-*.patch
+  #else
+  #  echo "make.sh note: You may see errors applying patches below. These are normal."
+  #  git apply ../../../patches/ports-of-call-*.patch
+  #fi
+  #cd -
 
   rm -rf build
 fi
@@ -333,6 +343,7 @@ cd build
 
 if option "clean"; then
 
+  # Print cmake command
   if option "dryrun"; then
     set -x
   fi
@@ -350,21 +361,22 @@ if option "clean"; then
     -DKokkos_ENABLE_HIP=$ENABLE_HIP \
     $EXTRA_FLAGS
 
+  # Stop printing
   if option "dryrun"; then
     set +x
-    # Describe the kokkos version, for debugging
-    echo "--- Using Kokkos version: ---"
-    (cd external/parthenon/external/Kokkos && git describe --tags --always)
-    echo "-----------------------------"
-    exit
   fi
+
+  # Describe the kokkos version, for debugging
+  echo "--- Using Kokkos version: ---"
+  (cd $SCRIPT_DIR/external/parthenon/external/Kokkos && git describe --tags --always && cd -)
+  echo "-----------------------------"
 fi
 
 if ! option "dryrun"; then
   make -j$NPROC
   cp kharma/kharma.* ..
 
-  # Needed now we build packages
+  # Needed now that we build packages
   if option "install"; then
     make install
   fi
