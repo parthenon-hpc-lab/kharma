@@ -122,7 +122,7 @@ void KHARMA::PostInitialize(ParameterInput* pin, Mesh* pmesh, bool is_restart)
         bool iharm3d_restart = prob_name == "resize_restart";
         // but sometimes in a pinch we want to restart from .phdf files, which are like
         // iharm3d restarts
-        bool prims_only_restart = pin->GetBoolean("b_field", "restart_from_prims");
+        bool prims_only_restart = pin->GetOrAddBoolean("b_field", "restart_from_prims", false);
         if (!(iharm3d_restart || prims_only_restart)) {
             std::cout << "Restoring B field from conserved values" << std::endl;
             if (pkgs.count("B_FluxCT")) {

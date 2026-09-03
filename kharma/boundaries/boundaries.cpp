@@ -34,6 +34,7 @@
 #include "boundaries.hpp"
 
 #include "bondi.hpp"
+#include "radm1/bondi_rad.hpp"
 #include "boundary_types.hpp"
 #include "decs.hpp"
 #include "domain.hpp"
@@ -407,6 +408,16 @@ std::shared_ptr<KHARMAPackage> KBoundaries::Initialize(
                         break;
                     default:
                         break;
+                }
+            } else if (btype == "bondi_rad") {
+                AddBondiRadParameters(pin, *packages);
+                switch (bface) {
+                    case BoundaryFace::outer_x1:
+                        pkg->KBoundaries[bface] = SetBondiRad<IndexDomain::outer_x1>;
+                        break;
+                    default:
+                        throw std::runtime_error(
+                            "bondi_rad boundary type is only valid on outer_x1");
                 }
             } else {
                 throw std::runtime_error("Unknown boundary type: " + btype);

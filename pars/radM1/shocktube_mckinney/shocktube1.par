@@ -5,8 +5,8 @@ problem_id = shock
 
 <parthenon/mesh>
 nx1 = 800
-x1min = -10.0
-x1max = 10.0
+x1min = -15.0
+x1max = 15.0
 
 nx2 = 1
 x2min = 0.0
@@ -40,7 +40,7 @@ two_sync = false
 <GRMHD>
 cfl = 0.5
 gamma = 1.666667
-reconstruction = weno5
+reconstruction = weno5_linear
 
 <b_field>
 solver = none
@@ -48,6 +48,10 @@ solver = none
 <boundaries>
 inner_x1 = outflow
 outer_x1 = outflow
+inner_x2 = outflow
+outer_x2 = outflow
+inner_x3 = periodic
+outer_x3 = periodic
 allow_inflow_inner_x1 = true
 allow_inflow_outer_x1 = true
 
@@ -62,18 +66,21 @@ PR = 1.61e-4
 u1R = 6.25e-3
 ER = 2.51e-7
 
+rad_comoving_ic = true
+rad_seed_frac = 0.01
+
 <floors>
 disable_floors = true
 
 <parthenon/output0>
 file_type = hdf5
-dt = 5.0
+dt = 2.0
 single_precision_output = true
-variables = prims
+variables = prims, cons
 
 <parthenon/output1>
 file_type = hst
-dt = 0.1
+dt = 5.0
 
 <debug>
 verbose = 1
@@ -84,6 +91,7 @@ flag_verbose = 2
 on = true
 sigma_rad = 3.085e9
 kappa_rho = 0.4
+kappa_scat = 0.0
 src_rootfind_eps = 1e-8
 src_rootfind_tol = 1e-8
 src_rootfind_maxiter = 50

@@ -52,7 +52,7 @@ std::shared_ptr<KHARMAPackage> RadM1::Initialize(
     auto driver_type = driver.Get<DriverType>("type");
     // TODO(PNM): Make it as an option to also add kharma driver eventually
     bool implicit_radm1 = (driver_type == DriverType::imex &&
-                           pin->GetOrAddBoolean("RadM1", "implicit", true));
+                           pin->GetOrAddBoolean("radM1", "implicit", true));
 
     if (!implicit_radm1)
         PARTHENON_WARN("M1 implementation will be uncoupled unless ImEx driver is used!");
@@ -100,9 +100,9 @@ std::shared_ptr<KHARMAPackage> RadM1::Initialize(
     Real u_rad_floor = pin->GetOrAddReal("radM1", "u_rad_floor", 1.e-8);
     pkg->AllParams().Add("u_rad_floor", u_rad_floor);
 
-    Real src_rootfind_eps = pin->GetOrAddReal("RadM1", "src_rootfind_eps", 1e-8);
-    Real src_rootfind_tol = pin->GetOrAddReal("RadM1", "src_rootfind_tol", 1e-8);
-    int src_rootfind_maxiter = pin->GetOrAddInteger("RadM1", "src_rootfind_maxiter", 50);
+    Real src_rootfind_eps = pin->GetOrAddReal("radM1", "src_rootfind_eps", 1e-8);
+    Real src_rootfind_tol = pin->GetOrAddReal("radM1", "src_rootfind_tol", 1e-8);
+    int src_rootfind_maxiter = pin->GetOrAddInteger("radM1", "src_rootfind_maxiter", 50);
     pkg->AllParams().Add("src_rootfind_eps", src_rootfind_eps);
     pkg->AllParams().Add("src_rootfind_tol", src_rootfind_tol);
     pkg->AllParams().Add("src_rootfind_maxiter", src_rootfind_maxiter);

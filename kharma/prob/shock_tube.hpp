@@ -91,9 +91,9 @@ TaskStatus InitializeShockTube(
                 if (!rad_comoving_ic) {
                     // Radiation isotropic at rest in the LAB frame.
                     erad(k, j, i) = E0;
-                    uvec_rad(0, k, j, i) = 0.0;
-                    uvec_rad(1, k, j, i) = 0.0;
-                    uvec_rad(2, k, j, i) = 0.0;
+                    uvec_rad(0, k, j, i) = 0.;
+                    uvec_rad(1, k, j, i) = 0.;
+                    uvec_rad(2, k, j, i) = 0.;
                 } else {
                     // Melon Fuksman & Mignone 2019 (PLUTO M1 module) IC
                     const Real u1_gas = (lhs) ? u1L : u1R;

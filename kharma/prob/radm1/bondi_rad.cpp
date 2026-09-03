@@ -3,17 +3,35 @@
 
 #include "boundaries.hpp"
 #include "utils/constants.hpp"
+#include "phoebus_utils/unit_conversions.hpp"
 
 using pc = parthenon::constants::PhysicalConstants<parthenon::constants::CGS>;
 
 void AddBondiRadParameters(ParameterInput* pin, Packages_t& packages)
 {
     // McKinney et al. 2014, Table 4 pars.
-    const Real mdot = pin->GetOrAddReal("bondi_rad", "mdot", 1.0);
+    const Real mdot_per_edd = pin->GetOrAddReal("bondi_rad", "mdot", 1.0);
+
+    Real mdot_edd = 1.0; // code units; stays 1 if scale_free (no physical mass scale)
+    const bool scale_free = pin->GetOrAddBoolean("units", "scale_free", true);
+    if (!scale_free) {
+        phoebus::UnitConversions unit_conv(pin);
+        const Real length_cgs = unit_conv.GetLengthCodeToCGS();
+        const Real M_BH_cgs = length_cgs * pc::c * pc::c / pc::g_newt;
+        constexpr Real sigma_thomson_cgs = 6.6524587158e-25;
+        // Mdot_Edd = L_Edd/c^2 = 4*pi*G*M_BH*m_p/(sigma_T*c)  [g/s]
+        const Real mdot_edd_cgs =
+            4.0 * M_PI * pc::g_newt * M_BH_cgs * pc::mp / (sigma_thomson_cgs * pc::c);
+        mdot_edd = mdot_edd_cgs * unit_conv.GetTimeCodeToCGS() / unit_conv.GetMassCodeToCGS();
+    }
+    const Real mdot = mdot_per_edd * mdot_edd;
+
     const Real T_out_K = pin->GetOrAddReal("bondi_rad", "T_out", 1.e6);
     const Real fp = pin->GetOrAddReal("bondi_rad", "fp", 1.2e-4);
 
-    const Real T_out = T_out_K * pc::kb / (pc::mp * pc::c * pc::c);
+    const Real mu = pin->GetOrAddReal("radM1", "mu", 1.0);
+
+    const Real T_out = T_out_K * pc::kb / (mu * pc::mp * pc::c * pc::c);
 
     // Outer radius the analytic profile is anchored to (rho_0,out in eq. 94).
     const Real r_out = pin->GetReal("coordinates", "r_out");
@@ -174,9 +192,9 @@ TaskStatus SetBondiRadImpl(
 
             if(use_rad){
                 u_rad(k, j, i) = 3. * fp * pgas;
-                uvec_rad(0, k, j, i) = 0.;
-                uvec_rad(1, k, j, i) = 0.;
-                uvec_rad(2, k, j, i) = 0.;
+                uvec_rad(0, k, j, i) = u_prim[0];
+                uvec_rad(1, k, j, i) = u_prim[1];
+                uvec_rad(2, k, j, i) = u_prim[2];
             }
         });
 

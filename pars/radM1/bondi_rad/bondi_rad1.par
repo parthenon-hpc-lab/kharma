@@ -20,12 +20,8 @@ correct_connections = false
 base = spherical_ks
 transform = eks
 a = 0.0
-r_in = 1.9
+r_in = 2.5
 r_out = 2.e4
-r_in_bondi = 2.5
-r_in_bondi_rad = 2.5
-fill_interior = false
-
 
 <parthenon/time>
 tlim = 3.13e4
@@ -37,10 +33,11 @@ two_sync = false
 <GRMHD>
 cfl = 0.5
 gamma = 1.6665866858620597
-reconstruction = mp5
+reconstruction = weno5_linear
 
 <eos>
 type = IdealGas
+gamma = 1.6665866858620597
 Cv = 1.0
 
 <bondi_rad>
@@ -66,9 +63,10 @@ fix_average_neighbors = true
 
 <radM1>
 on = true
-src_rootfind_eps = 1e-8
+mu = 1.0
+src_rootfind_eps = 1e-8 
 src_rootfind_tol = 1e-8
-src_rootfind_maxiter = 50
+src_rootfind_maxiter = 100
 
 <units>
 # Required for the CGS opacity conversion (eqs. 91-92) to do anything -- with
@@ -84,14 +82,17 @@ fluid_mass_g =  6.203843e12
 
 <parthenon/output0>
 file_type = hdf5
-dt = 0.1
+dt = 100.0
 single_precision_output = true
-variables = prims, cons
+variables = prims, cons, rimplflag, rinvflag, pflag
 
 <parthenon/output1>
+file_type = rst
+dt = 100.0
+
+<parthenon/output2>
 file_type = hst
 dt = 0.1
-variables = all_reductions
 
 <debug>
 verbose = 1

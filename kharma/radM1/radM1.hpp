@@ -120,13 +120,15 @@ KOKKOS_INLINE_FUNCTION Real calc_kabs(Real rho, Real T, int opacity_model,
     const Microphysics::Opacities& opacities)
 {
     if (opacity_model == (int)OpacityModel::ShocktubeConstant) {
-        return m::min(rho * shocktube_kappa_rho, 1.e5);
+        return rho * shocktube_kappa_rho;
     } else if (opacity_model == (int)OpacityModel::Bondi) {
         // Thermal bremsstrahlung, McKinney et al. 2014 eq. 91.
-        const Real T_cgs = m::abs(T) * units_cgs.temperature_cgs;
+        // Mckinney makes no reference to mu at all, but mu is present in Fragile 2012.
+        const Real T_cgs = m::abs(T) * units_cgs.mu * pc::mp * pc::c * pc::c / pc::kb;
         const Real rho_cgs = rho * units_cgs.mass_cgs / (units_cgs.length_cgs * units_cgs.length_cgs * units_cgs.length_cgs);
+        //1.0e23 to match harmrad
         const Real kappa_a_cgs =
-            1.7e-25 * m::pow(T_cgs, -3.5) * m::pow(pc::mp, -2.0) * rho_cgs * rho_cgs;
+           1.0e23 * m::pow(T_cgs, -3.5) * rho_cgs * rho_cgs;
         //make it scale free
         return kappa_a_cgs * units_cgs.length_cgs;
     } else if (opacity_model == (int)OpacityModel::Transparent) {
@@ -308,6 +310,7 @@ KOKKOS_INLINE_FUNCTION void initialize_radiation_pressure(Real UU, Real& UU_rad)
     //  simulation, so we can just set it to a small value.
 
     // radiation pressure is 0.1% of the gas pressure at the start of the simulation.
+    // We should probably to a LTE solution, but I don't know if it matters.
     UU_rad = UU * 0.001;
 
     return;

@@ -24,7 +24,7 @@ hslope = 0.3
 correct_connections = true
 
 <parthenon/time>
-tlim = 600.0
+tlim = 900.0
 nlim = -1
 
 <torus>
