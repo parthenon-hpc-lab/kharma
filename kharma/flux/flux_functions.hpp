@@ -176,11 +176,10 @@ KOKKOS_FORCEINLINE_FUNCTION void prim_to_flux(const GRCoordinates& G, const Loca
         if (m_u.K_SHARMA >= 0) flux(m_u.K_SHARMA) = flux(m_u.RHO) * P(m_p.K_SHARMA);
     }
     // Noble+ '09 entropy S = p/rho^(gam-1), their eq. 19-20: div_mu(S u^mu) = 0. This
-    // is an entropy *density*, so it advects like q & dP above (a bare gdet*u^dir), 
-    // not like Ktot, which is per unit mass and so carries the extra factor of rho 
+    // is an entropy *density*, so it advects like q & dP above (a bare gdet*u^dir),
+    // not like Ktot, which is per unit mass and so carries the extra factor of rho
     // in flux(RHO).
-    if (m_u.KTOT_ADV >= 0)
-        flux(m_u.KTOT_ADV) = P(m_p.KTOT_ADV) * D.ucon[dir] * gdet;
+    if (m_u.KTOT_ADV >= 0) flux(m_u.KTOT_ADV) = P(m_p.KTOT_ADV) * D.ucon[dir] * gdet;
 }
 
 template<typename Global>

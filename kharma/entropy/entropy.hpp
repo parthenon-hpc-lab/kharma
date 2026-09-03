@@ -70,7 +70,7 @@ using namespace parthenon;
  *
  *   Ktot_adv = (gam-1) u / rho^(gam-1)   entropy *density*, i.e. rho * Ktot.  This is
  *                                        Noble+ 2009 (arXiv:0808.3140) eq. 20, the
- *                                        variable used by their entropy-based 
+ *                                        variable used by their entropy-based
  *                                        primitive inversion scheme.
  *
  * The two conserved forms are numerically identical -- sqrt(-g) rho u^t Ktot ==
@@ -106,7 +106,7 @@ KOKKOS_FORCEINLINE_FUNCTION Real CalcEntropy(
 /**
  * The same entropy as a *density* rather than per unit mass: S = p/rho^(gam-1), i.e.
  * rho*CalcEntropy(). This is Noble+ 2009 eq. 20, the form Ktot_adv is carried in.
- * Kept as its own function rather than a multiply-by-rho so that callers cannot 
+ * Kept as its own function rather than a multiply-by-rho so that callers cannot
  * quietly mix the two normalizations.
  */
 KOKKOS_FORCEINLINE_FUNCTION Real CalcEntropyDensity(
@@ -131,9 +131,9 @@ inline TaskStatus MeshInitEntropy(MeshData<Real>* md, ParameterInput* pin)
 
 /**
  * Recover the entropy primitives from their conserved forms.  The two differ:
- *   Ktot     = cons.Ktot / cons.rho                    (per mass, as Electrons::BlockUtoP)
- *   Ktot_adv = cons.Ktot_adv * prims.rho / cons.rho    (a density; the ratio here is
- *                                                       1/(gdet*u^t))
+ *   Ktot     = cons.Ktot / cons.rho                    (per mass, as
+ * Electrons::BlockUtoP) Ktot_adv = cons.Ktot_adv * prims.rho / cons.rho    (a density;
+ * the ratio here is 1/(gdet*u^t))
  */
 void BlockUtoP(MeshBlockData<Real>* rc, IndexDomain domain, bool coarse = false);
 
@@ -145,8 +145,8 @@ void BlockUtoP(MeshBlockData<Real>* rc, IndexDomain domain, bool coarse = false)
  * advected value.
  *
  * Does not touch Ktot_adv, which needs no such per-step update: it is left to evolve via
- * the standard advection machinery for the whole run.  (This is also what keeps 
- * Ktot_adv usable for an entropy-based inversion: it must carry the entropy the fluid 
+ * the standard advection machinery for the whole run.  (This is also what keeps
+ * Ktot_adv usable for an entropy-based inversion: it must carry the entropy the fluid
  * would have had *without* the dissipation.)
  */
 TaskStatus ApplyEntropyUpdate(MeshBlockData<Real>* rc);
