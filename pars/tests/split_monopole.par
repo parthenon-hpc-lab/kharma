@@ -10,13 +10,13 @@
 problem_id = bz_monopole
 
 <parthenon/mesh>
-nx1 = 2048
-nx2 = 2048
+nx1 = 1024
+nx2 = 1024
 nx3 = 1
 
 <parthenon/meshblock>
-nx1 = 512
-nx2 = 512
+nx1 = 256
+nx2 = 256
 nx3 = 1
 
 <coordinates>

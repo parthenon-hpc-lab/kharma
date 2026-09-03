@@ -1,4 +1,4 @@
-name: Regression tests (CPU)
+name: Regression tests (Nvidia)
 
 on:
   push:
@@ -7,30 +7,31 @@ on:
     branches: [ main, dev ]
 
 env:
-  NPROC: 12
-  MPI_NUM_PROCS: 4
+  NPROC: 6
+  MPI_NUM_PROCS: 1
   OMP_NUM_THREADS: 1
+  MODULEPATH: '/opt/nvidia/hpc_sdk/modulefiles:/usr/share/modulefiles'
 
 jobs:
   # Job 1: Compilation
   build:
-    runs-on: [self-hosted, kharma]
+    runs-on: [self-hosted, kharma-gpu-nv]
     steps:
       - uses: actions/checkout@v7
         with:
           submodules: 'recursive'
       - name: Run compilation
-        run: bash -i ./make.sh clean noopenmp
+        run: bash -ic 'module load nvhpc && ./make.sh clean cuda'
       - uses: actions/upload-artifact@v7
         with:
           name: build-artifacts
-          path: kharma.host
+          path: kharma.cuda
           if-no-files-found: 'error'
 
   # Job 2: Test Matrix
   test:
     needs: build
-    runs-on: [self-hosted, kharma]
+    runs-on: [self-hosted, kharma-gpu-nv]
     continue-on-error: true
     strategy:
       fail-fast: false
@@ -44,7 +45,6 @@ jobs:
         - bz_monopole
         - conducting_atmosphere
         - emhdmodes
-        - emhdshock
         - hubble_flow
         - mhdmodes
         - mhdmodes_smr

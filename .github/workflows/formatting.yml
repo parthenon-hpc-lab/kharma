@@ -25,4 +25,7 @@ jobs:
             packages: |
                clang-format==19.1.7
         - name: check formatting
-          run: git ls-files -z 'kharma/**/*.cpp' 'kharma/**/*.hpp' 'tests/**/*.cpp' 'tests/**/*.hpp' | xargs -0 clang-format -style=file -i && git diff --exit-code --ignore-submodules
+          run: |
+            git ls-files -z 'kharma/**.[ch]pp' 'tests/**.[ch]pp' |
+              xargs -I {} -0 -t clang-format -style=file -i {} \
+              && git diff --exit-code --ignore-submodules

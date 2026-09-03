@@ -396,30 +396,21 @@ TaskStatus Implicit::Step(MeshData<Real>* md_full_step_init,
                 ScratchPad3D<Real> jacobian_s(
                     member.team_scratch(scratch_level), n1, nfvar, nfvar);
                 ScratchPad3D<Real> delta_prim_s(
-                    member.team_scratch(scratch_level), n1, 1, nfvar);
+                    member.team_scratch(scratch_level), n1, nfvar, 1);
                 ScratchPad2D<Real> trans_s(member.team_scratch(scratch_level), n1, nfvar);
                 ScratchPad2D<Real> work_s(
                     member.team_scratch(scratch_level), n1, 2 * nfvar);
                 ScratchPad2D<int> pivot_s(member.team_scratch(scratch_level), n1, nfvar);
 
                 // Copy in to scratchpads
-                FLOOP
-                {
-                    parthenon::par_for_inner(member, 0, n1 - 1,
-                        [&](const int& i)
-                        {
-                            delta_prim_s(i, 0, ip) = -residual_all(b)(ip, k, j, i);
-                        });
-                }
-                FLOOP2
-                {
-                    parthenon::par_for_inner(member, 0, n1 - 1,
-                        [&](const int& i)
-                        {
-                            jacobian_s(i, ip, jp) =
-                                jacobian_all(b)(ip * nfvar + jp, k, j, i);
-                        });
-                }
+                parthenon::par_for_inner(member, 0, nfvar - 1, 0, nfvar - 1, 0, n1 - 1,
+                    [&](const int& ip, const int& jp, const int& i)
+                    {
+                        if (jp == 0)
+                            delta_prim_s(i, ip, 0) = -residual_all(b, ip, k, j, i);
+                        jacobian_s(i, ip, jp) = jacobian_all(b, ip * nfvar + jp, k, j, i);
+                    });
+
                 member.team_barrier();
 
                 // TODO(CEP) even still worth keeping non-QR version?  Much less stable
@@ -433,7 +424,7 @@ TaskStatus Implicit::Step(MeshData<Real>* md_full_step_init,
                             auto delta_prim = Kokkos::subview(
                                 delta_prim_s, i, Kokkos::ALL(), Kokkos::ALL());
                             auto delta_prim_one =
-                                Kokkos::subview(delta_prim_s, i, 0, Kokkos::ALL());
+                                Kokkos::subview(delta_prim_s, i, Kokkos::ALL(), 0);
                             auto pivot = Kokkos::subview(pivot_s, i, Kokkos::ALL());
                             auto trans = Kokkos::subview(trans_s, i, Kokkos::ALL());
                             auto work = Kokkos::subview(work_s, i, Kokkos::ALL());
@@ -455,7 +446,7 @@ TaskStatus Implicit::Step(MeshData<Real>* md_full_step_init,
                                 // Linear solve by QR decomposition
                                 KokkosBatched::SerialApplyPivot<KokkosBatched::Side::Left,
                                     KokkosBatched::Direct::Backward>::invoke(pivot,
-                                    delta_prim);
+                                    delta_prim_one);
                             }
                         });
                 } else {
@@ -466,7 +457,7 @@ TaskStatus Implicit::Step(MeshData<Real>* md_full_step_init,
                             auto jacobian = Kokkos::subview(
                                 jacobian_s, i, Kokkos::ALL(), Kokkos::ALL());
                             auto delta_prim =
-                                Kokkos::subview(delta_prim_s, i, 0, Kokkos::ALL());
+                                Kokkos::subview(delta_prim_s, i, Kokkos::ALL(), 0);
 
                             if (solve_fail_all(b, 0, k, j, i) != SolverStatusR::fail) {
                                 KokkosBatched::SerialLU<
@@ -483,14 +474,11 @@ TaskStatus Implicit::Step(MeshData<Real>* md_full_step_init,
                 member.team_barrier();
 
                 // Copy out delta_prim
-                FLOOP
-                {
-                    parthenon::par_for_inner(member, ib.s, ib.e,
-                        [&](const int& i)
-                        {
-                            delta_prim_all(b)(ip, k, j, i) = delta_prim_s(i, 0, ip);
-                        });
-                }
+                parthenon::par_for_inner(member, 0, nfvar - 1, ib.s, ib.e,
+                    [&](const int& ip, const int& i)
+                    {
+                        delta_prim_all(b)(ip, k, j, i) = delta_prim_s(i, ip, 0);
+                    });
 #if SPLIT_IMPLICIT_SOLVE
             } // End lambda
         ); // End par_for

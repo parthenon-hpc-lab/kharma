@@ -1,25 +1,25 @@
-/* 
+/*
  *  File: types.hpp
- *  
+ *
  *  BSD 3-Clause License
- *  
+ *
  *  Copyright (c) 2020, AFD Group at UIUC
  *  All rights reserved.
- *  
+ *
  *  Redistribution and use in source and binary forms, with or without
  *  modification, are permitted provided that the following conditions are met:
- *  
+ *
  *  1. Redistributions of source code must retain the above copyright notice, this
  *     list of conditions and the following disclaimer.
- *  
+ *
  *  2. Redistributions in binary form must reproduce the above copyright notice,
  *     this list of conditions and the following disclaimer in the documentation
  *     and/or other materials provided with the distribution.
- *  
+ *
  *  3. Neither the name of the copyright holder nor the names of its
  *     contributors may be used to endorse or promote products derived from
  *     this software without specific prior written permission.
- *  
+ *
  *  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  *  AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  *  IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -47,7 +47,7 @@ using parthenon::MeshBlockData;
 
 /**
  * Types, macros, and convenience functions
- * 
+ *
  * Anything potentially useful throughout KHARMA, but specific to it
  * (general copy/pastes from StackOverflow go in kharma_utils.hpp)
  */
@@ -74,28 +74,34 @@ constexpr TE NN = TE::NN;
 // Host-only because the templating/types are weird on device
 // TODO(CEP) make host/device?
 template<typename T>
-inline TE FaceOf(const T& dir) {
+inline TE FaceOf(const T& dir)
+{
     return (dir == X1DIR) ? F1 : ((dir == X2DIR) ? F2 : F3);
 }
 template<typename T>
-inline TE EdgeOf(const T& dir) {
+inline TE EdgeOf(const T& dir)
+{
     return (dir == X1DIR) ? E1 : ((dir == X2DIR) ? E2 : E3);
 }
 template<typename T>
-inline std::vector<TE> OrthogonalEdges(const T& dir) {
-    return (dir == X1DIR) ? std::vector<TE>{E2, E3} :
-        ((dir == X2DIR) ? std::vector<TE>{E1, E3} : std::vector<TE>{E1, E2});
+inline std::vector<TE> OrthogonalEdges(const T& dir)
+{
+    return (dir == X1DIR)
+               ? std::vector<TE>{E2, E3}
+               : ((dir == X2DIR) ? std::vector<TE>{E1, E3} : std::vector<TE>{E1, E2});
 }
 
 // Struct for derived 4-vectors at a point, usually calculated and needed together
-typedef struct {
+typedef struct
+{
     Real ucon[GR_DIM];
     Real ucov[GR_DIM];
     Real bcon[GR_DIM];
     Real bcov[GR_DIM];
 } FourVectors;
 
-typedef struct {
+typedef struct
+{
     int is;
     int ie;
     int js;
@@ -104,7 +110,8 @@ typedef struct {
     int ke;
 } IndexRange3;
 
-typedef struct {
+typedef struct
+{
     uint n1;
     uint n2;
     uint n3;
@@ -169,9 +176,9 @@ class VarMap {
                 Q = name_map["cons.q"].first;
                 DP = name_map["cons.dP"].first;
 
-                // Added material
-                RHOADD = name_map["Floors.rhou0add"].first;
-                T0ADD = name_map["Floors.Tadd"].first;
+            // Added material
+            RHOADD = name_map["Floors.rhou0add"].first;
+            T0ADD = name_map["Floors.Tadd"].first;
 
             } else {
                 // HD
@@ -230,14 +237,15 @@ class VarMap {
                 T3ADD = -1;
             }
         }
+    }
 
-        void print() const
-        {
-            printf("VAR MAP:\n");
-            printf("prims: %d %d %d %d %d\n", RHO, UU, U1, U2, U3);
-            printf("B field cell: %d %d %d face: %d %d %d\n", B1, B2, B3, Bf1, Bf2, Bf3);
-            printf("EMHD q: %d dP: %d\n", Q, DP);
-        }
+    void print() const
+    {
+        printf("VAR MAP:\n");
+        printf("prims: %d %d %d %d %d\n", RHO, UU, U1, U2, U3);
+        printf("B field cell: %d %d %d face: %d %d %d\n", B1, B2, B3, Bf1, Bf2, Bf3);
+        printf("EMHD q: %d dP: %d\n", Q, DP);
+    }
 };
 
 // Reasonable maximum number of fluid primitive or conserved variables being evolved
@@ -249,10 +257,10 @@ class VarMap {
 /**
  * Function to generate outputs wherever, whenever.
  */
-inline void OutputNow(Mesh *pmesh, std::string name)
+inline void OutputNow(Mesh* pmesh, std::string name)
 {
     auto tm = SimTime(0., 0., 0, 0, 0, 0, 0.);
-    ParameterInput *pin = pmesh->packages.Get("Globals")->Param<ParameterInput*>("pin");
+    ParameterInput* pin = pmesh->packages.Get("Globals")->Param<ParameterInput*>("pin");
     auto pouts = std::make_unique<Outputs>(pmesh, pin, &tm);
     pouts->MakeOutputs(pmesh, pin, &tm, SignalHandler::OutputSignal::now);
     // TODO: find most recently written "now" files and move them to "name"
@@ -262,7 +270,7 @@ inline void OutputNow(Mesh *pmesh, std::string name)
 /**
  * Functions for "tracing" execution by printing strings at each entry/exit.
  * Normally, they profile the code, but they can print a nested execution trace.
- * 
+ *
  * Don't laugh at my dumb mutex, it works.
  */
 #if TRACE
@@ -272,7 +280,7 @@ extern int kharma_debug_trace_mutex;
 #define MAX_INDENT_SPACES 80
 inline void Flag(std::string label)
 {
-    if(MPIRank0()) {
+    if (MPIRank0()) {
         int& indent = kharma_debug_trace_indent;
         int& mutex = kharma_debug_trace_mutex;
         // If no other thread is printing one of these...
@@ -281,37 +289,31 @@ inline void Flag(std::string label)
         mutex = 1;
         // Make very sure the indent does not exceed the available space.
         // Forgetting EndFlag() is easy and buffer overflows are bad.
-        indent = m::max(m::min(indent, MAX_INDENT_SPACES/2), 0);
+        indent = m::max(m::min(indent, MAX_INDENT_SPACES / 2), 0);
         char tab[MAX_INDENT_SPACES] = {0};
-        for (int i=0; i < indent; i++) tab[i*2] = tab[i*2+1] = ' ';
+        for (int i = 0; i < indent; i++) tab[i * 2] = tab[i * 2 + 1] = ' ';
         // Print everything in one call so we have the best chance of coherence
         fprintf(stderr, "%sStarting %s\n", tab, label.c_str());
-        indent = m::min(indent+1, MAX_INDENT_SPACES/2);
+        indent = m::min(indent + 1, MAX_INDENT_SPACES / 2);
         // Release mutex
         mutex = 0;
     }
 }
 inline void EndFlag()
 {
-    if(MPIRank0()) {
+    if (MPIRank0()) {
         int& indent = kharma_debug_trace_indent;
         int& mutex = kharma_debug_trace_mutex;
         while (mutex != 0);
         mutex = 1;
-        indent = m::min(m::max(indent-1, 0), MAX_INDENT_SPACES/2);
+        indent = m::min(m::max(indent - 1, 0), MAX_INDENT_SPACES / 2);
         char tab[MAX_INDENT_SPACES] = {0};
-        for (int i=0; i < indent; i++) tab[i*2] = tab[i*2+1] = ' ';
+        for (int i = 0; i < indent; i++) tab[i * 2] = tab[i * 2 + 1] = ' ';
         fprintf(stderr, "%sDone\n", tab);
         mutex = 0;
     }
 }
 #else
-inline void Flag(std::string label)
-{
-    Kokkos::Profiling::pushRegion(label);
-}
-inline void EndFlag()
-{
-    Kokkos::Profiling::popRegion();
-}
+inline void Flag(std::string label) { Kokkos::Profiling::pushRegion(label); }
+inline void EndFlag() { Kokkos::Profiling::popRegion(); }
 #endif

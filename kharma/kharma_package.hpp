@@ -1,25 +1,25 @@
-/* 
+/*
  *  File: kharma_package.hpp
- *  
+ *
  *  BSD 3-Clause License
- *  
+ *
  *  Copyright (c) 2020, AFD Group at UIUC
  *  All rights reserved.
- *  
+ *
  *  Redistribution and use in source and binary forms, with or without
  *  modification, are permitted provided that the following conditions are met:
- *  
+ *
  *  1. Redistributions of source code must retain the above copyright notice, this
  *     list of conditions and the following disclaimer.
- *  
+ *
  *  2. Redistributions in binary form must reproduce the above copyright notice,
  *     this list of conditions and the following disclaimer in the documentation
  *     and/or other materials provided with the distribution.
- *  
+ *
  *  3. Neither the name of the copyright holder nor the names of its
  *     contributors may be used to endorse or promote products derived from
  *     this software without specific prior written permission.
- *  
+ *
  *  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  *  AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  *  IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -40,20 +40,23 @@
 using namespace parthenon;
 
 /**
- * Adds a number of useful callbacks which KHARMA packages might want to take advantage of,
- * which may not make sense to add to the Parthenon StateDescriptor struct upstream
+ * Adds a number of useful callbacks which KHARMA packages might want to take advantage
+ * of, which may not make sense to add to the Parthenon StateDescriptor struct upstream
  * (or which simply haven't been added yet, for whatever reason)
- * 
+ *
  * KHARMA packages which handle variables evolved with Flux:: must additionally provide
  * some device-side functions.
  * 1. Package::prim_to_flux -- various calling conventions, see grmhd_functions.hpp
- * 
+ *
  */
-class KHARMAPackage : public StateDescriptor {
-    public:
-        KHARMAPackage(std::string name) : StateDescriptor(name) {}
+class KHARMAPackage : public StateDescriptor
+{
+  public:
+    KHARMAPackage(std::string name)
+        : StateDescriptor(name)
+    {}
 #if TRACE
-        ~KHARMAPackage() { std::cerr << "Destroying package " << label_ << std::endl; }
+    ~KHARMAPackage() { std::cerr << "Destroying package " << label_ << std::endl; }
 #endif
 
         // PHYSICS
@@ -120,45 +123,49 @@ class KHARMAPackage : public StateDescriptor {
 /**
  * Implement the above callbacks
  */
-namespace Packages {
+namespace Packages
+{
 
 /**
  * Any "fixes" to the fluxes through zone faces calculated by GetFlux.
  * These are all package-defined, with boundary fluxes and magnetic field transport
  * being the big cases.
  */
-TaskStatus FixFlux(MeshData<Real> *md);
+TaskStatus FixFlux(MeshData<Real>* md);
 
 /**
  * Fill the primitive variables P using the conserved U
  */
-TaskStatus BlockUtoP(MeshBlockData<Real> *mbd, IndexDomain domain, bool coarse=false);
-TaskStatus MeshUtoP(MeshData<Real> *md, IndexDomain domain, bool coarse=false);
+TaskStatus BlockUtoP(MeshBlockData<Real>* mbd, IndexDomain domain, bool coarse = false);
+TaskStatus MeshUtoP(MeshData<Real>* md, IndexDomain domain, bool coarse = false);
 
 /**
  * U to P specifically for boundaries (domain and MPI).
  * All packages must define this, even if not using UtoP, as KHARMA must sync conserved
  * variables in AMR mode.
  */
-TaskStatus BoundaryUtoP(MeshBlockData<Real> *rc, IndexDomain domain, bool coarse=false);
+TaskStatus BoundaryUtoP(MeshBlockData<Real>* rc, IndexDomain domain, bool coarse = false);
 /**
  * For each package, run DomainBoundaryPtoU if available, otherwise BoundaryUtoP.
  * This is for domain boundaries: if we're syncing the conserved variables, we still
  * want to apply domain boundaries to the GRHD primitive variables
  * See KBoundaries::ApplyBoundary for details
  */
-TaskStatus BoundaryPtoUElseUtoP(MeshBlockData<Real> *rc, IndexDomain domain, bool coarse=false);
+TaskStatus BoundaryPtoUElseUtoP(
+    MeshBlockData<Real>* rc, IndexDomain domain, bool coarse = false);
 
 /**
- * Fill all conserved variables (U) from primitive variables (P), over a domain on a single block
+ * Fill all conserved variables (U) from primitive variables (P), over a domain on a
+ * single block
  */
 // TaskStatus BlockPtoU(MeshBlockData<Real> *mbd, IndexDomain domain, bool coarse=false);
 
 /**
- * Add any source terms to the conserved variables.  Applied over the interior/physical zones only, as these
- * are the only ones well-defined in the only place this function is called.
+ * Add any source terms to the conserved variables.  Applied over the interior/physical
+ * zones only, as these are the only ones well-defined in the only place this function is
+ * called.
  */
-TaskStatus AddSource(MeshData<Real> *md, MeshData<Real> *mdudt, IndexDomain domain);
+TaskStatus AddSource(MeshData<Real>* md, MeshData<Real>* mdudt, IndexDomain domain);
 
 /**
  * Add any source terms to the primitive variables. Strang-split around the transport 
@@ -176,16 +183,16 @@ bool AnyPrimSource(Mesh *pmesh);
 
 /**
  * Apply all registered floors, including any package-specific limiters.
- * 
+ *
  * LOCKSTEP: this function respects P and returns consistent P<->U
  */
-TaskStatus MeshApplyFloors(MeshData<Real> *md, IndexDomain domain);
+TaskStatus MeshApplyFloors(MeshData<Real>* md, IndexDomain domain);
 
 // These are already Parthenon global callbacks -- see their documentation
 // I define them here so I can pass them on to packages
-void UserWorkBeforeOutput(MeshBlock *pmb, ParameterInput *pin, const SimTime& unused);
-void PreStepWork(Mesh *pmesh, ParameterInput *pin, const SimTime &tm);
-void PostStepWork(Mesh *pmesh, ParameterInput *pin, const SimTime &tm);
-void PostStepDiagnostics(Mesh *pmesh, ParameterInput *pin, const SimTime &tm);
-void PostExecute(Mesh *pmesh, ParameterInput *pin, const SimTime &tm);
+void UserWorkBeforeOutput(MeshBlock* pmb, ParameterInput* pin, const SimTime& unused);
+void PreStepWork(Mesh* pmesh, ParameterInput* pin, const SimTime& tm);
+void PostStepWork(Mesh* pmesh, ParameterInput* pin, const SimTime& tm);
+void PostStepDiagnostics(Mesh* pmesh, ParameterInput* pin, const SimTime& tm);
+void PostExecute(Mesh* pmesh, ParameterInput* pin, const SimTime& tm);
 }
