@@ -30,7 +30,9 @@ import pyharm
 # (key, display name, colormap) for the fields we map
 FIELDS = [
     ("rho", r"$\rho$", "viridis"),
-    ("Ktot_adv", r"$K_{\rm adv}$", "magma"),
+    # Ktot_adv is Noble+ '09 S = p/rho^(gam-1), an entropy *density* -- not the per-mass
+    # entropy Ktot.  Labelled S here so the two are not confused on sight.
+    ("Ktot_adv", r"$S = p/\rho^{\gamma-1}$", "magma"),
 ]
 
 

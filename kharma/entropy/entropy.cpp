@@ -104,12 +104,14 @@ TaskStatus InitEntropy(MeshBlockData<Real>* rc, ParameterInput* pin)
         return TaskStatus::complete;
     }
 
-    // Covers prims.Ktot and, if enabled, prims.Ktot_adv -- both start from the same,
-    // real initial entropy implied by the problem's initial rho, u.
-    auto& k_P = rc->PackVariables(
-        {Metadata::GetUserFlag("TrackEntropy"), Metadata::GetUserFlag("Primitive")});
+    // Ktot and Ktot_adv both start from the real entropy implied by the problem's
+    // initial rho, u, but in different normalizations -- per mass and per volume
+    // respectively -- so they cannot be packed and set together.  See entropy.hpp.
     GridScalar rho = rc->Get("prims.rho").data;
     GridScalar u = rc->Get("prims.u").data;
+    GridScalar ktot = rc->Get("prims.Ktot").data;
+    const bool advect_entropy =
+        pmb->packages.Get("Entropy")->Param<bool>("advect_entropy");
 
     const Real gam = pmb->packages.Get("GRMHD")->Param<Real>("gamma");
 
@@ -124,11 +126,20 @@ TaskStatus InitEntropy(MeshBlockData<Real>* rc, ParameterInput* pin)
     int is = pmb->cellbounds.is(domain), ie = pmb->cellbounds.ie(domain);
     int js = pmb->cellbounds.js(domain), je = pmb->cellbounds.je(domain);
     int ks = pmb->cellbounds.ks(domain), ke = pmb->cellbounds.ke(domain);
-    pmb->par_for("init_entropy", 0, k_P.GetDim(4) - 1, ks, ke, js, je, is, ie,
-                 KOKKOS_LAMBDA(const int& p, const int& k, const int& j, const int& i)
+    pmb->par_for("init_entropy", ks, ke, js, je, is, ie,
+        KOKKOS_LAMBDA(const int& k, const int& j, const int& i)
         {
-            k_P(p, k, j, i) = Entropy::CalcEntropy(rho(k, j, i), u(k, j, i), gam);
+            ktot(k, j, i) = Entropy::CalcEntropy(rho(k, j, i), u(k, j, i), gam);
         });
+    if (advect_entropy) {
+        GridScalar ktot_adv = rc->Get("prims.Ktot_adv").data;
+        pmb->par_for("init_entropy_adv", ks, ke, js, je, is, ie,
+            KOKKOS_LAMBDA(const int& k, const int& j, const int& i)
+            {
+                ktot_adv(k, j, i) =
+                    Entropy::CalcEntropyDensity(rho(k, j, i), u(k, j, i), gam);
+            });
+    }
 
     EndFlag();
     return TaskStatus::complete;
@@ -138,23 +149,39 @@ void BlockUtoP(MeshBlockData<Real>* rc, IndexDomain domain, bool coarse)
 {
     auto pmb = rc->GetBlockPointer();
 
-    // No need for a "map" here, we just want everything that fits these criteria.
-    auto& k_P = rc->PackVariables(
-        {Metadata::GetUserFlag("TrackEntropy"), Metadata::GetUserFlag("Primitive")});
-    auto& k_U =
-        rc->PackVariables({Metadata::GetUserFlag("TrackEntropy"), Metadata::Conserved});
+    GridScalar ktot_P = rc->Get("prims.Ktot").data;
+    GridScalar ktot_U = rc->Get("cons.Ktot").data;
     // And then the local density
     GridScalar rho_U = rc->Get("cons.rho").data;
+
+    const bool advect_entropy =
+        pmb->packages.Get("Entropy")->Param<bool>("advect_entropy");
 
     auto bounds = coarse ? pmb->c_cellbounds : pmb->cellbounds;
     int is = bounds.is(domain), ie = bounds.ie(domain);
     int js = bounds.js(domain), je = bounds.je(domain);
     int ks = bounds.ks(domain), ke = bounds.ke(domain);
-    pmb->par_for("UtoP_entropy", 0, k_P.GetDim(4) - 1, ks, ke, js, je, is, ie,
-                 KOKKOS_LAMBDA(const int& p, const int& k, const int& j, const int& i)
+
+    // Ktot is per unit mass: divide out the conserved density, exactly as Electrons do.
+    pmb->par_for("UtoP_entropy", ks, ke, js, je, is, ie,
+        KOKKOS_LAMBDA(const int& k, const int& j, const int& i)
         {
-            k_P(p, k, j, i) = k_U(p, k, j, i) / rho_U(k, j, i);
+            ktot_P(k, j, i) = ktot_U(k, j, i) / rho_U(k, j, i);
         });
+
+    if (advect_entropy) {
+        // Ktot_adv is a density, conserved as sqrt(-g) u^t Ktot_adv, so what has to be
+        // divided out is gdet*u^t.
+        GridScalar ktot_adv_P = rc->Get("prims.Ktot_adv").data;
+        GridScalar ktot_adv_U = rc->Get("cons.Ktot_adv").data;
+        GridScalar rho_P = rc->Get("prims.rho").data;
+        pmb->par_for("UtoP_entropy_adv", ks, ke, js, je, is, ie,
+            KOKKOS_LAMBDA(const int& k, const int& j, const int& i)
+            {
+                ktot_adv_P(k, j, i) =
+                    ktot_adv_U(k, j, i) * rho_P(k, j, i) / rho_U(k, j, i);
+            });
+    }
 }
 
 TaskStatus ApplyEntropyUpdate(MeshBlockData<Real>* rc)
