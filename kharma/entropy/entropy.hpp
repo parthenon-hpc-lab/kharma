@@ -57,11 +57,31 @@ using namespace parthenon;
  * consumer.
  *
  * Optionally (see "advect_entropy" below), this package also tracks a second, genuinely
- * idealized version of the entropy, Ktot_adv, which is *never* reset: it is simply
- * advected for the entire run as if there had been no dissipation at all.
- * Ktot - Ktot_adv is then the total dissipation (numerical, or explicit if EMHD is
- * enabled) accumulated since the start of the run -- a useful global diagnostic, but not
- * otherwise consumed by KHARMA.
+ * idealized entropy, Ktot_adv, which is *never* reset: it is simply advected for the
+ * entire run as if there had been no dissipation at all.
+ *
+ * NOTE Ktot and Ktot_adv are not the same kind of object, and are not directly
+ * comparable:
+ *
+ *   Ktot     = (gam-1) u / rho^gam       specific entropy, per unit mass.
+ *                                        Lagrangian invariant: u^mu d_mu Ktot = 0, so it
+ *                                        advects weighted by the mass flux, and its
+ *                                        conserved form is sqrt(-g) rho u^t Ktot.
+ *
+ *   Ktot_adv = (gam-1) u / rho^(gam-1)   entropy *density*, i.e. rho * Ktot.  This is
+ *                                        Noble+ 2009 (arXiv:0808.3140) eq. 20, the
+ *                                        variable used by their entropy-based 
+ *                                        primitive inversion scheme.
+ *
+ * The two conserved forms are numerically identical -- sqrt(-g) rho u^t Ktot ==
+ * sqrt(-g) u^t (rho Ktot) -- which is why only the primitive normalization and the flux
+ * expression differ between them.  The reason for carrying Ktot_adv in Noble's form
+ * rather than as a second specific entropy is that the inversion wants p directly:
+ * given rho, p = Ktot_adv * rho^(gam-1) with no root-find.
+ *
+ * Consequently the dissipation-free specific entropy is Ktot_adv/rho, and the
+ * accumulated dissipation is Ktot - Ktot_adv/rho.
+ *
  */
 namespace Entropy
 {
@@ -84,6 +104,18 @@ KOKKOS_FORCEINLINE_FUNCTION Real CalcEntropy(
 }
 
 /**
+ * The same entropy as a *density* rather than per unit mass: S = p/rho^(gam-1), i.e.
+ * rho*CalcEntropy(). This is Noble+ 2009 eq. 20, the form Ktot_adv is carried in.
+ * Kept as its own function rather than a multiply-by-rho so that callers cannot 
+ * quietly mix the two normalizations.
+ */
+KOKKOS_FORCEINLINE_FUNCTION Real CalcEntropyDensity(
+    const Real& rho, const Real& u, const Real& gam)
+{
+    return (gam - 1.) * u * m::pow(rho, 1. - gam);
+}
+
+/**
  * Set the initial values of Ktot (and Ktot_adv, if enabled) from the problem's initial
  * rho, u.  Called manually at the end of problem initialization in problem.cpp, mirroring
  * Electrons.
@@ -98,8 +130,10 @@ inline TaskStatus MeshInitEntropy(MeshData<Real>* md, ParameterInput* pin)
 }
 
 /**
- * As with Electrons::BlockUtoP, get the specific entropy primitive(s) by dividing the
- * conserved total (density-weighted) entropy by the density: Ktot/(rho*u^0).
+ * Recover the entropy primitives from their conserved forms.  The two differ:
+ *   Ktot     = cons.Ktot / cons.rho                    (per mass, as Electrons::BlockUtoP)
+ *   Ktot_adv = cons.Ktot_adv * prims.rho / cons.rho    (a density; the ratio here is
+ *                                                       1/(gdet*u^t))
  */
 void BlockUtoP(MeshBlockData<Real>* rc, IndexDomain domain, bool coarse = false);
 
@@ -111,7 +145,9 @@ void BlockUtoP(MeshBlockData<Real>* rc, IndexDomain domain, bool coarse = false)
  * advected value.
  *
  * Does not touch Ktot_adv, which needs no such per-step update: it is left to evolve via
- * the standard advection machinery for the whole run.
+ * the standard advection machinery for the whole run.  (This is also what keeps 
+ * Ktot_adv usable for an entropy-based inversion: it must carry the entropy the fluid 
+ * would have had *without* the dissipation.)
  */
 TaskStatus ApplyEntropyUpdate(MeshBlockData<Real>* rc);
 inline TaskStatus MeshUpdateEntropy(MeshData<Real>* md)

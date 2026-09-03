@@ -175,8 +175,12 @@ KOKKOS_FORCEINLINE_FUNCTION void prim_to_flux(const GRCoordinates& G, const Loca
         if (m_u.K_ROWAN >= 0) flux(m_u.K_ROWAN) = flux(m_u.RHO) * P(m_p.K_ROWAN);
         if (m_u.K_SHARMA >= 0) flux(m_u.K_SHARMA) = flux(m_u.RHO) * P(m_p.K_SHARMA);
     }
-    // Idealized (advected, no-dissipation) entropy: advects exactly like Ktot
-    if (m_u.KTOT_ADV >= 0) flux(m_u.KTOT_ADV) = flux(m_u.RHO) * P(m_p.KTOT_ADV);
+    // Noble+ '09 entropy S = p/rho^(gam-1), their eq. 19-20: div_mu(S u^mu) = 0. This
+    // is an entropy *density*, so it advects like q & dP above (a bare gdet*u^dir), 
+    // not like Ktot, which is per unit mass and so carries the extra factor of rho 
+    // in flux(RHO).
+    if (m_u.KTOT_ADV >= 0)
+        flux(m_u.KTOT_ADV) = P(m_p.KTOT_ADV) * D.ucon[dir] * gdet;
 }
 
 template<typename Global>
@@ -244,8 +248,9 @@ KOKKOS_FORCEINLINE_FUNCTION void prim_to_flux(const GRCoordinates& G, const Glob
         if (m_u.K_SHARMA >= 0)
             flux[m_u.K_SHARMA] = flux[m_u.RHO] * P(m_p.K_SHARMA, k, j, i);
     }
-    // Idealized (advected, no-dissipation) entropy: advects exactly like Ktot
-    if (m_u.KTOT_ADV >= 0) flux[m_u.KTOT_ADV] = flux[m_u.RHO] * P(m_p.KTOT_ADV, k, j, i);
+    // Noble+ '09 entropy density S = p/rho^(gam-1): advects like q & dP, not like Ktot
+    if (m_u.KTOT_ADV >= 0)
+        flux[m_u.KTOT_ADV] = P(m_p.KTOT_ADV, k, j, i) * D.ucon[dir] * gdet;
 }
 
 template<typename Global>
@@ -319,9 +324,9 @@ KOKKOS_FORCEINLINE_FUNCTION void prim_to_flux(const GRCoordinates& G, const Glob
             flux(m_u.K_SHARMA, k, j, i) =
                 flux(m_u.RHO, k, j, i) * P(m_p.K_SHARMA, k, j, i);
     }
-    // Idealized (advected, no-dissipation) entropy: advects exactly like Ktot
+    // Noble+ '09 entropy density S = p/rho^(gam-1): advects like q & dP, not like Ktot
     if (m_u.KTOT_ADV >= 0)
-        flux(m_u.KTOT_ADV, k, j, i) = flux(m_u.RHO, k, j, i) * P(m_p.KTOT_ADV, k, j, i);
+        flux(m_u.KTOT_ADV, k, j, i) = P(m_p.KTOT_ADV, k, j, i) * D.ucon[dir] * gdet;
 }
 
 /**

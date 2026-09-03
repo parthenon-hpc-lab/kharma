@@ -183,9 +183,8 @@ TaskCollection KHARMADriver::MakeImExTaskCollection(BlockList_t& blocks, int sta
 
         // Strang splitting, first half.  Any primitive-variable sources get to advance
         // the state at t^n over dt/2 before any transport happens. This is split around
-        // the whole *step*, not each sub-step, so only stage 1 -- and note
-        // md_sub_step_init IS md_full_step_init here -- so the fluxes below see the
-        // result.
+        // the whole *step*, not each sub-step, so the fluxes below see the result. 
+        // Note md_sub_step_init IS md_full_step_init here.
         auto t_prim_source_first = t_none;
         if (stage == 1 && use_prim_source) {
             auto t_src_first = tl.AddTask(t_none, Packages::MeshApplyPrimSource,
