@@ -49,7 +49,7 @@
 #include "coord_output.hpp"
 #include "current.hpp"
 #include "electrons.hpp"
-#include "emhd.hpp"
+#include "entropy.hpp"
 #include "floors.hpp"
 #include "flux.hpp"
 #include "grmhd.hpp"
@@ -78,6 +78,11 @@ std::shared_ptr<KHARMAPackage> KHARMA::InitializeGlobals(
     // Also sets max step increase, so we initialize it to max value to allow any first
     // step size
     params.Add("dt_last", std::numeric_limits<double>::max(), true);
+    // Time the current sub-step's *output* state represents, i.e. what time-dependent
+    // boundaries should be set to.  Written by the driver at the top of each stage, see
+    // KHARMADriver::MakeTaskCollection.  Use this rather than reconstructing it from
+    // "time" and "dt_last". Also, note that dt_last is DBL_MAX before the loop starts.
+    params.Add("time_substep_end", 0.0, true);
     // Whether we are computing initial outputs/timestep, or versions in the execution
     // loop
     params.Add("in_loop", false, true);
@@ -463,10 +468,23 @@ Packages_t KHARMA::ProcessPackages(std::unique_ptr<ParameterInput>& pin)
     }
 
     // Optional standalone packages
+    // Entropy tracking (Ktot, & optionally idealized/advected Ktot_adv) is independent of
+    // any package that might use it, but Electrons relies on it to get the fluid's
+    // current & purely-advected entropy, so it's forced on whenever Electrons is.
+    bool entropy_on = pin->GetOrAddBoolean("entropy", "on", false);
+    if (pin->GetOrAddBoolean("electrons", "on", false)) {
+        entropy_on = true;
+        pin->SetBoolean("entropy", "on", true);
+    }
+    auto t_entropy = t_grmhd;
+    if (entropy_on) {
+        t_entropy = tl.AddTask(
+            t_grmhd, KHARMA::AddPackage, packages, Entropy::Initialize, pin.get());
+    }
     // Electrons are boring but not impossible without a B field (TODO add a test?)
     if (pin->GetOrAddBoolean("electrons", "on", false)) {
         auto t_electrons = tl.AddTask(
-            t_grmhd, KHARMA::AddPackage, packages, Electrons::Initialize, pin.get());
+            t_entropy, KHARMA::AddPackage, packages, Electrons::Initialize, pin.get());
     }
     if (pin->GetBoolean("emhd", "on")) { // Set above when deciding to load inverter
         auto t_emhd = tl.AddTask(

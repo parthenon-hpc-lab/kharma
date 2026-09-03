@@ -41,6 +41,7 @@
 #include "b_ct.hpp"
 #include "b_flux_ct.hpp"
 #include "electrons.hpp"
+#include "entropy.hpp"
 #include "grmhd.hpp"
 #include "inverter.hpp"
 #include "ismr.hpp"
@@ -73,6 +74,9 @@ TaskCollection KHARMADriver::MakeImExTaskCollection(BlockList_t& blocks, int sta
     const bool use_b_cleanup = pkgs.count("B_Cleanup");
     const bool use_b_ct = pkgs.count("B_CT");
     const bool use_electrons = pkgs.count("Electrons");
+    const bool use_entropy = pkgs.count("Entropy");
+    // Whether anything needs the Strang-split primitive-source half-steps at all
+    const bool use_prim_source = Packages::AnyPrimSource(pmesh);
     const bool use_fofc = flux_pkg.Get<bool>("use_fofc");
     const bool use_implicit = pkgs.count("Implicit");
     const bool use_jcon = pkgs.count("Current");
@@ -177,6 +181,36 @@ TaskCollection KHARMADriver::MakeImExTaskCollection(BlockList_t& blocks, int sta
             "sync" + integrator->stage_name[stage] + std::to_string(i), md_sub_step_final,
             sync_vars);
 
+        // Strang splitting, first half.  Any primitive-variable sources get to advance
+        // the state at t^n over dt/2 before any transport happens. This is split around
+        // the whole *step*, not each sub-step, so the fluxes below see the result.
+        // Note md_sub_step_init IS md_full_step_init here.
+        auto t_prim_source_first = t_none;
+        if (stage == 1 && use_prim_source) {
+            auto t_src_first = tl.AddTask(t_none, Packages::MeshApplyPrimSource,
+                md_full_step_init.get(), tm.time, 0.5 * integrator->dt);
+            // A source sub-step has to advance *every* primitive it affects, and heating
+            // the gas raises its entropy, which is how the electrons get their share.
+            auto t_heat_first = t_src_first;
+            if (use_electrons) {
+                t_heat_first =
+                    tl.AddTask(t_src_first, Electrons::MeshApplyElectronHeating,
+                        md_full_step_init.get(), md_full_step_init.get(), false);
+            }
+            // Ktot has to follow the sources too: this heating is real dissipation,
+            // so the entropy the transport step advects must be the post-source value.
+            // (Electrons above still need Ktot's pre-source value to see that heating.)
+            auto t_entropy_first = t_heat_first;
+            if (use_entropy) {
+                t_entropy_first = tl.AddTask(
+                    t_heat_first, Entropy::MeshUpdateEntropy, md_full_step_init.get());
+            }
+            // Required because the state update below reads this container's conserved
+            // vars, and we have only touched the primitives.
+            t_prim_source_first = tl.AddTask(t_entropy_first, Flux::MeshPtoU,
+                md_full_step_init.get(), IndexDomain::entire, false);
+        }
+
         // Start receiving flux corrections and ghost cells
         auto t_start_recv_bound = tl.AddTask(t_none,
             parthenon::StartReceiveBoundBufs<parthenon::BoundaryType::any>,
@@ -189,8 +223,9 @@ TaskCollection KHARMADriver::MakeImExTaskCollection(BlockList_t& blocks, int sta
         // Calculate the flux of each variable through each face
         // This reconstructs the primitives (P) at faces and uses them to calculate fluxes
         // of the conserved variables (U) through each face.
-        auto t_flux_calc = KHARMADriver::AddFluxCalculations(
-            t_start_recv_flux, tl, md_sub_step_init.get());
+        auto t_flux_start = t_start_recv_flux | t_prim_source_first;
+        auto t_flux_calc =
+            KHARMADriver::AddFluxCalculations(t_flux_start, tl, md_sub_step_init.get());
         auto t_fluxes = t_flux_calc;
         if (use_fofc) {
             auto& guess_src = pmesh->mesh_data.GetOrAdd("fofc_source", i);
@@ -370,13 +405,15 @@ TaskCollection KHARMADriver::MakeImExTaskCollection(BlockList_t& blocks, int sta
         auto t_set_bc = tl.AddTask(t_fix_solve,
             parthenon::ApplyBoundaryConditionsOnCoarseOrFineMD, md_sync, false);
 
-        // Any package- (likely, problem-) specific source terms which must be applied to
-        // primitive variables Apply these only after the final step so they're
-        // operator-split
+        // Strang splitting, second half: the sources advance the transported state over
+        // the remaining dt/2.  Only after the last stage, so that the pair straddles the
+        // whole transport step symmetrically. That symmetry is what cancels the
+        // leading splitting error and keeps the composition 2nd order.
         auto t_prim_source = t_set_bc;
         if (stage == integrator->nstages) {
-            t_prim_source = tl.AddTask(
-                t_set_bc, Packages::MeshApplyPrimSource, md_sub_step_final.get());
+            t_prim_source = tl.AddTask(t_set_bc, Packages::MeshApplyPrimSource,
+                md_sub_step_final.get(), tm.time + 0.5 * integrator->dt,
+                0.5 * integrator->dt);
         }
         // Electron heating goes where it does in the KHARMA Driver, for the same reasons
         auto t_heat_electrons = t_prim_source;
@@ -386,9 +423,18 @@ TaskCollection KHARMADriver::MakeImExTaskCollection(BlockList_t& blocks, int sta
                     md_sub_step_init.get(), md_sub_step_final.get(), stage == 1);
         }
 
+        // Update the tracked total entropy for the (sub-)step that just completed.
+        // This must run *after* electron heating, which still needs to read the
+        // pre-update (purely advected) value of Ktot to calculate dissipation.
+        auto t_entropy = t_heat_electrons;
+        if (use_entropy) {
+            t_entropy = tl.AddTask(
+                t_heat_electrons, Entropy::MeshUpdateEntropy, md_sub_step_final.get());
+        }
+
         // Make sure *all* conserved vars are synchronized at step end
-        auto t_ptou = tl.AddTask(t_heat_electrons, Flux::MeshPtoU,
-            md_sub_step_final.get(), IndexDomain::entire, false);
+        auto t_ptou = tl.AddTask(t_entropy, Flux::MeshPtoU, md_sub_step_final.get(),
+            IndexDomain::entire, false);
 
         auto t_step_done = t_ptou;
         if (pkgs.count("ISMR")) {

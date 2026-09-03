@@ -151,6 +151,9 @@ KOKKOS_FORCEINLINE_FUNCTION void prim_to_flux(const GRCoordinates& G, const Glob
         if (m_u.K_SHARMA >= 0)
             flux[m_u.K_SHARMA] = flux[m_u.RHO] * P(m_p.K_SHARMA, k, j, i);
     }
+    // Noble+ '09 entropy density S = p/rho^(gam-1): advects like q & dP, not like Ktot
+    if (m_u.KTOT_ADV >= 0)
+        flux[m_u.KTOT_ADV] = P(m_p.KTOT_ADV, k, j, i) * D.ucon[dir] * gdet;
 }
 
 template<typename Global>
@@ -224,6 +227,9 @@ KOKKOS_FORCEINLINE_FUNCTION void prim_to_flux(const GRCoordinates& G, const Glob
             flux(m_u.K_SHARMA, k, j, i) =
                 flux(m_u.RHO, k, j, i) * P(m_p.K_SHARMA, k, j, i);
     }
+    // Noble+ '09 entropy density S = p/rho^(gam-1): advects like q & dP, not like Ktot
+    if (m_u.KTOT_ADV >= 0)
+        flux(m_u.KTOT_ADV, k, j, i) = P(m_p.KTOT_ADV, k, j, i) * D.ucon[dir] * gdet;
 }
 
 /**
