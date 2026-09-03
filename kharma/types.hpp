@@ -238,15 +238,14 @@ class VarMap
             T3ADD = -1;
         }
     }
-}
 
     void print() const
-{
-    printf("VAR MAP:\n");
-    printf("prims: %d %d %d %d %d\n", RHO, UU, U1, U2, U3);
-    printf("B field cell: %d %d %d face: %d %d %d\n", B1, B2, B3, Bf1, Bf2, Bf3);
-    printf("EMHD q: %d dP: %d\n", Q, DP);
-}
+    {
+        printf("VAR MAP:\n");
+        printf("prims: %d %d %d %d %d\n", RHO, UU, U1, U2, U3);
+        printf("B field cell: %d %d %d face: %d %d %d\n", B1, B2, B3, Bf1, Bf2, Bf3);
+        printf("EMHD q: %d dP: %d\n", Q, DP);
+    }
 }
 ;
 
