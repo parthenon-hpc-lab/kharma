@@ -185,7 +185,7 @@ TaskStatus Packages::AddSource(
     return TaskStatus::complete;
 }
 
-bool Packages::AnyPrimSource(Mesh *pmesh)
+bool Packages::AnyPrimSource(Mesh* pmesh)
 {
     for (auto kpackage : pmesh->packages.AllPackagesOfType<KHARMAPackage>()) {
         if (kpackage.second->BlockApplyPrimSource != nullptr) return true;
@@ -193,7 +193,7 @@ bool Packages::AnyPrimSource(Mesh *pmesh)
     return false;
 }
 
-TaskStatus Packages::MeshApplyPrimSource(MeshData<Real> *md, Real t_start, Real dt_split)
+TaskStatus Packages::MeshApplyPrimSource(MeshData<Real>* md, Real t_start, Real dt_split)
 {
     Flag("MeshApplyPrimSource");
     for (int i = 0; i < md->NumBlocks(); ++i) {
