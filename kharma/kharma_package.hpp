@@ -59,66 +59,65 @@ class KHARMAPackage : public StateDescriptor
     ~KHARMAPackage() { std::cerr << "Destroying package " << label_ << std::endl; }
 #endif
 
-    // PHYSICS
-    // Recovery of primitive variables from conserved.
-    // These can be host-side functions because they are not called from GetFlux()
-    // rather, they are called on zone center values once per step only.
-    std::function<void(MeshBlockData<Real>*, IndexDomain, bool)> BlockUtoP = nullptr;
-    std::function<void(MeshData<Real>*, IndexDomain, bool)> MeshUtoP = nullptr;
-    // Allow applying UtoP only/separately for boundary domains after
-    // sync/prolong/restrict ops All packages with independent variables should register
-    // this for AMR
-    std::function<void(MeshBlockData<Real>*, IndexDomain, bool)> BoundaryUtoP = nullptr;
-    // On domain boundaries, however, we sometimes need to respect the primitive
-    // variables. Currently only the GRMHD primitives (rho, u, uvec) do this
-    std::function<void(MeshBlockData<Real>*, IndexDomain, bool)> DomainBoundaryPtoU =
-        nullptr;
+        // PHYSICS
+        // Recovery of primitive variables from conserved.
+        // These can be host-side functions because they are not called from GetFlux()
+        // rather, they are called on zone center values once per step only.
+        std::function<void(MeshBlockData<Real>*, IndexDomain, bool)> BlockUtoP = nullptr;
+        std::function<void(MeshData<Real>*, IndexDomain, bool)> MeshUtoP = nullptr;
+        // Allow applying UtoP only/separately for boundary domains after sync/prolong/restrict ops
+        // All packages with independent variables should register this for AMR
+        std::function<void(MeshBlockData<Real>*, IndexDomain, bool)> BoundaryUtoP = nullptr;
+        // On domain boundaries, however, we sometimes need to respect the primitive variables.
+        // Currently only the GRMHD primitives (rho, u, uvec) do this
+        std::function<void(MeshBlockData<Real>*, IndexDomain, bool)> DomainBoundaryPtoU = nullptr;
 
-    // Going the other way, however, is always handled by Flux::{Block,Mesh}PtoU.
-    // All PtoU implementations are device-side (called prim_to_flux),
-    // so we do not need something like
-    // std::function<void(MeshBlockData<Real>*, IndexDomain, bool)> BlockPtoU = nullptr;
+        // Going the other way, however, is always handled by Flux::{Block,Mesh}PtoU.
+        // All PtoU implementations are device-side (called prim_to_flux),
+        // so we do not need something like
+        //std::function<void(MeshBlockData<Real>*, IndexDomain, bool)> BlockPtoU = nullptr;
 
-    // Source term to add to the conserved variables during each step
-    std::function<void(MeshData<Real>*, MeshData<Real>*, IndexDomain)> AddSource =
-        nullptr;
+        // Source term to add to the conserved variables during each step
+        std::function<void(MeshData<Real>*, MeshData<Real>*, IndexDomain)> AddSource = nullptr;
 
-    // Source term to apply to primitive variables, needed for some problems in order
-    // to control dissipation (Hubble, turbulence).
-    // Must be applied over entire domain!
-    std::function<void(MeshBlockData<Real>*)> BlockApplyPrimSource = nullptr;
+        // Source term applied directly to the primitive variables, in contrast to
+        // AddSource above which contributes a rate to dU/dt and lets the integrator
+        // multiply through by beta*dt.  Here you write an already-integrated amount
+        // straight into P, after the update, inversion, floors and boundaries.
+        
+        // These are Strang-split around the transport step: the callback is invoked
+        // exactly twice per step, once on the state at t^n before the first stage and
+        // once on the state at t^n+dt after the last. The understanding is that it 
+        // advance its own source ODE across that interval at 2nd order. For a source 
+        // depending on time alone, the midpoint value t_start + dt_split/2 suffices.
+        std::function<void(MeshBlockData<Real>*, Real, Real)> BlockApplyPrimSource = nullptr;
 
-    // Apply any fixes after the initial fluxes are calculated
-    std::function<void(MeshData<Real>*)> FixFlux = nullptr;
+        // Apply any fixes after the initial fluxes are calculated
+        std::function<void(MeshData<Real>*)> FixFlux = nullptr;
 
-    // Apply any floors or limiters specific to the package (that is, on the package's
-    // variables)
-    std::function<void(MeshBlockData<Real>*, IndexDomain)> BlockApplyFloors = nullptr;
-    std::function<void(MeshData<Real>*, IndexDomain)> MeshApplyFloors = nullptr;
+        // Apply any floors or limiters specific to the package (that is, on the package's variables)
+        std::function<void(MeshBlockData<Real>*, IndexDomain)> BlockApplyFloors = nullptr;
+        std::function<void(MeshData<Real>*, IndexDomain)> MeshApplyFloors = nullptr;
 
-    // CONVENIENCE
-    // Anything to be done before each step begins -- currently just updating global
-    // "in_loop"
-    std::function<void(Mesh*, ParameterInput*, const SimTime&)> PreStepWork = nullptr;
-    // Anything to be done after every step is fully complete -- usually reductions or
-    // preservation of variables Note that most diagnostics should go in
-    // "PostStepDiagnosticsMesh" instead
-    std::function<void(Mesh*, ParameterInput*, const SimTime&)> PostStepWork = nullptr;
+        // CONVENIENCE
+        // Anything to be done before each step begins -- currently just updating global "in_loop"
+        std::function<void(Mesh*, ParameterInput*, const SimTime&)> PreStepWork = nullptr;
+        // Anything to be done after every step is fully complete -- usually reductions or preservation of variables
+        // Note that most diagnostics should go in "PostStepDiagnosticsMesh" instead
+        std::function<void(Mesh*, ParameterInput*, const SimTime&)> PostStepWork = nullptr;
 
-    // Anything to be done just before any outputs (dump files, restarts, history files)
-    // are made Usually for filling output-only variables
-    // TODO Add MeshUserWorkBeforeOutput to Parthenon
-    std::function<void(MeshBlock*, ParameterInput*)> BlockUserWorkBeforeOutput = nullptr;
+        // Anything to be done just before any outputs (dump files, restarts, history files) are made
+        // Usually for filling output-only variables
+        // TODO Add MeshUserWorkBeforeOutput to Parthenon
+        std::function<void(MeshBlock*, ParameterInput*)> BlockUserWorkBeforeOutput = nullptr;
 
-    // Anything at the very end of simulation. Cleanup, summaries, outputs if you're brave
-    std::function<void(Mesh*, ParameterInput*, const SimTime&)> PostExecute = nullptr;
+        // Anything at the very end of simulation. Cleanup, summaries, outputs if you're brave
+        std::function<void(Mesh*, ParameterInput*, const SimTime&)> PostExecute = nullptr;
 
-    // BOUNDARIES
-    // Currently only used by the "boundaries" package
-    // Note these functions take the boundary IndexDomain as an argument, so you can
-    // assign the same function to multiple boundaries.
-    std::array<std::function<void(std::shared_ptr<MeshBlockData<Real>>&, bool)>, 6>
-        KBoundaries = {nullptr};
+        // BOUNDARIES
+        // Currently only used by the "boundaries" package
+        // Note these functions take the boundary IndexDomain as an argument, so you can assign the same function to multiple boundaries.
+        std::array<std::function<void(std::shared_ptr<MeshBlockData<Real>>&, bool)>, 6> KBoundaries = {nullptr};
 };
 
 /**
@@ -169,10 +168,18 @@ TaskStatus BoundaryPtoUElseUtoP(
 TaskStatus AddSource(MeshData<Real>* md, MeshData<Real>* mdudt, IndexDomain domain);
 
 /**
- * Add any source terms to the primitive variables.  Applied directly rather than adding
- * to a derivative.
+ * Add any source terms to the primitive variables. Strang-split around the transport 
+ * step: "t_start" and "dt_split" describe the half-step interval each call is 
+ * responsible for integrating.
  */
-TaskStatus MeshApplyPrimSource(MeshData<Real>* md);
+TaskStatus MeshApplyPrimSource(MeshData<Real> *md, Real t_start, Real dt_split);
+
+/**
+ * Whether any loaded package registers a BlockApplyPrimSource.  The drivers use this to
+ * skip the Strang-split half-steps entirely (and the extra PtoU they need) when nothing
+ * would be applied, which is the common case.
+ */
+bool AnyPrimSource(Mesh *pmesh);
 
 /**
  * Apply all registered floors, including any package-specific limiters.

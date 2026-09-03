@@ -78,8 +78,12 @@ std::shared_ptr<KHARMAPackage> KHARMA::InitializeGlobals(
     // Also sets max step increase, so we initialize it to max value to allow any first
     // step size
     params.Add("dt_last", std::numeric_limits<double>::max(), true);
-    // Whether we are computing initial outputs/timestep, or versions in the execution
-    // loop
+    // Time the current sub-step's *output* state represents, i.e. what time-dependent
+    // boundaries should be set to.  Written by the driver at the top of each stage, see
+    // KHARMADriver::MakeTaskCollection.  Use this rather than reconstructing it from
+    // "time" and "dt_last". Also, note that dt_last is DBL_MAX before the loop starts.
+    params.Add("time_substep_end", 0.0, true);
+    // Whether we are computing initial outputs/timestep, or versions in the execution loop
     params.Add("in_loop", false, true);
 
     // Log levels, the other acceptable global
