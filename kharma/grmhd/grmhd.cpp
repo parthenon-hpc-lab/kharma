@@ -846,14 +846,14 @@ void UpdateAveragedCtop(MeshData<Real>* md)
                             GRMHD::calc_4vecs(G, P, m_p, k, jf, i, Loci::center, Dtmp);
                             // Remember our 'cmin' array stores *positive* values!
                             Real cmin_minus;
-                            Flux::vchar_global(G, P, m_p, Dtmp, gam, emhd_params, k, jf,
-                                i, Loci::center, X1DIR, cmax(V1, k, jf, i), cmin_minus);
+                            Flux::vchar(G, P, m_p, Dtmp, gam, emhd_params, k, jf, i,
+                                Loci::center, X1DIR, cmax(V1, k, jf, i), cmin_minus);
                             cmin(V1, k, jf, i) = -cmin_minus;
-                            Flux::vchar_global(G, P, m_p, Dtmp, gam, emhd_params, k, jf,
-                                i, Loci::center, X2DIR, cmax(V2, k, jf, i), cmin_minus);
+                            Flux::vchar(G, P, m_p, Dtmp, gam, emhd_params, k, jf, i,
+                                Loci::center, X2DIR, cmax(V2, k, jf, i), cmin_minus);
                             cmin(V2, k, jf, i) = -cmin_minus;
-                            Flux::vchar_global(G, P, m_p, Dtmp, gam, emhd_params, k, jf,
-                                i, Loci::center, X3DIR, cmax(V3, k, jf, i), cmin_minus);
+                            Flux::vchar(G, P, m_p, Dtmp, gam, emhd_params, k, jf, i,
+                                Loci::center, X3DIR, cmax(V3, k, jf, i), cmin_minus);
                             cmin(V3, k, jf, i) = -cmin_minus;
                         });
                 }
