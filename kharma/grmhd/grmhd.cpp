@@ -82,7 +82,15 @@ std::shared_ptr<KHARMAPackage> Initialize(
     // Fluid gamma for ideal EOS.  Don't guess this.
     // Only ideal EOS are supported, though modifying gamma based on
     // local temperatures would be straightforward.
-    double gamma = pin->GetReal("GRMHD", "gamma");
+    // Prefer <eos>/gamma; fall back to <GRMHD>/gamma for backward compatibility.
+    double gamma;
+    if (pin->DoesParameterExist("eos", "gamma")) {
+        gamma = pin->GetReal("eos", "gamma");
+    } else if (pin->DoesParameterExist("GRMHD", "gamma")) {
+        gamma = pin->GetReal("GRMHD", "gamma");
+    } else {
+        throw std::runtime_error("GRMHD requires that gamma be specified in <eos> or <GRMHD> block!");
+    }
     params.Add("gamma", gamma);
 
     // Proportion of courant condition for timesteps
