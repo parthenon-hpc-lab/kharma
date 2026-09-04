@@ -34,7 +34,7 @@
 #pragma once
 
 // See note in coordintate_embedding
-#include <mpark/variant.hpp>
+#include <ports-of-call/variant.hpp>
 // #include <variant>
 // namespace mpark = std;
 
@@ -876,9 +876,9 @@ class WidepoleTransform
 
 // Bundle coordinates and transforms into umbrella variant types
 // These act as a wannabe "interface" or "parent class" with the exception that access
-// requires "mpark::visit" See coordinate_embedding.hpp
-using SomeBaseCoords = mpark::variant<SphMinkowskiCoords, CartMinkowskiCoords,
+// requires "PortsOfCall::visit" See coordinate_embedding.hpp
+using SomeBaseCoords = PortsOfCall::variant<SphMinkowskiCoords, CartMinkowskiCoords,
     SphBLCoords, SphKSCoords, SphBLExtG, SphKSExtG>;
 using SomeTransform =
-    mpark::variant<NullTransform, SphNullTransform, ExponentialTransform,
+    PortsOfCall::variant<NullTransform, SphNullTransform, ExponentialTransform,
         SuperExponentialTransform, ModifyTransform, FunkyTransform, WidepoleTransform>;

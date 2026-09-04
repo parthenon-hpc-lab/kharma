@@ -1,0 +1,42 @@
+#!/usr/bin/env bash
+
+###########################################################################
+# KHARMA repo pre-commit:
+#
+# Devolopers should run the following to use this:
+#
+#    git config core.hooksPath .githooks
+#
+# git will then only look in the .githooks directory
+# for hooks, so if you have a custom hook for your workflow
+# in the hidden directory, either move it to .githooks
+# and set a local ignore policy in '.git/info/exclude',
+# or use the forwarding steps shown at the end of this
+# script (#2)
+#
+###########################################################################
+
+
+# 1. Run global rules
+echo "Running global pre-commit rules..."
+
+# pre-commit runs from repo root by default,
+# so run the formatter script on everything:
+export KDEV_FORMAT_STAGED=1
+./scripts/format.sh
+unset KDEV_FORMAT_STAGED
+
+# Then need to re-stage so that the formatted version is committed.
+# (The xargs insertion brackets '{}' are helpful if there are no cpp/hpp
+#  files being added, they will be left as-is)
+git diff --staged --name-only --diff-filter=ACMR -z -- \
+    'kharma/**.[ch]pp' 'tests/**.[ch]pp' \
+    | xargs -I {} -0 -t git add {}
+
+# 2. Forward execution to the local repository hook if it exists
+# (credit: Google AI search "git config core hooksPath multiple"
+#  for this forwarding idea)
+if [ -f "./.git/hooks/pre-commit" ]; then
+    echo "Running local repository pre-commit rules..."
+    "./.git/hooks/pre-commit" "$@" || exit 1
+fi
