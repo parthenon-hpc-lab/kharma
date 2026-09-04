@@ -13,8 +13,8 @@ if [[ $HOST == *"rc.fas.harvard.edu" ]]; then
   # System HDF5 doesn't have compression, we don't need it
   EXTRA_FLAGS="-DPARTHENON_DISABLE_HDF5_COMPRESSION=ON" # -DPARTHENON_ENABLE_HOST_COMM_BUFFERS=ON"
 
-  MPI_EXE="srun"
-  MPI_EXTRA_ARGS="--mpi=pmix"
+  MPI_EXE=${MPI_EXE:-"srun"}
+  MPI_EXTRA_ARGS=${MPI_EXTRA_ARGS:-"--mpi=pmix"}
 
   if option "cuda"; then
     if option "volta"; then
@@ -23,11 +23,10 @@ if [[ $HOST == *"rc.fas.harvard.edu" ]]; then
       DEVICE_ARCH=AMPERE80
     fi
 
-    if option "nompi"; then
-      module load gcc/14.2.0-fasrc01
-      module load cuda
-    else
+    if option "nvhpc"; then
       # NVHPC includes Nvidia's MPI that has GPUDirect
+      # Currently segfaults...
+
       # Note this compiles hdf5 with nvc, because mpicc->nvc non-negotiably
       # This is fine as long as you allow shared libraries in HDF5 config
       export MPICH_GPU_SUPPORT_ENABLED=1
@@ -35,6 +34,13 @@ if [[ $HOST == *"rc.fas.harvard.edu" ]]; then
       module load nvhpc
       # Didn't work for me, but you're welcome to try!
       #export CXXFLAGS="$CXXFLAGS -allow-unsupported-compiler"
+
+      # Nvidia's openmpi
+      MPI_EXE="mpirun"
+    else
+      module load gcc/14.2.0-fasrc01
+      module load openmpi/5.0.5-fasrc1
+      module load cuda
     fi
 
     # Avoid Nvidia's compilers
@@ -43,6 +49,7 @@ if [[ $HOST == *"rc.fas.harvard.edu" ]]; then
   else
     # TODO Intel's or AMD's compiler is probably faster
     module load gcc/14.2.0-fasrc01
+    module load openmpi/5.0.5-fasrc1
     module load hdf5
     # General Cannon CPU machines have 112 threads
     export OMP_NUM_THREADS=56
