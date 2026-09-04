@@ -24,7 +24,7 @@ r_in = 2.5
 r_out = 2.e4
 
 <parthenon/time>
-tlim = 4.e4
+tlim = 1.21e5
 
 <driver>
 type = imex
@@ -32,18 +32,18 @@ two_sync = false
 
 <GRMHD>
 cfl = 0.5
-gamma = 1.6666665866
+gamma = 1.6665866858620597
 reconstruction = ppm
 
 <eos>
 type = IdealGas
-gamma = 1.6666665866
+gamma = 1.6665866858620597
 Cv = 1.0
 
 <bondi_rad>
 mdot = 10.0
-T_out = 1.e5
-fp = 1.2e-7
+T_out = 1.e6
+fp = 1.2e-4
 r_in_bondi = 2.5
 
 <b_field>
@@ -75,13 +75,13 @@ fluid_mass_g =  6.203843e12
 
 <parthenon/output0>
 file_type = hdf5
-dt = 100.0
+dt = 500.0
 single_precision_output = true
 variables = prims, cons, rimplflag, rinvflag, pflag
 
 <parthenon/output1>
 file_type = rst
-dt = 100.0
+dt = 500.0
 
 <parthenon/output2>
 file_type = hst

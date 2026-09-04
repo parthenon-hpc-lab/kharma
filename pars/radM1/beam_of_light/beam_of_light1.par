@@ -36,7 +36,7 @@ two_sync = false
 <GRMHD>
 cfl = 0.5
 gamma = 1.6666666666666667
-reconstruction = linear_vl
+reconstruction = weno5_linear
 
 <eos>
 type = IdealGas

@@ -146,7 +146,7 @@ std::shared_ptr<KHARMAPackage> Flux::Initialize(
     // Fallback to TVD reconstruction when these algorithms reconstruct something outside
     // the floors
     bool default_recon_fallback =
-        (recon == "weno5" || recon == "weno5_linear" || recon == "mp5");
+        (recon == "weno5" || recon == "weno5_linear" || recon == "mp5" || recon == "ppmx");
     bool reconstruction_fallback =
         pin->GetOrAddBoolean("flux", "reconstruction_fallback", default_recon_fallback);
     params.Add("reconstruction_fallback", reconstruction_fallback);
