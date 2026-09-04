@@ -38,13 +38,8 @@
 #include "domain.hpp"
 #include "floors_functions.hpp"
 #include "flux.hpp"
+#include "kharma_driver.hpp"
 #include "reductions.hpp"
-
-int Inverter::CountPFlags(MeshData<Real>* md)
-{
-    return Reductions::CountFlags(
-        md, "pflag", Inverter::status_names, IndexDomain::interior, false)[0];
-}
 
 std::shared_ptr<KHARMAPackage> Inverter::Initialize(
     ParameterInput* pin, std::shared_ptr<Packages_t>& packages)
@@ -65,6 +60,15 @@ std::shared_ptr<KHARMAPackage> Inverter::Initialize(
         use_kastaun = true;
     } else if (inverter_name == "none") {
         params.Add("inverter_type", Type::none);
+    }
+
+
+    // An option that exits when someone use onedw with an equation of state that is not ideal gas.
+    if (inverter_name == "onedw") {
+        const std::string eos_name = pin->GetOrAddString("eos", "type", "ideal");
+        if (eos_name != "ideal") {
+            throw std::invalid_argument("onedw inverter only works with ideal gas equation of state");
+        }
     }
 
     // Solver options
@@ -160,6 +164,8 @@ std::shared_ptr<KHARMAPackage> Inverter::Initialize(
         pkg->DomainBoundaryPtoU = Flux::BlockPtoUMHD;
     }
 
+    // But always handle and print the flag
+    pkg->PreStepWork = Inverter::PreStepWork;
     pkg->PostStepDiagnosticsMesh = Inverter::PostStepDiagnostics;
 
     // List (vector) of HistoryOutputVars that will all be enrolled as output variables
@@ -195,7 +201,8 @@ inline void BlockPerformInversion(
 
     if (U.GetDim(4) == 0 || pflag.GetDim(4) == 0) return;
 
-    const Real gam = pmb->packages.Get("GRMHD")->Param<Real>("gamma");
+    const auto& eos_params = pmb->packages.Get("eos")->AllParams();
+    auto eos = eos_params.Get<Microphysics::EOS::EOS>("d.EOS");
 
     auto& pars = pmb->packages.Get("Inverter")->AllParams();
     const Real err_tol = pars.Get<Real>("err_tol");
@@ -223,7 +230,7 @@ inline void BlockPerformInversion(
         KOKKOS_LAMBDA (const int &k, const int &j, const int &i)
         {
             int pflagl = Inverter::u_to_p<inverter>(
-                G, U, m_u, gam, k, j, i, P, m_p, Loci::center, iter_max, err_tol);
+                G, U, m_u, eos, k, j, i, P, m_p, Loci::center, iter_max, err_tol);
             pflag(0, k, j, i) = pflagl;
         });
 }
@@ -248,6 +255,19 @@ void Inverter::BlockUtoP(MeshBlockData<Real>* rc, IndexDomain domain, bool coars
     // later.
     // Reductions::StartFlagReduce(md, "pflag", Inverter::status_names,
     // IndexDomain::interior, false, 1);
+}
+
+int Inverter::CountPFlags(MeshData<Real>* md)
+{
+    return Reductions::CountFlags(
+        md, "pflag", Inverter::status_names, IndexDomain::interior, false)[0];
+}
+
+void Inverter::PreStepWork(Mesh* pmesh, ParameterInput* pin, const SimTime& tm)
+{
+    // Clear all floor flags before each step
+    auto md = pmesh->mesh_data.Get().get();
+    KHARMADriver::Scale(std::vector<std::string>{"pflag"}, md, 0.);
 }
 
 TaskStatus Inverter::PostStepDiagnostics(const SimTime& tm, MeshData<Real>* md)

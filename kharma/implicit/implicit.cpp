@@ -197,7 +197,6 @@ TaskStatus Implicit::Step(MeshData<Real>* md_full_step_init,
     const auto& globals = pmb_full_step_init->packages.Get("Globals")->AllParams();
     const int verbose = globals.Get<int>("verbose");
     const int flag_verbose = globals.Get<int>("flag_verbose");
-    const Real gam = pmb_full_step_init->packages.Get("GRMHD")->Param<Real>("gamma");
 
     const auto& eos_params = pmb_full_step_init->packages.Get("eos")->AllParams();
     auto eos = eos_params.Get<Microphysics::EOS::EOS>("d.EOS");
@@ -365,8 +364,8 @@ TaskStatus Implicit::Step(MeshData<Real>* md_full_step_init,
                                                    : throwaway;
                         Real tau, chi_e, nu_e;
                         EMHD::set_parameters(G, P_sub_step_init_all(b), m_p,
-                            emhd_params_sub_step_init, gam, k, j, i, tau, chi_e, nu_e);
-                        EMHD::implicit_sources(G, P_full_step_init_all(b), m_p, gam, tau,
+                            emhd_params_sub_step_init, eos, k, j, i, tau, chi_e, nu_e);
+                        EMHD::implicit_sources(G, P_full_step_init_all(b), m_p, eos, tau,
                             k, j, i, dUq, dUdP);
                     }
 

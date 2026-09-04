@@ -39,15 +39,10 @@
 #include "grmhd.hpp"
 #include "grmhd_functions.hpp"
 #include "inverter.hpp"
+#include "kharma_driver.hpp"
 #include "pack.hpp"
 
 // Floors.  Apply limits to fluid values to maintain integrable state
-
-int Floors::CountFFlags(MeshData<Real>* md)
-{
-    return Reductions::CountFlags(
-        md, "fflag", FFlag::flag_names, IndexDomain::interior, true)[0];
-}
 
 std::shared_ptr<KHARMAPackage> Floors::Initialize(
     ParameterInput* pin, std::shared_ptr<Packages_t>& packages)
@@ -64,7 +59,7 @@ std::shared_ptr<KHARMAPackage> Floors::Initialize(
     // less reliable but velocity reconstructions potentially more robust.
     // Drift frame floors are now available and preferred when using
     // the implicit solver to avoid UtoP calls.
-    // TODO(BSP) automate/standardize parsing enums like this: classes w/tables like the
+    // TODO(CEP) automate/standardize parsing enums like this: classes w/tables like the
     // flags?
     std::vector<std::string> allowed_floor_frames = {
         "normal", "fluid", "mixed", "mixed_fluid_normal", "mixed_normal_drift", "drift"};
@@ -151,7 +146,7 @@ std::shared_ptr<KHARMAPackage> Floors::Initialize(
     pkg->AddField("Floors.u_floor", m);
 
     // Flag for which floor conditions were violated.  Used for diagnostics
-    // TODO(BSP) Should switch these to "Integer" fields when Parthenon supports it
+    // TODO(CEP) Should switch these to "Integer" fields when Parthenon supports it
     pkg->AddField("fflag", m);
     // When not using UtoP, we still need a "dummy" copy of pflag to write the
     // post-flooring flag to
@@ -178,10 +173,14 @@ std::shared_ptr<KHARMAPackage> Floors::Initialize(
     // floors will be applied during the inversion call.
     // Also allow manually disabling the call, for testing
     if (!disable_call) {
-        // TODO(BSP) THIS IS THE ONLY MeshApplyFloors.  Any others will NOT BE CALLED.
+        // TODO(CEP) THIS IS THE ONLY MeshApplyFloors.  Any others will NOT BE CALLED.
         // Use BlockApplyFloors in your packages or fix Packages::MeshApplyFloors
         pkg->MeshApplyFloors = Floors::ApplyGRMHDFloors;
     }
+    pkg->PostStepDiagnosticsMesh = Floors::PostStepDiagnostics;
+
+    // We still need to look after the fflag, even if we're not adding to it
+    pkg->PreStepWork = Floors::PreStepWork;
     pkg->PostStepDiagnosticsMesh = Floors::PostStepDiagnostics;
 
     // List (vector) of HistoryOutputVars that will all be enrolled as output variables
@@ -237,7 +236,6 @@ TaskStatus Floors::ApplyInitialFloors(
 
     const auto& G = pmb->coords;
 
-    const Real gam = pmb->packages.Get("GRMHD")->Param<Real>("gamma");
     const auto& eos_params = pmb->packages.Get("eos")->AllParams();
     auto eos = eos_params.Get<Microphysics::EOS::EOS>("d.EOS");
 
@@ -284,11 +282,11 @@ TaskStatus Floors::ApplyInitialFloors(
             Real rhoflr_max, uflr_max;
             // Initial floors, so the radius-dependence of floors don't matter that much.
             int fflag = determine_floors(
-                G, P, m_p, gam, k, j, i, floors, floors, rhoflr_max, uflr_max);
+                G, P, m_p, eos, k, j, i, floors, floors, rhoflr_max, uflr_max);
             if (fflag) {
                 apply_floors<InjectionFrame::fluid>(
-                    G, P, m_p, gam, k, j, i, rhoflr_max, uflr_max, U, m_u);
-                apply_ceilings(G, P, m_p, gam, k, j, i, floors, floors, U, m_u);
+                    G, P, m_p, eos, k, j, i, rhoflr_max, uflr_max, U, m_u);
+                apply_ceilings(G, P, m_p, eos, k, j, i, floors, floors, U, m_u);
                 // P->U for any modified zones
                 Flux::p_to_u_mhd(
                     G, P, m_p, emhd_params, eos, k, j, i, U, m_u, Loci::center);
@@ -329,7 +327,8 @@ TaskStatus Floors::DetermineGRMHDFloors(MeshData<Real>* md, IndexDomain domain,
     const int rhofi = floors_map["Floors.rho_floor"].first;
     const int ufi = floors_map["Floors.u_floor"].first;
 
-    const Real gam = pmb0->packages.Get("GRMHD")->Param<Real>("gamma");
+    const auto& eos_params = pmb0->packages.Get("eos")->AllParams();
+    auto eos = eos_params.Get<Microphysics::EOS::EOS>("d.EOS");
 
     const IndexRange3 b = KDomain::GetRange(md, domain);
     const IndexRange block = IndexRange{0, P.GetDim(5) - 1};
@@ -340,12 +339,13 @@ TaskStatus Floors::DetermineGRMHDFloors(MeshData<Real>* md, IndexDomain domain,
             const auto& G = P.GetCoords(b);
             // The inverter might have set some floor flags, so we add to that
             // non-destructively
-            fflag(b, 0, k, j, i) = static_cast<int>(
-                determine_floors(G, P(b), m_p, gam, k, j, i, floors, floors_inner,
-                    floor_vals(b, rhofi, k, j, i), floor_vals(b, ufi, k, j, i)));
+            fflag(b, 0, k, j, i) =
+                static_cast<int>(fflag(b, 0, k, j, i)) |
+                determine_floors(G, P(b), m_p, eos, k, j, i, floors, floors_inner,
+                    floor_vals(b, rhofi, k, j, i), floor_vals(b, ufi, k, j, i));
         });
 
-    // TODO(BSP) if we can somehow guarantee one call/rank we can start the reduction here
+    // TODO(CEP) if we can somehow guarantee one call/rank we can start the reduction here
     // Reductions::StartFlagReduce(md, "fflag", FFlag::flag_names, IndexDomain::interior,
     // true, 0);
 
@@ -407,6 +407,19 @@ TaskStatus Floors::TrackAdditions(MeshData<Real>* md, MeshData<Real>* md_save)
         });
     Kokkos::Profiling::popRegion(); // Task_TrackAdditions
     return TaskStatus::complete;
+}
+
+int Floors::CountFFlags(MeshData<Real>* md)
+{
+    return Reductions::CountFlags(
+        md, "fflag", FFlag::flag_names, IndexDomain::interior, true)[0];
+}
+
+void Floors::PreStepWork(Mesh* pmesh, ParameterInput* pin, const SimTime& tm)
+{
+    // Clear all floor flags before each step
+    auto md = pmesh->mesh_data.Get().get();
+    KHARMADriver::Scale(std::vector<std::string>{"fflag"}, md, 0.);
 }
 
 TaskStatus Floors::PostStepDiagnostics(const SimTime& tm, MeshData<Real>* md)

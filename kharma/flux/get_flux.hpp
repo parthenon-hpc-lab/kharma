@@ -40,8 +40,6 @@
 #include "phoebus_utils/unit_conversions.hpp"
 #include "phoebus_utils/variables.hpp"
 
-using namespace singularity;
-
 #include "domain.hpp"
 #include "floors_functions.hpp"
 
@@ -109,20 +107,25 @@ inline TaskStatus GetFlux(MeshData<Real>* md)
     }
 
     const bool reconstruction_floors = pars.Get<bool>("reconstruction_floors");
+    const bool reconstruction_fallback = pars.Get<bool>("reconstruction_fallback");
     Floors::Prescription floors_temp;
     Floors::Prescription floors_inner_temp;
-    if (reconstruction_floors) {
+    if (reconstruction_floors || reconstruction_fallback) {
         // Apply post-reconstruction floors.
         // Only enabled for WENO since it is not TVD, and only when other
         // floors are enabled.
         floors_temp = packages.Get("Floors")->Param<Floors::Prescription>("prescription");
         floors_inner_temp =
             packages.Get("Floors")->Param<Floors::Prescription>("prescription_inner");
+        if (reconstruction_fallback) {
+            floors_temp.rho_min_const = 0.;
+            floors_temp.u_min_const = 0.;
+            floors_temp.rho_min_geom = 0.;
+            floors_temp.u_min_geom = 0.;
+        }
     }
     const Floors::Prescription& floors = floors_temp;
     const Floors::Prescription& floors_inner = floors_inner_temp;
-
-    const bool reconstruction_fallback = pars.Get<bool>("reconstruction_fallback");    
 
     // Check whether we're using constraint-damping
     // (which requires that a variable be propagated at ctop_max)
@@ -164,11 +167,20 @@ inline TaskStatus GetFlux(MeshData<Real>* md)
     const auto& Fl_all = md->PackVariables(std::vector<std::string>{"Flux.Fl"});
     const auto& Fr_all = md->PackVariables(std::vector<std::string>{"Flux.Fr"});
 
+    auto fflag = md->PackVariables(std::vector<std::string>{"fflag"});
+
     // Get the domain size
     // We need fluxes outside the domain for flux-CT and FOFC: one extra zone update on
     // each side
+    // TODO(CEP) restrict the extra halo to those cases for speed
+
+    // Actual faces where we want fluxes
     const IndexRange3 b =
         KDomain::GetRange(md, IndexDomain::interior, FaceOf(dir), -1, 1);
+    // Cell-centered range: face X needs right-side from cell X-1 but left-side from X
+    const IndexRange3 bc =
+        KDomain::GetRange(md, IndexDomain::interior, FaceOf(dir), -2, 1);
+
     // Get other sizes we need
     const int n1 = pmb0->cellbounds.ncellsi(IndexDomain::entire);
     const IndexRange block = IndexRange{0, cmax.GetDim(5) - 1};
@@ -182,100 +194,142 @@ inline TaskStatus GetFlux(MeshData<Real>* md)
         emhd_params.print();
     }
 
-    // Allocate scratch space
-    const int scratch_level = 1; // 0 is actual scratch (tiny); 1 is HBM
-    const size_t var_size_in_bytes = parthenon::ScratchPad2D<Real>::shmem_size(nvar, n1);
-    const size_t line_size_in_bytes = parthenon::ScratchPad1D<int>::shmem_size(n1);
-    // Allocate enough to cache prims, conserved, and fluxes, for left and right faces,
-    // plus temporaries inside reconstruction (most use none, donor_cell uses one,
-    // linear_vl uses a bunch)
     using RType = KReconstruction::Type;
-    const size_t recon_scratch_bytes =
-        (4 + 1 * (Recon == RType::donor_cell) + 5 * (Recon == RType::linear_vl)) *
-            var_size_in_bytes +
-        line_size_in_bytes;
-    const size_t flux_scratch_bytes = 3 * var_size_in_bytes;
 
     // This isn't a pmb0->par_for_outer because Parthenon's current overloaded definitions
     // do not accept three pairs of bounds, which we need in order to iterate over blocks
     Flag("GetFlux_" + std::to_string(dir) + "_recon");
-    parthenon::par_for_outer(DEFAULT_OUTER_LOOP_PATTERN, "calc_flux_recon",
-        pmb0->exec_space, recon_scratch_bytes, scratch_level, block.s, block.e, b.ks,
-        b.ke, b.js, b.je,
-        KOKKOS_LAMBDA(parthenon::team_mbr_t member,
-                      const int& bl,
+    pmb0->par_for("calc_flux_recon", block.s, block.e, 0, P_all.GetDim(4) - 1, bc.ks,
+        bc.ke, bc.js, bc.je, bc.is, bc.ie,
+        KOKKOS_LAMBDA(const int& bl,
+                      const int& p,
                       const int& k,
-                      const int& j)
+                      const int& j,
+                      const int& i)
         {
             const auto& G = U_all.GetCoords(bl);
-            ScratchPad2D<Real> Pl_s(member.team_scratch(scratch_level), nvar, n1);
-            ScratchPad2D<Real> Pr_s(member.team_scratch(scratch_level), nvar, n1);
-            ScratchPad2D<Real> Plf_s(member.team_scratch(scratch_level), nvar, n1);
-            ScratchPad2D<Real> Prf_s(member.team_scratch(scratch_level), nvar, n1);
-            ScratchPad1D<int> fallback_tvd(member.team_scratch(scratch_level), n1);
 
             // We template on reconstruction type to avoid a big switch statement here.
             // Instead, a version of GetFlux() is generated separately for each
             // reconstruction/direction pair. See reconstruction.hpp for all the
             // implementations.
+
+            // TODO this could be constexpr/templated with only tens more
+            // instantiation lines!
             if (use_ismr) {
-                KReconstruction::ReconstructRowIsmr<Recon, dir>(
-                    member, P_all(bl), k, j, b.is, b.ie, ng_plus_nlevels, Pl_s, Pr_s);
-            } else {
-                KReconstruction::ReconstructRow<Recon, dir>(
-                    member, P_all(bl), k, j, b.is, b.ie, Pl_s, Pr_s);
-            }
-
-            // Sync all threads in the team so that scratch memory is consistent
-            member.team_barrier();
-
-            parthenon::par_for_inner(member, b.is, b.ie,
-                [&](const int& i)
-                {
-                    auto Pl = Kokkos::subview(Pl_s, Kokkos::ALL(), i);
-                    auto Pr = Kokkos::subview(Pr_s, Kokkos::ALL(), i);
-                    // Apply floors to the *reconstructed* primitives, because without TVD
-                    // we have no guarantee they remotely resemble the *centered*
-                    // primitives If we selected to fall back to TVD, the floors are at
-                    // zero (as intended)
-                    if (reconstruction_floors || reconstruction_fallback) {
-                        fallback_tvd(i) = Floors::apply_geo_floors(
-                            G, Pl, m_p, eos, j, i, floors, floors_inner, loc);
-                        fallback_tvd(i) |= Floors::apply_geo_floors(
-                            G, Pr, m_p, eos, j, i, floors, floors_inner, loc);
+                if (dir == 1) {
+                    KReconstruction::reconstruct<Recon>(P_all(bl, p, k, j, i - 2),
+                        P_all(bl, p, k, j, i - 1), P_all(bl, p, k, j, i),
+                        P_all(bl, p, k, j, i + 1), P_all(bl, p, k, j, i + 2),
+                        Pr_all(bl, p, k, j, i), Pl_all(bl, p, k, j, i + 1));
+                } else if (dir == 2) {
+                    KReconstruction::reconstruct<Recon>(P_all(bl, p, k, j - 2, i),
+                        P_all(bl, p, k, j - 1, i), P_all(bl, p, k, j, i),
+                        P_all(bl, p, k, j + 1, i), P_all(bl, p, k, j + 2, i),
+                        Pr_all(bl, p, k, j, i), Pl_all(bl, p, k, j + 1, i));
+                } else if (dir == 3) {
+                    if (j < ng_plus_nlevels ||
+                        j > P_all.GetDim(2) - 1 - ng_plus_nlevels) {
+                        KReconstruction::reconstruct<RType::linear_mc>(
+                            P_all(bl, p, k - 2, j, i), P_all(bl, p, k - 1, j, i),
+                            P_all(bl, p, k, j, i), P_all(bl, p, k + 1, j, i),
+                            P_all(bl, p, k + 2, j, i), Pr_all(bl, p, k, j, i),
+                            Pl_all(bl, p, k + 1, j, i));
+                    } else {
+                        KReconstruction::reconstruct<Recon>(P_all(bl, p, k - 2, j, i),
+                            P_all(bl, p, k - 1, j, i), P_all(bl, p, k, j, i),
+                            P_all(bl, p, k + 1, j, i), P_all(bl, p, k + 2, j, i),
+                            Pr_all(bl, p, k, j, i), Pl_all(bl, p, k + 1, j, i));
                     }
-                });
-            member.team_barrier();
-
-            if (reconstruction_fallback) {
-                // TODO without the whole thing again? Also, option of scheme?
-                KReconstruction::ReconstructRow<RType::ppm, dir>(
-                    member, P_all(bl), k, j, b.is, b.ie, Plf_s, Prf_s);
-                member.team_barrier();
-                for (int p = 0; p <= P_all.GetDim(4) - 1; ++p) {
-                    parthenon::par_for_inner(member, b.is, b.ie,
-                        [&](const int& i)
-                        {
-                            if (fallback_tvd(i)) {
-                                Pl_s(p, i) = Plf_s(p, i);
-                                Pr_s(p, i) = Prf_s(p, i);
-                            }
-                        });
                 }
-                member.team_barrier();
+            } else {
+                if (dir == 1) {
+                    KReconstruction::reconstruct<Recon>(P_all(bl, p, k, j, i - 2),
+                        P_all(bl, p, k, j, i - 1), P_all(bl, p, k, j, i),
+                        P_all(bl, p, k, j, i + 1), P_all(bl, p, k, j, i + 2),
+                        Pr_all(bl, p, k, j, i), Pl_all(bl, p, k, j, i + 1));
+                } else if (dir == 2) {
+                    KReconstruction::reconstruct<Recon>(P_all(bl, p, k, j - 2, i),
+                        P_all(bl, p, k, j - 1, i), P_all(bl, p, k, j, i),
+                        P_all(bl, p, k, j + 1, i), P_all(bl, p, k, j + 2, i),
+                        Pr_all(bl, p, k, j, i), Pl_all(bl, p, k, j + 1, i));
+                } else if (dir == 3) {
+                    KReconstruction::reconstruct<Recon>(P_all(bl, p, k - 2, j, i),
+                        P_all(bl, p, k - 1, j, i), P_all(bl, p, k, j, i),
+                        P_all(bl, p, k + 1, j, i), P_all(bl, p, k + 2, j, i),
+                        Pr_all(bl, p, k, j, i), Pl_all(bl, p, k + 1, j, i));
+                }
             }
-
-            // Copy out state (TODO(CEP) eliminate)
-            for (int p = 0; p < nvar; ++p) {
-                parthenon::par_for_inner(member, b.is, b.ie,
-                    [&](const int& i)
-                    {
-                        Pl_all(bl, p, k, j, i) = Pl_s(p, i);
-                        Pr_all(bl, p, k, j, i) = Pr_s(p, i);
-                    });
-            }
-            member.team_barrier();
         });
+
+    if (reconstruction_floors || reconstruction_fallback) {
+        pmb0->par_for("calc_flux_reconfloor", block.s, block.e, b.ks, b.ke, b.js, b.je,
+            b.is, b.ie,
+            KOKKOS_LAMBDA(const int& bl,
+                        const int& k,
+                        const int& j,
+                        const int& i)
+            {
+                const auto& G = U_all.GetCoords(bl);
+                // Apply floors to the *reconstructed* primitives, because without TVD
+                // we have no guarantee they remotely resemble the *centered*
+                // primitives If we selected to fall back to TVD, the floors are at
+                // zero (as intended)
+                int fflagl = fflag(bl, 0, k, j, i);
+                fflagl |= Floors::apply_geo_floors(
+                    G, Pl_all(bl), m_p, eos, k, j, i, floors, floors_inner, loc);
+                fflagl |= Floors::apply_geo_floors(
+                    G, Pr_all(bl), m_p, eos, k, j, i, floors, floors_inner, loc);
+                fflag(bl, 0, k, j, i) = fflagl;
+            });
+    }
+
+    if (reconstruction_fallback) {
+        pmb0->par_for("calc_flux_reconfallback", block.s, block.e, 0, P_all.GetDim(4) - 1,
+            b.ks, b.ke, b.js, b.je, b.is, b.ie,
+            KOKKOS_LAMBDA(const int& bl,
+                        const int& p,
+                        const int& k,
+                        const int& j,
+                        const int& i)
+            {
+                if ((static_cast<int>(fflag(bl, 0, k, j, i)) &
+                        static_cast<int>(Floors::FFlag::GEOM_RHO_FLUX)) ||
+                    (static_cast<int>(fflag(bl, 0, k, j, i)) &
+                        static_cast<int>(Floors::FFlag::GEOM_U_FLUX))) {
+                    if (dir == 1) {
+                        // Recon left of this cell == right of this face
+                        KReconstruction::reconstruct_left<RType::ppm>(
+                            P_all(bl, p, k, j, i - 2), P_all(bl, p, k, j, i - 1),
+                            P_all(bl, p, k, j, i), P_all(bl, p, k, j, i + 1),
+                            P_all(bl, p, k, j, i + 2), Pr_all(bl, p, k, j, i));
+                        // Recon right of last cell == left of this face
+                        KReconstruction::reconstruct_right<RType::ppm>(
+                            P_all(bl, p, k, j, i - 3), P_all(bl, p, k, j, i - 2),
+                            P_all(bl, p, k, j, i - 1), P_all(bl, p, k, j, i),
+                            P_all(bl, p, k, j, i + 1), Pl_all(bl, p, k, j, i));
+                    } else if (dir == 2) {
+                        KReconstruction::reconstruct_left<RType::ppm>(
+                            P_all(bl, p, k, j - 2, i), P_all(bl, p, k, j - 1, i),
+                            P_all(bl, p, k, j, i), P_all(bl, p, k, j + 1, i),
+                            P_all(bl, p, k, j + 2, i), Pr_all(bl, p, k, j, i));
+                        KReconstruction::reconstruct_right<RType::ppm>(
+                            P_all(bl, p, k, j - 3, i), P_all(bl, p, k, j - 2, i),
+                            P_all(bl, p, k, j - 1, i), P_all(bl, p, k, j, i),
+                            P_all(bl, p, k, j + 1, i), Pl_all(bl, p, k, j, i));
+                    } else if (dir == 3) {
+                        KReconstruction::reconstruct_left<RType::ppm>(
+                            P_all(bl, p, k - 2, j, i), P_all(bl, p, k - 1, j, i),
+                            P_all(bl, p, k, j, i), P_all(bl, p, k + 1, j, i),
+                            P_all(bl, p, k + 2, j, i), Pr_all(bl, p, k, j, i));
+                        KReconstruction::reconstruct_right<RType::ppm>(
+                            P_all(bl, p, k - 3, j, i), P_all(bl, p, k - 2, j, i),
+                            P_all(bl, p, k - 1, j, i), P_all(bl, p, k, j, i),
+                            P_all(bl, p, k + 1, j, i), Pl_all(bl, p, k, j, i));
+                    }
+                }
+            });
+    }
     EndFlag();
 
     // If we have B field on faces, we "must" replace reconstructed version with that
@@ -304,155 +358,83 @@ inline TaskStatus GetFlux(MeshData<Real>* md)
     // At least, we should refactor to template loops on vchar/stress-energy T type
 
     Flag("GetFlux_" + std::to_string(dir) + "_left");
-    parthenon::par_for_outer(DEFAULT_OUTER_LOOP_PATTERN, "calc_flux_left",
-        pmb0->exec_space, flux_scratch_bytes, scratch_level, block.s, block.e, b.ks, b.ke,
-        b.js, b.je,
-        KOKKOS_LAMBDA(parthenon::team_mbr_t member,
-                      const int& bl,
+    parthenon::par_for(DEFAULT_LOOP_PATTERN, "calc_flux_left", pmb0->exec_space, block.s,
+        block.e, b.ks, b.ke, b.js, b.je, b.is, b.ie,
+        KOKKOS_LAMBDA(const int& bl,
                       const int& k,
-                      const int& j)
+                      const int& j,
+                      const int& i)
         {
             const auto& G = U_all.GetCoords(bl);
-            ScratchPad2D<Real> Pl_s(member.team_scratch(scratch_level), nvar, n1);
-            ScratchPad2D<Real> Ul_s(member.team_scratch(scratch_level), nvar, n1);
-            ScratchPad2D<Real> Fl_s(member.team_scratch(scratch_level), nvar, n1);
 
-            // Copy in state (TODO(CEP) eliminate)
-            for (int p = 0; p < nvar; ++p) {
-                parthenon::par_for_inner(member, b.is, b.ie,
-                    [&](const int& i)
-                    {
-                        Pl_s(p, i) = Pl_all(bl, p, k, j, i);
-                    });
+            // Declare temporary vectors
+            FourVectors Dtmp;
+
+            // Left
+            GRMHD::calc_4vecs(G, Pl_all(bl), m_p, k, j, i, loc, Dtmp);
+            Flux::prim_to_flux(G, Pl_all(bl), m_p, Dtmp, emhd_params, eos, k, j, i, 0,
+                Ul_all(bl), m_u, loc);
+            Flux::prim_to_flux(G, Pl_all(bl), m_p, Dtmp, emhd_params, eos, k, j, i, dir,
+                Fl_all(bl), m_u, loc);
+
+            // Magnetosonic speeds
+            Real cmaxL, cminL;
+            Flux::vchar_global(G, Pl_all(bl), m_p, Dtmp, eos, emhd_params, k, j, i, loc,
+                dir, cmaxL, cminL);
+            // Out of the package modification RADM1. Calculate radiation
+            // characteristic speeds.
+            if (use_rad) {
+                Real cmaxL_rad, cminL_rad;
+                Flux::vchar_rad(G, Pl, m_p, Dtmp, eos, emhd_params, opacity_model,
+                    shocktube_kappa_rho, shocktube_kappa_scat, units_cgs, opacities, k, j, i,
+                    loc, dir, cmaxL_rad, cminL_rad);
+                cmax_rad(bl, dir - 1, k, j, i) = m::max(0., cmaxL_rad);
+                cmin_rad(bl, dir - 1, k, j, i) = m::min(0., cminL_rad);
             }
-            member.team_barrier();
-
-            // LEFT FACES
-            parthenon::par_for_inner(member, b.is, b.ie,
-                [&](const int& i)
-                {
-                    auto Pl = Kokkos::subview(Pl_s, Kokkos::ALL(), i);
-                    auto Ul = Kokkos::subview(Ul_s, Kokkos::ALL(), i);
-                    auto Fl = Kokkos::subview(Fl_s, Kokkos::ALL(), i);
-                    // Declare temporary vectors
-                    FourVectors Dtmp;
-
-                    // Left
-                    GRMHD::calc_4vecs(G, Pl, m_p, j, i, loc, Dtmp);
-                    Flux::prim_to_flux(
-                        G, Pl, m_p, Dtmp, emhd_params, eos, j, i, 0, Ul, m_u, loc);
-                    Flux::prim_to_flux(
-                        G, Pl, m_p, Dtmp, emhd_params, eos, j, i, dir, Fl, m_u, loc);
-
-                    // Magnetosonic speeds
-                    Real cmaxL, cminL;
-                    Flux::vchar(G, Pl, m_p, Dtmp, eos, emhd_params, k, j, i, loc, dir,
-                        cmaxL, cminL);
-
-                    // Out of the package modification RADM1. Calculate radiation
-                    // characteristic speeds.
-                    if (use_rad) {
-                        Real cmaxL_rad, cminL_rad;
-                        Flux::vchar_rad(G, Pl, m_p, Dtmp, eos, emhd_params, opacity_model,
-                            shocktube_kappa_rho, shocktube_kappa_scat, units_cgs, opacities, k, j, i,
-                            loc, dir, cmaxL_rad, cminL_rad);
-                        cmax_rad(bl, dir - 1, k, j, i) = m::max(0., cmaxL_rad);
-                        cmin_rad(bl, dir - 1, k, j, i) = m::min(0., cminL_rad);
-                    }
-
-                    // Record speeds
-                    cmax(bl, dir - 1, k, j, i) = m::max(0., cmaxL);
-                    cmin(bl, dir - 1, k, j, i) = m::min(0., cminL);
-                });
-            member.team_barrier();
-
-            // Copy out state
-            for (int p = 0; p < nvar; ++p) {
-                parthenon::par_for_inner(member, b.is, b.ie,
-                    [&](const int& i)
-                    {
-                        Ul_all(bl, p, k, j, i) = Ul_s(p, i);
-                        Fl_all(bl, p, k, j, i) = Fl_s(p, i);
-                    });
-            }
+            // Record speeds
+            cmax(bl, dir - 1, k, j, i) = m::max(0., cmaxL);
+            cmin(bl, dir - 1, k, j, i) = m::min(0., cminL);
         });
     EndFlag();
 
     Flag("GetFlux_" + std::to_string(dir) + "_right");
-    parthenon::par_for_outer(DEFAULT_OUTER_LOOP_PATTERN, "calc_flux_right",
-        pmb0->exec_space, flux_scratch_bytes, scratch_level, block.s, block.e, b.ks, b.ke,
-        b.js, b.je,
-        KOKKOS_LAMBDA(parthenon::team_mbr_t member,
-                      const int& bl,
+    parthenon::par_for(DEFAULT_LOOP_PATTERN, "calc_flux_right", pmb0->exec_space, block.s,
+        block.e, b.ks, b.ke, b.js, b.je, b.is, b.ie,
+        KOKKOS_LAMBDA(const int& bl,
                       const int& k,
-                      const int& j)
+                      const int& j,
+                      const int& i)
         {
             const auto& G = U_all.GetCoords(bl);
-            ScratchPad2D<Real> Pr_s(member.team_scratch(scratch_level), nvar, n1);
-            ScratchPad2D<Real> Ur_s(member.team_scratch(scratch_level), nvar, n1);
-            ScratchPad2D<Real> Fr_s(member.team_scratch(scratch_level), nvar, n1);
 
-            // Copy in state (TODO(CEP) eliminate)
-            for (int p = 0; p < nvar; ++p) {
-                parthenon::par_for_inner(member, b.is, b.ie,
-                    [&](const int& i)
-                    {
-                        Pr_s(p, i) = Pr_all(bl, p, k, j, i);
-                    });
+            // Declare temporary vectors
+            FourVectors Dtmp;
+            // Right
+            GRMHD::calc_4vecs(G, Pr_all(bl), m_p, k, j, i, loc, Dtmp);
+            Flux::prim_to_flux(G, Pr_all(bl), m_p, Dtmp, emhd_params, eos, k, j, i, 0,
+                Ur_all(bl), m_u, loc);
+            Flux::prim_to_flux(G, Pr_all(bl), m_p, Dtmp, emhd_params, eos, k, j, i, dir,
+                Fr_all(bl), m_u, loc);
+
+            // Magnetosonic speeds
+            Real cmaxR, cminR;
+            Flux::vchar(G, Pr, m_p, Dtmp, eos, emhd_params, k, j, i, loc, dir,
+                cmaxR, cminR);
+
+            if (use_rad) {
+                Real cmaxR_rad, cminR_rad;
+                Flux::vchar_rad(G, Pr, m_p, Dtmp, eos, emhd_params, opacity_model,
+                    shocktube_kappa_rho, shocktube_kappa_scat, units_cgs, opacities, k, j, i,
+                    loc, dir, cmaxR_rad, cminR_rad);
+                cmax_rad(bl, dir - 1, k, j, i) =
+                    m::max(cmax_rad(bl, dir - 1, k, j, i), cmaxR_rad);
+                cmin_rad(bl, dir - 1, k, j, i) =
+                    -m::min(cmin_rad(bl, dir - 1, k, j, i), cminR_rad);
             }
-            member.team_barrier();
 
-            // RIGHT FACES, finalize signal speed
-            parthenon::par_for_inner(member, b.is, b.ie,
-                [&](const int& i)
-                {
-                    auto Pr = Kokkos::subview(Pr_s, Kokkos::ALL(), i);
-                    auto Ur = Kokkos::subview(Ur_s, Kokkos::ALL(), i);
-                    auto Fr = Kokkos::subview(Fr_s, Kokkos::ALL(), i);
-                    // Declare temporary vectors
-                    FourVectors Dtmp;
-                    // Right
-                    GRMHD::calc_4vecs(G, Pr, m_p, j, i, loc, Dtmp);
-                    Flux::prim_to_flux(
-                        G, Pr, m_p, Dtmp, emhd_params, eos, j, i, 0, Ur, m_u, loc);
-                    Flux::prim_to_flux(
-                        G, Pr, m_p, Dtmp, emhd_params, eos, j, i, dir, Fr, m_u, loc);
-
-                    // Magnetosonic speeds
-                    Real cmaxR, cminR;
-                    Flux::vchar(G, Pr, m_p, Dtmp, eos, emhd_params, k, j, i, loc, dir,
-                        cmaxR, cminR);
-
-                    // Out of the package modification RADM1. Calculate radiation
-                    // characteristic speeds.
-                    if (use_rad) {
-                        Real cmaxR_rad, cminR_rad;
-                        Flux::vchar_rad(G, Pr, m_p, Dtmp, eos, emhd_params, opacity_model,
-                            shocktube_kappa_rho, shocktube_kappa_scat, units_cgs, opacities, k, j, i,
-                            loc, dir, cmaxR_rad, cminR_rad);
-                        cmax_rad(bl, dir - 1, k, j, i) =
-                            m::max(cmax_rad(bl, dir - 1, k, j, i), cmaxR_rad);
-                        cmin_rad(bl, dir - 1, k, j, i) =
-                            -m::min(cmin_rad(bl, dir - 1, k, j, i), cminR_rad);
-                    }
-
-                    // Calculate cmax/min based on comparison with cached values
-                    cmax(bl, dir - 1, k, j, i) =
-                        m::max(cmax(bl, dir - 1, k, j, i), cmaxR);
-                    cmin(bl, dir - 1, k, j, i) =
-                        -m::min(cmin(bl, dir - 1, k, j, i), cminR);
-                });
-            member.team_barrier();
-
-            // Copy out state
-            for (int p = 0; p < nvar; ++p) {
-                parthenon::par_for_inner(member, b.is, b.ie,
-                    [&](const int& i)
-                    {
-                        Ur_all(bl, p, k, j, i) = Ur_s(p, i);
-                        Fr_all(bl, p, k, j, i) = Fr_s(p, i);
-                    });
-            }
+            // Calculate cmax/min based on comparison with cached values
+            cmax(bl, dir - 1, k, j, i) = m::max(cmax(bl, dir - 1, k, j, i), cmaxR);
+            cmin(bl, dir - 1, k, j, i) = -m::min(cmin(bl, dir - 1, k, j, i), cminR);
         });
     EndFlag();
 

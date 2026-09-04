@@ -75,33 +75,19 @@ std::shared_ptr<KHARMAPackage> Initialize(ParameterInput *pin, std::shared_ptr<P
   bool needs_ye = false;
   bool provides_entropy = false;
   if (eos_type.compare(IdealGas::EosType()) == 0) {
-
-    // If none is especified also throw an error
-    if (!pin->DoesParameterExist("GRMHD", "gamma") && !pin->DoesParameterExist(block_name, "gamma")) {
-      throw std::runtime_error("gamma must be specified in either GRMHD or EOS block!");
+    Real gamma1;
+    // Check if there is gamma in <GRMHD> block for backwards compatibility
+    if(!pin -> DoesParameterExist("GRMHD", "gamma") && !pin -> DoesParameterExist(block_name, "gamma")) {
+      throw std::runtime_error("IdealGas EOS requires that gamma be specified in <GRMHD> or <eos> block!");
     }
 
-    // Check if gamma is present in GRMHD or eos, backwards compatibility with old input files
-    Real gamma;
-    if (pin->DoesParameterExist("GRMHD", "gamma") && pin->DoesParameterExist(block_name, "gamma")) {
-      const Real gamma_grmhd = pin->GetReal("GRMHD", "gamma");
-      const Real gamma_eos = pin->GetReal(block_name, "gamma");
-      if (gamma_grmhd != gamma_eos) {
-        throw std::runtime_error("gamma values in GRMHD and EOS blocks do not match!");
-      }
-      gamma = gamma_grmhd;
-    } else if (pin->DoesParameterExist("GRMHD", "gamma")) {
-      // Specified in GRMHD but not EOS: use the GRMHD value
-      gamma = pin->GetOrAddReal(block_name, "gamma", pin->GetReal("GRMHD", "gamma"));
+    if(pin -> DoesParameterExist("GRMHD", "gamma")) {
+      gamma1 = pin->GetReal("GRMHD", std::string("gamma"));
     } else {
-      // Specified in EOS but not GRMHD
-      gamma = pin->GetReal(block_name, "gamma");
+      gamma1 = pin->GetReal(block_name, std::string("gamma"));
     }
 
-    const Real gm1 = gamma - 1.0;
-    if (!pin->DoesParameterExist(block_name, "Cv")) {
-      PARTHENON_WARN("Cv not specified in EOS block, defaulting to Cv = 1.0!");
-    }
+    const Real gm1 = gamma1 - 1.0;
     const Real Cv = pin->GetOrAddReal(block_name, "Cv", 1.0);
     params.Add("gm1", gm1);
     params.Add("Cv", Cv);

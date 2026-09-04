@@ -17,18 +17,20 @@
 #include <memory>
 #include <parthenon/package.hpp>
 
-#include "grmhd_functions.hpp"
+#include "kharma_package.hpp"
 
 #include <singularity-eos/eos/eos_ideal.hpp>
 #include <singularity-eos/eos/eos_variant.hpp>
 #include <singularity-eos/eos/modifiers/eos_unitsystem.hpp>
 
+
 #ifdef SPINER_USE_HDF
 #include <singularity-eos/eos/eos_stellar_collapse.hpp>
 #endif
 
-using namespace parthenon::package::prelude;
 
+
+using namespace parthenon::package::prelude;
 namespace Microphysics {
 
 //  using MyEOS=singularity::impl::Variant<IdealGas>;

@@ -57,7 +57,6 @@ void InsertBlob(MeshBlockData<Real>* rc, ParameterInput* pin)
     const VarMap m_p(prims_map, false);
 
     GRCoordinates G = pmb->coords;
-    Real gam = pmb->packages.Get("GRMHD")->Param<Real>("gamma");
 
     Real desired_sigma = pin->GetOrAddReal("blob", "desired_sigma", 1.1);
     Real u_over_rho = pin->GetOrAddReal("blob", "u_over_rho", 50.0);

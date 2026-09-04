@@ -696,7 +696,6 @@ void KBoundaries::CheckInflow(
 {
     auto pmb = rc->GetBlockPointer();
     const auto& G = pmb->coords;
-    const Real gam = pmb->packages.Get("GRMHD")->Param<Real>("gamma");
 
     PackIndexMap prims_map;
     auto P = GRMHD::PackMHDPrims(rc.get(), prims_map, coarse);
@@ -848,7 +847,6 @@ TaskStatus KBoundaries::FixFlux(MeshData<Real>* md)
 
                     const EMHD::EMHD_parameters& emhd_params =
                         EMHD::GetEMHDParameters(pmb->packages);
-                    const Real gam = pmb->packages.Get("GRMHD")->Param<Real>("gamma");
                     const auto& G = pmb->coords;
                     const int nvar = F.GetDim(4);
                     // Loci "outer" and "inner" refer to right and left.

@@ -70,8 +70,6 @@ static constexpr int TEMP = ipow(2, 10);
 static constexpr int GAMMA = ipow(2, 11);
 static constexpr int KTOT = ipow(2, 12);
 // Separate flags for when the floors are applied after reconstruction.
-// Not yet used, as this will likely have some speed penalty paid even if
-// the flags aren't written
 static constexpr int GEOM_RHO_FLUX = ipow(2, 13);
 static constexpr int GEOM_U_FLUX = ipow(2, 14);
 // Yet more flags for floors hit during inversion
@@ -102,8 +100,9 @@ static const std::map<int, std::string> flag_names = {
     {B_RHO, "B_RHO: Ceiling on plasma sigma"}, {B_U, "B_U: Ceiling on plasma beta"},
     {GAMMA, "GAMMA: Direct limit on Lorentz factor"}, {TEMP, "TEMP: Temperature ceiling"},
     {KTOT, "KTOT: Entropy ceiling"},
-    {GEOM_RHO_FLUX, "GEOM_RHO_FLUX: Geometric rho post-reconstruction"},
-    {GEOM_U_FLUX, "GEOM_U_FLUX: Geometric u post-reconstruction"},
+    {GEOM_RHO_FLUX,
+        "GEOM_RHO_FLUX: Geometric rho floor at face or reconstruction fallback"},
+    {GEOM_U_FLUX, "GEOM_U_FLUX: Geometric u floor at face or reconstruction fallback"},
     {FIXUP_ENERGY, "FIXUP_ENERGY: Total energy backstop"},
     {FIXUP_VEL, "FIXUP_VEL: Internal energy backstop, recovered some velocity"},
     {FIXUP_VEL_FAILED, "FIXUP_VEL_FAILED: Velocity recovery failed"},
@@ -220,7 +219,7 @@ inline Prescription MakePrescription(
 inline Prescription MakePrescriptionInner(parthenon::ParameterInput* pin,
     Prescription p_outer, std::string block = "floors_inner")
 {
-    // TODO(BSP) I wonder if there's an easier way to "set if parameter exists" from pin,
+    // TODO(CEP) I wonder if there's an easier way to "set if parameter exists" from pin,
     // that would be broadly useful
     Prescription p_inner;
 
@@ -314,6 +313,11 @@ TaskStatus ApplyInitialFloors(
  * Count up all nonzero FFlags on md.  Used for history file reductions.
  */
 int CountFFlags(MeshData<Real>* md);
+
+/**
+ * Clear the floor flag before each step
+ */
+void PreStepWork(Mesh* pmesh, ParameterInput* pin, const SimTime& tm);
 
 /**
  * Record any changes in conserved variables since the application of flux divergence +

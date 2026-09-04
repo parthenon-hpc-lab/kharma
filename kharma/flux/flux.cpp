@@ -86,6 +86,8 @@ std::shared_ptr<KHARMAPackage> Flux::Initialize(
     } else if (pin->DoesParameterExist("GRMHD", "reconstruction")) {
         default_recon_s = pin->GetString("GRMHD", "reconstruction");
     }
+    // Probably nobody has specified donor_cell_c in years, should remove
+    // Indicated cell-wise vs row-wise donor cell recon
     std::vector<std::string> recon_allowed_vals = {"donor_cell", "donor_cell_c",
         "linear_vl", "linear_mc", "weno5", "weno5_linear", "ppm", "ppmx", "mp5"};
     std::string recon = pin->GetOrAddString(
@@ -100,11 +102,8 @@ std::shared_ptr<KHARMAPackage> Flux::Initialize(
             "Lowered reconstructions can only be enabled with weno5!");
 
     int stencil = 0;
-    if (recon == "donor_cell") {
+    if (recon == "donor_cell" || recon == "donor_cell_c") {
         params.Add("recon", KReconstruction::Type::donor_cell);
-        stencil = 1;
-    } else if (recon == "donor_cell_c") {
-        params.Add("recon", KReconstruction::Type::donor_cell_c);
         stencil = 1;
     } else if (recon == "linear_vl") {
         params.Add("recon", KReconstruction::Type::linear_vl);
@@ -145,8 +144,8 @@ std::shared_ptr<KHARMAPackage> Flux::Initialize(
 
     // Fallback to TVD reconstruction when these algorithms reconstruct something outside
     // the floors
-    bool default_recon_fallback =
-        (recon == "weno5" || recon == "weno5_linear" || recon == "mp5" || recon == "ppmx");
+    bool default_recon_fallback = (recon == "weno5" || recon == "weno5_linear" ||
+                                   recon == "mp5" || recon == "ppmx");
     bool reconstruction_fallback =
         pin->GetOrAddBoolean("flux", "reconstruction_fallback", default_recon_fallback);
     params.Add("reconstruction_fallback", reconstruction_fallback);
@@ -300,8 +299,6 @@ TaskStatus Flux::BlockPtoUMHD(MeshBlockData<Real>* rc, IndexDomain domain, bool 
     // Pointers
     auto pmb = rc->GetBlockPointer();
     // Options
-    const auto& pars = pmb->packages.Get("GRMHD")->AllParams();
-    const Real gam = pars.Get<Real>("gamma");
 
     const auto& eos_params = pmb->packages.Get("eos")->AllParams();
     auto eos = eos_params.Get<Microphysics::EOS::EOS>("d.EOS");
@@ -335,9 +332,6 @@ TaskStatus Flux::BlockPtoU(MeshBlockData<Real>* rc, IndexDomain domain, bool coa
     // Pointers
     auto pmb = rc->GetBlockPointer();
     // Options
-    const auto& pars = pmb->packages.Get("GRMHD")->AllParams();
-    const Real gam = pars.Get<Real>("gamma");
-
     const auto& eos_params = pmb->packages.Get("eos")->AllParams();
     auto eos = eos_params.Get<Microphysics::EOS::EOS>("d.EOS");
 
@@ -386,8 +380,7 @@ TaskStatus Flux::BlockPtoU_Send(MeshBlockData<Real>* rc, IndexDomain domain, boo
     auto pmb = rc->GetBlockPointer();
     const int ndim = pmb->pmy_mesh->ndim;
     // Options
-    const auto& pars = pmb->packages.Get("GRMHD")->AllParams();
-    const Real gam = pars.Get<Real>("gamma");
+
 
     const auto& eos_params = pmb->packages.Get("eos")->AllParams();
     auto eos = eos_params.Get<Microphysics::EOS::EOS>("d.EOS");
@@ -464,8 +457,6 @@ void Flux::AddGeoSource(MeshData<Real>* md, MeshData<Real>* mdudt, IndexDomain d
     auto pmb0 = md->GetBlockData(0)->GetBlockPointer();
     auto pkgs = pmb0->packages;
     // Options
-    const auto& pars = pkgs.Get("GRMHD")->AllParams();
-    const Real gam = pars.Get<Real>("gamma");
     const auto& eos_params = pkgs.Get("eos")->AllParams();
     auto eos = eos_params.Get<Microphysics::EOS::EOS>("d.EOS");
 

@@ -212,7 +212,9 @@ TaskStatus SeedBFieldType(MeshBlockData<Real>* rc, ParameterInput* pin,
             case BSeedType::sane:
             case BSeedType::mad:
             case BSeedType::mad_quadrupole:
+            case BSeedType::mcaf:
             case BSeedType::r3s3:
+            case BSeedType::r3s3_min_rho:
             case BSeedType::r5s5:
             case BSeedType::gaussian:
                 // Torus parameters
@@ -221,7 +223,7 @@ TaskStatus SeedBFieldType(MeshBlockData<Real>* rc, ParameterInput* pin,
                 kappa = pin->GetReal("torus", "kappa");
                 tilt = pin->GetReal("torus", "tilt") / 180. * M_PI;
                 // Other things we need only for torus evaluation
-                gam = pmb->packages.Get("GRMHD")->Param<Real>("gamma");
+                gam = pmb->packages.Get("eos")->Param<Real>("gm1") + 1.0;
                 rho_norm = pmb->packages.Get("GRMHD")->Param<Real>("rho_norm");
                 a = G.coords.get_a();
                 break;
@@ -230,7 +232,7 @@ TaskStatus SeedBFieldType(MeshBlockData<Real>* rc, ParameterInput* pin,
                 arg1 = pin->GetReal("orszag_tang", "phase");
                 break;
             case BSeedType::r1s2:
-                gam = pmb->packages.Get("GRMHD")->Param<Real>("gamma");
+                gam = pmb->packages.Get("eos")->Param<Real>("gm1") + 1.0;
                 n = 1. / (gam - 1.);
                 rs = pin->GetOrAddReal("bondi", "rs", m::sqrt(1e5));
                 if (m::abs(n - 1.5) < 0.01)
@@ -416,7 +418,6 @@ TaskStatus SeedBField(MeshData<Real>* md, ParameterInput* pin)
         // I could make this a map or something,
         // but this is the only place I decode it.
         // TODO could also save it to a package...
-        // TODO accumulate TaskStatus properly?
         if (b_field_type == "constant") {
             status = SeedBFieldType<BSeedType::constant>(rc, pin);
         } else if (b_field_type == "monopole") {
@@ -430,8 +431,12 @@ TaskStatus SeedBField(MeshData<Real>* md, ParameterInput* pin)
             status = SeedBFieldType<BSeedType::mad>(rc, pin);
         } else if (b_field_type == "mad_quadrupole") {
             status = SeedBFieldType<BSeedType::mad_quadrupole>(rc, pin);
+        } else if (b_field_type == "mcaf") {
+            status = SeedBFieldType<BSeedType::mcaf>(rc, pin);
         } else if (b_field_type == "r3s3") {
             status = SeedBFieldType<BSeedType::r3s3>(rc, pin);
+        } else if (b_field_type == "r3s3_min_rho") {
+            status = SeedBFieldType<BSeedType::r3s3_min_rho>(rc, pin);
         } else if (b_field_type == "steep" || b_field_type == "r5s5") {
             status = SeedBFieldType<BSeedType::r5s5>(rc, pin);
         } else if (b_field_type == "gaussian") {

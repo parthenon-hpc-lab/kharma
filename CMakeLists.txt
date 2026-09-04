@@ -25,7 +25,7 @@ set(PARTHENON_LINT_DEFAULT OFF CACHE BOOL "KHARMA Override")
 # Attempt HDF5 compression, requires recent/standard HDF5. YMMV
 set(PARTHENON_DISABLE_HDF5_COMPRESSION OFF CACHE BOOL "KHARMA Override")
 # Don't build sparse (selectively-allocated) variable support
-set(PARTHENON_DISABLE_SPARSE ON CACHE BOOL "KHARMA Override")
+set(PARTHENON_DISABLE_SPARSE OFF CACHE BOOL "KHARMA Override")
 # Set to move MPI buffers to host; slower but less crashy
 # Favor setting this per-machine in machines/
 set(PARTHENON_ENABLE_HOST_COMM_BUFFERS OFF CACHE BOOL "KHARMA Override")

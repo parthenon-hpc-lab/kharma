@@ -107,6 +107,13 @@ TaskStatus Backstop(MeshBlockData<Real>* rc);
 int CountPFlags(MeshData<Real>* md);
 
 /**
+ * Clear the inverter flag before each step.
+ * Generally invocations of UtoP will clear/not respect existing pflag,
+ * BUT useful for partial-domain calls and for consistency
+ */
+void PreStepWork(Mesh* pmesh, ParameterInput* pin, const SimTime& tm);
+
+/**
  * Print details of any inversion failures or fixed zones
  */
 TaskStatus PostStepDiagnostics(const SimTime& tm, MeshData<Real>* md);

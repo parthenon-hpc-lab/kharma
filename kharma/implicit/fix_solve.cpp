@@ -61,7 +61,6 @@ TaskStatus Implicit::FixSolve(MeshBlockData<Real>* mbd)
 
     GridScalar solve_fail = mbd->Get("solve_fail").data;
 
-    const Real gam = pmb->packages.Get("GRMHD")->Param<Real>("gamma");
     const int flag_verbose = pmb->packages.Get("Globals")->Param<int>("flag_verbose");
 
     pmb->par_for("fix_solver_failures", b.ks, b.ke, b.js, b.je, b.is, b.ie,
