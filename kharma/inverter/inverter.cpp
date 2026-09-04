@@ -40,6 +40,7 @@
 #include "flux.hpp"
 #include "kharma_driver.hpp"
 #include "reductions.hpp"
+#include <stdexcept>
 
 std::shared_ptr<KHARMAPackage> Inverter::Initialize(
     ParameterInput* pin, std::shared_ptr<Packages_t>& packages)
@@ -121,6 +122,13 @@ std::shared_ptr<KHARMAPackage> Inverter::Initialize(
             "Inverter parameters error: cannot recover with backstop_recover_vel and "
             "backstop_recover_u!  Please choose one option.");
     }
+
+    // When to stop the trainwreck
+    Real kill_on_pflags_pct = pin->GetOrAddReal("inverter", "kill_on_pflags_pct", 5);
+    params.Add("kill_on_pflags_pct", kill_on_pflags_pct);
+    bool kill_on_any_max_iter =
+        pin->GetOrAddBoolean("inverter", "kill_on_any_max_iter", false);
+    params.Add("kill_on_any_max_iter", kill_on_any_max_iter);
 
     // Flag denoting UtoP inversion failures
     // Needs boundary sync if the fixup code will use neighbors, and if
@@ -241,10 +249,6 @@ void Inverter::BlockUtoP(MeshBlockData<Real>* rc, IndexDomain domain, bool coars
         case Type::none:
             break;
     }
-    // This is dangerous since there are many blocks/packs and we need one reduction. For
-    // later.
-    // Reductions::StartFlagReduce(md, "pflag", Inverter::status_names,
-    // IndexDomain::interior, false, 1);
 }
 
 int Inverter::CountPFlags(MeshData<Real>* md)
@@ -265,26 +269,33 @@ TaskStatus Inverter::PostStepDiagnostics(const SimTime& tm, MeshData<Real>* md)
     auto pmesh = md->GetMeshPointer();
     auto pmb0 = md->GetBlockData(0)->GetBlockPointer();
     // Options
-    const auto& pars = pmesh->packages.Get("Globals")->AllParams();
-    const int flag_verbose = pars.Get<int>("flag_verbose");
+    const auto& globals = pmesh->packages.Get("Globals")->AllParams();
+    const auto flag_verbose = globals.Get<int>("flag_verbose");
+    const auto& pars = pmesh->packages.Get("Inverter")->AllParams();
+    const auto kill_on_any_max_iter = pars.Get<bool>("kill_on_any_max_iter");
+    const auto kill_on_pflags_pct = pars.Get<Real>("kill_on_pflags_pct");
 
     // Debugging/diagnostic info about inversion flags
-    // TODO grab the total and die on too many
-    if (flag_verbose >= 1) {
-        // TODO this should move into UtoP when everything goes MeshData
-        Reductions::StartFlagReduce(
-            md, "pflag", Inverter::status_names, IndexDomain::interior, false, 1);
-        Reductions::CheckFlagReduceAndPrintHits(
-            md, "pflag", Inverter::status_names, IndexDomain::interior, false, 1);
+    Reductions::StartFlagReduce(
+        md, "pflag", Inverter::status_names, IndexDomain::interior, false, 1);
+    auto totals = Reductions::CheckFlagReduceAndPrintHits(
+        md, "pflag", Inverter::status_names, IndexDomain::interior, false, 1);
 
-        // If we're the only floors, print those too
-        if (!pmesh->packages.AllPackages().count("Floors")) {
-            Reductions::StartFlagReduce(
-                md, "fflag", Floors::FFlag::flag_names, IndexDomain::interior, true, 0);
-            // Debugging/diagnostic info about floors
-            Reductions::CheckFlagReduceAndPrintHits(
-                md, "fflag", Floors::FFlag::flag_names, IndexDomain::interior, true, 0);
-        }
+    IndexRange ib = md->GetBoundsI(IndexDomain::interior);
+    IndexRange jb = md->GetBoundsJ(IndexDomain::interior);
+    IndexRange kb = md->GetBoundsK(IndexDomain::interior);
+    int n_cells =
+        pmesh->nbtotal * (kb.e - kb.s + 1) * (jb.e - jb.s + 1) * (ib.e - ib.s + 1);
+
+    Real pflags_pct = ((Real)totals[0]) / n_cells * 100.;
+    if ((kill_on_pflags_pct > 0.) && (pflags_pct > kill_on_pflags_pct)) {
+        throw std::runtime_error(
+            string_format("Too many pflags to continue! (%d, %f %) Quitting...",
+                totals[0], pflags_pct));
+    }
+
+    if (totals[(int)Status::max_iter] > 0 && kill_on_any_max_iter) {
+        throw std::runtime_error("Encountered max iter! Quitting...");
     }
 
     return TaskStatus::complete;

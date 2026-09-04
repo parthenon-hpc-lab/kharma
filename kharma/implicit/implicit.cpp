@@ -679,12 +679,12 @@ TaskStatus Implicit::PostStepDiagnostics(const SimTime& tm, MeshData<Real>* md)
     const int flag_verbose = pars.Get<int>("flag_verbose");
 
     // Debugging/diagnostic info about implicit solver
-    if (flag_verbose > 0) {
-        Reductions::StartFlagReduce(
-            md, "solve_fail", Implicit::status_names, IndexDomain::interior, false, 2);
-        Reductions::CheckFlagReduceAndPrintHits(
-            md, "solve_fail", Implicit::status_names, IndexDomain::interior, false, 2);
-    }
+    Reductions::StartFlagReduce(
+        md, "solve_fail", Implicit::status_names, IndexDomain::interior, false, 2);
+    Reductions::CheckFlagReduceAndPrintHits(
+        md, "solve_fail", Implicit::status_names, IndexDomain::interior, false, 2);
+
+    // TODO(CEP) Die on too many solver failures (accuracy failures excepted)
 
     return TaskStatus::complete;
 }
