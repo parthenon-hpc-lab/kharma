@@ -499,45 +499,43 @@ TaskID KHARMADriver::AddStateUpdateIdealGuess(TaskID& t_start, TaskList& tl,
     return t_copy_prims | t_update;
 }
 
-void KHARMADriver::SetGlobalTimeStep()
-{
-    // TODO(CEP) apply the limits from GRMHD package here
-    if (tm.dt < 0.1 * std::numeric_limits<Real>::max()) {
-        tm.dt *= 2.0;
-    }
-    Real big = std::numeric_limits<Real>::max();
-    auto pmb_dt = pmesh->block_list[0];
-    bool set_block = false;
-    for (auto const& pmb : pmesh->block_list) {
-        if (pmb->NewDt() < tm.dt) {
-            tm.dt = pmb->NewDt();
-            pmb_dt = pmb;
-        }
-        pmb->SetAllowedDt(big);
-    }
-    const int& verbose = pmesh->packages.Get("Globals")->Param<int>("verbose");
-    if (verbose > 1) {
-        if (set_block) {
-            fprintf(stderr, "Dt set by %d w/range X1 %g %g, X2 %g %g, X3 %g %g\n",
-                pmb_dt->gid, pmb_dt->block_size.xmin(X1DIR),
-                pmb_dt->block_size.xmax(X1DIR), pmb_dt->block_size.xmin(X2DIR),
-                pmb_dt->block_size.xmax(X2DIR), pmb_dt->block_size.xmin(X3DIR),
-                pmb_dt->block_size.xmax(X3DIR));
-        } else {
-            fprintf(stderr, "Dt set by doubling\n");
-        }
-    }
-
-    // TODO(CEP) start reduce at the end of the per-meshblock stuff, then check it here
-#ifdef MPI_PARALLEL
-    PARTHENON_MPI_CHECK(MPI_Allreduce(
-        MPI_IN_PLACE, &tm.dt, 1, MPI_PARTHENON_REAL, MPI_MIN, MPI_COMM_WORLD));
-#endif
-
-    if (tm.time < tm.tlim &&
-        (tm.tlim - tm.time) < tm.dt) // timestep would take us past desired endpoint
-        tm.dt = tm.tlim - tm.time;
-}
+// TODO(CEP) bring back as extra prints/limits only, calling up to
+// EvolutionDriver::SetGlobalTimeStep? void KHARMADriver::SetGlobalTimeStep()
+// {
+//     if (tm.dt < 0.1 * std::numeric_limits<Real>::max()) {
+//         tm.dt *= 2.0;
+//     }
+//     Real big = std::numeric_limits<Real>::max();
+//     auto pmb_dt = pmesh->block_list[0];
+//     bool set_block = false;
+//     for (auto const& pmb : pmesh->block_list) {
+//         if (pmb->NewDt() < tm.dt) {
+//             tm.dt = pmb->NewDt();
+//             pmb_dt = pmb;
+//         }
+//         pmb->SetAllowedDt(big);
+//     }
+//     const int& verbose = pmesh->packages.Get("Globals")->Param<int>("verbose");
+//     if (verbose > 1) {
+//         if (set_block) {
+//             fprintf(stderr, "Dt set by %d w/range X1 %g %g, X2 %g %g, X3 %g %g\n",
+//                 pmb_dt->gid, pmb_dt->block_size.xmin(X1DIR),
+//                 pmb_dt->block_size.xmax(X1DIR), pmb_dt->block_size.xmin(X2DIR),
+//                 pmb_dt->block_size.xmax(X2DIR), pmb_dt->block_size.xmin(X3DIR),
+//                 pmb_dt->block_size.xmax(X3DIR));
+//         } else {
+//             fprintf(stderr, "Dt set by doubling\n");
+//         }
+//     }
+//     // TODO(CEP) start reduce at the end of the per-meshblock stuff, then check it here
+// #ifdef MPI_PARALLEL
+//     PARTHENON_MPI_CHECK(MPI_Allreduce(
+//         MPI_IN_PLACE, &tm.dt, 1, MPI_PARTHENON_REAL, MPI_MIN, MPI_COMM_WORLD));
+// #endif
+//     if (tm.time < tm.tlim &&
+//         (tm.tlim - tm.time) < tm.dt) // timestep would take us past desired endpoint
+//         tm.dt = tm.tlim - tm.time;
+// }
 
 void KHARMADriver::PostExecute(DriverStatus status)
 {

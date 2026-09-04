@@ -151,10 +151,10 @@ inline EMHD_parameters GetEMHDParameters(Packages_t& packages)
 
 #if DISABLE_EMHD
 
-template<typename Local>
-KOKKOS_INLINE_FUNCTION void set_parameters(const GRCoordinates& G, const Local& P,
-    const VarMap& m_p, const EMHD_parameters& emhd_params, const Microphysics::EOS::EOS& eos, const int& j,
-    const int& i, Real& tau, Real& chi_e, Real& nu_e)
+KOKKOS_INLINE_FUNCTION void set_parameters(const GRCoordinates& G, const Real& rho,
+    const Real& u, const Real& qtilde, const Real& dPtilde, const Real& bsq,
+    const EMHD_parameters& emhd_params, const Microphysics::EOS::EOS& eos, const int& j, const int& i,
+    Real& tau, Real& chi_e, Real& nu_e)
 {}
 
 KOKKOS_INLINE_FUNCTION void set_parameters(const GRCoordinates& G,
@@ -163,14 +163,9 @@ KOKKOS_INLINE_FUNCTION void set_parameters(const GRCoordinates& G,
     Real& nu_e)
 {}
 
-KOKKOS_INLINE_FUNCTION void set_parameters_init(const GRCoordinates& G, const Real& rho,
-    const Real& u, const EMHD_parameters& emhd_params, const Microphysics::EOS::EOS& eos, const int& k,
-    const int& j, const int& i, Real& tau, Real& chi_e, Real& nu_e)
-{}
-
 KOKKOS_INLINE_FUNCTION void calc_tensor(const Real& rho, const Real& u, const Real& pgas,
-    const EMHD::EMHD_parameters& emhd_params, const Real& q, const Real& dP,
-    const FourVectors& D, const int& dir, Real emhd[GR_DIM])
+    const Real& q, const Real& dP, const FourVectors& D, const int& dir,
+    Real emhd[GR_DIM])
 {}
 
 KOKKOS_INLINE_FUNCTION void convert_prims_to_q_dP(const Real& q_tilde,
@@ -268,19 +263,6 @@ KOKKOS_INLINE_FUNCTION void set_parameters(const GRCoordinates& G, const Real& r
         chi_e = m::min(max_alpha, emhd_params.conduction_alpha) * cs2 * tau;
         nu_e = m::min(max_alpha, emhd_params.viscosity_alpha) * cs2 * tau;
     }
-}
-template<typename Local>
-KOKKOS_INLINE_FUNCTION void set_parameters(const GRCoordinates& G, const Local& P,
-    const VarMap& m_p, const EMHD_parameters& emhd_params, const Microphysics::EOS::EOS& eos, const int& j,
-    const int& i, Real& tau, Real& chi_e, Real& nu_e)
-{
-    FourVectors Dtmp;
-    GRMHD::calc_4vecs(G, P, m_p, j, i, Loci::center, Dtmp);
-    double bsq = m::max(dot(Dtmp.bcon, Dtmp.bcov), SMALL_NUM);
-    Real qtilde = (m_p.Q >= 0) ? P(m_p.Q) : 0.;
-    Real dPtilde = (m_p.DP >= 0) ? P(m_p.DP) : 0.;
-    set_parameters(G, P(m_p.RHO), P(m_p.UU), qtilde, dPtilde, bsq, emhd_params, eos, j, i,
-        tau, chi_e, nu_e);
 }
 
 KOKKOS_INLINE_FUNCTION void set_parameters(const GRCoordinates& G,

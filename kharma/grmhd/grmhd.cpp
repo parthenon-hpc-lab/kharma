@@ -483,9 +483,10 @@ Real EstimateTimestep(MeshData<Real>* md)
     const double dt_last = globals.Get<double>("dt_last");
     const double dt_max = grmhd_pars.Get<double>("max_dt_increase") * dt_last;
     if (verbose > 1) {
-        std::cerr << "Updating dt. min allowed: " << dt_min << "max allowed: " << dt_max
-                  << "\nCalculated timestep (w/CFL factor!): " << min_ndt * cfl
-                  << std::endl;
+        std::cerr << "Updating dt on block. min allowed: " << dt_min
+                  << " max allowed: " << dt_max
+                  << "\nCalculated timestep before clipping (w/CFL factor): "
+                  << min_ndt * cfl << std::endl;
     }
     const double ndt = clip(min_ndt * cfl, dt_min, dt_max);
 
@@ -851,14 +852,14 @@ void UpdateAveragedCtop(MeshData<Real>* md)
                             GRMHD::calc_4vecs(G, P, m_p, k, jf, i, Loci::center, Dtmp);
                             // Remember our 'cmin' array stores *positive* values!
                             Real cmin_minus;
-                            Flux::vchar_global(G, P, m_p, Dtmp, eos, emhd_params, k, jf,
-                                i, Loci::center, X1DIR, cmax(V1, k, jf, i), cmin_minus);
+                            Flux::vchar(G, P, m_p, Dtmp, eos, emhd_params, k, jf, i,
+                                Loci::center, X1DIR, cmax(V1, k, jf, i), cmin_minus);
                             cmin(V1, k, jf, i) = -cmin_minus;
-                            Flux::vchar_global(G, P, m_p, Dtmp, eos, emhd_params, k, jf,
-                                i, Loci::center, X2DIR, cmax(V2, k, jf, i), cmin_minus);
+                            Flux::vchar(G, P, m_p, Dtmp, eos, emhd_params, k, jf, i,
+                                Loci::center, X2DIR, cmax(V2, k, jf, i), cmin_minus);
                             cmin(V2, k, jf, i) = -cmin_minus;
-                            Flux::vchar_global(G, P, m_p, Dtmp, eos, emhd_params, k, jf,
-                                i, Loci::center, X3DIR, cmax(V3, k, jf, i), cmin_minus);
+                            Flux::vchar(G, P, m_p, Dtmp, eos, emhd_params, k, jf, i,
+                                Loci::center, X3DIR, cmax(V3, k, jf, i), cmin_minus);
                             cmin(V3, k, jf, i) = -cmin_minus;
                         });
                 }

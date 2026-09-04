@@ -188,20 +188,32 @@ inline TaskStatus GetFlux(MeshData<Real>* md)
             // reconstruction/direction pair. See reconstruction.hpp for all the
             // implementations.
 
-            // TODO this could be constexpr/templated with only tens more
+            // TODO the use_ismr option could be constexpr/templated with only tens more
             // instantiation lines!
             if (use_ismr) {
+#ifdef KOKKOS_ENABLE_CUDA
                 if (dir == 1) {
+#else
+                if constexpr (dir == 1) {
+#endif
                     KReconstruction::reconstruct<Recon>(P_all(bl, p, k, j, i - 2),
                         P_all(bl, p, k, j, i - 1), P_all(bl, p, k, j, i),
                         P_all(bl, p, k, j, i + 1), P_all(bl, p, k, j, i + 2),
                         Pr_all(bl, p, k, j, i), Pl_all(bl, p, k, j, i + 1));
+#ifdef KOKKOS_ENABLE_CUDA
                 } else if (dir == 2) {
+#else
+                } else if constexpr (dir == 2) {
+#endif
                     KReconstruction::reconstruct<Recon>(P_all(bl, p, k, j - 2, i),
                         P_all(bl, p, k, j - 1, i), P_all(bl, p, k, j, i),
                         P_all(bl, p, k, j + 1, i), P_all(bl, p, k, j + 2, i),
                         Pr_all(bl, p, k, j, i), Pl_all(bl, p, k, j + 1, i));
+#ifdef KOKKOS_ENABLE_CUDA
                 } else if (dir == 3) {
+#else
+                } else if constexpr (dir == 3) {
+#endif
                     if (j < ng_plus_nlevels ||
                         j > P_all.GetDim(2) - 1 - ng_plus_nlevels) {
                         KReconstruction::reconstruct<RType::linear_mc>(
@@ -217,17 +229,29 @@ inline TaskStatus GetFlux(MeshData<Real>* md)
                     }
                 }
             } else {
+#ifdef KOKKOS_ENABLE_CUDA
                 if (dir == 1) {
+#else
+                if constexpr (dir == 1) {
+#endif
                     KReconstruction::reconstruct<Recon>(P_all(bl, p, k, j, i - 2),
                         P_all(bl, p, k, j, i - 1), P_all(bl, p, k, j, i),
                         P_all(bl, p, k, j, i + 1), P_all(bl, p, k, j, i + 2),
                         Pr_all(bl, p, k, j, i), Pl_all(bl, p, k, j, i + 1));
+#ifdef KOKKOS_ENABLE_CUDA
                 } else if (dir == 2) {
+#else
+                } else if constexpr (dir == 2) {
+#endif
                     KReconstruction::reconstruct<Recon>(P_all(bl, p, k, j - 2, i),
                         P_all(bl, p, k, j - 1, i), P_all(bl, p, k, j, i),
                         P_all(bl, p, k, j + 1, i), P_all(bl, p, k, j + 2, i),
                         Pr_all(bl, p, k, j, i), Pl_all(bl, p, k, j + 1, i));
+#ifdef KOKKOS_ENABLE_CUDA
                 } else if (dir == 3) {
+#else
+                } else if constexpr (dir == 3) {
+#endif
                     KReconstruction::reconstruct<Recon>(P_all(bl, p, k - 2, j, i),
                         P_all(bl, p, k - 1, j, i), P_all(bl, p, k, j, i),
                         P_all(bl, p, k + 1, j, i), P_all(bl, p, k + 2, j, i),
@@ -271,7 +295,11 @@ inline TaskStatus GetFlux(MeshData<Real>* md)
                         static_cast<int>(Floors::FFlag::GEOM_RHO_FLUX)) ||
                     (static_cast<int>(fflag(bl, 0, k, j, i)) &
                         static_cast<int>(Floors::FFlag::GEOM_U_FLUX))) {
+#ifdef KOKKOS_ENABLE_CUDA
                     if (dir == 1) {
+#else
+                    if constexpr (dir == 1) {
+#endif
                         // Recon left of this cell == right of this face
                         KReconstruction::reconstruct_left<RType::ppm>(
                             P_all(bl, p, k, j, i - 2), P_all(bl, p, k, j, i - 1),
@@ -282,7 +310,11 @@ inline TaskStatus GetFlux(MeshData<Real>* md)
                             P_all(bl, p, k, j, i - 3), P_all(bl, p, k, j, i - 2),
                             P_all(bl, p, k, j, i - 1), P_all(bl, p, k, j, i),
                             P_all(bl, p, k, j, i + 1), Pl_all(bl, p, k, j, i));
+#ifdef KOKKOS_ENABLE_CUDA
                     } else if (dir == 2) {
+#else
+                    } else if constexpr (dir == 2) {
+#endif
                         KReconstruction::reconstruct_left<RType::ppm>(
                             P_all(bl, p, k, j - 2, i), P_all(bl, p, k, j - 1, i),
                             P_all(bl, p, k, j, i), P_all(bl, p, k, j + 1, i),
@@ -291,7 +323,11 @@ inline TaskStatus GetFlux(MeshData<Real>* md)
                             P_all(bl, p, k, j - 3, i), P_all(bl, p, k, j - 2, i),
                             P_all(bl, p, k, j - 1, i), P_all(bl, p, k, j, i),
                             P_all(bl, p, k, j + 1, i), Pl_all(bl, p, k, j, i));
+#ifdef KOKKOS_ENABLE_CUDA
                     } else if (dir == 3) {
+#else
+                    } else if constexpr (dir == 3) {
+#endif
                         KReconstruction::reconstruct_left<RType::ppm>(
                             P_all(bl, p, k - 2, j, i), P_all(bl, p, k - 1, j, i),
                             P_all(bl, p, k, j, i), P_all(bl, p, k + 1, j, i),
@@ -309,6 +345,8 @@ inline TaskStatus GetFlux(MeshData<Real>* md)
     // If we have B field on faces, we "must" replace reconstructed version with that
     // Override at user option due to unreasonable effectiveness
     // (https://github.com/AFD-Illinois/kharma/issues/79)
+    // TODO(CEP) integrate above: if(p == m_p.B && consistent_face_b) and see if that's
+    // faster
     if (pmb0->packages.AllPackages().count("B_CT") &&
         packages.Get("Fluxes")->Param<bool>("consistent_face_b")) {
         const auto& Bf = md->PackVariables(std::vector<std::string>{"cons.fB"});
@@ -353,8 +391,8 @@ inline TaskStatus GetFlux(MeshData<Real>* md)
 
             // Magnetosonic speeds
             Real cmaxL, cminL;
-            Flux::vchar_global(G, Pl_all(bl), m_p, Dtmp, eos, emhd_params, k, j, i, loc,
-                dir, cmaxL, cminL);
+            Flux::vchar(G, Pl_all(bl), m_p, Dtmp, eos, emhd_params, k, j, i, loc, dir,
+                cmaxL, cminL);
 
             // Record speeds
             cmax(bl, dir - 1, k, j, i) = m::max(0., cmaxL);
@@ -383,8 +421,8 @@ inline TaskStatus GetFlux(MeshData<Real>* md)
 
             // Magnetosonic speeds
             Real cmaxR, cminR;
-            Flux::vchar_global(G, Pr_all(bl), m_p, Dtmp, eos, emhd_params, k, j, i, loc,
-                dir, cmaxR, cminR);
+            Flux::vchar(G, Pr_all(bl), m_p, Dtmp, eos, emhd_params, k, j, i, loc, dir,
+                cmaxR, cminR);
 
             // Calculate cmax/min based on comparison with cached values
             cmax(bl, dir - 1, k, j, i) = m::max(cmax(bl, dir - 1, k, j, i), cmaxR);

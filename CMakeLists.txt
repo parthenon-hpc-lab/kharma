@@ -9,10 +9,9 @@ project(kharma LANGUAGES C CXX)
 option(KHARMA_BUILD_TESTS "Build unit tests" OFF)
 
 # We follow Parthenon in requiring C++17 going forward
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_CXX17_STANDARD_COMPILE_OPTION "-std=c++17")
-set(PARTHENON_ENABLE_CPP17 ON CACHE BOOL "KHARMA Override")
+set(CMAKE_CXX17_STANDARD_COMPILE_OPTION "-std=c++20")
 
 # Set the path to include cmake/ dir
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
@@ -38,8 +37,6 @@ set(HDF5_USE_STATIC_LIBRARIES OFF CACHE BOOL "KHARMA Override")
 
 
 # Kokkos options
-set(Kokkos_ENABLE_CUDA_LAMBDA ON CACHE BOOL "KHARMA Override")
-set(Kokkos_ENABLE_CUDA_CONSTEXPR ON CACHE BOOL "KHARMA Override")
 # Set ON for possible speed improvement?
 set(Kokkos_ENABLE_HWLOC OFF CACHE BOOL "KHARMA Override")
 set(Kokkos_ENABLE_AGGRESSIVE_VECTORIZATION ON CACHE BOOL "KHARMA Override")
@@ -69,23 +66,31 @@ endif()
 # Build Parthenon
 add_subdirectory(external/parthenon)
 include_directories(external/parthenon/src)
-# mpark::variant is header only, don't build anything
-include_directories(external/variant/include)
-# Our hacked-up version of the Kokkos kernels
+# variant is header only, don't build anything
+include_directories(external/singularity-eos/utils/ports-of-call)
+
+# Inherit pristine kokkos-kernels
 include_directories(external/kokkos-kernels)
+# kokkos-kernels want to import from their own directories
+include_directories(external/kokkos-kernels/batched)
+include_directories(external/kokkos-kernels/batched/dense)
+include_directories(external/kokkos-kernels/batched/dense/src)
+include_directories(external/kokkos-kernels/batched/dense/impl)
+include_directories(external/kokkos-kernels/blas/src)
+include_directories(external/kokkos-kernels/blas/impl)
+include_directories(external/kokkos-kernels/common/src)
+# We do NOT build kokkos-kernels, we only need device-side functions
 
-
-# Needed for running singularity-eos tests
-set(SINGULARITY_USE_HDF5 ON CACHE BOOL "" FORCE)
-set(SINGULARITY_USE_SPINER ON CACHE BOOL "" FORCE)
-set(SINGULARITY_USE_SPINER_WITH_HDF5 ON CACHE BOOL "" FORCE)
-set(PARTHENON_DISABLE_HDF5 OFF CACHE BOOL "" FORCE)
-set(SINGULARITY_USE_STELLAR_COLLAPSE ON CACHE BOOL "" FORCE)
+# Singularity-eos options
+set(DSINGULARITY_USE_SPINER ON CACHE BOOL "" FORCE)
+set(SINGULARITY_USE_KOKKOS ON CACHE BOOL "" FORCE)
+set(SINGULARITY_USE_FORTRAN ON CACHE BOOL "" FORCE)
+set(SINGULARITY_BUILD_CLOSURE ON CACHE BOOL "" FORCE)
 set(SINGULARITY_FORCE_SUBMODULE_MODE ON CACHE BOOL "" FORCE)
-
 # Build Singularity-eos
 add_subdirectory(external/singularity-eos)
 
+# TODO(CEP) Singularity-opac options
 # Build Singularity-opac
 add_subdirectory(external/singularity-opac)
 
