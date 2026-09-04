@@ -24,7 +24,7 @@ r_in = 2.5
 r_out = 2.e4
 
 <parthenon/time>
-tlim = 3.13e4
+tlim = 5.e4
 
 <driver>
 type = imex
@@ -33,7 +33,7 @@ two_sync = false
 <GRMHD>
 cfl = 0.5
 gamma = 1.6665866858620597
-reconstruction = weno5_linear
+reconstruction = ppm
 
 <eos>
 type = IdealGas
@@ -69,15 +69,8 @@ src_rootfind_tol = 1e-8
 src_rootfind_maxiter = 100
 
 <units>
-# Required for the CGS opacity conversion (eqs. 91-92) to do anything -- with
-# scale_free = true (the default) every phoebus::UnitConversions factor is 1.0.
 scale_free = false
 geom_mass_msun = 3.0
-
-# Since rho = mdot/(4 * pi * r^2 * u^r), to make it in cgs, we have [rho] = [mdot]/([length]^2 * c)
-# mdot = 4 * pi * G * M * c * m_p/sigma_T * 1/c^2 = 1.3e46 * M(in M_odot)/(10^8 M_odot) g/s
-# So calculating for 3 solar masses, it gives us 4.339116894028e18;
-# so [M] = [mdot] * time_unit
 fluid_mass_g =  6.203843e12
 
 <parthenon/output0>
