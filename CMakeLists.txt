@@ -82,7 +82,7 @@ include_directories(external/kokkos-kernels/common/src)
 # We do NOT build kokkos-kernels, we only need device-side functions
 
 # Singularity-eos options
-set(DSINGULARITY_USE_SPINER ON CACHE BOOL "" FORCE)
+set(SINGULARITY_USE_SPINER ON CACHE BOOL "" FORCE)
 set(SINGULARITY_USE_KOKKOS ON CACHE BOOL "" FORCE)
 set(SINGULARITY_USE_FORTRAN ON CACHE BOOL "" FORCE)
 set(SINGULARITY_BUILD_CLOSURE ON CACHE BOOL "" FORCE)
@@ -90,7 +90,8 @@ set(SINGULARITY_FORCE_SUBMODULE_MODE ON CACHE BOOL "" FORCE)
 # Build Singularity-eos
 add_subdirectory(external/singularity-eos)
 
-# TODO(CEP) Singularity-opac options
+# Singularity-opac options
+set(SINGULARITY_USE_HDF5 ON CACHE BOOL "" FORCE)
 # Build Singularity-opac
 add_subdirectory(external/singularity-opac)
 
