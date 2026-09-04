@@ -1,0 +1,104 @@
+# shock_tube test
+
+<parthenon/job>
+problem_id = shock
+
+<parthenon/mesh>
+nx1 = 800
+x1min = -15.0
+x1max = 15.0
+
+nx2 = 1
+x2min = 0.0
+x2max = 1.0
+
+nx3 = 1
+x3min = 0.0
+x3max = 1.0
+
+<parthenon/meshblock>
+nx1 = 400
+nx2 = 1
+nx3 = 1
+
+<coordinates>
+base = cartesian_minkowski
+transform = null
+correct_connections = true
+
+<parthenon/time>
+tlim = 300.0
+integrator = rk2
+dt_min = 0.0001
+
+<driver>
+type = imex
+# Second sync at the end of each step
+# Can skip this with the robust inverter & face_ct B fields
+two_sync = false
+
+<GRMHD>
+cfl = 0.5
+gamma = 2.
+reconstruction = ppm
+
+<b_field>
+solver = none
+
+<boundaries>
+inner_x1 = outflow
+outer_x1 = outflow
+inner_x2 = outflow
+outer_x2 = outflow
+inner_x3 = periodic
+outer_x3 = periodic
+allow_inflow_inner_x1 = true
+allow_inflow_outer_x1 = true
+
+<shock>
+rhoL = 1.
+PL = 60.
+u1L = 10.0
+EL = 2.0
+
+rhoR = 8.0
+PR = 2.34e3
+u1R = 1.25
+ER = 1.14e3
+
+rad_comoving_ic = true
+rad_seed_frac = 0.01
+
+<floors>
+disable_floors = true
+
+<parthenon/output0>
+file_type = hdf5
+dt = 2.0
+single_precision_output = true
+variables = prims, cons
+
+<parthenon/output1>
+file_type = hst
+dt = 5.0
+
+<debug>
+verbose = 1
+extra_checks = 2
+flag_verbose = 2
+
+<radM1>
+on = true
+sigma_rad = 3.858e-8
+kappa_rho = 0.3
+kappa_scat = 0.0
+src_rootfind_eps = 1e-8
+src_rootfind_tol = 1e-8
+src_rootfind_maxiter = 50
+
+<units> 
+on = true
+M_BH = 100
+rho_scale = 1e-4
+
+

@@ -1,0 +1,104 @@
+# McKinney et al. 2014 (MNRAS 441, 3177), section 5.9:
+# Beam of light in 2D spherical polar, a/M = 0.
+# Model 3 from Table 3.
+<parthenon/job>
+problem_id = beam_of_light
+
+<parthenon/mesh>
+nx1 = 60
+nx2 = 120
+nx3 = 1
+x1min = 14.5
+x1max = 20.5
+x2min = 0.7853981633974483
+x2max = 2.356194490192345
+x3min = 0.0
+x3max = 6.283185307179586
+
+<parthenon/meshblock>
+nx1 = 60
+nx2 = 120
+nx3 = 1
+
+<coordinates>
+base = spherical_ks
+transform = null
+a = 0.0
+
+<parthenon/time>
+tlim = 16.5
+
+<driver>
+type = imex
+two_sync = false
+
+<GRMHD>
+cfl = 0.5
+gamma = 1.6666666666666667
+reconstruction = linear_vl
+
+<eos>
+type = IdealGas
+Cv = 1.0
+
+<beam_of_light>
+r_beam = 16.0
+dr_beam = 0.5
+T_ambient_K = 1.e7
+T_beam_over_Ta = 1000.0
+f_target = 0.9999
+rho_ambient = 1.0
+
+<units>
+scale_free = false
+geom_mass_msun = 3.0
+fluid_density_cgs = 1.0
+
+<b_field>
+solver = none
+
+<boundaries>
+inner_x1 = outflow
+outer_x1 = outflow
+check_inflow_inner_x1 = false
+check_inflow_outer_x1 = false
+inner_x2 = dirichlet
+zero_flux_inner_x2 = false
+zero_flux_outer_x2 = false
+outer_x2 = outflow
+inner_x3 = periodic
+outer_x3 = periodic
+# inner_x2 beam values are set at runtime by InitializeBeamOfLight
+
+<floors>
+disable_floors = true
+
+<inverter>
+backstop = false
+fix_average_neighbors = true
+
+<radM1>
+on = true
+opacity_model = shocktube_constant
+sigma_rad = 0.0
+kappa_rho = 0.0
+kappa_scat = 0.0
+src_rootfind_eps = 1e-8
+src_rootfind_tol = 1e-8
+src_rootfind_maxiter = 50
+
+<parthenon/output0>
+file_type = hdf5
+dt = 0.1
+single_precision_output = true
+variables = prims, cons
+
+<parthenon/output1>
+file_type = hst
+dt = 0.5
+variables = all_reductions
+
+<debug>
+verbose = 1
+extra_checks = 1
+flag_verbose = 2

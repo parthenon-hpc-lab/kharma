@@ -30,15 +30,12 @@ nlim = -1
 <debug>
 verbose = 1
 extra_checks = 1
-flag_verbose = 0
+flag_verbose = 2
 
 <GRMHD>
 cfl = 0.9
 gamma = 1.666667
 reconstruction = weno5
-
-<driver>
-type = kharma
 
 <torus>
 rin = 6.0

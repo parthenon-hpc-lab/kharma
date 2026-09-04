@@ -34,6 +34,10 @@
 #pragma once
 
 #include "emhd.hpp"
+// phoebus includes
+#include "microphysics/eos_kharma/eos_kharma.hpp"
+#include "phoebus_utils/unit_conversions.hpp"
+#include "phoebus_utils/variables.hpp"
 
 #include "flux_functions.hpp"
 
@@ -61,27 +65,35 @@ namespace EMHD
  * value for the ideal MHD variables.
  */
 KOKKOS_INLINE_FUNCTION int apply_instability_limits(const GRCoordinates& G,
-    const VariablePack<Real>& P, const VarMap& m_p, const Real& gam,
+    const VariablePack<Real>& P, const VarMap& m_p, const Microphysics::EOS::EOS& eos,
     const EMHD::EMHD_parameters& emhd_params, const int& k, const int& j, const int& i,
     const VariablePack<Real>& U, const VarMap& m_u, const Loci loc = Loci::center)
 {
     int eflag = 0;
 
+    //TODO_EOS: Check if everything is fine here, I'm assuming it's not.
     Real rho = P(m_p.RHO, k, j, i);
     Real uu = P(m_p.UU, k, j, i);
     Real qtilde = (m_p.Q >= 0) ? P(m_p.Q, k, j, i) : 0.;
     Real dPtilde = (m_p.DP >= 0) ? P(m_p.DP, k, j, i) : 0.;
 
-    Real pg = (gam - 1.) * uu;
-    Real Theta = pg / rho;
-    Real cs = m::sqrt(gam * pg / (rho + (gam * uu)));
+    //Real pg = (gam - 1.) * uu;
+    Real pg = eos.PressureFromDensityInternalEnergy(rho, uu/rho);
 
+    //TODO_EOS: check theta here, might be temperature and need to be calculated accordingly.
+    Real Theta = pg / rho;
+    const Real ef = rho + pg + uu; // \rho * h = rho + u + P.
+    const Real bulk = eos.BulkModulusFromDensityInternalEnergy(rho, uu/rho);
+
+    Real cs = m::sqrt(bulk / ef);
     FourVectors D;
     GRMHD::calc_4vecs(G, P, m_p, k, j, i, Loci::center, D);
     Real bsq = m::max(dot(D.bcon, D.bcov), SMALL_NUM);
 
     Real tau, chi_e, nu_e;
-    EMHD::set_parameters(G, P, m_p, emhd_params, gam, k, j, i, tau, chi_e, nu_e);
+    //TODO_EOS: This might need to be changed for general eos.
+    //TODO_EOS: for now, I'll calculate gamma
+    EMHD::set_parameters(G, P, m_p, emhd_params, eos, k, j, i, tau, chi_e, nu_e);
 
     Real q, dP;
     EMHD::convert_prims_to_q_dP(qtilde, dPtilde, rho, Theta, cs * cs, emhd_params, q, dP);
@@ -120,7 +132,7 @@ KOKKOS_INLINE_FUNCTION int apply_instability_limits(const GRCoordinates& G,
             P(m_p.DP, k, j, i) = P(m_p.DP, k, j, i) * (1. / m::max(dP / dP_minus, 1.));
     }
 
-    Flux::p_to_u(G, P, m_p, emhd_params, gam, k, j, i, U, m_u);
+    Flux::p_to_u(G, P, m_p, emhd_params, eos, k, j, i, U, m_u);
 
     return eflag;
 }

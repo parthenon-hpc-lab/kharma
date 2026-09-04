@@ -51,6 +51,11 @@
 #include "kharma.hpp"
 #include "kharma_driver.hpp"
 
+// phoebus includes
+#include "microphysics/eos_kharma/eos_kharma.hpp"
+#include "phoebus_utils/unit_conversions.hpp"
+#include "phoebus_utils/variables.hpp"
+
 #include <memory>
 
 /**
@@ -423,8 +428,20 @@ Real EstimateTimestep(MeshData<Real>* md)
         const bool is_outer_x2 =
             KBoundaries::IsPhysicalBoundary(pmb, BoundaryFace::outer_x2);
 
-        const auto& cmax = rc->PackVariables(std::vector<std::string>{"Flux.cmax"});
-        const auto& cmin = rc->PackVariables(std::vector<std::string>{"Flux.cmin"});
+        const auto& cmax_mhd = rc->PackVariables(std::vector<std::string>{"Flux.cmax"});
+        const auto& cmin_mhd = rc->PackVariables(std::vector<std::string>{"Flux.cmin"});
+
+        // Out of the Package modification RADM1.
+        // If radiation package is present, use radiation cmax and cmin for timestep
+        // calculation instead of MHD cmax and cmin
+        const bool use_rad = pmesh->packages.AllPackages().count("RadM1");
+
+        const auto& cmax =
+            (use_rad) ? rc->PackVariables(std::vector<std::string>{"Flux.cmax_rad"})
+                      : cmax_mhd;
+        const auto& cmin =
+            (use_rad) ? rc->PackVariables(std::vector<std::string>{"Flux.cmin_rad"})
+                      : cmin_mhd;
 
         auto& boundaries = pmesh->packages.Get<KHARMAPackage>("Boundaries")->AllParams();
         const bool excise_inner_x2 = boundaries.Get<bool>("excise_flux_inner_x2");
@@ -643,8 +660,8 @@ void CancelBoundaryU3(MeshBlockData<Real>* rc, IndexDomain domain, bool coarse)
     const VarMap m_u(cons_map, true), m_p(prims_map, false);
 
     const auto& G = pmb->coords;
-
-    const Real gam = pmb->packages.Get("GRMHD")->Param<Real>("gamma");
+    const auto& eos_params = pmb->packages.Get("eos")->AllParams();
+    auto eos = eos_params.Get<Microphysics::EOS::EOS>("d.EOS");
 
     const bool sync_prims = pmb->packages.Get("Driver")->Param<bool>("sync_prims");
 
@@ -666,7 +683,7 @@ void CancelBoundaryU3(MeshBlockData<Real>* rc, IndexDomain domain, bool coarse)
                     [&](const int& k)
                     {
                         Inverter::u_to_p<Inverter::Type::kastaun>(
-                            G, U, m_u, gam, k, jf, i, P, m_p, Loci::center, 25, 1e-12);
+                            G, U, m_u, eos, k, jf, i, P, m_p, Loci::center, 25, 1e-12);
                     });
             }
             member.team_barrier();
@@ -693,10 +710,10 @@ void CancelBoundaryU3(MeshBlockData<Real>* rc, IndexDomain domain, bool coarse)
 
                     // Apply floors
                     Floors::apply_geo_floors(
-                        G, P, m_p, gam, k, jf, i, floors, floors, Loci::center);
+                        G, P, m_p, eos, k, jf, i, floors, floors, Loci::center);
 
                     // Always PtoU, we modified P.  Accommodate EMHD
-                    Flux::p_to_u_mhd(G, P, m_p, emhd_params, gam, k, jf, i, U, m_u);
+                    Flux::p_to_u_mhd(G, P, m_p, emhd_params, eos, k, jf, i, U, m_u);
                 });
         });
 }
@@ -728,8 +745,8 @@ void CancelBoundaryT3(MeshBlockData<Real>* rc, IndexDomain domain, bool coarse)
 
     const auto& G = pmb->coords;
 
-    const Real gam = pmb->packages.Get("GRMHD")->Param<Real>("gamma");
-
+    const auto& eos_params = pmb->packages.Get("eos")->AllParams();
+    auto eos = eos_params.Get<Microphysics::EOS::EOS>("d.EOS");
     const bool sync_prims = pmb->packages.Get("Driver")->Param<bool>("sync_prims");
 
     const Floors::Prescription floors =
@@ -749,7 +766,7 @@ void CancelBoundaryT3(MeshBlockData<Real>* rc, IndexDomain domain, bool coarse)
                 parthenon::par_for_inner(member, bi.ks, bi.ke,
                     [&](const int& k)
                     {
-                        p_to_u(G, P, m_p, gam, k, jf, i, U, m_u, Loci::center);
+                        p_to_u(G, P, m_p, eos, k, jf, i, U, m_u, Loci::center);
                     });
             }
             member.team_barrier();
@@ -775,12 +792,12 @@ void CancelBoundaryT3(MeshBlockData<Real>* rc, IndexDomain domain, bool coarse)
                     U(m_u.U3, k, jf, i) -= T3_avg;
                     // Recover primitive GRMHD variables from our modified U
                     Inverter::u_to_p<Inverter::Type::kastaun>(
-                        G, U, m_u, gam, k, jf, i, P, m_p, Loci::center, 25, 1e-12);
+                        G, U, m_u, eos, k, jf, i, P, m_p, Loci::center, 25, 1e-12);
                     // Floor them
                     int fflag = Floors::apply_geo_floors(
-                        G, P, m_p, gam, k, jf, i, floors, floors, Loci::center);
+                        G, P, m_p, eos, k, jf, i, floors, floors, Loci::center);
                     // Recalculate U on anything we floored
-                    if (fflag) p_to_u(G, P, m_p, gam, k, jf, i, U, m_u, Loci::center);
+                    if (fflag) p_to_u(G, P, m_p, eos, k, jf, i, U, m_u, Loci::center);
                 });
         });
 }
@@ -791,6 +808,8 @@ void UpdateAveragedCtop(MeshData<Real>* md)
     if (pmesh->packages.AllPackages().count("B_CT"))
         B_CT::MeshUtoP(md, IndexDomain::interior);
     auto& params = pmesh->packages.Get<KHARMAPackage>("Boundaries")->AllParams();
+    const auto& eos_params = pmesh->packages.Get("eos")->AllParams();
+    auto eos = eos_params.Get<Microphysics::EOS::EOS>("d.EOS");
     for (auto& pmb : pmesh->block_list) {
         auto& rc = pmb->meshblock_data.Get(md->StageName());
         for (int i = 0; i < BOUNDARY_NFACES; i++) {
@@ -822,7 +841,6 @@ void UpdateAveragedCtop(MeshData<Real>* md)
                         rc->PackVariables(std::vector<std::string>{"Flux.cmin"});
 
                     const auto& G = pmb->coords;
-                    const Real gam = pmb->packages.Get("GRMHD")->Param<Real>("gamma");
                     const Floors::Prescription floors =
                         pmb->packages.Get("Floors")->Param<Floors::Prescription>(
                             "prescription");
@@ -846,13 +864,13 @@ void UpdateAveragedCtop(MeshData<Real>* md)
                             GRMHD::calc_4vecs(G, P, m_p, k, jf, i, Loci::center, Dtmp);
                             // Remember our 'cmin' array stores *positive* values!
                             Real cmin_minus;
-                            Flux::vchar(G, P, m_p, Dtmp, gam, emhd_params, k, jf, i,
+                            Flux::vchar(G, P, m_p, Dtmp, eos, emhd_params, k, jf, i,
                                 Loci::center, X1DIR, cmax(V1, k, jf, i), cmin_minus);
                             cmin(V1, k, jf, i) = -cmin_minus;
-                            Flux::vchar(G, P, m_p, Dtmp, gam, emhd_params, k, jf, i,
+                            Flux::vchar(G, P, m_p, Dtmp, eos, emhd_params, k, jf, i,
                                 Loci::center, X2DIR, cmax(V2, k, jf, i), cmin_minus);
                             cmin(V2, k, jf, i) = -cmin_minus;
-                            Flux::vchar(G, P, m_p, Dtmp, gam, emhd_params, k, jf, i,
+                            Flux::vchar(G, P, m_p, Dtmp, eos, emhd_params, k, jf, i,
                                 Loci::center, X3DIR, cmax(V3, k, jf, i), cmin_minus);
                             cmin(V3, k, jf, i) = -cmin_minus;
                         });

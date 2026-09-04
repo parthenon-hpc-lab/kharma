@@ -34,7 +34,10 @@
 #pragma once
 
 #include "floors.hpp"
-
+// phoebus includes
+#include "microphysics/eos_kharma/eos_kharma.hpp"
+#include "phoebus_utils/unit_conversions.hpp"
+#include "phoebus_utils/variables.hpp"
 #include "domain.hpp"
 
 namespace Floors
@@ -62,7 +65,10 @@ TaskStatus ApplyFloorsInFrame(MeshData<Real>* md, IndexDomain domain)
     const int rhofi = floors_map["Floors.rho_floor"].first;
     const int ufi = floors_map["Floors.u_floor"].first;
 
-    const Real gam = pmb0->packages.Get("GRMHD")->Param<Real>("gamma");
+
+    const auto& eos_params = pmb0->packages.Get("eos")->AllParams();
+    auto eos = eos_params.Get<Microphysics::EOS::EOS>("d.EOS");
+
     const EMHD::EMHD_parameters& emhd_params = EMHD::GetEMHDParameters(pmb0->packages);
     const Real switch_r =
         (frame == InjectionFrame::mixed_fluid_normal)
@@ -93,7 +99,7 @@ TaskStatus ApplyFloorsInFrame(MeshData<Real>* md, IndexDomain domain)
                 // constexpr ifs
                 if (frame == InjectionFrame::mixed_fluid_normal) {
                     if (G.r(k, j, i) > switch_r) {
-                        pflag_l = apply_floors<InjectionFrame::fluid>(G, P(b), m_p, gam,
+                        pflag_l = apply_floors<InjectionFrame::fluid>(G, P(b), m_p, eos,
                             k, j, i, floor_vals(b, rhofi, k, j, i),
                             floor_vals(b, ufi, k, j, i), U(b), m_u);
                     } else {
@@ -101,7 +107,7 @@ TaskStatus ApplyFloorsInFrame(MeshData<Real>* md, IndexDomain domain)
                         // Since no prior simulations use mixed frames thus requiring
                         // back-compat, I said no
                         pflag_l = apply_floors<InjectionFrame::normal_kastaun>(G, P(b),
-                            m_p, gam, k, j, i, floor_vals(b, rhofi, k, j, i),
+                            m_p, eos, k, j, i, floor_vals(b, rhofi, k, j, i),
                             floor_vals(b, ufi, k, j, i), U(b), m_u);
                     }
                 } else if (frame == InjectionFrame::mixed_normal_drift) {
@@ -111,16 +117,16 @@ TaskStatus ApplyFloorsInFrame(MeshData<Real>* md, IndexDomain domain)
                         m::min(P(b, m_p.RHO, k, j, i), P(b, m_p.UU, k, j, i)) /
                         dot(Dtmp.bcon, Dtmp.bcov);
                     if (mag_switch < switch_beta) {
-                        pflag_l = apply_floors<InjectionFrame::drift>(G, P(b), m_p, gam,
+                        pflag_l = apply_floors<InjectionFrame::drift>(G, P(b), m_p, eos,
                             k, j, i, floor_vals(b, rhofi, k, j, i),
                             floor_vals(b, ufi, k, j, i), U(b), m_u);
                     } else {
                         pflag_l = apply_floors<InjectionFrame::normal_kastaun>(G, P(b),
-                            m_p, gam, k, j, i, floor_vals(b, rhofi, k, j, i),
+                            m_p, eos, k, j, i, floor_vals(b, rhofi, k, j, i),
                             floor_vals(b, ufi, k, j, i), U(b), m_u);
                     }
                 } else {
-                    pflag_l = apply_floors<frame>(G, P(b), m_p, gam, k, j, i,
+                    pflag_l = apply_floors<frame>(G, P(b), m_p, eos, k, j, i,
                         floor_vals(b, rhofi, k, j, i), floor_vals(b, ufi, k, j, i), U(b),
                         m_u);
                 }
@@ -131,12 +137,12 @@ TaskStatus ApplyFloorsInFrame(MeshData<Real>* md, IndexDomain domain)
                 // Apply ceilings *after* floors, to make the temperature ceiling
                 // better-behaved
                 apply_ceilings(
-                    G, P(b), m_p, gam, k, j, i, floors, floors_inner, U(b), m_u);
+                    G, P(b), m_p, eos, k, j, i, floors, floors_inner, U(b), m_u);
 
                 // P->U if we inverted *correctly* (or didn't invert)
                 if (pflag_l <= 0)
                     Flux::p_to_u_mhd(
-                        G, P(b), m_p, emhd_params, gam, k, j, i, U(b), m_u, Loci::center);
+                        G, P(b), m_p, emhd_params, eos, k, j, i, U(b), m_u, Loci::center);
             }
         });
 

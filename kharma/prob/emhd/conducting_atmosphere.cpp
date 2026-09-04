@@ -60,7 +60,10 @@ TaskStatus InitializeAtmosphere(
 
     // Obtain GRMHD params
     const auto& grmhd_pars = pmb->packages.Get("GRMHD")->AllParams();
-    const Real& gam = grmhd_pars.Get<Real>("gamma");
+    const Real& gam = pmb->packages.Get("eos")->Param<Real>("gm1") + 1.0;
+
+    const auto& eos_params = pmb->packages.Get("eos")->AllParams();
+    auto eos = eos_params.Get<Microphysics::EOS::EOS>("d.EOS");
 
     // Get all primitive variables (GRMHD+EMHD if in use)
     PackIndexMap prims_map;
@@ -209,7 +212,7 @@ TaskStatus InitializeAtmosphere(
                     Real tau, chi_e, nu_e;
                     // Zeros are q, dP, and bsq, only needed for torus closure
                     EMHD::set_parameters(G, rho_temp, u_temp, 0., 0., 0., emhd_params,
-                        gam, j, i, tau, chi_e, nu_e);
+                        eos, j, i, tau, chi_e, nu_e);
                     const Real Theta = (gam - 1.) * u_temp / rho_temp;
                     if (use_conduction)
                         q_host(k, j, i) *=

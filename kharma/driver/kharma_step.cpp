@@ -43,6 +43,10 @@
 #include "grmhd.hpp"
 #include "inverter.hpp"
 #include "ismr.hpp"
+// Out of the package modification units.
+#include "units.hpp"
+// Out of the package modification RADM1.
+#include "radM1.hpp"
 #include "wind.hpp"
 // Other headers
 #include "boundaries.hpp"

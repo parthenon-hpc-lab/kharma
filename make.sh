@@ -29,7 +29,7 @@
 # Set conservatively as nvcc/nvc++ uses a *lot* of memory
 # Set in environment or override in machine file
 NPROC=${NPROC:-8}
-
+NPROC=4
 ### Load basic stuff ###
 HOST=$(hostname -f)
 if [ -z $HOST ]; then

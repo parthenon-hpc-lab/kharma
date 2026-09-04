@@ -58,15 +58,23 @@
 #include "ismr.hpp"
 #include "kharma_driver.hpp"
 #include "reductions.hpp"
+
+// Out of the package modification units.
+#include "units.hpp"
+// Out of the package modification RADM1.
+#include "radM1.hpp"
 #include "wind.hpp"
+
 
 #include "bondi.hpp"
 #include "boundaries.hpp"
 #include "resize_restart.hpp"
 #include "resize_restart_kharma.hpp"
 
-std::shared_ptr<KHARMAPackage> KHARMA::InitializeGlobals(
-    ParameterInput* pin, std::shared_ptr<Packages_t>& packages)
+#include "microphysics/eos_kharma/eos_kharma.hpp"
+#include "microphysics/opac_kharma/opac_kharma.hpp"
+
+std::shared_ptr<KHARMAPackage> KHARMA::InitializeGlobals(ParameterInput *pin, std::shared_ptr<Packages_t>& packages)
 {
     // All truly global state.  Mostly mutable state in order to avoid scope creep
     auto pkg = std::make_shared<KHARMAPackage>("Globals");
@@ -344,6 +352,21 @@ void KHARMA::FixParameters(ParameterInput* pin, bool is_parthenon_restart)
         }
     }
 
+    // Required configuration for the rest of the code, from M1
+    if (pin->GetOrAddBoolean("radM1", "on", false)) {
+        // Require units package
+        pin->SetBoolean("units", "on", true);
+        // Force corrected connection coeffs, they are necessary for M1
+        // pin->SetBoolean("coordinates", "correct_connections", true);
+        // Mark GRMHD variables as implicitly evolved if RadM1 interaction is enabled
+        // (but note we're not using the Implicit package to do it!)
+        // if (pin->GetOrAddBoolean("RadM1", "implicit", true)) {
+        //     pin->SetBoolean("GRMHD", "implicit", true);
+        // }
+        // Force light crossing timestep
+        //pin->SetBoolean("parthenon/time", "use_dt_light", true);
+    }
+
     EndFlag();
 }
 
@@ -384,11 +407,11 @@ Packages_t KHARMA::ProcessPackages(std::unique_ptr<ParameterInput>& pin)
             CoordinateOutput::Initialize, pin.get());
     }
     // Driver package is the foundation
-    auto t_driver = tl.AddTask(
-        t_none, KHARMA::AddPackage, packages, KHARMADriver::Initialize, pin.get());
+    auto t_driver = tl.AddTask(t_none, KHARMA::AddPackage, packages, KHARMADriver::Initialize, pin.get());
+    //Enable eos package
+    auto t_eos = tl.AddTask(t_driver, KHARMA::AddPackage, packages, Microphysics::EOS::Initialize, pin.get());
     // GRMHD needs globals to mark packages
-    auto t_grmhd = tl.AddTask(
-        t_globals | t_driver, KHARMA::AddPackage, packages, GRMHD::Initialize, pin.get());
+    auto t_grmhd = tl.AddTask(t_globals | t_eos, KHARMA::AddPackage, packages, GRMHD::Initialize, pin.get());
     // Only load the inverter if GRMHD/EMHD isn't being evolved implicitly
     // Unless we want to use the explicitly-evolved ideal MHD variables as a guess for the
     // solver Or we want first-order flux corrections, which rely on a UtoP guess Note we
@@ -476,6 +499,19 @@ Packages_t KHARMA::ProcessPackages(std::unique_ptr<ParameterInput>& pin)
         auto t_wind = tl.AddTask(
             t_grmhd, KHARMA::AddPackage, packages, Wind::Initialize, pin.get());
     }
+
+    // Enable radiation package. Out of the package modification units.
+    if (pin->GetOrAddBoolean("units", "on", false)) {
+        auto t_units = tl.AddTask(t_grmhd, KHARMA::AddPackage, packages, Units::Initialize, pin.get());
+    }
+
+    // Enable radiation package. Out of the package modification RADM1.
+    bool use_radm1 = pin->GetOrAddBoolean("radM1", "on", false);
+    if (use_radm1) {
+        auto t_radM1 = tl.AddTask(t_grmhd, KHARMA::AddPackage, packages, RadM1::Initialize, pin.get());
+    }
+    // Enable calculating jcon iff it is in any list of outputs (and there's even B to calculate it).
+    // Since it is never required to restart, this is the only time we'd write (hence, need) it
     // Enable calculating jcon iff it is in any list of outputs (and there's even B to
     // calculate it). Since it is never required to restart, this is the only time we'd
     // write (hence, need) it
@@ -483,7 +519,12 @@ Packages_t KHARMA::ProcessPackages(std::unique_ptr<ParameterInput>& pin)
         auto t_current = tl.AddTask(
             t_b_field, KHARMA::AddPackage, packages, Current::Initialize, pin.get());
     }
+    
 
+    // Enable opac package
+    if (pin->GetOrAddBoolean("opac", "on", false)) {
+        auto t_opac = tl.AddTask(t_grmhd, KHARMA::AddPackage, packages, Microphysics::Opacity::Initialize, pin.get());
+    }
     // Execute the whole collection (just in case we do something fancy?)
     tc.Execute(); // TODO check return if Exe ever returns errors
 
@@ -516,7 +557,7 @@ Packages_t KHARMA::ProcessPackages(std::unique_ptr<ParameterInput>& pin)
     int n_implicit =
         StateDescriptor::CreateResolvedStateDescriptor(*packages)->GetPackDimension(
             Metadata::GetUserFlag("Implicit"));
-    if (n_implicit > 0) {
+    if (n_implicit > 0 && !use_radm1) {
         KHARMA::AddPackage(packages, Implicit::Initialize, pin.get());
     }
 

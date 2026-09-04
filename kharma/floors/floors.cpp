@@ -236,7 +236,15 @@ TaskStatus Floors::ApplyInitialFloors(
 
     const auto& G = pmb->coords;
 
-    const Real gam = pmb->packages.Get("GRMHD")->Param<Real>("gamma");
+    const auto& eos_params = pmb->packages.Get("eos")->AllParams();
+    auto eos = eos_params.Get<Microphysics::EOS::EOS>("d.EOS");
+
+    // Out of the package modification RADM1.
+    // I don't think we need an Apply Initial Floors function for radM1. I'm applying it
+    // in the fluid frame as well as it is done with the gas. For now, I'm applying the
+    // same floors to the radiation variables as the fluid variables, but we can adjust
+    // this as needed. The floor is only being applied to UU_RAD.
+    const bool use_rad = pmb->packages.AllPackages().count("RadM1");
 
     // If we're going to apply floors through the run, apply the same ones at init
     // Otherwise stick to specified/default geometric floors
@@ -274,16 +282,27 @@ TaskStatus Floors::ApplyInitialFloors(
             Real rhoflr_max, uflr_max;
             // Initial floors, so the radius-dependence of floors don't matter that much.
             int fflag = determine_floors(
-                G, P, m_p, gam, k, j, i, floors, floors, rhoflr_max, uflr_max);
+                G, P, m_p, eos, k, j, i, floors, floors, rhoflr_max, uflr_max);
             if (fflag) {
                 apply_floors<InjectionFrame::fluid>(
-                    G, P, m_p, gam, k, j, i, rhoflr_max, uflr_max, U, m_u);
-                apply_ceilings(G, P, m_p, gam, k, j, i, floors, floors, U, m_u);
+                    G, P, m_p, eos, k, j, i, rhoflr_max, uflr_max, U, m_u);
+                apply_ceilings(G, P, m_p, eos, k, j, i, floors, floors, U, m_u);
                 // P->U for any modified zones
                 Flux::p_to_u_mhd(
-                    G, P, m_p, emhd_params, gam, k, j, i, U, m_u, Loci::center);
+                    G, P, m_p, emhd_params, eos, k, j, i, U, m_u, Loci::center);
             }
         });
+
+    // Out of the package modification RADM1.
+    // Apply RadM1 floors after GRMHD is completely done.
+    if (use_rad) {
+        RadM1::ApplyRadM1Floors(mbd, domain);
+
+        // Because ApplyRadM1Floors only modifies Primitive variables (P),
+        // you MUST sync the modified Primitives back to Conserved variables (U) here.
+        // If you have a function like RadM1::BlockPtoU, call it now!
+        RadM1::BlockPtoU(mbd, domain, false);
+    }
 
     EndFlag();
     return TaskStatus::complete;
@@ -308,7 +327,8 @@ TaskStatus Floors::DetermineGRMHDFloors(MeshData<Real>* md, IndexDomain domain,
     const int rhofi = floors_map["Floors.rho_floor"].first;
     const int ufi = floors_map["Floors.u_floor"].first;
 
-    const Real gam = pmb0->packages.Get("GRMHD")->Param<Real>("gamma");
+    const auto& eos_params = pmb0->packages.Get("eos")->AllParams();
+    auto eos = eos_params.Get<Microphysics::EOS::EOS>("d.EOS");
 
     const IndexRange3 b = KDomain::GetRange(md, domain);
     const IndexRange block = IndexRange{0, P.GetDim(5) - 1};
@@ -321,7 +341,7 @@ TaskStatus Floors::DetermineGRMHDFloors(MeshData<Real>* md, IndexDomain domain,
             // non-destructively
             fflag(b, 0, k, j, i) =
                 static_cast<int>(fflag(b, 0, k, j, i)) |
-                determine_floors(G, P(b), m_p, gam, k, j, i, floors, floors_inner,
+                determine_floors(G, P(b), m_p, eos, k, j, i, floors, floors_inner,
                     floor_vals(b, rhofi, k, j, i), floor_vals(b, ufi, k, j, i));
         });
 

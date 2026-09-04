@@ -35,6 +35,11 @@
 
 #include "flux.hpp"
 
+// phoebus includes
+#include "microphysics/eos_kharma/eos_kharma.hpp"
+#include "phoebus_utils/unit_conversions.hpp"
+#include "phoebus_utils/variables.hpp"
+
 #include "domain.hpp"
 #include "floors_functions.hpp"
 
@@ -76,7 +81,30 @@ inline TaskStatus GetFlux(MeshData<Real>* md)
     const auto& pars = packages.Get("Fluxes")->AllParams();
     const auto& mhd_pars = packages.Get("GRMHD")->AllParams();
     const auto& globals = packages.Get("Globals")->AllParams();
+    
+    const auto& eos_params = packages.Get("eos")->AllParams();
+    auto eos = eos_params.Get<Microphysics::EOS::EOS>("d.EOS");
+
     const bool use_hlle = pars.Get<bool>("use_hlle");
+
+    // Out of the Package modification RADM1.
+    const bool use_rad = packages.AllPackages().count("RadM1");
+
+    int opacity_model = 0;
+    Real shocktube_kappa_rho = 0.0;
+    Real shocktube_kappa_scat = 0.0;
+    RadM1::UnitScales units_cgs{};
+    Microphysics::Opacities opacities;
+    if (use_rad) {
+        const auto& rad_pars = packages.Get("RadM1")->AllParams();
+        opacity_model = rad_pars.Get<int>("opacity_model");
+        shocktube_kappa_rho = rad_pars.Get<Real>("shocktube_kappa_rho");
+        shocktube_kappa_scat = rad_pars.Get<Real>("shocktube_kappa_scat");
+        units_cgs = rad_pars.Get<RadM1::UnitScales>("units_cgs");
+        if (packages.AllPackages().count("opacity")) {
+            opacities = packages.Get("opacity")->AllParams().Get<Microphysics::Opacities>("opacities");
+        }
+    }
 
     const bool reconstruction_floors = pars.Get<bool>("reconstruction_floors");
     const bool reconstruction_fallback = pars.Get<bool>("reconstruction_fallback");
@@ -99,8 +127,6 @@ inline TaskStatus GetFlux(MeshData<Real>* md)
     const Floors::Prescription& floors = floors_temp;
     const Floors::Prescription& floors_inner = floors_inner_temp;
 
-    const Real gam = mhd_pars.Get<Real>("gamma");
-
     // Check whether we're using constraint-damping
     // (which requires that a variable be propagated at ctop_max)
     const bool use_b_cd = packages.AllPackages().count("B_CD");
@@ -119,6 +145,13 @@ inline TaskStatus GetFlux(MeshData<Real>* md)
     PackIndexMap prims_map, cons_map;
     const auto& cmax = md->PackVariables(std::vector<std::string>{"Flux.cmax"});
     const auto& cmin = md->PackVariables(std::vector<std::string>{"Flux.cmin"});
+
+    // Out of the package modification RADM1.
+    // Adding radiation cmax and cmin
+    const auto& cmax_rad =
+        (use_rad) ? md->PackVariables(std::vector<std::string>{"Flux.cmax_rad"}) : cmax;
+    const auto& cmin_rad =
+        (use_rad) ? md->PackVariables(std::vector<std::string>{"Flux.cmin_rad"}) : cmin;
 
     const auto& P_all = md->PackVariables(
         std::vector<MetadataFlag>{Metadata::GetUserFlag("Primitive"), Metadata::Cell},
@@ -268,9 +301,9 @@ inline TaskStatus GetFlux(MeshData<Real>* md)
                 // zero (as intended)
                 int fflagl = fflag(bl, 0, k, j, i);
                 fflagl |= Floors::apply_geo_floors(
-                    G, Pl_all(bl), m_p, gam, k, j, i, floors, floors_inner, loc);
+                    G, Pl_all(bl), m_p, eos, k, j, i, floors, floors_inner, loc);
                 fflagl |= Floors::apply_geo_floors(
-                    G, Pr_all(bl), m_p, gam, k, j, i, floors, floors_inner, loc);
+                    G, Pr_all(bl), m_p, eos, k, j, i, floors, floors_inner, loc);
                 fflag(bl, 0, k, j, i) = fflagl;
             });
     }
@@ -377,15 +410,25 @@ inline TaskStatus GetFlux(MeshData<Real>* md)
 
             // Left
             GRMHD::calc_4vecs(G, Pl_all(bl), m_p, k, j, i, loc, Dtmp);
-            Flux::prim_to_flux(G, Pl_all(bl), m_p, Dtmp, emhd_params, gam, k, j, i, 0,
+            Flux::prim_to_flux(G, Pl_all(bl), m_p, Dtmp, emhd_params, eos, k, j, i, 0,
                 Ul_all(bl), m_u, loc);
-            Flux::prim_to_flux(G, Pl_all(bl), m_p, Dtmp, emhd_params, gam, k, j, i, dir,
+            Flux::prim_to_flux(G, Pl_all(bl), m_p, Dtmp, emhd_params, eos, k, j, i, dir,
                 Fl_all(bl), m_u, loc);
 
             // Magnetosonic speeds
             Real cmaxL, cminL;
-            Flux::vchar(G, Pl_all(bl), m_p, Dtmp, gam, emhd_params, k, j, i, loc, dir,
+            Flux::vchar(G, Pl_all(bl), m_p, Dtmp, eos, emhd_params, k, j, i, loc, dir,
                 cmaxL, cminL);
+            // Out of the package modification RADM1. Calculate radiation
+            // characteristic speeds.
+            if (use_rad) {
+                Real cmaxL_rad, cminL_rad;
+                Flux::vchar_rad(G, Pl_all(bl), m_p, Dtmp, eos, emhd_params, opacity_model,
+                    shocktube_kappa_rho, shocktube_kappa_scat, units_cgs, opacities, k, j, i,
+                    loc, dir, cmaxL_rad, cminL_rad);
+                cmax_rad(bl, dir - 1, k, j, i) = m::max(0., cmaxL_rad);
+                cmin_rad(bl, dir - 1, k, j, i) = m::min(0., cminL_rad);
+            }
 
             // Record speeds
             cmax(bl, dir - 1, k, j, i) = m::max(0., cmaxL);
@@ -407,15 +450,28 @@ inline TaskStatus GetFlux(MeshData<Real>* md)
             FourVectors Dtmp;
             // Right
             GRMHD::calc_4vecs(G, Pr_all(bl), m_p, k, j, i, loc, Dtmp);
-            Flux::prim_to_flux(G, Pr_all(bl), m_p, Dtmp, emhd_params, gam, k, j, i, 0,
+            Flux::prim_to_flux(G, Pr_all(bl), m_p, Dtmp, emhd_params, eos, k, j, i, 0,
                 Ur_all(bl), m_u, loc);
-            Flux::prim_to_flux(G, Pr_all(bl), m_p, Dtmp, emhd_params, gam, k, j, i, dir,
+            Flux::prim_to_flux(G, Pr_all(bl), m_p, Dtmp, emhd_params, eos, k, j, i, dir,
                 Fr_all(bl), m_u, loc);
 
             // Magnetosonic speeds
             Real cmaxR, cminR;
-            Flux::vchar(G, Pr_all(bl), m_p, Dtmp, gam, emhd_params, k, j, i, loc, dir,
+            Flux::vchar(G, Pr_all(bl), m_p, Dtmp, eos, emhd_params, k, j, i, loc, dir,
                 cmaxR, cminR);
+
+            // Calculate radiation characteristic speeds
+            // Out of the Package modification RADM1. Calculate radiation characteristic speeds.
+            if (use_rad) {
+                Real cmaxR_rad, cminR_rad;
+                Flux::vchar_rad(G, Pr_all(bl), m_p, Dtmp, eos, emhd_params, opacity_model,
+                    shocktube_kappa_rho, shocktube_kappa_scat, units_cgs, opacities, k, j, i,
+                    loc, dir, cmaxR_rad, cminR_rad);
+                cmax_rad(bl, dir - 1, k, j, i) =
+                    m::max(cmax_rad(bl, dir - 1, k, j, i), cmaxR_rad);
+                cmin_rad(bl, dir - 1, k, j, i) =
+                    -m::min(cmin_rad(bl, dir - 1, k, j, i), cminR_rad);
+            }
 
             // Calculate cmax/min based on comparison with cached values
             cmax(bl, dir - 1, k, j, i) = m::max(cmax(bl, dir - 1, k, j, i), cmaxR);
@@ -425,37 +481,92 @@ inline TaskStatus GetFlux(MeshData<Real>* md)
 
     // Apply what we've calculated
     Flag("GetFlux_" + std::to_string(dir) + "_riemann");
-    if (use_hlle) { // More fluxes would need a template
-        pmb0->par_for("flux_hlle", block.s, block.e, 0, nvar - 1, b.ks, b.ke, b.js, b.je,
-            b.is, b.ie,
-            KOKKOS_LAMBDA(const int& bl,
-                          const int& p,
-                          const int& k,
-                          const int& j,
-                          const int& i)
-            {
-                U_all(bl).flux(dir, p, k, j, i) =
-                    hlle(Fl_all(bl, p, k, j, i), Fr_all(bl, p, k, j, i),
-                        cmax(bl, dir - 1, k, j, i), cmin(bl, dir - 1, k, j, i),
-                        Ul_all(bl, p, k, j, i), Ur_all(bl, p, k, j, i));
-            });
-    } else {
-        pmb0->par_for("flux_llf", block.s, block.e, 0, nvar - 1, b.ks, b.ke, b.js, b.je,
-            b.is, b.ie,
-            KOKKOS_LAMBDA(const int& bl,
-                          const int& p,
-                          const int& k,
-                          const int& j,
-                          const int& i)
-            {
-                U_all(bl).flux(dir, p, k, j, i) =
-                    llf(Fl_all(bl, p, k, j, i), Fr_all(bl, p, k, j, i),
-                        cmax(bl, dir - 1, k, j, i), cmin(bl, dir - 1, k, j, i),
-                        Ul_all(bl, p, k, j, i), Ur_all(bl, p, k, j, i));
-            });
-    }
-    EndFlag();
+    // Apply what we've calculated
+    Flag("GetFlux_" + std::to_string(dir) + "_riemann");
 
+    if (use_rad) {
+        if (use_hlle) {
+            pmb0->par_for("flux_hlle", block.s, block.e, 0, nvar - 1, b.ks, b.ke, b.js, b.je,
+                b.is, b.ie,
+                KOKKOS_LAMBDA(const int& bl,
+                              const int& p,
+                              const int& k,
+                              const int& j,
+                              const int& i)
+                {
+                    // Default to Fluid Speeds (stored as positive magnitudes)
+                    Real cmax_val = cmax(bl, dir - 1, k, j, i);
+                    Real cmin_val = cmin(bl, dir - 1, k, j, i);
+
+                    // Override with Radiation Speeds if 'p' is a radiation variable
+                    if (use_rad && (p == m_u.UU_RAD || p == m_u.U1_RAD ||
+                                    p == m_u.U2_RAD || p == m_u.U3_RAD)) {
+                        cmax_val = cmax_rad(bl, dir - 1, k, j, i);
+                        cmin_val = cmin_rad(bl, dir - 1, k, j, i);
+                    }
+
+                    // Compute Flux
+                    U_all(bl).flux(dir, p, k, j, i) =
+                        hlle(Fl_all(bl, p, k, j, i), Fr_all(bl, p, k, j, i), cmax_val,
+                            cmin_val, Ul_all(bl, p, k, j, i), Ur_all(bl, p, k, j, i));
+                });
+        } else {
+            pmb0->par_for("flux_llf", block.s, block.e, 0, nvar - 1, b.ks, b.ke, b.js, b.je,
+                b.is, b.ie,
+                KOKKOS_LAMBDA(const int& bl,
+                              const int& p,
+                              const int& k,
+                              const int& j,
+                              const int& i)
+                {
+                    // Default to Fluid Speeds
+                    Real cmax_val = cmax(bl, dir - 1, k, j, i);
+                    Real cmin_val = cmin(bl, dir - 1, k, j, i);
+
+                    // Override with Radiation Speeds
+                    if (use_rad && (p == m_u.UU_RAD || p == m_u.U1_RAD ||
+                                    p == m_u.U2_RAD || p == m_u.U3_RAD)) {
+                        cmax_val = cmax_rad(bl, dir - 1, k, j, i);
+                        cmin_val = cmin_rad(bl, dir - 1, k, j, i);
+                    }
+
+                    // Compute Flux
+                    U_all(bl).flux(dir, p, k, j, i) =
+                        llf(Fl_all(bl, p, k, j, i), Fr_all(bl, p, k, j, i), cmax_val,
+                            cmin_val, Ul_all(bl, p, k, j, i), Ur_all(bl, p, k, j, i));
+                });
+        }
+    } else {
+        if (use_hlle) { // More fluxes would need a template
+            pmb0->par_for("flux_hlle", block.s, block.e, 0, nvar - 1, b.ks, b.ke, b.js, b.je,
+                b.is, b.ie,
+                KOKKOS_LAMBDA(const int& bl,
+                              const int& p,
+                              const int& k,
+                              const int& j,
+                              const int& i)
+                {
+                    U_all(bl).flux(dir, p, k, j, i) =
+                        hlle(Fl_all(bl, p, k, j, i), Fr_all(bl, p, k, j, i),
+                            cmax(bl, dir - 1, k, j, i), cmin(bl, dir - 1, k, j, i),
+                            Ul_all(bl, p, k, j, i), Ur_all(bl, p, k, j, i));
+                });
+        } else {
+            pmb0->par_for("flux_llf", block.s, block.e, 0, nvar - 1, b.ks, b.ke, b.js, b.je,
+                b.is, b.ie,
+                KOKKOS_LAMBDA(const int& bl,
+                              const int& p,
+                              const int& k,
+                              const int& j,
+                              const int& i)
+                {
+                    U_all(bl).flux(dir, p, k, j, i) =
+                        llf(Fl_all(bl, p, k, j, i), Fr_all(bl, p, k, j, i),
+                            cmax(bl, dir - 1, k, j, i), cmin(bl, dir - 1, k, j, i),
+                            Ul_all(bl, p, k, j, i), Ur_all(bl, p, k, j, i));
+                });
+        }
+    }
     EndFlag();
     return TaskStatus::complete;
 }

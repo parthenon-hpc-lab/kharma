@@ -1,0 +1,93 @@
+# McKinney et al. 2014 (MNRAS 441, 3177), section 5.10:
+# Radiative spherical (Bondi) accretion in 1D, a/M = 0.
+# Model E1T6 from Table 4: Mdot*c^2/L_Edd = 1.0, T_out = 1e6 K, fp = 1.2e-4
+
+<parthenon/job>
+problem_id = bondi_rad
+
+<parthenon/mesh>
+nx1 = 512
+nx2 = 1
+nx3 = 1
+
+<parthenon/meshblock>
+nx1 = 512
+nx2 = 1
+nx3 = 1
+
+<coordinates>
+correct_connections = false
+base = spherical_ks
+transform = eks
+a = 0.0
+r_in = 2.5
+r_out = 2.e4
+
+<parthenon/time>
+tlim = 1.21e5
+
+<driver>
+type = imex
+two_sync = false
+
+<GRMHD>
+cfl = 0.5
+gamma = 1.6665866858620597
+reconstruction = ppm
+
+<eos>
+type = IdealGas
+gamma = 1.6665866858620597
+Cv = 1.0
+
+<bondi_rad>
+mdot = 10.0
+T_out = 1.e6
+fp = 1.2e-4
+r_in_bondi = 2.5
+
+<b_field>
+solver = none
+
+<boundaries>
+inner_x1 = outflow
+# outer_x1 is set at runtime by InitializeRadiativeBondi
+check_inflow_outer_x1 = false
+
+<floors>
+disable_floors = true
+
+<inverter>
+backstop = false
+fix_average_neighbors = true
+
+<radM1>
+on = true
+mu = 1.0
+src_rootfind_eps = 1e-8 
+src_rootfind_tol = 1e-8
+src_rootfind_maxiter = 100
+
+<units>
+scale_free = false
+geom_mass_msun = 3.0
+fluid_mass_g =  6.203843e12
+
+<parthenon/output0>
+file_type = hdf5
+dt = 500.0
+single_precision_output = true
+variables = prims, cons, rimplflag, rinvflag, pflag
+
+<parthenon/output1>
+file_type = rst
+dt = 500.0
+
+<parthenon/output2>
+file_type = hst
+dt = 0.1
+
+<debug>
+verbose = 1
+extra_checks = 1
+flag_verbose = 2

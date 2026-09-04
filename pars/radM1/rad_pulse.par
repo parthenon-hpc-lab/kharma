@@ -1,0 +1,84 @@
+# Radiation pulse test
+
+<parthenon/job>
+problem_id = rad_pulse
+
+<parthenon/mesh>
+nx1 = 50
+x1min = -50.0
+x1max = 50.0
+
+nx2 = 50
+x2min = -50.0
+x2max = 50.0
+
+nx3 = 1
+x3min = -50.0
+x3max = 50.0
+
+<parthenon/meshblock>
+nx1 = 50
+nx2 = 50
+nx3 = 1
+
+<coordinates>
+base = cartesian_minkowski
+transform = null
+
+
+<parthenon/time>
+#tlim = 35.0 # for optically thin
+#tlim = 30000.0 # for optically thick
+integrator = rk2
+dt_min = 0.0001
+
+<driver>
+type = imex
+# Second sync at the end of each step
+# Can skip this with the robust inverter & face_ct B fields
+two_sync = false
+
+<GRMHD>
+cfl = 0.5
+gamma = 1.666667
+reconstruction = weno5
+
+<b_field>
+solver = none
+
+<boundaries>
+inner_x1 = outflow
+outer_x1 = outflow
+allow_inflow_inner_x1 = true
+allow_inflow_outer_x1 = true
+
+<floors>
+disable_floors = true
+
+<parthenon/output0>
+file_type = hdf5
+dt = 0.1
+single_precision_output = true
+variables = prims
+
+<parthenon/output1>
+file_type = hst
+dt = 0.1
+
+<debug>
+verbose = 1
+extra_checks = 0
+flag_verbose = 2
+
+<radM1>
+on = true
+src_rootfind_eps = 1e-8
+src_rootfind_tol = 1e-8
+src_rootfind_maxiter = 10
+
+<units> 
+on = true
+M_BH = 100
+rho_scale = 1e-4
+
+

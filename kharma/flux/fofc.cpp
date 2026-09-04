@@ -38,6 +38,11 @@
 #include "floors_functions.hpp"
 #include "inverter.hpp"
 
+// phoebus includes
+#include "microphysics/eos_kharma/eos_kharma.hpp"
+#include "phoebus_utils/unit_conversions.hpp"
+#include "phoebus_utils/variables.hpp"
+
 using namespace parthenon;
 
 // Very bad definition. TODO get rid of this eventually
@@ -53,6 +58,9 @@ TaskStatus Flux::MarkFOFC(MeshData<Real>* guess)
     auto pflag = guess->PackVariables(std::vector<std::string>{"pflag"});
     auto fofcflag = guess->PackVariables(std::vector<std::string>{"fofcflag"});
 
+    const auto& eos_params = pmb0->packages.Get("eos")->AllParams();
+    auto eos = eos_params.Get<Microphysics::EOS::EOS>("d.EOS");
+
     PackIndexMap cons_map, prims_map;
     std::vector<MetadataFlag> prims_flags = {
         Metadata::GetUserFlag("Primitive"), Metadata::Cell};
@@ -60,8 +68,6 @@ TaskStatus Flux::MarkFOFC(MeshData<Real>* guess)
     const auto& P = guess->PackVariables(prims_flags, prims_map);
     const auto& U = guess->PackVariablesAndFluxes(cons_flags, cons_map);
     const VarMap m_u(cons_map, true), m_p(prims_map, false);
-
-    const Real gam = pmb0->packages.Get("GRMHD")->Param<Real>("gamma");
 
     // Use values from floors package if it's enabled, otherwise any we've been asked to
     // apply
@@ -101,7 +107,7 @@ TaskStatus Flux::MarkFOFC(MeshData<Real>* guess)
             // If the solve failed, because we reconstructed a
             // negative or zero internal energy (even after floors!)
             Real rhomin_geom, umin_geom;
-            determine_geo_floors(G, P(bl), m_p, gam, k, j, i, floors, floors_inner,
+            determine_geo_floors(G, P(bl), m_p, eos, k, j, i, floors, floors_inner,
                 rhomin_geom, umin_geom);
             const Real umin = umin_geom;
             if (Inverter::failed(pflag(bl, 0, k, j, i)) &&
@@ -155,6 +161,8 @@ TaskStatus Flux::FOFC(MeshData<Real>* md, MeshData<Real>* guess)
 {
     auto pmb0 = md->GetBlockData(0)->GetBlockPointer();
     auto& packages = pmb0->packages;
+    const auto& eos_params = packages.Get("eos")->AllParams();
+    auto eos = eos_params.Get<Microphysics::EOS::EOS>("d.EOS");
     auto pmesh = md->GetMeshPointer();
     const int ndim = pmesh->ndim;
 
@@ -187,7 +195,6 @@ TaskStatus Flux::FOFC(MeshData<Real>* md, MeshData<Real>* guess)
 
     // Parameters
     const auto& pars = packages.Get("Fluxes")->AllParams();
-    const Real gam = packages.Get("GRMHD")->Param<Real>("gamma");
     const bool use_global = pars.Get<bool>("fofc_use_glf");
     const EMHD::EMHD_parameters& emhd_params = EMHD::GetEMHDParameters(packages);
     // Only fix faces if they exist
@@ -231,27 +238,27 @@ TaskStatus Flux::FOFC(MeshData<Real>* md, MeshData<Real>* guess)
                     FourVectors Dtmp;
                     // Left
                     GRMHD::calc_4vecs(G, Pl_all(b), m_p, k, j, i, loc, Dtmp);
-                    Flux::prim_to_flux(G, Pl_all(b), m_p, Dtmp, emhd_params, gam, k, j, i,
+                    Flux::prim_to_flux(G, Pl_all(b), m_p, Dtmp, emhd_params, eos, k, j, i,
                         0, Ul_all(b), m_u, loc);
-                    Flux::prim_to_flux(G, Pl_all(b), m_p, Dtmp, emhd_params, gam, k, j, i,
+                    Flux::prim_to_flux(G, Pl_all(b), m_p, Dtmp, emhd_params, eos, k, j, i,
                         dir, Fl_all(b), m_u, loc);
                     // Magnetosonic speeds
                     Real cmaxL, cminL;
-                    Flux::vchar(G, Pl_all(b), m_p, Dtmp, gam, emhd_params, k, j, i, loc,
-                        dir, cmaxL, cminL);
+                    Flux::vchar(G, Pl_all(b), m_p, Dtmp, eos, emhd_params, k, j, i,
+                        loc, dir, cmaxL, cminL);
                     // Record speeds
                     cmax(b, dir - 1, k, j, i) = m::max(0., cmaxL);
                     cmin(b, dir - 1, k, j, i) = m::min(0., cminL);
 
                     // Right
                     GRMHD::calc_4vecs(G, Pr_all(b), m_p, k, j, i, loc, Dtmp);
-                    Flux::prim_to_flux(G, Pr_all(b), m_p, Dtmp, emhd_params, gam, k, j, i,
+                    Flux::prim_to_flux(G, Pr_all(b), m_p, Dtmp, emhd_params, eos, k, j, i,
                         0, Ur_all(b), m_u, loc);
-                    Flux::prim_to_flux(G, Pr_all(b), m_p, Dtmp, emhd_params, gam, k, j, i,
+                    Flux::prim_to_flux(G, Pr_all(b), m_p, Dtmp, emhd_params, eos, k, j, i,
                         dir, Fr_all(b), m_u, loc);
                     // Magnetosonic speeds
                     Real cmaxR, cminR;
-                    Flux::vchar(G, Pr_all(b), m_p, Dtmp, gam, emhd_params, k, j, i, loc,
+                    Flux::vchar(G, Pr_all(b), m_p, Dtmp, eos, emhd_params, k, j, i, loc,
                         dir, cmaxR, cminR);
                     // Calculate cmax/min based on comparison with cached values
                     if (!use_global) {
