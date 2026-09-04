@@ -509,6 +509,8 @@ TaskStatus Flux::PostStepDiagnostics(const SimTime& tm, MeshData<Real>* md)
     const bool use_fofc = flux_pars.Get<bool>("use_fofc");
 
     // Debugging/diagnostic info about FOFC hits
+    // This verbosity check is only here to save time, Check&Print hits will
+    // stay silent by itself and just return values
     if (use_fofc && flag_verbose > 0) {
         std::map<int, std::string> fofc_label = {{1, "Flux-corrected"}};
         Reductions::StartFlagReduce(

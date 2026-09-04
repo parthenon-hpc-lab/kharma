@@ -411,6 +411,8 @@ TaskStatus Floors::PostStepDiagnostics(const SimTime& tm, MeshData<Real>* md)
     const int flag_verbose = pars.Get<int>("flag_verbose");
 
     // Debugging/diagnostic info about floor flags
+    // This check is *only* to save time when not printing.
+    // Check&PrintHits has its own verbosity check before actually printing
     if (flag_verbose > 0) {
         Reductions::StartFlagReduce(
             md, "fflag", FFlag::flag_names, IndexDomain::interior, true, 0);
