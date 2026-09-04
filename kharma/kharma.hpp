@@ -1,25 +1,25 @@
-/* 
+/*
  *  File: kharma.hpp
- *  
+ *
  *  BSD 3-Clause License
- *  
+ *
  *  Copyright (c) 2020, AFD Group at UIUC
  *  All rights reserved.
- *  
+ *
  *  Redistribution and use in source and binary forms, with or without
  *  modification, are permitted provided that the following conditions are met:
- *  
+ *
  *  1. Redistributions of source code must retain the above copyright notice, this
  *     list of conditions and the following disclaimer.
- *  
+ *
  *  2. Redistributions in binary form must reproduce the above copyright notice,
  *     this list of conditions and the following disclaimer in the documentation
  *     and/or other materials provided with the distribution.
- *  
+ *
  *  3. Neither the name of the copyright holder nor the names of its
  *     contributors may be used to endorse or promote products derived from
  *     this software without specific prior written permission.
- *  
+ *
  *  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  *  AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  *  IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -37,46 +37,53 @@
 #include "types.hpp"
 
 /**
- * General preferences for KHARMA.  Anything semi-driver-independent, like loading packages, etc.
+ * General preferences for KHARMA.  Anything semi-driver-independent, like loading
+ * packages, etc.
  */
-namespace KHARMA {
+namespace KHARMA
+{
 
 /**
- * Initialize a "package" of global variables: quantities needed randomly in several places.
- * Some are physical e.g. time, step times. Others track program state like initialization vs. stepping.
+ * Initialize a "package" of global variables: quantities needed randomly in several
+ * places. Some are physical e.g. time, step times. Others track program state like
+ * initialization vs. stepping.
  */
-std::shared_ptr<KHARMAPackage> InitializeGlobals(ParameterInput *pin, std::shared_ptr<Packages_t>& packages);
+std::shared_ptr<KHARMAPackage> InitializeGlobals(
+    ParameterInput* pin, std::shared_ptr<Packages_t>& packages);
 
 /**
- * Version for restarts, called in PostInitialize if we're restarting from a Parthenon restart file
- * Note this doesn't do very much -- Parthenon is good about restoring things the way we'd like
+ * Version for restarts, called in PostInitialize if we're restarting from a Parthenon
+ * restart file Note this doesn't do very much -- Parthenon is good about restoring things
+ * the way we'd like
  */
-void ResetGlobals(ParameterInput *pin, Mesh *pmesh);
+void ResetGlobals(ParameterInput* pin, Mesh* pmesh);
 
 /**
  * Update variables in Globals package based on Parthenon state incl. SimTime struct
  */
-void PreStepWork(Mesh *pmesh, ParameterInput *pin, const SimTime &tm);
+void PreStepWork(Mesh* pmesh, ParameterInput* pin, const SimTime& tm);
 /**
  * Update variables in Globals package based on Parthenon state incl. SimTime struct
  */
-void PostStepWork(Mesh *pmesh, ParameterInput *pin, const SimTime &tm);
+void PostStepWork(Mesh* pmesh, ParameterInput* pin, const SimTime& tm);
 
 /**
- * Task to add a package.  Lets us queue up all the packages we want in a task list, *then* load them
- * with correct dependencies and everything!
+ * Task to add a package.  Lets us queue up all the packages we want in a task list,
+ * *then* load them with correct dependencies and everything!
  */
 TaskStatus AddPackage(std::shared_ptr<Packages_t>& packages,
-                      std::function<std::shared_ptr<KHARMAPackage>(ParameterInput*, std::shared_ptr<Packages_t>&)> package_init,
-                      ParameterInput *pin);
+    std::function<std::shared_ptr<KHARMAPackage>(
+        ParameterInput*, std::shared_ptr<Packages_t>&)>
+        package_init,
+    ParameterInput* pin);
 
 /**
- * This function messes with all Parthenon's parameters in-place before we hand them to the Mesh,
- * so that KHARMA decks can omit/infer some things parthenon needs.
- * This includes boundaries in spherical coordinates, coordinate system translations, etc.
- * This function also handles setting parameters from restart files
+ * This function messes with all Parthenon's parameters in-place before we hand them to
+ * the Mesh, so that KHARMA decks can omit/infer some things parthenon needs. This
+ * includes boundaries in spherical coordinates, coordinate system translations, etc. This
+ * function also handles setting parameters from restart files
  */
-void FixParameters(ParameterInput *pin, bool is_parthenon_restart);
+void FixParameters(ParameterInput* pin, bool is_parthenon_restart);
 
 /**
  * Load any packages specified in the input parameters
@@ -93,19 +100,20 @@ Packages_t ProcessPackages(std::unique_ptr<ParameterInput>& pin);
  * an exact match to a vector element, so sub-names like `prims.`
  * or `coords.` will match any field which contains them.
  */
-inline bool FieldIsOutput(ParameterInput *pin, std::string name)
+inline bool FieldIsOutput(ParameterInput* pin, std::string name)
 {
-    InputBlock *pib = pin->pfirst_block;
-    while (pib != nullptr) {
+    auto block_names = pin->GetBlockNamesWithPrefix("parthenon/output");
+    for (auto block_name : block_names) {
         // For every output block with a 'variables' entry...
-        if (pib->block_name.find("parthenon/output") != std::string::npos &&
-            pin->DoesParameterExist(pib->block_name, "variables")) {
-            std::string allvars = pin->GetString(pib->block_name, "variables");
-            if (allvars.find(name) != std::string::npos) {
-                return true;
+        if (pin->DoesParameterExist(block_name, "variables")) {
+            std::vector<std::string> allvars =
+                pin->GetVector<std::string>(block_name, "variables");
+            for (std::string var : allvars) {
+                if (var.find(name) != std::string::npos) {
+                    return true;
+                }
             }
         }
-        pib = pib->pnext;
     }
     return false;
 }
@@ -115,7 +123,8 @@ inline bool FieldIsOutput(ParameterInput *pin, std::string name)
  * it uses only the package list, and counts through each variable in each package.
  * Mostly useful for initialization.
  */
-inline std::vector<std::string> GetVariableNames(Packages_t* packages, Metadata::FlagCollection fc)
+inline std::vector<std::string> GetVariableNames(
+    Packages_t* packages, Metadata::FlagCollection fc)
 {
     // Count dimensions (1 for scalars + vector lengths) of each package's variables
     std::vector<std::string> names;

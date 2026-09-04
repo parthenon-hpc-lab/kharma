@@ -483,55 +483,6 @@ KOKKOS_INLINE_FUNCTION int apply_floors<InjectionFrame::mixed_normal_drift>(
  *
  * NOT LOCKSTEP: Operates on and respects primitives *only*
  */
-template<typename Local>
-KOKKOS_INLINE_FUNCTION int apply_geo_floors(const GRCoordinates& G, Local& P,
-    const VarMap& m, const Microphysics::EOS::EOS& eos, const int& j, const int& i,
-    const Floors::Prescription& floors, const Floors::Prescription& floors_inner,
-    const Loci loc = Loci::center)
-{
-    // Choose our floor scheme
-    const Floors::Prescription& myfloors =
-        (floors.radius_dependent_floors && G.r(0, j, i) < floors.floors_switch_r)
-            ? floors_inner
-            : floors;
-
-    // Apply only the geometric floors
-    Real rhoflr_geom, uflr_geom;
-    if (G.coords.is_spherical()) {
-        const GReal r = G.r(0, j, i);
-        // r_char sets more aggressive floor close to EH but backs off
-        Real rhoscal = (myfloors.use_r_char) ? 1. / ((r * r) * (1 + r / myfloors.r_char))
-                                             : 1. / m::sqrt(r * r * r);// 
-        rhoflr_geom = m::max(myfloors.rho_min_geom * rhoscal, myfloors.rho_min_const);
-        //TODO_EOS: check with cora what she's trying to do here. 
-        // For now make it gam1
-        Real sie = P(m.UU) / P(m.RHO);
-        Real gamma1 = eos.BulkModulusFromDensityInternalEnergy(P(m.RHO),sie)/eos.PressureFromDensityInternalEnergy(P(m.RHO),sie);
-        uflr_geom =
-            m::max(myfloors.u_min_geom * m::pow(rhoscal, gamma1), myfloors.u_min_const); //ufloor = max(rhoscal^gamma1, constant umin)
-    } else {
-        rhoflr_geom = myfloors.rho_min_const;
-        uflr_geom = myfloors.u_min_const;
-    }
-
-    int fflag = 0;
-    // Record Geometric floor hits
-    fflag |= (rhoflr_geom > P(m.RHO)) * FFlag::GEOM_RHO_FLUX;
-    fflag |= (uflr_geom > P(m.UU)) * FFlag::GEOM_U_FLUX;
-
-    P(m.RHO) += m::max(0., rhoflr_geom - P(m.RHO));
-    P(m.UU) += m::max(0., uflr_geom - P(m.UU));
-
-    // These are a last-ditch *after* the usual floor applications.  Keep them stable
-    if (fflag) {
-        P(m.U1) = 0.;
-        P(m.U2) = 0.;
-        P(m.U3) = 0.;
-    }
-
-    return fflag;
-}
-
 template<typename Global>
 KOKKOS_INLINE_FUNCTION int apply_geo_floors(const GRCoordinates& G, Global& P,
     const VarMap& m, const Microphysics::EOS::EOS& eos, const int& k, const int& j, const int& i,
@@ -571,6 +522,12 @@ KOKKOS_INLINE_FUNCTION int apply_geo_floors(const GRCoordinates& G, Global& P,
 
     P(m.RHO, k, j, i) += m::max(0., rhoflr_geom - P(m.RHO, k, j, i));
     P(m.UU, k, j, i) += m::max(0., uflr_geom - P(m.UU, k, j, i));
+    // These are a last-ditch *after* the usual floor applications.  Keep them stable
+    if (fflag) {
+        P(m.U1, k, j, i) = 0.;
+        P(m.U2, k, j, i) = 0.;
+        P(m.U3, k, j, i) = 0.;
+    }
 
     // These are a last-ditch *after* the usual floor applications.  Keep them stable
     if (fflag) {

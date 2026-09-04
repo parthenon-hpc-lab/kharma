@@ -883,7 +883,7 @@ TaskStatus KBoundaries::FixFlux(MeshData<Real>* md)
                                 j, i, dir, Fl_all, m_u, loc);
                             // Magnetosonic speeds
                             Real cmaxL, cminL;
-                            Flux::vchar_global(G, Pl_all, m_p, Dtmp, eos, emhd_params, k,
+                            Flux::vchar(G, Pl_all, m_p, Dtmp, eos, emhd_params, k,
                                 j, i, loc, dir, cmaxL, cminL);
                             // Record speeds
                             cmax(dir - 1, k, j, i) = m::max(0., cmaxL);
@@ -897,7 +897,7 @@ TaskStatus KBoundaries::FixFlux(MeshData<Real>* md)
                                 j, i, dir, Fr_all, m_u, loc);
                             // Magnetosonic speeds
                             Real cmaxR, cminR;
-                            Flux::vchar_global(G, Pr_all, m_p, Dtmp, eos, emhd_params, k,
+                            Flux::vchar(G, Pr_all, m_p, Dtmp, eos, emhd_params, k,
                                 j, i, loc, dir, cmaxR, cminR);
 
                             // Reset cmax/cmin based on our flux
@@ -947,7 +947,7 @@ TaskStatus KBoundaries::FixFlux(MeshData<Real>* md)
                                 j, i, bdir, Fl_all, m_u, Loci::center);
                             // Magnetosonic speeds
                             Real cmaxL, cminL;
-                            Flux::vchar_global(G, Pl_all, m_p, Dtmp, eos, emhd_params, k,
+                            Flux::vchar(G, Pl_all, m_p, Dtmp, eos, emhd_params, k,
                                 j, i, Loci::center, bdir, cmaxL, cminL);
                             // Record speeds
                             cmax(bdir - 1, k, j, i) = m::max(0., cmaxL);
@@ -962,7 +962,7 @@ TaskStatus KBoundaries::FixFlux(MeshData<Real>* md)
                                 j, i, bdir, Fr_all, m_u, Loci::center);
                             // Magnetosonic speeds
                             Real cmaxR, cminR;
-                            Flux::vchar_global(G, Pr_all, m_p, Dtmp, eos, emhd_params, k,
+                            Flux::vchar(G, Pr_all, m_p, Dtmp, eos, emhd_params, k,
                                 j, i, Loci::center, bdir, cmaxR, cminR);
 
                             // Reset cmax/cmin based on our flux
