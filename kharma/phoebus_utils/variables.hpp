@@ -16,7 +16,7 @@
 
 //#include "compile_constants.hpp"
 
-#include <pack/sparse_pack.hpp>
+#include <pack/sparse_pack/sparse_pack.hpp>
 #include <parthenon/package.hpp>
 
 #define VARIABLE(ns, varname)                                                            \

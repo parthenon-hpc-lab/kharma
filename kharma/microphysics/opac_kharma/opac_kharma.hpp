@@ -21,9 +21,15 @@ using namespace parthenon::package::prelude;
 
 
 #include "kharma_package.hpp"
+//Include neutrinos opacities
+#include <singularity-opac/neutrinos/mean_opacity_neutrinos.hpp>
+#include <singularity-opac/neutrinos/mean_s_opacity_neutrinos.hpp>
+#include <singularity-opac/neutrinos/opac_neutrinos.hpp>
+#include <singularity-opac/neutrinos/s_opac_neutrinos.hpp>
 
 #include <singularity-opac/photons/mean_opacity_photons.hpp>
 #include <singularity-opac/photons/mean_s_opacity_photons.hpp>
+#include <singularity-opac/photons/mean_photon_s_variant.hpp>
 #include <singularity-opac/photons/opac_photons.hpp>
 #include <singularity-opac/photons/s_opac_photons.hpp>
 
@@ -35,7 +41,8 @@ class Opacities {
   using MeanOpacity = singularity::photons::MeanOpacity;
   using MeanNonCGSUnits = singularity::photons::MeanNonCGSUnits<MeanOpacity>;
   using SOpacity = singularity::photons::SOpacity;
-  using MeanSOpacity = singularity::photons::MeanSOpacity;
+  using MeanSOpacityBase = singularity::photons::MeanSOpacityBase;
+  using MeanSOpacity = singularity::photons::impl::MeanSVariant<MeanSOpacityBase, singularity::photons::MeanNonCGSUnitsS<MeanSOpacityBase>>;
   using MeanNonCGSUnitsS = singularity::photons::MeanNonCGSUnitsS<MeanSOpacity>;
 
  public:

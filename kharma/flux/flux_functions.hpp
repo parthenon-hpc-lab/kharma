@@ -322,8 +322,8 @@ KOKKOS_FORCEINLINE_FUNCTION void p_to_u_mhd(const GRCoordinates& G, const Global
  * Calculate the radiation characteristic speeds.
  * Out of the package modification RADM1.
  */
-template<typename Local>
-KOKKOS_FORCEINLINE_FUNCTION void vchar_rad(const GRCoordinates& G, const Local& P,
+template<typename Global>
+KOKKOS_FORCEINLINE_FUNCTION void vchar_rad(const GRCoordinates& G, const Global& P,
     const VarMap& m, const FourVectors& D, const Microphysics::EOS::EOS& eos,
     const EMHD::EMHD_parameters& emhd_params, const int& opacity_model,
     const Real& shocktube_kappa_rho, const Real& shocktube_kappa_scat,
@@ -331,17 +331,17 @@ KOKKOS_FORCEINLINE_FUNCTION void vchar_rad(const GRCoordinates& G, const Local& 
     const int& k,
     const int& j, const int& i, const Loci& loc, const int& dir, Real& cmax, Real& cmin)
 {
-    const Real sie = P(m.UU)/P(m.RHO);
-    const Real pressure = eos.PressureFromDensityInternalEnergy(P(m.RHO),sie);
-    const Real bulk = eos.BulkModulusFromDensityInternalEnergy(P(m.RHO), sie);
-    const Real ef = P(m.RHO) + pressure + P(m.UU);
+    const Real sie = P(m.UU, k, j, i)/P(m.RHO, k, j, i);
+    const Real pressure = eos.PressureFromDensityInternalEnergy(P(m.RHO, k, j, i),sie);
+    const Real bulk = eos.BulkModulusFromDensityInternalEnergy(P(m.RHO, k, j, i), sie);
+    const Real ef = P(m.RHO, k, j, i) + pressure + P(m.UU, k, j, i);
     const Real gam = bulk / pressure;
-    GReal Tgas = (gam - 1.) * P(m.UU) / P(m.RHO);
+    GReal Tgas = (gam - 1.) * P(m.UU, k, j, i) / P(m.RHO, k, j, i);
     // Out of the package modification RADM1.
     GReal kappa_abs = RadM1::calc_kabs(
-        P(m.RHO), Tgas, opacity_model, shocktube_kappa_rho, units_cgs, opacities);
+        P(m.RHO, k, j, i), Tgas, opacity_model, shocktube_kappa_rho, units_cgs, opacities);
     GReal kappa_s = RadM1::calc_kscattering(
-        P(m.RHO), Tgas, opacity_model, shocktube_kappa_scat, units_cgs, opacities);
+        P(m.RHO, k, j, i), Tgas, opacity_model, shocktube_kappa_scat, units_cgs, opacities);
 
     GReal kappa_tot = kappa_abs + kappa_s;
 

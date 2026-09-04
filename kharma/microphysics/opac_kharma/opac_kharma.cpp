@@ -7,9 +7,16 @@
 #include "utils/constants.hpp"
 #include <parthenon/package.hpp>
 
+//Include neutrinos opacities
+#include <singularity-opac/neutrinos/mean_opacity_neutrinos.hpp>
+#include <singularity-opac/neutrinos/mean_s_opacity_neutrinos.hpp>
+#include <singularity-opac/neutrinos/opac_neutrinos.hpp>
+#include <singularity-opac/neutrinos/s_opac_neutrinos.hpp>
+
 // singularity includes -- photon opacities
 #include <singularity-opac/photons/mean_opacity_photons.hpp>
 #include <singularity-opac/photons/mean_s_opacity_photons.hpp>
+#include <singularity-opac/photons/mean_photon_s_variant.hpp>
 #include <singularity-opac/photons/opac_photons.hpp>
 #include <singularity-opac/photons/s_opac_photons.hpp>
 
@@ -25,6 +32,7 @@ namespace Microphysics {
 namespace Opacity {
 std::shared_ptr<KHARMAPackage> Initialize(ParameterInput *pin, std::shared_ptr<Packages_t>& packages) {
   using namespace singularity::photons;
+  using namespace singularity::neutrinos;
 
   auto pkg = std::make_shared<KHARMAPackage>("opacity");
   Params &params = pkg->AllParams();
@@ -246,8 +254,9 @@ std::shared_ptr<KHARMAPackage> Initialize(ParameterInput *pin, std::shared_ptr<P
       const Real lTMin = pin->GetOrAddReal("mean_opacity", "ltmin", std::log10(0.1));
       const Real lTMax = pin->GetOrAddReal("mean_opacity", "ltmax", std::log10(10.));
       const int NT = pin->GetOrAddInteger("mean_opacity", "nt", 10);
-      MeanSOpacity mean_opac_host = MeanSOpacityScaleFree(
-          opacity_host, lRhoMin, lRhoMax, NRho, lTMin, lTMax, NT);
+      MeanSOpacity mean_opac_host(
+          MeanSOpacityBase(opacity_host, lRhoMin, lRhoMax, NRho, lTMin, lTMax, NT, YeMin,
+                            YeMax, NYe));
       auto mean_opac_device = mean_opac_host.GetOnDevice();
       params.Add("h.mean_s_opacity", mean_opac_host);
       params.Add("d.mean_s_opacity", mean_opac_device);
@@ -259,11 +268,14 @@ std::shared_ptr<KHARMAPackage> Initialize(ParameterInput *pin, std::shared_ptr<P
       const Real lTMin = pin->GetOrAddReal("mean_opacity", "ltmin", std::log10(1.e2));
       const Real lTMax = pin->GetOrAddReal("mean_opacity", "ltmax", std::log10(1.e12));
       const int NT = pin->GetOrAddInteger("mean_opacity", "nt", 10);
-      auto cgs_mean_opacity = MeanSOpacityCGS(opacity_host, lRhoMin, lRhoMax, NRho, lTMin,
-                                              lTMax, NT);
-      MeanSOpacity mean_opac_host = MeanNonCGSUnitsS<MeanSOpacityCGS>(
-          std::forward<MeanSOpacityCGS>(cgs_mean_opacity), time_unit, mass_unit,
-          length_unit, temp_unit);
+      // TODO (JWM): placeholder frequency-range defaults, confirm with Jonah
+      const Real lNuMin = pin->GetOrAddReal("mean_opacity", "lnumin", std::log10(1.e14));
+      const Real lNuMax = pin->GetOrAddReal("mean_opacity", "lnumax", std::log10(1.e22));
+      const int NNu = pin->GetOrAddInteger("mean_opacity", "nnu", 10);
+      MeanSOpacityBase cgs_mean_opacity(opacity_host, lRhoMin, lRhoMax, NRho, lTMin, lTMax,
+                                        NT, YeMin, YeMax, NYe, lNuMin, lNuMax, NNu);
+      MeanSOpacity mean_opac_host(MeanNonCGSUnitsS<MeanSOpacityBase>(
+          std::move(cgs_mean_opacity), time_unit, mass_unit, length_unit, temp_unit));
       auto mean_opac_device = mean_opac_host.GetOnDevice();
       params.Add("h.mean_s_opacity", mean_opac_host);
       params.Add("d.mean_s_opacity", mean_opac_device);
