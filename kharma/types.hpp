@@ -87,12 +87,18 @@ inline std::vector<TE> OrthogonalEdges(const T& dir) {
         ((dir == X2DIR) ? std::vector<TE>{E1, E3} : std::vector<TE>{E1, E2});
 }
 
+// Struct for an unrolled 4-vector, avoids lots of stack/global memory allocs
+typedef struct {
+  Real u0, u1, u2, u3;
+  KOKKOS_FORCEINLINE_FUNCTION 
+  Real &operator[](const int i) {
+    return (i ==  0) ? u0 : (i == 1) ? u1 : (i == 2) ? u2 : u3;
+  }
+} FourVector;
+
 // Struct for derived 4-vectors at a point, usually calculated and needed together
 typedef struct {
-    Real ucon[GR_DIM];
-    Real ucov[GR_DIM];
-    Real bcon[GR_DIM];
-    Real bcov[GR_DIM];
+  FourVector ucon, ucov, bcon, bcov;
 } FourVectors;
 
 typedef struct {

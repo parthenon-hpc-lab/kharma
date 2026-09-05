@@ -116,6 +116,7 @@ inline TaskStatus GetFlux(MeshData<Real>* md)
     const Loci loc = loc_of(dir);
 
     // Pack variables.  Keep ctop separate
+    // TODO(CEP) Packs have registers, pack once in a sparsepack
     PackIndexMap prims_map, cons_map;
     const auto& cmax = md->PackVariables(std::vector<std::string>{"Flux.cmax"});
     const auto& cmin = md->PackVariables(std::vector<std::string>{"Flux.cmin"});
@@ -127,6 +128,7 @@ inline TaskStatus GetFlux(MeshData<Real>* md)
         std::vector<MetadataFlag>{Metadata::Conserved, Metadata::Cell}, cons_map);
     const VarMap m_u(cons_map, true), m_p(prims_map, false);
 
+    // TODO(CEP) Use one pack here, this is slow
     const auto& Pl_all = md->PackVariables(std::vector<std::string>{"Flux.Pl"});
     const auto& Pr_all = md->PackVariables(std::vector<std::string>{"Flux.Pr"});
     const auto& Ul_all = md->PackVariables(std::vector<std::string>{"Flux.Ul"});
