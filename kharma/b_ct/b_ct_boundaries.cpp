@@ -42,6 +42,11 @@
 #include "inverter.hpp"
 #include "kharma.hpp"
 
+#include "microphysics/eos_kharma/eos_kharma.hpp"
+#include "phoebus_utils/unit_conversions.hpp"
+#include "phoebus_utils/variables.hpp"
+
+
 void B_CT::ZeroBoundaryEMF(MeshBlockData<Real>* rc, IndexDomain domain,
     const VariablePack<Real>& emfpack, bool coarse)
 {
@@ -314,6 +319,9 @@ void B_CT::ReconnectBoundaryB3(MeshBlockData<Real>* rc, IndexDomain domain,
     const int bdir = KBoundaries::BoundaryDirection(bface);
     const auto bname = KBoundaries::BoundaryName(bface);
 
+    const auto& eos_params = pmb->packages.Get("eos")->AllParams();
+    auto eos = eos_params.Get<Microphysics::EOS::EOS>("d.EOS");
+
     // Pull cell-centered values, as we need to update fluid primitives
     // TODO standardize on passing Packs or Datas...
     PackIndexMap prims_map, cons_map;
@@ -325,7 +333,6 @@ void B_CT::ReconnectBoundaryB3(MeshBlockData<Real>* rc, IndexDomain domain,
 
     const auto& G = pmb->coords;
 
-    const Real gam = pmb->packages.Get("GRMHD")->Param<Real>("gamma");
 
     const int reconnection_outer_buffer =
         pmb->packages.Get("B_CT")->Param<int>("reconnection_outer_buffer");
@@ -380,14 +387,14 @@ void B_CT::ReconnectBoundaryB3(MeshBlockData<Real>* rc, IndexDomain domain,
 
                     // Recover primitive GRMHD variables from our modified U
                     Inverter::u_to_p<Inverter::Type::kastaun>(
-                        G, U, m_u, gam, k, jf, i, P, m_p, Loci::center, 25, 1e-12);
+                        G, U, m_u, eos, k, jf, i, P, m_p, Loci::center, 25, 1e-12);
                     // Floor them
                     // TODO THIS IS IN FLUID FRAME
                     int fflag = Floors::apply_geo_floors(
-                        G, P, m_p, gam, k, jf, i, floors, floors, Loci::center);
+                        G, P, m_p, eos, k, jf, i, floors, floors, Loci::center);
                     // Recalculate U on anything we floored
                     if (fflag)
-                        GRMHD::p_to_u(G, P, m_p, gam, k, jf, i, U, m_u, Loci::center);
+                        GRMHD::p_to_u(G, P, m_p, eos, k, jf, i, U, m_u, Loci::center);
                 });
         });
 }

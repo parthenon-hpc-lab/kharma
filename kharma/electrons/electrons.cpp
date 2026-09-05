@@ -41,6 +41,11 @@
 #include "kharma.hpp"
 #include "kharma_driver.hpp"
 
+// phoebus includes
+#include "microphysics/eos_kharma/eos_kharma.hpp"
+#include "phoebus_utils/unit_conversions.hpp"
+#include "phoebus_utils/variables.hpp"
+
 #include <parthenon/parthenon.hpp>
 #include <utils/string_utils.hpp>
 
@@ -236,7 +241,10 @@ TaskStatus InitElectrons(MeshBlockData<Real>* rc, ParameterInput* pin)
     GridScalar rho = rc->Get("prims.rho").data;
     GridScalar u = rc->Get("prims.u").data;
 
-    const Real gam = pmb->packages.Get("GRMHD")->Param<Real>("gamma");
+    const auto& eos_params = pmb->packages.Get("eos")->AllParams();
+    auto eos = eos_params.Get<Microphysics::EOS::EOS>("d.EOS");
+
+    //const Real gam = pmb->packages.Get("GRMHD")->Param<Real>("gamma");
     const Real game = pmb->packages.Get("Electrons")->Param<Real>("gamma_e");
     const Real fel0 = pmb->packages.Get("Electrons")->Param<Real>("fel_0");
 
@@ -249,6 +257,9 @@ TaskStatus InitElectrons(MeshBlockData<Real>* rc, ParameterInput* pin)
         {
             if (p == ktot_index) {
                 // Initialize total entropy by definition,
+                Real sie = u(k, j, i) / rho(k, j, i);
+                Real gam = eos.BulkModulusFromDensityInternalEnergy(rho(k, j, i),sie)/eos.PressureFromDensityInternalEnergy(rho(k, j, i),sie);
+
                 e_P(p, k, j, i) = (gam - 1.) * u(k, j, i) * m::pow(rho(k, j, i), -gam);
             } else {
                 // and e- entropy by given constant initial fraction
@@ -322,7 +333,10 @@ TaskStatus ApplyElectronHeating(
     auto pmb = rc->GetBlockPointer();
     const auto& G = pmb->coords;
 
-    const Real gam = pmb->packages.Get("GRMHD")->Param<Real>("gamma");
+    const auto& eos_params = pmb->packages.Get("eos")->AllParams();
+    auto eos = eos_params.Get<Microphysics::EOS::EOS>("d.EOS");
+
+    //const Real gam = pmb->packages.Get("GRMHD")->Param<Real>("gamma");
     const Real gamp = pmb->packages.Get("Electrons")->Param<Real>("gamma_p");
     const Real game = pmb->packages.Get("Electrons")->Param<Real>("gamma_e");
     const Real fel_const = pmb->packages.Get("Electrons")->Param<Real>("fel_constant");
@@ -350,6 +364,9 @@ TaskStatus ApplyElectronHeating(
             Real bsq = dot(Dtmp.bcon, Dtmp.bcov);
 
             // Calculate the new total entropy in this cell considering heating
+            Real sie = P_new(m_p.UU, k, j, i) / P_new(m_p.RHO, k, j, i);
+            Real gam = eos.BulkModulusFromDensityInternalEnergy(P_new(m_p.RHO, k, j, i),sie)/eos.PressureFromDensityInternalEnergy(P_new(m_p.RHO, k, j, i),sie);
+
             const Real k_energy_conserving = (gam - 1.) * P_new(m_p.UU, k, j, i) /
                                              m::pow(P_new(m_p.RHO, k, j, i), gam);
 
@@ -671,7 +688,7 @@ void ApplyFloors(MeshBlockData<Real>* mbd, IndexDomain domain)
 
     const auto& G = pmb->coords;
 
-    const Real gam = packages.Get("GRMHD")->Param<Real>("gamma");
+    //const Real gam = packages.Get("GRMHD")->Param<Real>("gamma");
     const Floors::Prescription floors =
         packages.Get("Floors")->Param<Floors::Prescription>("prescription");
     const Floors::Prescription floors_inner =

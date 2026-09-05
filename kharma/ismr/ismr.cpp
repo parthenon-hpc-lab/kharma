@@ -88,6 +88,7 @@ TaskStatus ISMR::DerefinePoles(MeshData<Real>* md)
     // TODO this routine only applies to polar boundaries for now.
     auto pmesh = md->GetMeshPointer();
     const uint nlevels = pmesh->packages.Get("ISMR")->Param<uint>("nlevels");
+    
 
     // Figure out indices
     int ng = Globals::nghost;
@@ -160,7 +161,8 @@ TaskStatus ISMR::DerefinePoles(MeshData<Real>* md)
                     prims_map);
                 VarMap m_u(cons_map_utop, true), m_p(prims_map, false);
                 const auto& G = pmb->coords;
-                const Real gam = pmb->packages.Get("GRMHD")->Param<Real>("gamma");
+                const auto& eos_params = pmb->packages.Get("eos")->AllParams();
+                auto eos = eos_params.Get<Microphysics::EOS::EOS>("d.EOS");
                 const Floors::Prescription floors =
                     pmb->packages.Get("Floors")->Param<Floors::Prescription>(
                         "prescription");
@@ -171,7 +173,7 @@ TaskStatus ISMR::DerefinePoles(MeshData<Real>* md)
                         const int j_c = j + ((binner) ? 0 : -1); // cell center
                         // The usual inverter is not EMHD-aware, so it's going to dump all
                         // of T into the ideal GRMHD fluid variables
-                        Inverter::u_to_p<Inverter::Type::kastaun>(G, vars_utop, m_u, gam,
+                        Inverter::u_to_p<Inverter::Type::kastaun>(G, vars_utop, m_u, eos,
                             k, j_c, i, P, m_p, Loci::center, 25, 1e-12);
                         // Consistent with that, we zero out the EMHD extra variables.
                         // This switches theories to evolving ideal GRMHD in ISMR region,

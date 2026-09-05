@@ -46,7 +46,7 @@ TaskStatus InitializeNoh(std::shared_ptr<MeshBlockData<Real>>& rc, ParameterInpu
     GridScalar rho = rc->Get("prims.rho").data;
     GridScalar u = rc->Get("prims.u").data;
     GridVector uvec = rc->Get("prims.uvec").data;
-    const Real gam = pmb->packages.Get("GRMHD")->Param<Real>("gamma");
+    const Real gam = pmb->packages.Get("eos")->Param<Real>("gm1") + 1.0;
 
     const Real mach = pin->GetOrAddReal("noh", "mach", 49.);
     const Real rho0 = pin->GetOrAddReal("noh", "rho", 1.0);

@@ -41,6 +41,8 @@
 #include "kharma_driver.hpp"
 #include "reductions.hpp"
 
+#include <singularity-eos/eos/eos_ideal.hpp>
+
 std::shared_ptr<KHARMAPackage> Inverter::Initialize(
     ParameterInput* pin, std::shared_ptr<Packages_t>& packages)
 {
@@ -60,6 +62,16 @@ std::shared_ptr<KHARMAPackage> Inverter::Initialize(
         use_kastaun = true;
     } else if (inverter_name == "none") {
         params.Add("inverter_type", Type::none);
+    }
+
+
+    // An option that exits when someone use onedw with an equation of state that is not ideal gas.
+    // eos_kharma is solely responsible for setting/defaulting "eos"/"type"; we only ever read it here.
+    if (inverter_name == "onedw") {
+        const std::string eos_name = pin->GetString("eos", "type");
+        if (eos_name != singularity::IdealGas::EosType()) {
+            throw std::invalid_argument("onedw inverter only works with ideal gas equation of state");
+        }
     }
 
     // Solver options
@@ -192,7 +204,8 @@ inline void BlockPerformInversion(
 
     if (U.GetDim(4) == 0 || pflag.GetDim(4) == 0) return;
 
-    const Real gam = pmb->packages.Get("GRMHD")->Param<Real>("gamma");
+    const auto& eos_params = pmb->packages.Get("eos")->AllParams();
+    auto eos = eos_params.Get<Microphysics::EOS::EOS>("d.EOS");
 
     auto& pars = pmb->packages.Get("Inverter")->AllParams();
     const Real err_tol = pars.Get<Real>("err_tol");
@@ -220,7 +233,7 @@ inline void BlockPerformInversion(
         KOKKOS_LAMBDA (const int &k, const int &j, const int &i)
         {
             int pflagl = Inverter::u_to_p<inverter>(
-                G, U, m_u, gam, k, j, i, P, m_p, Loci::center, iter_max, err_tol);
+                G, U, m_u, eos, k, j, i, P, m_p, Loci::center, iter_max, err_tol);
             pflag(0, k, j, i) = pflagl;
         });
 }

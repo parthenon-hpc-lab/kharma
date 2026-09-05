@@ -65,8 +65,10 @@
 #include "resize_restart.hpp"
 #include "resize_restart_kharma.hpp"
 
-std::shared_ptr<KHARMAPackage> KHARMA::InitializeGlobals(
-    ParameterInput* pin, std::shared_ptr<Packages_t>& packages)
+#include "microphysics/eos_kharma/eos_kharma.hpp"
+#include "microphysics/opac_kharma/opac_kharma.hpp"
+
+std::shared_ptr<KHARMAPackage> KHARMA::InitializeGlobals(ParameterInput *pin, std::shared_ptr<Packages_t>& packages)
 {
     // All truly global state.  Mostly mutable state in order to avoid scope creep
     auto pkg = std::make_shared<KHARMAPackage>("Globals");
@@ -384,11 +386,11 @@ Packages_t KHARMA::ProcessPackages(std::unique_ptr<ParameterInput>& pin)
             CoordinateOutput::Initialize, pin.get());
     }
     // Driver package is the foundation
-    auto t_driver = tl.AddTask(
-        t_none, KHARMA::AddPackage, packages, KHARMADriver::Initialize, pin.get());
+    auto t_driver = tl.AddTask(t_none, KHARMA::AddPackage, packages, KHARMADriver::Initialize, pin.get());
+    //Enable eos package
+    auto t_eos = tl.AddTask(t_driver, KHARMA::AddPackage, packages, Microphysics::EOS::Initialize, pin.get());
     // GRMHD needs globals to mark packages
-    auto t_grmhd = tl.AddTask(
-        t_globals | t_driver, KHARMA::AddPackage, packages, GRMHD::Initialize, pin.get());
+    auto t_grmhd = tl.AddTask(t_globals | t_eos, KHARMA::AddPackage, packages, GRMHD::Initialize, pin.get());
     // Only load the inverter if GRMHD/EMHD isn't being evolved implicitly
     // Unless we want to use the explicitly-evolved ideal MHD variables as a guess for the
     // solver Or we want first-order flux corrections, which rely on a UtoP guess Note we
@@ -483,7 +485,12 @@ Packages_t KHARMA::ProcessPackages(std::unique_ptr<ParameterInput>& pin)
         auto t_current = tl.AddTask(
             t_b_field, KHARMA::AddPackage, packages, Current::Initialize, pin.get());
     }
+    
 
+    // Enable opac package
+    if (pin->GetOrAddBoolean("opac", "on", false)) {
+        auto t_opac = tl.AddTask(t_grmhd, KHARMA::AddPackage, packages, Microphysics::Opacity::Initialize, pin.get());
+    }
     // Execute the whole collection (just in case we do something fancy?)
     tc.Execute(); // TODO check return if Exe ever returns errors
 
