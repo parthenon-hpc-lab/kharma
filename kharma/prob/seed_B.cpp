@@ -37,6 +37,7 @@
 #include "b_flux_ct.hpp"
 
 #include "boundaries.hpp"
+#include "chakrabarti_torus.hpp"
 #include "coordinate_utils.hpp"
 #include "domain.hpp"
 #include "flux.hpp"
@@ -96,6 +97,18 @@ TaskStatus SeedBFieldType(MeshBlockData<Real>* rc, ParameterInput* pin,
     std::string b_field_type = pin->GetString("b_field", "type");
     auto prob = pin->GetString("parthenon/job", "problem_id");
     bool is_torus = (prob == "torus");
+    // If a torus, what kind?
+    std::string torus_type = "";
+    if (is_torus) {
+        torus_type = pin->GetString("torus", "type");
+    }
+    bool is_fm = false, is_chakrabarti = false;
+    if (torus_type == "fishbone_moncrief") {
+        is_fm = true;
+    } else if (torus_type == "chakrabarti") {
+        is_chakrabarti = true;
+    }
+
     auto fname_fill = pin->GetOrAddString("resize_restart", "fname_fill", "none");
     const bool should_fill = !(fname_fill == "none");
     Real fx1min, fx1max, dx1, fx1min_ghost;
@@ -208,6 +221,11 @@ TaskStatus SeedBFieldType(MeshBlockData<Real>* rc, ParameterInput* pin,
         // Init-specific loads
         Real a, rin, rmax, gam, kappa, rho_norm, arg1, n, rs, rb;
         Real tilt = 0; // Needs to be initialized
+        // Chakrabarti-specific variables
+        const Real rho_max = pin->GetOrAddReal("torus", "rho_max", 1.0);
+        Real gm1, lnh_in, lnh_peak, pgas_over_rho_peak, rho_peak;
+        GReal cc, nn;
+        Real potential_rho_pow, potential_falloff, potential_r_pow;
         switch (Seed) {
             case BSeedType::sane:
             case BSeedType::mad:
@@ -226,6 +244,30 @@ TaskStatus SeedBFieldType(MeshBlockData<Real>* rc, ParameterInput* pin,
                 gam = pmb->packages.Get("GRMHD")->Param<Real>("gamma");
                 rho_norm = pmb->packages.Get("GRMHD")->Param<Real>("rho_norm");
                 a = G.coords.get_a();
+                break;
+            case BSeedType::vertical_chakrabarti:
+                // A separate case for the vertical field initialized for the Chakrabarti
+                // torus Fluid parameters
+                gam = pmb->packages.Get("GRMHD")->Param<Real>("gamma");
+                gm1 = gam - 1.;
+                // Field init parameters
+                potential_rho_pow =
+                    pin->GetOrAddReal("b_field", "potential_rho_pow", 1.0);
+                potential_falloff =
+                    pin->GetOrAddReal("b_field", "potential_falloff", 0.0);
+                potential_r_pow = pin->GetOrAddReal("b_field", "potential_r_pow", 0.0);
+                // Torus parameters
+                rin = pin->GetReal("torus", "rin");
+                rmax = pin->GetReal("torus", "rmax");
+                tilt = pin->GetReal("torus", "tilt") / 180. * M_PI;
+                // Spacetime geometry parameters
+                a = G.coords.get_a();
+                // Now compute relevant parameters
+                cn_calc(a, rin, rmax, &cc, &nn);
+                lnh_in = lnh_calc(a, rin, rin, 1.0, cc, nn);
+                lnh_peak = lnh_calc(a, rin, rmax, 1.0, cc, nn) - lnh_in;
+                pgas_over_rho_peak = gm1 / gam * (m::exp(lnh_peak) - 1.0);
+                rho_peak = m::pow(pgas_over_rho_peak, 1.0 / gm1) / rho_max;
                 break;
             case BSeedType::orszag_tang_a:
                 A0 = pin->GetReal("orszag_tang", "tscale");
@@ -264,6 +306,10 @@ TaskStatus SeedBFieldType(MeshBlockData<Real>* rc, ParameterInput* pin,
                 rotate_polar(Xembed, tilt, Xmidplane);
                 const GReal r = Xmidplane[1], th = Xmidplane[2];
 
+                // Trigonometric values
+                const GReal sth = sin(th);
+                const GReal cth = cos(th);
+
                 // In case we need zone sizes
                 const GReal dxc[GR_DIM] = {0., G.Dxc<1>(i), G.Dxc<2>(j), G.Dxc<3>(k)};
 
@@ -271,9 +317,20 @@ TaskStatus SeedBFieldType(MeshBlockData<Real>* rc, ParameterInput* pin,
                 // than a bunch of averaging in a meaningful way.  Just use the average if
                 // not.
                 Real rho_av;
+                bool in_torus = false;
                 if (is_torus) {
-                    // Find rho at corner directly for torii
-                    rho_av = fm_torus_rho(a, rin, rmax, gam, kappa, r, th) / rho_norm;
+                    if (is_fm) {
+                        // Find rho at corner directly for torii
+                        rho_av = fm_torus_rho(a, rin, rmax, gam, kappa, r, th) / rho_norm;
+                    } else if (is_chakrabarti) {
+                        // Find rho
+                        const Real lnh = lnh_calc(a, rin, r, sth, cc, nn);
+                        if (lnh >= 0.0) {
+                            in_torus = true;
+                            Real pg_over_rho = gm1 / gam * (m::exp(lnh) - 1.0);
+                            rho_av = m::pow(pg_over_rho, 1. / gm1) / rho_peak;
+                        }
+                    }
                 } else {
                     // Use averages for anything else
                     // Avoid overstepping array bounds (but allow overstepping domain
@@ -295,8 +352,9 @@ TaskStatus SeedBFieldType(MeshBlockData<Real>* rc, ParameterInput* pin,
                     }
                 }
 
-                Real Aphi =
-                    seed_a<Seed>(Xmidplane, dxc, rho_av, rin, min_A, A0, arg1, rb);
+                Real Aphi = seed_a<Seed>(Xmidplane, dxc, rho_av, rin, min_A, A0, arg1, rb,
+                    in_torus, rho_max, potential_rho_pow, potential_falloff,
+                    potential_r_pow);
 
                 if (tilt != 0.0) {
                     // This is *covariant* A_mu of an untilted disk
@@ -449,6 +507,8 @@ TaskStatus SeedBField(MeshData<Real>* md, ParameterInput* pin)
             status = SeedBFieldType<BSeedType::split_monopole_const>(rc, pin);
         } else if (b_field_type == "vertical") {
             status = SeedBFieldType<BSeedType::vertical>(rc, pin);
+        } else if (b_field_type == "vertical_chakrabarti") {
+            status = SeedBFieldType<BSeedType::vertical_chakrabarti>(rc, pin);
         } else if (b_field_type == "r1s2") {
             status = SeedBFieldType<BSeedType::r1s2>(rc, pin);
         } else if (b_field_type == "orszag_tang") {
