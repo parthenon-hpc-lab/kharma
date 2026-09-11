@@ -1,20 +1,23 @@
 name: Regression tests (Nvidia)
 
 on:
-  push:
-    branches: [ main, dev ]
+  # when triggered manually
+  workflow_dispatch:
+  # when auto merge is enabled (hack to make sure it's run before merging)
   pull_request:
-    branches: [ main, dev ]
+    types: [auto_merge_enabled]
 
 env:
-  NPROC: 6
+  NPROC: 12
   MPI_NUM_PROCS: 1
   OMP_NUM_THREADS: 1
   MODULEPATH: '/opt/nvidia/hpc_sdk/modulefiles:/usr/share/modulefiles'
 
 jobs:
   # Job 1: Compilation
-  build:
+  build-nvidia:
+    concurrency:
+      group: nvidia-compile
     runs-on: [self-hosted, kharma-gpu-nv]
     steps:
       - uses: actions/checkout@v7
@@ -25,12 +28,14 @@ jobs:
       - uses: actions/upload-artifact@v7
         with:
           name: build-artifacts
-          path: kharma.cuda
+          path: |
+            kharma.cuda
+            make_args
           if-no-files-found: 'error'
 
   # Job 2: Test Matrix
-  test:
-    needs: build
+  test-nvidia:
+    needs: build-nvidia
     runs-on: [self-hosted, kharma-gpu-nv]
     continue-on-error: true
     strategy:
@@ -71,8 +76,15 @@ jobs:
         with:
           name: ${{ matrix.test_name }}-artifacts
           path: |
-            .
+            tests/${{ matrix.test_name }}
             !*.phdf
             !*.rhdf
             !*.xdmf
             !*.h5
+
+  # Require all tests in a single status check we can mark req'd for merge
+  tests-pass-nvidia:
+    runs-on: ubuntu-latest
+    needs: test-nvidia
+    steps:
+      - run: exit 0

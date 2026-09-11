@@ -1,36 +1,50 @@
 name: Regression tests (CPU)
 
 on:
+  # Oh push to stable/dev incl. automated merge after branch tests
   push:
-    branches: [ main, dev ]
+    branches: [ stable, dev ]
+  # On every push of pull requests to stable/dev. Frequent!
   pull_request:
-    branches: [ main, dev ]
+    branches: [ stable, dev ]
+  # when triggered manually
+  workflow_dispatch:
 
 env:
-  NPROC: 12
+  NPROC: 4
   MPI_NUM_PROCS: 4
   OMP_NUM_THREADS: 1
+  HOST_ARCH: "HSW"
+  MPI_EXTRA_ARGS: "--oversubscribe"
 
 jobs:
   # Job 1: Compilation
   build:
-    runs-on: [self-hosted, kharma]
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
         with:
           submodules: 'recursive'
+      - name: Install prereqs
+        run: |
+          sudo apt-get update
+          sudo apt-get install build-essential
+          sudo apt-get install libopenmpi-dev libhdf5-openmpi-dev libfftw3-dev
+          sudo apt-get install hdf5-tools cmake
       - name: Run compilation
         run: bash -i ./make.sh clean noopenmp
       - uses: actions/upload-artifact@v7
         with:
           name: build-artifacts
-          path: kharma.host
+          path: |
+            kharma.host
+            make_args
           if-no-files-found: 'error'
 
   # Job 2: Test Matrix
   test:
     needs: build
-    runs-on: [self-hosted, kharma]
+    runs-on: ubuntu-latest
     continue-on-error: true
     strategy:
       fail-fast: false
@@ -45,6 +59,7 @@ jobs:
         - conducting_atmosphere
         - emhdmodes
         - emhdshock
+        - entropy_wave
         - hubble_flow
         - mhdmodes
         - mhdmodes_smr
@@ -61,8 +76,12 @@ jobs:
       - uses: actions/download-artifact@v8
         with:
           name: build-artifacts
-      - name: install pyharm
-        run: pip install git+https://github.com/c-prather/pyharm@dev
+      - name: Install prereqs
+        run: |
+          sudo apt-get update
+          sudo apt-get install libopenmpi-dev libhdf5-openmpi-dev libfftw3-dev
+          sudo apt-get install hdf5-tools
+          pip install git+https://github.com/c-prather/pyharm@dev
       - name: Run ${{ matrix.test_name }}
         working-directory: tests/${{ matrix.test_name }}
         run: bash -i ./run.sh
@@ -71,8 +90,16 @@ jobs:
         with:
           name: ${{ matrix.test_name }}-artifacts
           path: |
-            .
+            tests/${{ matrix.test_name }}
             !*.phdf
             !*.rhdf
             !*.xdmf
             !*.h5
+
+  # Require all tests in a single status check we can mark req'd for merge
+  tests-pass:
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - run: exit 0
+

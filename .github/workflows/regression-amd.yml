@@ -1,10 +1,11 @@
 name: Regression tests (AMD)
 
 on:
-  push:
-    branches: [ main, dev ]
+  # when triggered manually
+  workflow_dispatch:
+  # when auto merge is enabled (hack to make sure it's run before merging)
   pull_request:
-    branches: [ main, dev ]
+    types: [auto_merge_enabled]
 
 env:
   NPROC: 12
@@ -13,7 +14,7 @@ env:
 
 jobs:
   # Job 1: Compilation
-  build:
+  build-amd:
     runs-on: [self-hosted, kharma-gpu-amd]
     steps:
       - uses: actions/checkout@v7
@@ -29,12 +30,14 @@ jobs:
       - uses: actions/upload-artifact@v7
         with:
           name: build-artifacts
-          path: kharma.hip
+          path: |
+            kharma.hip
+            make_args
           if-no-files-found: 'error'
 
   # Job 2: Test Matrix
-  test:
-    needs: build
+  test-amd:
+    needs: build-amd
     runs-on: [self-hosted, kharma-gpu-amd]
     continue-on-error: true
     strategy:
@@ -75,8 +78,15 @@ jobs:
         with:
           name: ${{ matrix.test_name }}-artifacts
           path: |
-            .
+            tests/${{ matrix.test_name }}
             !*.phdf
             !*.rhdf
             !*.xdmf
             !*.h5
+
+  # Require all tests in a single status check we can mark req'd for merge
+  tests-pass-amd:
+    runs-on: ubuntu-latest
+    needs: test-amd
+    steps:
+      - run: exit 0
