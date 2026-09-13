@@ -717,8 +717,7 @@ void CancelBoundaryU3(MeshBlockData<Real>* rc, IndexDomain domain, bool coarse)
                     P(m_p.U3, k, jf, i) -= U3_avg;
 
                     // Apply floors
-                    Floors::apply_geo_floors(
-                        G, P, m_p, k, jf, i, floors, Loci::center);
+                    Floors::apply_geo_floors(G, P, m_p, k, jf, i, floors, Loci::center);
 
                     // Always PtoU, we modified P.  Accommodate EMHD
                     Flux::p_to_u_mhd(G, P, m_p, emhd_params, eos, k, jf, i, U, m_u);

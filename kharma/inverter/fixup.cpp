@@ -153,8 +153,7 @@ TaskStatus Inverter::FixUtoP(MeshBlockData<Real>* rc)
                 // Make sure all fixed values still abide by floors
                 // TODO Full floors instead of just geo?
                 int fflagl = fflag(0, k, j, i);
-                fflagl |=
-                    Floors::apply_geo_floors(G, P, m_p, k, j, i, floors);
+                fflagl |= Floors::apply_geo_floors(G, P, m_p, k, j, i, floors);
                 fflag(0, k, j, i) = fflagl;
 
                 // Make sure to keep lockstep
@@ -217,8 +216,7 @@ TaskStatus Inverter::Backstop(MeshBlockData<Real>* rc)
             // If the solve failed, because we reconstructed a
             // negative or zero internal energy (even after floors!)
             Real rhomin_geom, umin_geom;
-            determine_geo_floors(
-                G, P, m_p, k, j, i, floors, rhomin_geom, umin_geom);
+            determine_geo_floors(G, P, m_p, k, j, i, floors, rhomin_geom, umin_geom);
 
             const Real umin =
                 (m_p.KTOT >= 0)

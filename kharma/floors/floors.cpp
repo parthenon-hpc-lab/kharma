@@ -274,8 +274,8 @@ TaskStatus Floors::ApplyInitialFloors(
         {
             Real rhoflr_max, uflr_max;
             // Initial floors, so the radius-dependence of floors don't matter that much.
-            int fflag = determine_floors(
-                G, P, m_p, k, j, i, floors, rhoflr_max, uflr_max);
+            int fflag =
+                determine_floors(G, P, m_p, k, j, i, floors, rhoflr_max, uflr_max);
             if (fflag) {
                 apply_ceilings(G, P, m_p, k, j, i, floors, U, m_u);
                 apply_floors<InjectionFrame::fluid>(

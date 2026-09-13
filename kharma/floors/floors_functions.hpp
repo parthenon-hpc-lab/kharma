@@ -58,8 +58,7 @@ namespace Floors
  */
 KOKKOS_INLINE_FUNCTION void apply_ceilings(const GRCoordinates& G,
     const VariablePack<Real>& P, const VarMap& m_p, const int& k, const int& j,
-    const int& i, const Floors::Prescription& floors,
-    const VariablePack<Real>& U,
+    const int& i, const Floors::Prescription& floors, const VariablePack<Real>& U,
     const VarMap& m_u, const Loci loc = Loci::center)
 {
     // Compute max values for ceilings
@@ -110,7 +109,8 @@ KOKKOS_INLINE_FUNCTION int determine_floors(const GRCoordinates& G,
         Real rhoscal = (floors.use_r_char) ? 1. / ((r * r) * (1 + r / floors.r_char))
                                            : 1. / m::sqrt(r * r * r);
         rhoflr_geom = m::max(floors.rho_min_geom * rhoscal, floors.rho_min_const);
-        uflr_geom = m::max(floors.u_min_geom * m::pow(rhoscal, floors.gamma_floor), floors.u_min_const);
+        uflr_geom = m::max(
+            floors.u_min_geom * m::pow(rhoscal, floors.gamma_floor), floors.u_min_const);
     } else {
         rhoflr_geom = floors.rho_min_const;
         uflr_geom = floors.u_min_const;
@@ -131,9 +131,9 @@ KOKKOS_INLINE_FUNCTION int determine_floors(const GRCoordinates& G,
 
     // Entropy floor on U, experimental
     if (m_p.KTOT >= 0 && floors.use_u_min_entropy)
-        uflr_max = m::max(uflr_max,
-            P(m_p.KTOT, k, j, i) * m::pow(P(m_p.RHO, k, j, i), floors.gamma_floor) /
-                (floors.gamma_floor - 1.));
+        uflr_max = m::max(uflr_max, P(m_p.KTOT, k, j, i) *
+                                        m::pow(P(m_p.RHO, k, j, i), floors.gamma_floor) /
+                                        (floors.gamma_floor - 1.));
 
     const auto& rho = P(m_p.RHO, k, j, i);
     const auto& u = P(m_p.UU, k, j, i);
@@ -168,7 +168,8 @@ KOKKOS_INLINE_FUNCTION int determine_floors(const GRCoordinates& G,
     if (GRMHD::lorentz_calc(G, P, m_p, k, j, i, Loci::center) > floors.gamma_max)
         fflag |= FFlag::GAMMA;
 
-    if ((floors.gamma_floor - 1.) * P(m_p.UU, k, j, i) / m::pow(P(m_p.RHO, k, j, i), floors.gamma_floor) >
+    if ((floors.gamma_floor - 1.) * P(m_p.UU, k, j, i) /
+            m::pow(P(m_p.RHO, k, j, i), floors.gamma_floor) >
         floors.ktot_max)
         fflag |= FFlag::KTOT;
 
@@ -567,8 +568,7 @@ KOKKOS_INLINE_FUNCTION int apply_floors<InjectionFrame::mixed_normal_drift>(
 template<typename Global>
 KOKKOS_INLINE_FUNCTION int apply_geo_floors(const GRCoordinates& G, Global& P,
     const VarMap& m, const int& k, const int& j, const int& i,
-    const Floors::Prescription& floors,
-    const Loci loc = Loci::center)
+    const Floors::Prescription& floors, const Loci loc = Loci::center)
 {
     // Apply only the geometric floors
     Real rhoflr_geom, uflr_geom;
@@ -578,7 +578,8 @@ KOKKOS_INLINE_FUNCTION int apply_geo_floors(const GRCoordinates& G, Global& P,
         Real rhoscal = (floors.use_r_char) ? 1. / ((r * r) * (1 + r / floors.r_char))
                                            : 1. / m::sqrt(r * r * r);
         rhoflr_geom = m::max(floors.rho_min_geom * rhoscal, floors.rho_min_const);
-        uflr_geom = m::max(floors.u_min_geom * m::pow(rhoscal, floors.gamma_floor), floors.u_min_const);
+        uflr_geom = m::max(
+            floors.u_min_geom * m::pow(rhoscal, floors.gamma_floor), floors.u_min_const);
     } else {
         rhoflr_geom = floors.rho_min_const;
         uflr_geom = floors.u_min_const;
@@ -612,8 +613,8 @@ KOKKOS_INLINE_FUNCTION int apply_geo_floors(const GRCoordinates& G, Global& P,
 template<typename Global>
 KOKKOS_INLINE_FUNCTION int determine_geo_floors(const GRCoordinates& G, Global& P,
     const VarMap& m, const int& k, const int& j, const int& i,
-    const Floors::Prescription& floors,
-    Real& rhoflr_geom, Real& uflr_geom, const Loci loc = Loci::center)
+    const Floors::Prescription& floors, Real& rhoflr_geom, Real& uflr_geom,
+    const Loci loc = Loci::center)
 {
     // Apply only the geometric floors
     if (G.coords.is_spherical()) {
@@ -622,7 +623,8 @@ KOKKOS_INLINE_FUNCTION int determine_geo_floors(const GRCoordinates& G, Global& 
         Real rhoscal = (floors.use_r_char) ? 1. / ((r * r) * (1 + r / floors.r_char))
                                            : 1. / m::sqrt(r * r * r);
         rhoflr_geom = m::max(floors.rho_min_geom * rhoscal, floors.rho_min_const);
-        uflr_geom = m::max(floors.u_min_geom * m::pow(rhoscal, floors.gamma_floor), floors.u_min_const);
+        uflr_geom = m::max(
+            floors.u_min_geom * m::pow(rhoscal, floors.gamma_floor), floors.u_min_const);
     } else {
         rhoflr_geom = floors.rho_min_const;
         uflr_geom = floors.u_min_const;

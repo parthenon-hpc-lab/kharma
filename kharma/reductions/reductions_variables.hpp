@@ -48,8 +48,8 @@
     const GRCoordinates &G, const VariablePack<Real>&P, const VarMap &m_p,               \
         const VariablePack<Real>&U, const VarMap &m_u, const VariableFluxPack<Real>&F,   \
         const VarMap &m_f, const VariablePack<Real>&cmax, const VariablePack<Real>&cmin, \
-        const EMHD::EMHD_parameters &emhd_params, const Microphysics::EOS::EOS &eos, const int &k,         \
-        const int &j, const int &i
+        const EMHD::EMHD_parameters &emhd_params, const Microphysics::EOS::EOS &eos,     \
+        const int &k, const int &j, const int &i
 // Call for passing a particular block's values
 #define REDUCE_FUNCTION_CALL                                                             \
     G, P(b), m_p, U(b), m_u, F(b), m_f, cmax(b), cmin(b), emhd_params, eos, k, j, i
