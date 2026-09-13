@@ -75,13 +75,13 @@ fluid_mass_g =  6.203843e12
 
 <parthenon/output0>
 file_type = hdf5
-dt = 500.0
+dt = 100.0
 single_precision_output = true
 variables = prims, cons, rimplflag, rinvflag, pflag
 
 <parthenon/output1>
 file_type = rst
-dt = 500.0
+dt = 100.0
 
 <parthenon/output2>
 file_type = hst

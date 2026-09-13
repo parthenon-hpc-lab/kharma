@@ -48,6 +48,7 @@ jobs:
         - all_pars
         - anisotropic_conduction
         - bondi
+        - bondi_rad
         - bondi_viscous
         - bz_monopole
         - conducting_atmosphere
@@ -56,6 +57,7 @@ jobs:
         - mhdmodes
         - mhdmodes_smr
         - noh
+        - radshock
         - regrid
         - reinit
         - restart

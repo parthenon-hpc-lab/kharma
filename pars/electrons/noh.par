@@ -41,14 +41,11 @@ dt_min = 0.0001
 <GRMHD>
 cfl = 0.9
 reconstruction = weno5
+gamma = 1.666667
+
 
 <b_field>
 solver = none
-
-<eos>
-type = IdealGas
-gamma = 1.666667
-Cv = 1.0
 
 <electrons>
 on = true

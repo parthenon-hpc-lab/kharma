@@ -55,7 +55,7 @@ inner_x1 = outflow
 check_inflow_outer_x1 = false
 
 <floors>
-disable_floors = false
+disable_floors = true
 
 <fofc> 
 on = true
