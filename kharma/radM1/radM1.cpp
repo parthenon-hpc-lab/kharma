@@ -35,10 +35,10 @@
 #include "radM1_solvers.hpp"
 
 #include "domain.hpp"
-#include "units.hpp"
 #include "inverter.hpp"
 #include "kharma.hpp"
 #include "kharma_driver.hpp"
+#include "units.hpp"
 #include <limits>
 #include <stdexcept>
 
@@ -123,17 +123,17 @@ std::shared_ptr<KHARMAPackage> RadM1::Initialize(
         default_opacity_type = "transparent";
     } else if (problem_id == "thermal_equilibrium") {
         default_opacity_type = "thermal_equilibrium";
-    } else if (problem_id == "radmhdmodes"){
+    } else if (problem_id == "radmhdmodes") {
         default_opacity_type = "shocktube_constant";
     }
 
-    // user can override the default opacity model in the input file, but if not, we use the default based on the problem ID.
+    // user can override the default opacity model in the input file, but if not, we use
+    // the default based on the problem ID.
     std::string opacity_type_str =
         pin->GetOrAddString("opac", "type", default_opacity_type);
 
     std::set<std::string> known_opacity_types = {"default", "bondi_opacs", "transparent",
-                                                "thermal_equilibrium", "shocktube_constant", "constant"};
-
+        "thermal_equilibrium", "shocktube_constant", "constant"};
 
     if (!known_opacity_types.count(opacity_type_str)) {
         std::stringstream msg;
@@ -141,7 +141,6 @@ std::shared_ptr<KHARMAPackage> RadM1::Initialize(
         PARTHENON_FAIL(msg);
     }
 
-    
     int opacity_type = (int)OpacityType::Default;
     if (opacity_type_str == "shocktube_constant") {
         opacity_type = (int)OpacityType::ShocktubeConstant;
@@ -155,11 +154,11 @@ std::shared_ptr<KHARMAPackage> RadM1::Initialize(
         opacity_type = (int)OpacityType::Constant;
     }
 
-
-
-    // These parameters are only valid when singularity-opac is not in use! When it's in use, we just pass the responsability of handling opacities to it. Check rad_opacities.hpp
-    Real const_sigma    = pin->GetOrAddReal("opac", "sigma_rad", 0.0);
-    Real const_kappa_a  = pin->GetOrAddReal("opac", "kappa_a", 0.0);
+    // These parameters are only valid when singularity-opac is not in use! When it's in
+    // use, we just pass the responsability of handling opacities to it. Check
+    // rad_opacities.hpp
+    Real const_sigma = pin->GetOrAddReal("opac", "sigma_rad", 0.0);
+    Real const_kappa_a = pin->GetOrAddReal("opac", "kappa_a", 0.0);
     Real const_kappa_sc = pin->GetOrAddReal("opac", "kappa_sc", 0.0);
 
     // Add everything to the package parameters
@@ -168,7 +167,6 @@ std::shared_ptr<KHARMAPackage> RadM1::Initialize(
     pkg->AllParams().Add("const_sigma", const_sigma, true);
     pkg->AllParams().Add("const_kappa_a", const_kappa_a, true);
     pkg->AllParams().Add("const_kappa_sc", const_kappa_sc, true);
-
 
     // TODO (PNM): Currently attached to the floors package. Make this a separate option
     // only for radiation package.
@@ -295,10 +293,13 @@ TaskStatus RadM1::Step(
         rad_opac.const_sigma = params.Get<Real>("const_sigma");
         rad_opac.const_kappa_a = params.Get<Real>("const_kappa_a");
         rad_opac.const_kappa_sc = params.Get<Real>("const_kappa_sc");
-        rad_opac.units_cgs  = pmb->packages.Get("Units")->AllParams().Get<Units::UnitConversions>("unit_conv");
+        rad_opac.units_cgs =
+            pmb->packages.Get("Units")->AllParams().Get<Units::UnitConversions>(
+                "unit_conv");
         if (pmb->packages.AllPackages().count("opacity")) {
             rad_opac.sing_opac =
-                pmb->packages.Get("opacity")->AllParams().Get<Microphysics::Opacities>("opacities");
+                pmb->packages.Get("opacity")->AllParams().Get<Microphysics::Opacities>(
+                    "opacities");
         }
 
         const auto& G = pmb->coords;
@@ -363,8 +364,8 @@ TaskStatus RadM1::Step(
                 }
 
                 auto status_1d = solve_radiation_1d(G, U_init, P_init, m_p, m_u, U_new,
-                    P_new, eos, rad_opac, k, j, i, dt,
-                    src_rootfind_tol, src_rootfind_maxiter, pflag, rinvflag, U_entry);
+                    P_new, eos, rad_opac, k, j, i, dt, src_rootfind_tol,
+                    src_rootfind_maxiter, pflag, rinvflag, U_entry);
 
                 update_ktot_from_gas(G, P_new, U_new, m_p, m_u, eos, k, j, i);
                 if (status_1d == StatusImplicitStep::success) {
@@ -377,8 +378,8 @@ TaskStatus RadM1::Step(
                     static_cast<int>(StatusImplicitStep::onedfallback_failure);
 
                 assume_no_interaction(G, U_init, P_init, m_p, m_u, U_new, P_new, eos,
-                    rad_opac, k, j, i, dt,
-                    src_rootfind_tol, src_rootfind_maxiter, pflag, rinvflag, U_entry);
+                    rad_opac, k, j, i, dt, src_rootfind_tol, src_rootfind_maxiter, pflag,
+                    rinvflag, U_entry);
             });
     }
 

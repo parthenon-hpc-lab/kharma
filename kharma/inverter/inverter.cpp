@@ -84,31 +84,32 @@ std::shared_ptr<KHARMAPackage> Inverter::Initialize(
     int iter_max = pin->GetOrAddInteger("inverter", "iter_max", (use_kastaun) ? 25 : 8);
     params.Add("iter_max", iter_max);
 
-
-
-    Real gamma_floor = pin->GetOrAddReal("floors", "gamma_floor",
-    packages->Get("eos")->AllParams().Get<Real>("gm1") + 1);
+    Real gamma_floor = pin->GetOrAddReal(
+        "floors", "gamma_floor", packages->Get("eos")->AllParams().Get<Real>("gm1") + 1);
 
     // TODO only need these if Floors aren't loaded
     // Floor options
     // Use a custom block for inverter floors to allow customization.  Not sure anyone
     // *wants* that but...
     if (!pin->DoesBlockExist("inverter_floors")) {
-        params.Add("inverter_prescription", Floors::MakePrescription(pin, gamma_floor, "floors"));
+        params.Add("inverter_prescription",
+            Floors::MakePrescription(pin, gamma_floor, "floors"));
         if (pin->DoesBlockExist("floors_inner"))
             params.Add("inverter_prescription_inner",
-                Floors::MakePrescriptionInner(
-                    pin, Floors::MakePrescription(pin, gamma_floor, "floors"), "floors_inner"));
+                Floors::MakePrescriptionInner(pin,
+                    Floors::MakePrescription(pin, gamma_floor, "floors"),
+                    "floors_inner"));
         else
             params.Add("inverter_prescription_inner",
                 Floors::MakePrescriptionInner(
                     pin, Floors::MakePrescription(pin, gamma_floor, "floors"), "floors"));
     } else {
-        params.Add(
-            "inverter_prescription", Floors::MakePrescription(pin, gamma_floor, "inverter_floors"));
+        params.Add("inverter_prescription",
+            Floors::MakePrescription(pin, gamma_floor, "inverter_floors"));
         params.Add("inverter_prescription_inner",
             Floors::MakePrescriptionInner(pin,
-                Floors::MakePrescription(pin, gamma_floor, "inverter_floors"), "inverter_floors"));
+                Floors::MakePrescription(pin, gamma_floor, "inverter_floors"),
+                "inverter_floors"));
     }
 
     // Fixup options

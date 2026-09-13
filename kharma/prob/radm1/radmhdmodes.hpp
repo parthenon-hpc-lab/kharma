@@ -67,11 +67,10 @@ TaskStatus InitializeRadMHDModes(
     GridScalar Erad = rc->Get("prims.u_rad").data;
     GridVector Frad = rc->Get("prims.uvec_rad").data;
 
-    const bool use_radm1 = pin -> GetOrAddBoolean("radM1", "on", false);
+    const bool use_radm1 = pin->GetOrAddBoolean("radM1", "on", false);
 
     const Real gam = pmb->packages.Get("eos")->Param<Real>("gm1") + 1.0;
 
-    
     const auto& G = pmb->coords;
 
     const int nmode = pin->GetOrAddInteger("mhdmodes", "nmode", 1);
@@ -87,7 +86,6 @@ TaskStatus InitializeRadMHDModes(
     const Real u10rad = pin->GetOrAddReal("mhdmodes", "u10rad", 0.);
     const Real u20rad = pin->GetOrAddReal("mhdmodes", "u20rad", 0.);
     const Real u30rad = pin->GetOrAddReal("mhdmodes", "u30rad", 0.);
-
 
     const std::string wavetype = pin->GetOrAddString("mhdmodes", "wavetype", "sonic");
     const std::string regime = pin->GetOrAddString("mhdmodes", "regime", "puremhd");
@@ -108,9 +106,10 @@ TaskStatus InitializeRadMHDModes(
     std::complex<Real> dErad = 0, dF1rad = 0, dF2rad = 0, dF3rad = 0;
 
     Real P = 0.0;
-    if (regime == "thin") P = 0.1;
-    else if (regime == "thick") P = 10;
-
+    if (regime == "thin")
+        P = 0.1;
+    else if (regime == "thick")
+        P = 10;
 
     if (use_radm1) {
         const Real T0 = (gam - 1.0) * u0;
@@ -121,9 +120,8 @@ TaskStatus InitializeRadMHDModes(
         radm1_pkg->UpdateParam<Real>("const_kappa_sc", 0.0);
     }
 
-
     if (wavetype == "sonic") {
-        B10 = 0.; 
+        B10 = 0.;
         B20 = 0.;
         B30 = 0.;
         if (regime == "puremhd") {
@@ -213,7 +211,6 @@ TaskStatus InitializeRadMHDModes(
             omega = 0.5241865057284164 + 0.0759189591904107i;
         }
     }
-  
 
     // Record the parameters we set via nmode
     // This might be useful to read when checking, too...
@@ -252,7 +249,7 @@ TaskStatus InitializeRadMHDModes(
     pin->GetOrAddReal("b_field", "k3", k3);
     pin->GetOrAddReal("b_field", "phase", phase);
 
-    Real Erad0 =  3 * P * (gam - 1.0) * u0;
+    Real Erad0 = 3 * P * (gam - 1.0) * u0;
     IndexDomain domain = IndexDomain::interior;
     IndexRange ib = pmb->cellbounds.GetBoundsI(domain);
     IndexRange jb = pmb->cellbounds.GetBoundsJ(domain);
@@ -266,37 +263,37 @@ TaskStatus InitializeRadMHDModes(
             m::complex<Real> emode = m::exp(m::complex<Real>(0, -phase));
 
             rho(k, j, i) = rho0 + (drho * emode).real();
-            u(k, j, i) = u0 + (du   * emode).real();
+            u(k, j, i) = u0 + (du * emode).real();
             uvec(V1, k, j, i) = u10 + (du1 * emode).real();
             uvec(V2, k, j, i) = u20 + (du2 * emode).real();
             uvec(V3, k, j, i) = u30 + (du3 * emode).real();
 
             if (use_radm1) {
-                // This is in fluid frame, not in the frame used for our primitives (M1 rest frame). So, we need to change it
+                // This is in fluid frame, not in the frame used for our primitives (M1
+                // rest frame). So, we need to change it
                 Real E_hat = Erad0 + (dErad * emode).real();
-                Real F_hat[GR_DIM] = {0.,(dF1rad * emode).real(), (dF2rad * emode).real(), (dF3rad * emode).real()};
+                Real F_hat[GR_DIM] = {0., (dF1rad * emode).real(),
+                    (dF2rad * emode).real(), (dF3rad * emode).real()};
 
-
-                // I think this fails if non cartesian metric. Be careful! In cartesian minkowski coordinate basis IS the orthonormal tetrad.
-                Real uvec_gas[NVEC] = {u10 + (du1 * emode).real(), u20 + (du2 * emode).real(), u30 + (du3 * emode).real()};
+                // I think this fails if non cartesian metric. Be careful! In cartesian
+                // minkowski coordinate basis IS the orthonormal tetrad.
+                Real uvec_gas[NVEC] = {u10 + (du1 * emode).real(),
+                    u20 + (du2 * emode).real(), u30 + (du3 * emode).real()};
                 Real ucon_gas[GR_DIM];
                 GRMHD::calc_ucon(G, uvec_gas, k, j, i, Loci::center, ucon_gas);
-                
-
 
                 Real R_con_t[GR_DIM];
                 for (int nu = 0; nu < 4; ++nu) {
-                    R_con_t[nu] = (4./3.) * E_hat * ucon_gas[0] * ucon_gas[nu]
-                                + (1./3.) * E_hat * G.gcon(Loci::center, j, i, 0, nu)
-                                + ucon_gas[0] * F_hat[nu]
-                                + F_hat[0] * ucon_gas[nu];
+                    R_con_t[nu] = (4. / 3.) * E_hat * ucon_gas[0] * ucon_gas[nu] +
+                                  (1. / 3.) * E_hat * G.gcon(Loci::center, j, i, 0, nu) +
+                                  ucon_gas[0] * F_hat[nu] + F_hat[0] * ucon_gas[nu];
                 }
                 Real R_t_mu[GR_DIM];
                 G.lower(R_con_t, R_t_mu, k, j, i, Loci::center);
 
                 const Real gdet = G.gdet(Loci::center, j, i);
-                Real U_rad_init[GR_DIM] = {
-                    gdet * R_t_mu[0], gdet * R_t_mu[1], gdet * R_t_mu[2], gdet * R_t_mu[3]};
+                Real U_rad_init[GR_DIM] = {gdet * R_t_mu[0], gdet * R_t_mu[1],
+                    gdet * R_t_mu[2], gdet * R_t_mu[3]};
 
                 Real P_rad_init[GR_DIM];
                 RadM1::u_to_p_rad(G, U_rad_init, P_rad_init, k, j, i);
@@ -306,7 +303,7 @@ TaskStatus InitializeRadMHDModes(
                 Frad(V2, k, j, i) = P_rad_init[2];
                 Frad(V3, k, j, i) = P_rad_init[3];
             }
-    });
+        });
 
     // Override end time to be exactly 1 period for moving modes, unless we set otherwise
     if (one_period) {

@@ -55,7 +55,8 @@ std::shared_ptr<KHARMAPackage> Initialize(
     const Real time_unit = unit_conv.GetTimeCodeToCGS();
     const Real mass_unit = unit_conv.GetMassCodeToCGS();
     const Real length_unit = unit_conv.GetLengthCodeToCGS();
-    const Real temp_unit = pow(unit_conv.GetLengthCodeToCGS()/unit_conv.GetTimeCodeToCGS(), 2.);
+    const Real temp_unit =
+        pow(unit_conv.GetLengthCodeToCGS() / unit_conv.GetTimeCodeToCGS(), 2.);
     // If using StellarCollapse, we need additional variables.
     // We also need table max and min values, regardless of the EOS.
     // These can be used for floors/ceilings or for root find bounds

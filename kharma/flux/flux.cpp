@@ -242,29 +242,32 @@ std::shared_ptr<KHARMAPackage> Flux::Initialize(
             params.Add("fofc_consistent_face_b", fofc_consistent_face_b);
         }
 
-
         Real gamma_floor = pin->GetOrAddReal("floors", "gamma_floor",
-    packages->Get("eos")->AllParams().Get<Real>("gm1") + 1);
+            packages->Get("eos")->AllParams().Get<Real>("gm1") + 1);
 
         // Use a custom block for fofc floors.  We now do the same for Kastaun, where we
         // can *also* have floors
         // TODO even post-reconstruction/reconstruction fallback?
         if (!pin->DoesBlockExist("fofc_floors")) {
-            params.Add("fofc_prescription", Floors::MakePrescription(pin, gamma_floor, "floors"));
+            params.Add("fofc_prescription",
+                Floors::MakePrescription(pin, gamma_floor, "floors"));
             if (pin->DoesBlockExist("floors_inner"))
                 params.Add("fofc_prescription_inner",
-                    Floors::MakePrescriptionInner(
-                        pin, Floors::MakePrescription(pin, gamma_floor, "floors"), "floors_inner"));
+                    Floors::MakePrescriptionInner(pin,
+                        Floors::MakePrescription(pin, gamma_floor, "floors"),
+                        "floors_inner"));
             else
                 params.Add("fofc_prescription_inner",
-                    Floors::MakePrescriptionInner(
-                        pin, Floors::MakePrescription(pin, gamma_floor, "floors"), "floors"));
+                    Floors::MakePrescriptionInner(pin,
+                        Floors::MakePrescription(pin, gamma_floor, "floors"), "floors"));
         } else {
             // Override inner and outer floors with `fofc_floors` block
-            params.Add("fofc_prescription", Floors::MakePrescription(pin, gamma_floor, "fofc_floors"));
+            params.Add("fofc_prescription",
+                Floors::MakePrescription(pin, gamma_floor, "fofc_floors"));
             params.Add("fofc_prescription_inner",
-                Floors::MakePrescriptionInner(
-                    pin, Floors::MakePrescription(pin, gamma_floor, "fofc_floors"), "fofc_floors"));
+                Floors::MakePrescriptionInner(pin,
+                    Floors::MakePrescription(pin, gamma_floor, "fofc_floors"),
+                    "fofc_floors"));
         }
 
         // Flag for whether FOFC was applied, for diagnostics

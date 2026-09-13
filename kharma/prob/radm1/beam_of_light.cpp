@@ -32,7 +32,8 @@ void AddBeamOfLightParameters(ParameterInput* pin, Packages_t& packages)
     const Real u_theta_beam_ortho = gamma_beam * f_target;
 
     // This block is actually not necessary. The units are arbitrary.
-    const Units::UnitConversions unit_conv = packages.Get("Units")->AllParams().Get<Units::UnitConversions>("unit_conv");
+    const Units::UnitConversions unit_conv =
+        packages.Get("Units")->AllParams().Get<Units::UnitConversions>("unit_conv");
     const Real energy_density_scale = unit_conv.GetEnergyCodeToCGS();
     constexpr Real sigma_sb_cgs = 5.670374419e-5;
     constexpr Real c_cgs = 2.99792458e10;

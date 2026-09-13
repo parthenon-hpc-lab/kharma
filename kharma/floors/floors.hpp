@@ -133,7 +133,6 @@ enum class InjectionFrame {
 class Prescription
 {
   public:
-    
     Real gamma_floor;
     // Constant sanity limits
     Real rho_min_const, u_min_const;

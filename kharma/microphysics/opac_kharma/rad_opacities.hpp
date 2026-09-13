@@ -32,7 +32,6 @@
  *  OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-
 class RadOpac
 {
   public:
@@ -103,8 +102,13 @@ class RadOpac
             case OpacityType::ShocktubeConstant:
                 return 4.0 * const_sigma * (Tg * Tg * Tg * Tg);
             case OpacityType::Bondi: {
-                const Real energy_density_cgs =  units_cgs.GetEnergyCodeToCGS() /m::pow(units_cgs.GetLengthCodeToCGS(), 3.0);
-                const Real sigma_rad = 5.670374419e-5 / pc::c / (energy_density_cgs/m::pow(units_cgs.GetTemperatureCodeToCGS(), 4.0));
+                const Real energy_density_cgs =
+                    units_cgs.GetEnergyCodeToCGS() /
+                    m::pow(units_cgs.GetLengthCodeToCGS(), 3.0);
+                const Real sigma_rad =
+                    5.670374419e-5 / pc::c /
+                    (energy_density_cgs /
+                        m::pow(units_cgs.GetTemperatureCodeToCGS(), 4.0));
                 return 4.0 * sigma_rad * (Tg * Tg * Tg * Tg);
             }
             case OpacityType::ThermalEquilibrium:
@@ -117,5 +121,3 @@ class RadOpac
         }
     }
 };
-
- 

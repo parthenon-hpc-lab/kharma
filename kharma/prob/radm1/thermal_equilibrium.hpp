@@ -29,7 +29,7 @@ TaskStatus InitializeThermalEquilibrium(
         PARTHENON_FAIL("RadM1 package not loaded.");
 
     const Units::UnitConversions unit_conv =
-    pmb->packages.Get("Units")->AllParams().Get<Units::UnitConversions>("unit_conv");
+        pmb->packages.Get("Units")->AllParams().Get<Units::UnitConversions>("unit_conv");
     const Real mass_density_scale = unit_conv.GetMassDensityCodeToCGS();
     const Real energy_density_scale = unit_conv.GetEnergyCodeToCGS();
 

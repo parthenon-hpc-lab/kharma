@@ -50,7 +50,8 @@ std::shared_ptr<KHARMAPackage> Floors::Initialize(
     auto pkg = std::make_shared<KHARMAPackage>("Floors");
     Params& params = pkg->AllParams();
 
-    Real gamma_floor = pin->GetOrAddReal("floors", "gamma_floor", packages->Get("eos")->AllParams().Get<Real>("gm1") + 1);
+    Real gamma_floor = pin->GetOrAddReal(
+        "floors", "gamma_floor", packages->Get("eos")->AllParams().Get<Real>("gm1") + 1);
     // Parse all the particular floor values into a nice struct we can pass device-side
     params.Add("prescription", MakePrescription(pin, gamma_floor));
 
@@ -123,8 +124,8 @@ std::shared_ptr<KHARMAPackage> Floors::Initialize(
     // the values will simply be the same if radius-dependent floors are not enabled.
     // Avoids a bunch of if (radius_dependent_floors) else while determining floors.
     if (pin->DoesBlockExist("floors_inner"))
-        params.Add(
-            "prescription_inner", MakePrescriptionInner(pin, MakePrescription(pin, gamma_floor)));
+        params.Add("prescription_inner",
+            MakePrescriptionInner(pin, MakePrescription(pin, gamma_floor)));
     else
         params.Add("prescription_inner",
             MakePrescriptionInner(pin, MakePrescription(pin, gamma_floor)), "floors");

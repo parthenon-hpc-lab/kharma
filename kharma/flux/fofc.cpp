@@ -103,8 +103,8 @@ TaskStatus Flux::MarkFOFC(MeshData<Real>* guess)
             // If the solve failed, because we reconstructed a
             // negative or zero internal energy (even after floors!)
             Real rhomin_geom, umin_geom;
-            determine_geo_floors(G, P(bl), m_p, k, j, i, floors, floors_inner,
-                rhomin_geom, umin_geom);
+            determine_geo_floors(
+                G, P(bl), m_p, k, j, i, floors, floors_inner, rhomin_geom, umin_geom);
             const Real umin = umin_geom;
             if (Inverter::failed(pflag(bl, 0, k, j, i)) &&
                 (P(bl, m_p.UU, k, j, i) < umin)) {

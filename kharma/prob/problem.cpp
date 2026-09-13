@@ -68,8 +68,8 @@
 #include "radm1/beam_of_light.hpp"
 #include "radm1/bondi_rad.hpp"
 #include "radm1/rad_pulse.hpp"
-#include "radm1/thermal_equilibrium.hpp"
 #include "radm1/radmhdmodes.hpp"
+#include "radm1/thermal_equilibrium.hpp"
 
 // Electron problem headers
 #include "elec/driven_turbulence.hpp"
@@ -136,7 +136,7 @@ void KHARMA::ProblemGenerator(MeshBlock* pmb, ParameterInput* pin)
     } else if (prob == "thermal_equilibrium") {
         status = InitializeThermalEquilibrium(rc, pin);
     } else if (prob == "radmhdmodes") {
-        status = InitializeRadMHDModes(rc, pin); 
+        status = InitializeRadMHDModes(rc, pin);
         // Everything
     } else if (prob == "torus") {
         status = InitializeFMTorus(rc, pin);

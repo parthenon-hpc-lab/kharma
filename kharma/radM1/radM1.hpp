@@ -39,13 +39,12 @@
 #include "microphysics/eos_kharma/eos_kharma.hpp"
 #include "phoebus_utils/variables.hpp"
 
-#include "units.hpp"
 #include "gr_coordinates.hpp"
 #include "grmhd_functions.hpp"
 #include "kharma_utils.hpp"
 #include "types.hpp"
+#include "units.hpp"
 #include "utils/constants.hpp"
-
 
 #include <parthenon/parthenon.hpp>
 
@@ -111,7 +110,6 @@ static const std::map<int, std::string> status_names_inversion = {
         "RadM1 Radiation Inversion Failure: Non-finite Result from Cold Closure"}
 
 };
-
 
 TaskStatus BlockPtoU(MeshBlockData<Real>* rc, IndexDomain domain, bool coarse = false);
 /**

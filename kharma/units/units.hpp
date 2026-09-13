@@ -65,17 +65,35 @@ class UnitConversions
     KOKKOS_INLINE_FUNCTION Real GetEnergyCodeToCGS() const { return energy_; }
     KOKKOS_INLINE_FUNCTION Real GetEnergyCGSToCode() const { return 1. / energy_; }
 
-    KOKKOS_INLINE_FUNCTION Real GetNumberDensityCodeToCGS() const { return number_density_; }
-    KOKKOS_INLINE_FUNCTION Real GetNumberDensityCGSToCode() const { return 1. / number_density_; }
+    KOKKOS_INLINE_FUNCTION Real GetNumberDensityCodeToCGS() const
+    {
+        return number_density_;
+    }
+    KOKKOS_INLINE_FUNCTION Real GetNumberDensityCGSToCode() const
+    {
+        return 1. / number_density_;
+    }
 
     KOKKOS_INLINE_FUNCTION Real GetMassDensityCodeToCGS() const { return mass_density_; }
-    KOKKOS_INLINE_FUNCTION Real GetMassDensityCGSToCode() const { return 1. / mass_density_; }
+    KOKKOS_INLINE_FUNCTION Real GetMassDensityCGSToCode() const
+    {
+        return 1. / mass_density_;
+    }
 
     KOKKOS_INLINE_FUNCTION Real GetTemperatureCodeToCGS() const { return temperature_; }
-    KOKKOS_INLINE_FUNCTION Real GetTemperatureCGSToCode() const { return 1. / temperature_; }
+    KOKKOS_INLINE_FUNCTION Real GetTemperatureCGSToCode() const
+    {
+        return 1. / temperature_;
+    }
 
-    KOKKOS_INLINE_FUNCTION Real GetEntropyCodeToCGS() const { return (energy_ / mass_) / temperature_; }
-    KOKKOS_INLINE_FUNCTION Real GetEntropyCGSToCode() const { return mass_ * temperature_ / energy_; }
+    KOKKOS_INLINE_FUNCTION Real GetEntropyCodeToCGS() const
+    {
+        return (energy_ / mass_) / temperature_;
+    }
+    KOKKOS_INLINE_FUNCTION Real GetEntropyCGSToCode() const
+    {
+        return mass_ * temperature_ / energy_;
+    }
 
   private:
     bool scale_free_;
@@ -127,7 +145,6 @@ class CodeConstants
 };
 
 constexpr Real solar_mass = 1.989e33; // g
-
 
 std::shared_ptr<KHARMAPackage> Initialize(
     ParameterInput* pin, std::shared_ptr<Packages_t>& packages);

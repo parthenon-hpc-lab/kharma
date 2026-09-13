@@ -39,12 +39,12 @@ namespace Units
 
 parthenon::constants::PhysicalConstants<parthenon::constants::CGS> pc;
 
-
 UnitConversions::UnitConversions(ParameterInput* pin)
 {
     // if scale_free parameter is set, every conversion factor is set to 1.
-    // This basically means that we don't care about the physical units and we can just use code units.
-    // This is also parsed to singularity_opac, which helps with how it interprets the units.
+    // This basically means that we don't care about the physical units and we can just
+    // use code units. This is also parsed to singularity_opac, which helps with how it
+    // interprets the units.
     scale_free_ = pin->GetOrAddBoolean("units", "scale_free", true);
 
     if (scale_free_) {
@@ -57,9 +57,12 @@ UnitConversions::UnitConversions(ParameterInput* pin)
         temperature_ = 1.;
         return;
     } else {
-        int geom_mass_g_exists = pin->DoesParameterExist("units", "geom_mass_g"); //reads mass of the BH in g
-        int geom_mass_msun_exists = pin->DoesParameterExist("units", "geom_mass_msun"); // reads mass of the BH in solar masses
-        int geom_length_cm_exists = pin->DoesParameterExist("units", "geom_length_cm"); // Sets the length unit.
+        int geom_mass_g_exists =
+            pin->DoesParameterExist("units", "geom_mass_g"); // reads mass of the BH in g
+        int geom_mass_msun_exists = pin->DoesParameterExist(
+            "units", "geom_mass_msun"); // reads mass of the BH in solar masses
+        int geom_length_cm_exists =
+            pin->DoesParameterExist("units", "geom_length_cm"); // Sets the length unit.
         int fluid_density_cgs_exists =
             pin->DoesParameterExist("units", "fluid_density_cgs");
         int fluid_mass_g_exists = pin->DoesParameterExist("units", "fluid_mass_g");
@@ -113,7 +116,8 @@ std::shared_ptr<KHARMAPackage> Initialize(
     auto pkg = std::make_shared<KHARMAPackage>("Units");
     Params& params = pkg->AllParams();
 
-    //Only purpose of this function is to create the unit_conv parameter of the class Units.
+    // Only purpose of this function is to create the unit_conv parameter of the class
+    // Units.
     UnitConversions unit_conv(pin);
     params.Add("unit_conv", unit_conv);
 
