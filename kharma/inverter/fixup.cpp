@@ -102,9 +102,9 @@ TaskStatus Inverter::FixUtoP(MeshBlockData<Real>* rc)
                                 int ii = i + l, jj = j + m, kk = k + n;
                                 // If we haven't overstepped array bounds...
                                 if (KDomain::inside(kk, jj, ii, b)) {
-                                    // Count only the good cells (not failed AND not
-                                    // corner), if we can Note interpolated "fixed" cells
-                                    // stay flagged
+                                    // Count only the good cells (not failed/fixed AND not
+                                    // corner). Note that interpolated "fixed" cells
+                                    // stay flagged, so there is not a race cond. here
                                     if (!failed(pflag(kk, jj, ii))) {
                                         // Weight by distance
                                         double w =
@@ -132,16 +132,7 @@ TaskStatus Inverter::FixUtoP(MeshBlockData<Real>* rc)
     // Use values from floors package if it's enabled, otherwise any we've been asked to
     // apply
     const Floors::Prescription floors =
-        pmb->packages.AllPackages().count("Floors")
-            ? pmb->packages.Get("Floors")->Param<Floors::Prescription>("prescription")
-            : pmb->packages.Get("Inverter")
-                  ->Param<Floors::Prescription>("inverter_prescription");
-    const Floors::Prescription floors_inner =
-        pmb->packages.AllPackages().count("Floors")
-            ? pmb->packages.Get("Floors")->Param<Floors::Prescription>(
-                  "prescription_inner")
-            : pmb->packages.Get("Inverter")
-                  ->Param<Floors::Prescription>("inverter_prescription");
+        pmb->packages.Get("Floors")->Param<Floors::Prescription>("prescription");
 
     // We need the full packs of prims/cons for p_to_u
     // Pack new variables
@@ -163,7 +154,7 @@ TaskStatus Inverter::FixUtoP(MeshBlockData<Real>* rc)
                 // TODO Full floors instead of just geo?
                 int fflagl = fflag(0, k, j, i);
                 fflagl |=
-                    Floors::apply_geo_floors(G, P, m_p, k, j, i, floors, floors_inner);
+                    Floors::apply_geo_floors(G, P, m_p, k, j, i, floors);
                 fflag(0, k, j, i) = fflagl;
 
                 // Make sure to keep lockstep
@@ -193,16 +184,7 @@ TaskStatus Inverter::Backstop(MeshBlockData<Real>* rc)
     // Use values from floors package if it's enabled, otherwise any we've been asked to
     // apply
     const Floors::Prescription floors =
-        pmb->packages.AllPackages().count("Floors")
-            ? pmb->packages.Get("Floors")->Param<Floors::Prescription>("prescription")
-            : pmb->packages.Get("Inverter")
-                  ->Param<Floors::Prescription>("inverter_prescription");
-    const Floors::Prescription floors_inner =
-        pmb->packages.AllPackages().count("Floors")
-            ? pmb->packages.Get("Floors")->Param<Floors::Prescription>(
-                  "prescription_inner")
-            : pmb->packages.Get("Inverter")
-                  ->Param<Floors::Prescription>("inverter_prescription");
+        pmb->packages.Get("Floors")->Param<Floors::Prescription>("prescription");
 
     // Get flags
     GridScalar fflag = rc->Get("fflag").data;
@@ -236,7 +218,7 @@ TaskStatus Inverter::Backstop(MeshBlockData<Real>* rc)
             // negative or zero internal energy (even after floors!)
             Real rhomin_geom, umin_geom;
             determine_geo_floors(
-                G, P, m_p, k, j, i, floors, floors_inner, rhomin_geom, umin_geom);
+                G, P, m_p, k, j, i, floors, rhomin_geom, umin_geom);
 
             const Real umin =
                 (m_p.KTOT >= 0)
@@ -272,7 +254,7 @@ TaskStatus Inverter::Backstop(MeshBlockData<Real>* rc)
                 // just bump it to that and kill all kinetic energy
                 // Also use this if v=0.
                 if ((Trest[0] - U(m_u.UU, k, j, i)) / U(m_u.UU, k, j, i) > -tol ||
-                    W <= 1.0 || (!backstop_recover_vel && !backstop_recover_u)) {
+                    !(W > 1.0) || (!backstop_recover_vel && !backstop_recover_u)) {
                     // W = 1
                     P(m_p.RHO, k, j, i) = D;
                     P(m_p.UU, k, j, i) = umin;

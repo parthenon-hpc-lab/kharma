@@ -465,6 +465,7 @@ TaskStatus Implicit::Step(MeshData<Real>* md_full_step_init,
                                 KokkosBatched::SerialLU<
                                     KokkosBatched::Algo::LU::Unblocked>::invoke(jacobian,
                                     tiny);
+                                // TODO(CEP) does Kokkos Trsv need separate Ly=b Ux=y?
                                 KokkosBatched::SerialTrsv<KokkosBatched::Uplo::Upper,
                                     KokkosBatched::Trans::NoTranspose,
                                     KokkosBatched::Diag::NonUnit,

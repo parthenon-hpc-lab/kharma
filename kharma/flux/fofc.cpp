@@ -68,16 +68,7 @@ TaskStatus Flux::MarkFOFC(MeshData<Real>* guess)
     // Use values from floors package if it's enabled, otherwise any we've been asked to
     // apply
     const Floors::Prescription floors =
-        pmb0->packages.AllPackages().count("Floors")
-            ? pmb0->packages.Get("Floors")->Param<Floors::Prescription>("prescription")
-            : pmb0->packages.Get("Inverter")
-                  ->Param<Floors::Prescription>("inverter_prescription");
-    const Floors::Prescription floors_inner =
-        pmb0->packages.AllPackages().count("Floors")
-            ? pmb0->packages.Get("Floors")->Param<Floors::Prescription>(
-                  "prescription_inner")
-            : pmb0->packages.Get("Inverter")
-                  ->Param<Floors::Prescription>("inverter_prescription");
+        pmb0->packages.Get("Floors")->Param<Floors::Prescription>("prescription");
 
     // Parameters
     const auto& pars = pmb0->packages.Get("Fluxes")->AllParams();
@@ -104,7 +95,7 @@ TaskStatus Flux::MarkFOFC(MeshData<Real>* guess)
             // negative or zero internal energy (even after floors!)
             Real rhomin_geom, umin_geom;
             determine_geo_floors(
-                G, P(bl), m_p, k, j, i, floors, floors_inner, rhomin_geom, umin_geom);
+                G, P(bl), m_p, k, j, i, floors, rhomin_geom, umin_geom);
             const Real umin = umin_geom;
             if (Inverter::failed(pflag(bl, 0, k, j, i)) &&
                 (P(bl, m_p.UU, k, j, i) < umin)) {

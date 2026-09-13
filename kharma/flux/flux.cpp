@@ -95,9 +95,9 @@ std::shared_ptr<KHARMAPackage> Flux::Initialize(
     if (lower_edges && lower_poles)
         throw std::runtime_error(
             "Cannot enable lowered reconstruction on edges and poles!");
-    if ((lower_edges || lower_poles) && recon != "weno5")
+    if ((lower_edges || lower_poles)) // && recon != "weno5")
         throw std::runtime_error(
-            "Lowered reconstructions can only be enabled with weno5!");
+            "Spatially lowered-order reconstructions are not supported currently!");
 
     int stencil = 0;
     if (recon == "donor_cell" || recon == "donor_cell_c") {
@@ -109,12 +109,12 @@ std::shared_ptr<KHARMAPackage> Flux::Initialize(
     } else if (recon == "linear_mc") {
         params.Add("recon", KReconstruction::Type::linear_mc);
         stencil = 3;
-    } else if (recon == "weno5" && lower_edges) {
-        params.Add("recon", KReconstruction::Type::weno5_lower_edges);
-        stencil = 5;
-    } else if (recon == "weno5" && lower_poles) {
-        params.Add("recon", KReconstruction::Type::weno5_lower_poles);
-        stencil = 5;
+        // } else if (recon == "weno5" && lower_edges) {
+        //     params.Add("recon", KReconstruction::Type::weno5_lower_edges);
+        //     stencil = 5;
+        // } else if (recon == "weno5" && lower_poles) {
+        //     params.Add("recon", KReconstruction::Type::weno5_lower_poles);
+        //     stencil = 5;
     } else if (recon == "weno5") {
         params.Add("recon", KReconstruction::Type::weno5);
         stencil = 5;
@@ -136,8 +136,9 @@ std::shared_ptr<KHARMAPackage> Flux::Initialize(
     } // we only allow these options
     // Warn if using less than 3 ghost zones w/WENO etc, 2 w/Linear, etc.
     // SMR/AMR independently requires an even number of zones, so we usually use 4
-    if (Globals::nghost < (stencil / 2 + 1)) {
-        throw std::runtime_error("Not enough ghost zones for specified reconstruction!");
+    if (Globals::nghost < 4) {
+        throw std::runtime_error(
+            "Not enough ghost zones!  KHARMA currently requires 4 ghosts to avoid OOB");
     }
 
     // Fallback to TVD reconstruction when these algorithms reconstruct something outside
@@ -240,34 +241,6 @@ std::shared_ptr<KHARMAPackage> Flux::Initialize(
             bool fofc_consistent_face_b =
                 pin->GetOrAddBoolean("fofc", "consistent_face_b", consistent_face_b);
             params.Add("fofc_consistent_face_b", fofc_consistent_face_b);
-        }
-
-        Real gamma_floor = pin->GetOrAddReal("floors", "gamma_floor",
-            packages->Get("eos")->AllParams().Get<Real>("gm1") + 1);
-
-        // Use a custom block for fofc floors.  We now do the same for Kastaun, where we
-        // can *also* have floors
-        // TODO even post-reconstruction/reconstruction fallback?
-        if (!pin->DoesBlockExist("fofc_floors")) {
-            params.Add("fofc_prescription",
-                Floors::MakePrescription(pin, gamma_floor, "floors"));
-            if (pin->DoesBlockExist("floors_inner"))
-                params.Add("fofc_prescription_inner",
-                    Floors::MakePrescriptionInner(pin,
-                        Floors::MakePrescription(pin, gamma_floor, "floors"),
-                        "floors_inner"));
-            else
-                params.Add("fofc_prescription_inner",
-                    Floors::MakePrescriptionInner(pin,
-                        Floors::MakePrescription(pin, gamma_floor, "floors"), "floors"));
-        } else {
-            // Override inner and outer floors with `fofc_floors` block
-            params.Add("fofc_prescription",
-                Floors::MakePrescription(pin, gamma_floor, "fofc_floors"));
-            params.Add("fofc_prescription_inner",
-                Floors::MakePrescriptionInner(pin,
-                    Floors::MakePrescription(pin, gamma_floor, "fofc_floors"),
-                    "fofc_floors"));
         }
 
         // Flag for whether FOFC was applied, for diagnostics

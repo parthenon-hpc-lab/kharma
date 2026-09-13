@@ -56,14 +56,21 @@ TaskStatus Implicit::FixSolve(MeshBlockData<Real>* mbd)
 
     // Get number of implicit variables
     PackIndexMap implicit_prims_map;
+    // TODO this packs B if it is being evolved implicitly, which we definitely do not
+    // want
     auto implicit_vars =
         Implicit::GetOrderedNames(mbd, Metadata::GetUserFlag("Primitive"), true);
     auto& P = mbd->PackVariables(implicit_vars, implicit_prims_map);
     const int nfvar = P.GetDim(4);
+    const VarMap m_pi(implicit_prims_map, false);
 
     // Since we're after sync, we run over the entire domain
     const IndexRange3 b = KDomain::GetRange(mbd, IndexDomain::entire);
     const auto& G = pmb->coords;
+
+    //
+    const Floors::Prescription floors =
+        pmb->packages.Get("Floors")->Param<Floors::Prescription>("prescription");
 
     GridScalar solve_fail = mbd->Get("solve_fail").data;
 
@@ -76,8 +83,8 @@ TaskStatus Implicit::FixSolve(MeshBlockData<Real>* mbd)
             // Remember "failed" here has a different implementation
             if (failed(solve_fail(k, j, i))) {
                 // printf("Fixing zone %d %d %d!\n", i, j, k);
-                double wsum = 0., wsum_x = 0.;
-                double sum[NFVAR_MAX] = {0.}, sum_x[NFVAR_MAX] = {0.};
+                double wsum = 0.;             //, wsum_x = 0.;
+                double sum[NFVAR_MAX] = {0.}; //, sum_x[NFVAR_MAX] = {0.};
                 // For all neighboring cells...
                 for (int n = -1; n <= 1; n++) {
                     for (int m = -1; m <= 1; m++) {
@@ -97,22 +104,26 @@ TaskStatus Implicit::FixSolve(MeshBlockData<Real>* mbd)
                                     FLOOP sum[ip] += w * P(ip, kk, jj, ii);
                                 }
                                 // Just in case, keep a sum of even the bad ones
-                                wsum_x += w;
-                                FLOOP sum_x[ip] += w * P(ip, kk, jj, ii);
+                                // TODO(CEP) this is UB/race since it reads from the
+                                // same cells this kernel is writing. Cutting it for now
+                                // wsum_x += w;
+                                // FLOOP sum_x[ip] += w * P(ip, kk, jj, ii);
                             }
                         }
                     }
                 }
 
                 if (wsum < 1.e-10) {
-                // TODO probably should crash here.
-#ifndef KOKKOS_ENABLE_SYCL
-                    if (flag_verbose >=
-                        3) // && KDomain::inside(k, j, i, kb_b, jb_b, ib_b))
-                           // // If an interior zone...
-                        printf("No neighbors were available at %d %d %d!\n", i, j, k);
-#endif
-                    FLOOP P(ip, k, j, i) = sum_x[ip] / wsum_x;
+                    // TODO probably should crash here.
+                    if (m_pi.RHO >= 0) P(m_pi.RHO, k, j, i) = floors.rho_min_geom;
+                    if (m_pi.UU >= 0) P(m_pi.UU, k, j, i) = floors.u_min_geom;
+                    if (m_pi.Q >= 0) P(m_pi.Q, k, j, i) = 0.;
+                    if (m_pi.DP >= 0) P(m_pi.DP, k, j, i) = 0.;
+                    if (m_pi.U1 >= 0) {
+                        P(m_pi.U1, k, j, i) = 0.;
+                        P(m_pi.U2, k, j, i) = 0.;
+                        P(m_pi.U3, k, j, i) = 0.;
+                    }
                 } else {
                     FLOOP P(ip, k, j, i) = sum[ip] / wsum;
                 }

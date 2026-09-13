@@ -46,13 +46,13 @@
 // Arguments to computing any variable defined below
 #define REDUCE_FUNCTION_ARGS                                                             \
     const GRCoordinates &G, const VariablePack<Real>&P, const VarMap &m_p,               \
-        const VariableFluxPack<Real>&U, const VarMap &m_u,                               \
-        const VariablePack<Real>&cmax, const VariablePack<Real>&cmin,                    \
-        const EMHD::EMHD_parameters &emhd_params, const Microphysics::EOS::EOS &eos,     \
-        const int &k, const int &j, const int &i
+        const VariablePack<Real>&U, const VarMap &m_u, const VariableFluxPack<Real>&F,   \
+        const VarMap &m_f, const VariablePack<Real>&cmax, const VariablePack<Real>&cmin, \
+        const EMHD::EMHD_parameters &emhd_params, const Microphysics::EOS::EOS &eos, const int &k,         \
+        const int &j, const int &i
 // Call for passing a particular block's values
 #define REDUCE_FUNCTION_CALL                                                             \
-    G, P(b), m_p, U(b), m_u, cmax(b), cmin(b), emhd_params, eos, k, j, i
+    G, P(b), m_p, U(b), m_u, F(b), m_f, cmax(b), cmin(b), emhd_params, eos, k, j, i
 
 using namespace parthenon;
 
@@ -247,17 +247,17 @@ KOKKOS_INLINE_FUNCTION Real reduction_var<Var::ldot>(REDUCE_FUNCTION_ARGS)
 template<>
 KOKKOS_INLINE_FUNCTION Real reduction_var<Var::mdot_flux>(REDUCE_FUNCTION_ARGS)
 {
-    return -U.flux(X1DIR, m_u.RHO, k, j, i);
+    return -F.flux(X1DIR, m_u.RHO, k, j, i);
 }
 template<>
 KOKKOS_INLINE_FUNCTION Real reduction_var<Var::edot_flux>(REDUCE_FUNCTION_ARGS)
 {
-    return (U.flux(X1DIR, m_u.UU, k, j, i) - U.flux(X1DIR, m_u.RHO, k, j, i));
+    return (F.flux(X1DIR, m_u.UU, k, j, i) - F.flux(X1DIR, m_u.RHO, k, j, i));
 }
 template<>
 KOKKOS_INLINE_FUNCTION Real reduction_var<Var::ldot_flux>(REDUCE_FUNCTION_ARGS)
 {
-    return U.flux(X1DIR, m_u.U3, k, j, i);
+    return F.flux(X1DIR, m_u.U3, k, j, i);
 }
 
 // Amount of conserved fluid vars added to grid/subtracted from grid
@@ -343,81 +343,81 @@ KOKKOS_INLINE_FUNCTION Real reduction_var<Var::T03change>(REDUCE_FUNCTION_ARGS)
 template<>
 KOKKOS_INLINE_FUNCTION Real reduction_var<Var::Uflux1RHO>(REDUCE_FUNCTION_ARGS)
 {
-    return U.flux(X1DIR, m_u.RHO, k, j, i);
+    return F.flux(X1DIR, m_u.RHO, k, j, i);
 }
 template<>
 KOKKOS_INLINE_FUNCTION Real reduction_var<Var::Uflux1UU>(REDUCE_FUNCTION_ARGS)
 {
-    return U.flux(X1DIR, m_u.UU, k, j, i);
+    return F.flux(X1DIR, m_u.UU, k, j, i);
 }
 template<>
 KOKKOS_INLINE_FUNCTION Real reduction_var<Var::Uflux1U1>(REDUCE_FUNCTION_ARGS)
 {
-    return U.flux(X1DIR, m_u.U1, k, j, i);
+    return F.flux(X1DIR, m_u.U1, k, j, i);
 }
 template<>
 KOKKOS_INLINE_FUNCTION Real reduction_var<Var::Uflux1U2>(REDUCE_FUNCTION_ARGS)
 {
-    return U.flux(X1DIR, m_u.U2, k, j, i);
+    return F.flux(X1DIR, m_u.U2, k, j, i);
 }
 template<>
 KOKKOS_INLINE_FUNCTION Real reduction_var<Var::Uflux1U3>(REDUCE_FUNCTION_ARGS)
 {
-    return U.flux(X1DIR, m_u.U3, k, j, i);
+    return F.flux(X1DIR, m_u.U3, k, j, i);
 }
 
 // Fluxes of conserved fluid vars, X2
 template<>
 KOKKOS_INLINE_FUNCTION Real reduction_var<Var::Uflux2RHO>(REDUCE_FUNCTION_ARGS)
 {
-    return U.flux(X2DIR, m_u.RHO, k, j, i);
+    return F.flux(X2DIR, m_u.RHO, k, j, i);
 }
 template<>
 KOKKOS_INLINE_FUNCTION Real reduction_var<Var::Uflux2UU>(REDUCE_FUNCTION_ARGS)
 {
-    return U.flux(X2DIR, m_u.UU, k, j, i);
+    return F.flux(X2DIR, m_u.UU, k, j, i);
 }
 template<>
 KOKKOS_INLINE_FUNCTION Real reduction_var<Var::Uflux2U1>(REDUCE_FUNCTION_ARGS)
 {
-    return U.flux(X2DIR, m_u.U1, k, j, i);
+    return F.flux(X2DIR, m_u.U1, k, j, i);
 }
 template<>
 KOKKOS_INLINE_FUNCTION Real reduction_var<Var::Uflux2U2>(REDUCE_FUNCTION_ARGS)
 {
-    return U.flux(X2DIR, m_u.U2, k, j, i);
+    return F.flux(X2DIR, m_u.U2, k, j, i);
 }
 template<>
 KOKKOS_INLINE_FUNCTION Real reduction_var<Var::Uflux2U3>(REDUCE_FUNCTION_ARGS)
 {
-    return U.flux(X2DIR, m_u.U3, k, j, i);
+    return F.flux(X2DIR, m_u.U3, k, j, i);
 }
 
 // Fluxes of conserved fluid vars, X3
 template<>
 KOKKOS_INLINE_FUNCTION Real reduction_var<Var::Uflux3RHO>(REDUCE_FUNCTION_ARGS)
 {
-    return U.flux(X3DIR, m_u.RHO, k, j, i);
+    return F.flux(X3DIR, m_u.RHO, k, j, i);
 }
 template<>
 KOKKOS_INLINE_FUNCTION Real reduction_var<Var::Uflux3UU>(REDUCE_FUNCTION_ARGS)
 {
-    return U.flux(X3DIR, m_u.UU, k, j, i);
+    return F.flux(X3DIR, m_u.UU, k, j, i);
 }
 template<>
 KOKKOS_INLINE_FUNCTION Real reduction_var<Var::Uflux3U1>(REDUCE_FUNCTION_ARGS)
 {
-    return U.flux(X3DIR, m_u.U1, k, j, i);
+    return F.flux(X3DIR, m_u.U1, k, j, i);
 }
 template<>
 KOKKOS_INLINE_FUNCTION Real reduction_var<Var::Uflux3U2>(REDUCE_FUNCTION_ARGS)
 {
-    return U.flux(X3DIR, m_u.U2, k, j, i);
+    return F.flux(X3DIR, m_u.U2, k, j, i);
 }
 template<>
 KOKKOS_INLINE_FUNCTION Real reduction_var<Var::Uflux3U3>(REDUCE_FUNCTION_ARGS)
 {
-    return U.flux(X3DIR, m_u.U3, k, j, i);
+    return F.flux(X3DIR, m_u.U3, k, j, i);
 }
 
 // Luminosity proxy from (for example) Porth et al 2019.

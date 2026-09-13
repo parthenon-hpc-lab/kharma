@@ -167,7 +167,7 @@ KOKKOS_INLINE_FUNCTION void calc_residual(const GRCoordinates& G, const Global& 
     if (m_u.Q >= 0 || m_u.DP >= 0) {
         // Bind references for readability/flexibility and to avoid lots of ifs
         // If we're omitting q/dP we just write them to a throwaway
-        Real throwaway;
+        Real throwaway = 0.;
         Real& rq = (m_u.Q >= 0) ? residual(m_u.Q, k, j, i) : throwaway;
         Real& rdP = (m_u.DP >= 0) ? residual(m_u.DP, k, j, i) : throwaway;
 

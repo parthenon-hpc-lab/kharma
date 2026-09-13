@@ -79,8 +79,6 @@ TaskStatus ApplyFloorsInFrame(MeshData<Real>* md, IndexDomain domain)
     // Still needed for ceilings and determining floors
     const Floors::Prescription floors =
         pmb0->packages.Get("Floors")->Param<Floors::Prescription>("prescription");
-    const Floors::Prescription floors_inner =
-        pmb0->packages.Get("Floors")->Param<Floors::Prescription>("prescription_inner");
 
     const IndexRange3 b = KDomain::GetRange(md, domain);
     const IndexRange block = IndexRange{0, P.GetDim(5) - 1};
@@ -93,7 +91,7 @@ TaskStatus ApplyFloorsInFrame(MeshData<Real>* md, IndexDomain domain)
 
                 // Apply ceilings *before* floors, they are less important
                 // Generally we only use the gamma ceiling, which can help raise rho/u
-                apply_ceilings(G, P(b), m_p, k, j, i, floors, floors_inner, U(b), m_u);
+                apply_ceilings(G, P(b), m_p, k, j, i, floors, U(b), m_u);
 
                 // apply_floors can involve another U_to_P call, capture that flag
                 // this is the default return for "no inversion"

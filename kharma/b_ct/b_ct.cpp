@@ -255,12 +255,13 @@ TaskStatus B_CT::DangerousPtoU(MeshData<Real>* md, IndexDomain domain, bool coar
     auto B_P = md->PackVariables(std::vector<std::string>{"prims.B"});
 
     // Figure out indices
+    const auto ndim = md->GetMeshPointer()->ndim;
     const IndexRange block = IndexRange{0, B_Uf.GetDim(5) - 1};
 
     auto pmb0 = md->GetBlockData(0)->GetBlockPointer();
     // Average the primitive vals to faces and multiply by gdet
-    const IndexRange3 bf1 = (domain == IndexDomain::entire)
-                                ? KDomain::GetRange(md, domain, F1, coarse, 1, 0)
+    const IndexRange3 bf1 = (domain == IndexDomain::interior)
+                                ? KDomain::GetRange(md, domain, F1, 1, 0, coarse)
                                 : KDomain::GetRange(md, domain, F1, coarse);
     pmb0->par_for("PtoU_B_F1", block.s, block.e, bf1.ks, bf1.ke, bf1.js, bf1.je, bf1.is,
         bf1.ie,
@@ -270,27 +271,31 @@ TaskStatus B_CT::DangerousPtoU(MeshData<Real>* md, IndexDomain domain, bool coar
             B_Uf(b, F1, 0, k, j, i) = G.gdet(Loci::face1, j, i) *
                                       (B_P(b, V1, k, j, i - 1) + B_P(b, V1, k, j, i)) / 2;
         });
-    const IndexRange3 bf2 = (domain == IndexDomain::entire)
-                                ? KDomain::GetRange(md, domain, F2, coarse, 1, 0)
+    const IndexRange3 bf2 = (domain == IndexDomain::interior)
+                                ? KDomain::GetRange(md, domain, F2, 1, 0, coarse)
                                 : KDomain::GetRange(md, domain, F2, coarse);
     pmb0->par_for("PtoU_B_F2", block.s, block.e, bf2.ks, bf2.ke, bf2.js, bf2.je, bf2.is,
         bf2.ie,
         KOKKOS_LAMBDA(const int& b, const int& k, const int& j, const int& i)
         {
             const auto& G = B_Uf.GetCoords(b);
-            B_Uf(b, F2, 0, k, j, i) = G.gdet(Loci::face2, j, i) *
-                                      (B_P(b, V2, k, j - 1, i) + B_P(b, V2, k, j, i)) / 2;
+            const Real avg = (ndim > 1)
+                                 ? (B_P(b, V2, k, j - 1, i) + B_P(b, V2, k, j, i)) / 2
+                                 : B_P(b, V2, k, j, i);
+            B_Uf(b, F2, 0, k, j, i) = G.gdet(Loci::face2, j, i) * avg;
         });
-    const IndexRange3 bf3 = (domain == IndexDomain::entire)
-                                ? KDomain::GetRange(md, domain, F3, coarse, 1, 0)
+    const IndexRange3 bf3 = (domain == IndexDomain::interior)
+                                ? KDomain::GetRange(md, domain, F3, 1, 0, coarse)
                                 : KDomain::GetRange(md, domain, F3, coarse);
     pmb0->par_for("PtoU_B_F3", block.s, block.e, bf3.ks, bf3.ke, bf3.js, bf3.je, bf3.is,
         bf3.ie,
         KOKKOS_LAMBDA(const int& b, const int& k, const int& j, const int& i)
         {
             const auto& G = B_Uf.GetCoords(b);
-            B_Uf(b, F3, 0, k, j, i) = G.gdet(Loci::face3, j, i) *
-                                      (B_P(b, V3, k - 1, j, i) + B_P(b, V3, k, j, i)) / 2;
+            const Real avg = (ndim > 2)
+                                 ? (B_P(b, V3, k - 1, j, i) + B_P(b, V3, k, j, i)) / 2
+                                 : B_P(b, V3, k, j, i);
+            B_Uf(b, F3, 0, k, j, i) = G.gdet(Loci::face3, j, i) * avg;
         });
 
     // Make sure B on poles is still zero, even though we've interpolated
@@ -441,7 +446,7 @@ TaskStatus B_CT::CalculateEMF(MeshData<Real>* md)
                         emf_pack(bl, E1, 0, k, j, i) =
                             2 * emf_pack(bl, E1, 0, k, j, i) -
                             0.25 * (emfc(bl, V1, k, j, i) + emfc(bl, V1, k, j - 1, i) +
-                                       emfc(bl, V1, k, j - 1, i) +
+                                       emfc(bl, V1, k - 1, j, i) +
                                        emfc(bl, V1, k - 1, j - 1, i));
                         emf_pack(bl, E2, 0, k, j, i) =
                             2 * emf_pack(bl, E2, 0, k, j, i) -

@@ -117,19 +117,6 @@ std::shared_ptr<KHARMAPackage> Floors::Initialize(
         params.Add("frame_switch_beta", frame_switch_beta);
     }
 
-    // Radius-dependent floors and ceiling in a given frame
-    // Default presciption struct refers to outer domain, i.e., beyond 'floor_switch_r'
-    // Make an additional prescription struct for inner domain.
-    // There are two Floors::Prescription objects even if there is no radius-dependence,
-    // the values will simply be the same if radius-dependent floors are not enabled.
-    // Avoids a bunch of if (radius_dependent_floors) else while determining floors.
-    if (pin->DoesBlockExist("floors_inner"))
-        params.Add("prescription_inner",
-            MakePrescriptionInner(pin, MakePrescription(pin, gamma_floor)));
-    else
-        params.Add("prescription_inner",
-            MakePrescriptionInner(pin, MakePrescription(pin, gamma_floor)), "floors");
-
     // All of these are now the same option: disable the *call* only.
     // This lets us assume that the floors package is loaded, which is convenient many
     // places
@@ -288,9 +275,9 @@ TaskStatus Floors::ApplyInitialFloors(
             Real rhoflr_max, uflr_max;
             // Initial floors, so the radius-dependence of floors don't matter that much.
             int fflag = determine_floors(
-                G, P, m_p, k, j, i, floors, floors, rhoflr_max, uflr_max);
+                G, P, m_p, k, j, i, floors, rhoflr_max, uflr_max);
             if (fflag) {
-                apply_ceilings(G, P, m_p, k, j, i, floors, floors, U, m_u);
+                apply_ceilings(G, P, m_p, k, j, i, floors, U, m_u);
                 apply_floors<InjectionFrame::fluid>(
                     G, P, m_p, eos, k, j, i, rhoflr_max, uflr_max, U, m_u);
                 // P->U for any modified zones
@@ -312,8 +299,8 @@ TaskStatus Floors::ApplyInitialFloors(
     return TaskStatus::complete;
 }
 
-TaskStatus Floors::DetermineGRMHDFloors(MeshData<Real>* md, IndexDomain domain,
-    const Floors::Prescription& floors, const Floors::Prescription& floors_inner)
+TaskStatus Floors::DetermineGRMHDFloors(
+    MeshData<Real>* md, IndexDomain domain, const Floors::Prescription& floors)
 {
     auto pmb0 = md->GetBlockData(0)->GetBlockPointer();
 
@@ -345,7 +332,7 @@ TaskStatus Floors::DetermineGRMHDFloors(MeshData<Real>* md, IndexDomain domain,
             // non-destructively
             fflag(b, 0, k, j, i) =
                 static_cast<int>(fflag(b, 0, k, j, i)) |
-                determine_floors(G, P(b), m_p, k, j, i, floors, floors_inner,
+                determine_floors(G, P(b), m_p, k, j, i, floors,
                     floor_vals(b, rhofi, k, j, i), floor_vals(b, ufi, k, j, i));
         });
 
@@ -363,9 +350,7 @@ TaskStatus Floors::ApplyGRMHDFloors(MeshData<Real>* md, IndexDomain domain)
 
     // Determine floors
     const Floors::Prescription floors = pars.Get<Floors::Prescription>("prescription");
-    const Floors::Prescription floors_inner =
-        pars.Get<Floors::Prescription>("prescription_inner");
-    DetermineGRMHDFloors(md, domain, floors, floors_inner);
+    DetermineGRMHDFloors(md, domain, floors);
 
     if (pars.Get<InjectionFrame>("frame") == InjectionFrame::normal_kastaun) {
         return ApplyFloorsInFrame<InjectionFrame::normal_kastaun>(md, domain);

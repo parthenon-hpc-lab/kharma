@@ -233,7 +233,7 @@ TaskCollection KHARMADriver::MakeImExTaskCollection(BlockList_t& blocks, int sta
         if (use_fofc) {
             auto& guess_src = pmesh->mesh_data.GetOrAdd("fofc_source", i);
             auto& guess = pmesh->mesh_data.GetOrAdd("fofc_guess", i);
-            auto t_fluxes = KHARMADriver::AddFOFC(t_flux_calc, tl, md_sub_step_init.get(),
+            t_fluxes = KHARMADriver::AddFOFC(t_flux_calc, tl, md_sub_step_init.get(),
                 md_full_step_init.get(), md_sub_step_init.get(), guess_src.get(),
                 guess.get(), stage);
         }
@@ -269,7 +269,7 @@ TaskCollection KHARMADriver::MakeImExTaskCollection(BlockList_t& blocks, int sta
         auto t_flux_div = tl.AddTask(t_flux_bounds, FluxDivergence,
             md_sub_step_init.get(), md_flux_src.get(),
             std::vector<MetadataFlag>{
-                Metadata::Independent, Metadata::Cell, Metadata::WithFluxes},
+                Metadata::Independent, Metadata::WithFluxes, Metadata::Cell},
             0);
 
         // Add any source terms: geometric \Gamma * T, wind, damping, etc etc

@@ -109,20 +109,13 @@ inline TaskStatus GetFlux(MeshData<Real>* md)
     const bool reconstruction_fallback = pars.Get<bool>("reconstruction_fallback");
     Floors::Prescription floors_temp =
         packages.Get("Floors")->Param<Floors::Prescription>("prescription");
-    Floors::Prescription floors_inner_temp =
-        packages.Get("Floors")->Param<Floors::Prescription>("prescription_inner");
     if (reconstruction_fallback) {
         floors_temp.rho_min_const = 0.;
         floors_temp.u_min_const = 0.;
         floors_temp.rho_min_geom = 0.;
         floors_temp.u_min_geom = 0.;
-        floors_inner_temp.rho_min_const = 0.;
-        floors_inner_temp.u_min_const = 0.;
-        floors_inner_temp.rho_min_geom = 0.;
-        floors_inner_temp.u_min_geom = 0.;
     }
     const Floors::Prescription& floors = floors_temp;
-    const Floors::Prescription& floors_inner = floors_inner_temp;
 
     // Check whether we're using constraint-damping
     // (which requires that a variable be propagated at ctop_max)
@@ -154,7 +147,7 @@ inline TaskStatus GetFlux(MeshData<Real>* md)
         std::vector<MetadataFlag>{Metadata::GetUserFlag("Primitive"), Metadata::Cell},
         prims_map);
     const auto& U_all = md->PackVariablesAndFluxes(
-        std::vector<MetadataFlag>{Metadata::Conserved, Metadata::Cell}, cons_map);
+        std::vector<MetadataFlag>{Metadata::WithFluxes, Metadata::Cell}, cons_map);
     const VarMap m_u(cons_map, true), m_p(prims_map, false);
 
     const auto& Pl_all = md->PackVariables(std::vector<std::string>{"Flux.Pl"});
@@ -298,18 +291,17 @@ inline TaskStatus GetFlux(MeshData<Real>* md)
                 // zero (as intended)
                 int fflagl = fflag(bl, 0, k, j, i);
                 fflagl |= Floors::apply_geo_floors(
-                    G, Pl_all(bl), m_p, k, j, i, floors, floors_inner, loc);
+                    G, Pl_all(bl), m_p, k, j, i, floors, loc);
                 fflagl |= Floors::apply_geo_floors(
-                    G, Pr_all(bl), m_p, k, j, i, floors, floors_inner, loc);
+                    G, Pr_all(bl), m_p, k, j, i, floors, loc);
                 fflag(bl, 0, k, j, i) = fflagl;
             });
     }
 
     if (reconstruction_fallback) {
-        pmb0->par_for("calc_flux_reconfallback", block.s, block.e, 0, P_all.GetDim(4) - 1,
-            b.ks, b.ke, b.js, b.je, b.is, b.ie,
+        pmb0->par_for("calc_flux_reconfallback", block.s, block.e, b.ks, b.ke, b.js, b.je,
+            b.is, b.ie,
             KOKKOS_LAMBDA(const int& bl,
-                        const int& p,
                         const int& k,
                         const int& j,
                         const int& i)
@@ -319,9 +311,9 @@ inline TaskStatus GetFlux(MeshData<Real>* md)
                 Real tmp1, tmp2;
                 int fflag_dir = 0;
                 fflag_dir |= Floors::determine_geo_floors(
-                    G, Pl_all(bl), m_p, k, j, i, floors, floors_inner, tmp1, tmp2, loc);
+                    G, Pl_all(bl), m_p, k, j, i, floors, tmp1, tmp2, loc);
                 fflag_dir |= Floors::determine_geo_floors(
-                    G, Pr_all(bl), m_p, k, j, i, floors, floors_inner, tmp1, tmp2, loc);
+                    G, Pr_all(bl), m_p, k, j, i, floors, tmp1, tmp2, loc);
 
                 // Preserve (but do not respect) existing flags
                 int fflagl = fflag(bl, 0, k, j, i);
@@ -331,47 +323,49 @@ inline TaskStatus GetFlux(MeshData<Real>* md)
                 // Use PPM reconstruction on them
                 if ((fflag_dir & static_cast<int>(Floors::FFlag::GEOM_RHO_FLUX)) ||
                     (fflag_dir & static_cast<int>(Floors::FFlag::GEOM_U_FLUX))) {
+                    for (int p = 0; p < P_all.GetDim(4); ++p) {
 #ifdef KOKKOS_ENABLE_CUDA
-                    if (dir == 1) {
+                        if (dir == 1) {
 #else
-                    if constexpr (dir == 1) {
+                        if constexpr (dir == 1) {
 #endif
-                        // Recon left of this cell == right of this face
-                        KReconstruction::reconstruct_left<RType::ppm>(
-                            P_all(bl, p, k, j, i - 2), P_all(bl, p, k, j, i - 1),
-                            P_all(bl, p, k, j, i), P_all(bl, p, k, j, i + 1),
-                            P_all(bl, p, k, j, i + 2), Pr_all(bl, p, k, j, i));
-                        // Recon right of last cell == left of this face
-                        KReconstruction::reconstruct_right<RType::ppm>(
-                            P_all(bl, p, k, j, i - 3), P_all(bl, p, k, j, i - 2),
-                            P_all(bl, p, k, j, i - 1), P_all(bl, p, k, j, i),
-                            P_all(bl, p, k, j, i + 1), Pl_all(bl, p, k, j, i));
+                            // Recon left of this cell == right of this face
+                            KReconstruction::reconstruct_left<RType::ppm>(
+                                P_all(bl, p, k, j, i - 2), P_all(bl, p, k, j, i - 1),
+                                P_all(bl, p, k, j, i), P_all(bl, p, k, j, i + 1),
+                                P_all(bl, p, k, j, i + 2), Pr_all(bl, p, k, j, i));
+                            // Recon right of last cell == left of this face
+                            KReconstruction::reconstruct_right<RType::ppm>(
+                                P_all(bl, p, k, j, i - 3), P_all(bl, p, k, j, i - 2),
+                                P_all(bl, p, k, j, i - 1), P_all(bl, p, k, j, i),
+                                P_all(bl, p, k, j, i + 1), Pl_all(bl, p, k, j, i));
 #ifdef KOKKOS_ENABLE_CUDA
-                    } else if (dir == 2) {
+                        } else if (dir == 2) {
 #else
-                    } else if constexpr (dir == 2) {
+                        } else if constexpr (dir == 2) {
 #endif
-                        KReconstruction::reconstruct_left<RType::ppm>(
-                            P_all(bl, p, k, j - 2, i), P_all(bl, p, k, j - 1, i),
-                            P_all(bl, p, k, j, i), P_all(bl, p, k, j + 1, i),
-                            P_all(bl, p, k, j + 2, i), Pr_all(bl, p, k, j, i));
-                        KReconstruction::reconstruct_right<RType::ppm>(
-                            P_all(bl, p, k, j - 3, i), P_all(bl, p, k, j - 2, i),
-                            P_all(bl, p, k, j - 1, i), P_all(bl, p, k, j, i),
-                            P_all(bl, p, k, j + 1, i), Pl_all(bl, p, k, j, i));
+                            KReconstruction::reconstruct_left<RType::ppm>(
+                                P_all(bl, p, k, j - 2, i), P_all(bl, p, k, j - 1, i),
+                                P_all(bl, p, k, j, i), P_all(bl, p, k, j + 1, i),
+                                P_all(bl, p, k, j + 2, i), Pr_all(bl, p, k, j, i));
+                            KReconstruction::reconstruct_right<RType::ppm>(
+                                P_all(bl, p, k, j - 3, i), P_all(bl, p, k, j - 2, i),
+                                P_all(bl, p, k, j - 1, i), P_all(bl, p, k, j, i),
+                                P_all(bl, p, k, j + 1, i), Pl_all(bl, p, k, j, i));
 #ifdef KOKKOS_ENABLE_CUDA
-                    } else if (dir == 3) {
+                        } else if (dir == 3) {
 #else
-                    } else if constexpr (dir == 3) {
+                        } else if constexpr (dir == 3) {
 #endif
-                        KReconstruction::reconstruct_left<RType::ppm>(
-                            P_all(bl, p, k - 2, j, i), P_all(bl, p, k - 1, j, i),
-                            P_all(bl, p, k, j, i), P_all(bl, p, k + 1, j, i),
-                            P_all(bl, p, k + 2, j, i), Pr_all(bl, p, k, j, i));
-                        KReconstruction::reconstruct_right<RType::ppm>(
-                            P_all(bl, p, k - 3, j, i), P_all(bl, p, k - 2, j, i),
-                            P_all(bl, p, k - 1, j, i), P_all(bl, p, k, j, i),
-                            P_all(bl, p, k + 1, j, i), Pl_all(bl, p, k, j, i));
+                            KReconstruction::reconstruct_left<RType::ppm>(
+                                P_all(bl, p, k - 2, j, i), P_all(bl, p, k - 1, j, i),
+                                P_all(bl, p, k, j, i), P_all(bl, p, k + 1, j, i),
+                                P_all(bl, p, k + 2, j, i), Pr_all(bl, p, k, j, i));
+                            KReconstruction::reconstruct_right<RType::ppm>(
+                                P_all(bl, p, k - 3, j, i), P_all(bl, p, k - 2, j, i),
+                                P_all(bl, p, k - 1, j, i), P_all(bl, p, k, j, i),
+                                P_all(bl, p, k + 1, j, i), Pl_all(bl, p, k, j, i));
+                        }
                     }
                 }
             });

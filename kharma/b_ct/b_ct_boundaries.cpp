@@ -275,8 +275,8 @@ void B_CT::DestructiveBoundaryClean(MeshBlockData<Real>* rc, IndexDomain domain,
                 });
         }
     } else {
-        const int k_face = (binner) ? b.ie : b.is;
-        for (int kadd = 0; kadd <= (b.ie - b.is); kadd++) {
+        const int k_face = (binner) ? b.ke : b.ks;
+        for (int kadd = 0; kadd <= (b.ke - b.ks); kadd++) {
             const int k = (binner) ? k_face - kadd : k_face + kadd;
             const int last_rank_f = (binner) ? k + 1 : k - 1;
             const int last_rank_c = (binner) ? k : k - 1;
@@ -388,7 +388,7 @@ void B_CT::ReconnectBoundaryB3(MeshBlockData<Real>* rc, IndexDomain domain,
                     // Floor them
                     // TODO THIS IS IN FLUID FRAME
                     int fflag = Floors::apply_geo_floors(
-                        G, P, m_p, k, jf, i, floors, floors, Loci::center);
+                        G, P, m_p, k, jf, i, floors, Loci::center);
                     // Recalculate U on anything we floored
                     if (fflag)
                         GRMHD::p_to_u(G, P, m_p, eos, k, jf, i, U, m_u, Loci::center);
