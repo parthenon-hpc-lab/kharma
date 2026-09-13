@@ -74,6 +74,10 @@ std::shared_ptr<KHARMAPackage> Initialize(
     auto& driver = packages->Get("Driver")->AllParams();
     auto flags_prim = driver.Get<std::vector<MetadataFlag>>("prim_flags");
     flags_prim.insert(flags_prim.end(), flags_entropy.begin(), flags_entropy.end());
+
+    flags_prim.push_back(Metadata::Restart);
+    flags_prim.push_back(Metadata::FillGhost);
+    
     auto flags_cons = driver.Get<std::vector<MetadataFlag>>("cons_flags");
     flags_cons.insert(flags_cons.end(), flags_entropy.begin(), flags_entropy.end());
 
