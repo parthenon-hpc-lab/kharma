@@ -248,20 +248,8 @@ void init_GRCoordinates(GRCoordinates& G)
                     double gdetfp =
                         gdet_local(loc, j + (lam == X2DIR), i + (lam == X1DIR));
 
-                        // Then sum the coefficients and record nonzero ones for
-                        // modification
-                        GReal test_sum = 0;
-                        GReal sum_portions = 0;
-                        GReal portions[GR_DIM] = {0};
-                        DLOOP1 {
-                            test_sum += gdet_conn_local(j, i, mu, mu, lam);
-                            portions[mu] = m::abs(gdet_conn_local(j, i, mu, mu, lam));
-                            sum_portions += portions[mu];
-                        }
-                        DLOOP1
-                            portions[mu] /= m::max(sum_portions, VSMALL_NUM);
-                        // printf("Zone %d %d target: %.3g test_sum: %.3g correction:
-                        // %.3g\n", i, j, target, test_sum, diff);
+                    // Get cell center metric determinant
+                    double gdet_c = gdet_local(Loci::center, j, i);
 
                     GReal D_k =
                         (gdetfp - gdetfm) / ((Xfp[lam] - Xfm[lam] + SMALL_NUM) * gdet_c);
