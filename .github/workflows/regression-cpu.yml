@@ -65,6 +65,7 @@ jobs:
         - mhdmodes
         - mhdmodes_smr
         - noh
+        - rad_linear_waves
         - radshock
         - regrid
         - reinit
