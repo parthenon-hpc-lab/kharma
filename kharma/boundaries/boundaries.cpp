@@ -42,12 +42,17 @@
 #include "grmhd_functions.hpp"
 #include "kharma.hpp"
 #include "pack.hpp"
+#include "radm1/bondi_rad.hpp"
 #include "reductions.hpp"
 #include "types.hpp"
 
 #include "b_ct.hpp"
 #include "b_flux_ct.hpp"
 #include "flux.hpp"
+
+// phoebus includes
+#include "microphysics/eos_kharma/eos_kharma.hpp"
+#include "phoebus_utils/variables.hpp"
 
 // Parthenon's boundaries
 #include <bvals/boundary_conditions.hpp>
@@ -404,6 +409,16 @@ std::shared_ptr<KHARMAPackage> KBoundaries::Initialize(
                     default:
                         break;
                 }
+            } else if (btype == "bondi_rad") {
+                AddBondiRadParameters(pin, *packages);
+                switch (bface) {
+                    case BoundaryFace::outer_x1:
+                        pkg->KBoundaries[bface] = SetBondiRad<IndexDomain::outer_x1>;
+                        break;
+                    default:
+                        throw std::runtime_error(
+                            "bondi_rad boundary type is only valid on outer_x1");
+                }
             } else if (btype == "hubble") {
                 // Analytic Hubble-flow solution, see InitializeHubble for the parameters
                 // it needs (added there, as this is only ever used with that problem)
@@ -671,7 +686,8 @@ void KBoundaries::ApplyBoundary(
         } else {
             B_FluxCT::BlockUtoP(rc.get(), domain, coarse);
         }
-        Flux::BlockPtoU(rc.get(), domain, coarse);
+        Flux::BlockPtoU(
+            rc.get(), domain, coarse); // TODO(CEP) U on ghosts should not matter?
     } else {
         // 2. Exchange/prolongate/restrict CONSERVED variables: (KHARMA driver)
         //    Conserved variables are marked FillGhost, plus FLUID PRIMITIVES.
@@ -694,7 +710,6 @@ void KBoundaries::CheckInflow(
 {
     auto pmb = rc->GetBlockPointer();
     const auto& G = pmb->coords;
-    const Real gam = pmb->packages.Get("GRMHD")->Param<Real>("gamma");
 
     PackIndexMap prims_map;
     auto P = GRMHD::PackMHDPrims(rc.get(), prims_map, coarse);
@@ -716,6 +731,9 @@ TaskStatus KBoundaries::FixFlux(MeshData<Real>* md)
     auto pmb0 = md->GetBlockData(0)->GetBlockPointer();
 
     auto& params = pmb0->packages.Get("Boundaries")->AllParams();
+
+    const auto& eos_params = pmb0->packages.Get("eos")->AllParams();
+    auto eos = eos_params.Get<Microphysics::EOS::EOS>("d.EOS");
 
     // Fluxes are defined at faces, so there is one more valid flux than
     // valid cell in the face direction.  That is, e.g. F1 is valid on
@@ -842,7 +860,6 @@ TaskStatus KBoundaries::FixFlux(MeshData<Real>* md)
 
                     const EMHD::EMHD_parameters& emhd_params =
                         EMHD::GetEMHDParameters(pmb->packages);
-                    const Real gam = pmb->packages.Get("GRMHD")->Param<Real>("gamma");
                     const auto& G = pmb->coords;
                     const int nvar = F.GetDim(4);
                     // Loci "outer" and "inner" refer to right and left.
@@ -873,13 +890,13 @@ TaskStatus KBoundaries::FixFlux(MeshData<Real>* md)
                             FourVectors Dtmp;
                             // Left
                             GRMHD::calc_4vecs(G, Pl_all, m_p, k, j, i, loc, Dtmp);
-                            Flux::prim_to_flux(G, Pl_all, m_p, Dtmp, emhd_params, gam, k,
+                            Flux::prim_to_flux(G, Pl_all, m_p, Dtmp, emhd_params, eos, k,
                                 j, i, 0, Ul_all, m_u, loc);
-                            Flux::prim_to_flux(G, Pl_all, m_p, Dtmp, emhd_params, gam, k,
+                            Flux::prim_to_flux(G, Pl_all, m_p, Dtmp, emhd_params, eos, k,
                                 j, i, dir, Fl_all, m_u, loc);
                             // Magnetosonic speeds
                             Real cmaxL, cminL;
-                            Flux::vchar(G, Pl_all, m_p, Dtmp, gam, emhd_params, k, j, i,
+                            Flux::vchar(G, Pl_all, m_p, Dtmp, eos, emhd_params, k, j, i,
                                 loc, dir, cmaxL, cminL);
                             // Record speeds
                             cmax(dir - 1, k, j, i) = m::max(0., cmaxL);
@@ -887,13 +904,13 @@ TaskStatus KBoundaries::FixFlux(MeshData<Real>* md)
 
                             // Right
                             GRMHD::calc_4vecs(G, Pr_all, m_p, k, j, i, loc, Dtmp);
-                            Flux::prim_to_flux(G, Pr_all, m_p, Dtmp, emhd_params, gam, k,
+                            Flux::prim_to_flux(G, Pr_all, m_p, Dtmp, emhd_params, eos, k,
                                 j, i, 0, Ur_all, m_u, loc);
-                            Flux::prim_to_flux(G, Pr_all, m_p, Dtmp, emhd_params, gam, k,
+                            Flux::prim_to_flux(G, Pr_all, m_p, Dtmp, emhd_params, eos, k,
                                 j, i, dir, Fr_all, m_u, loc);
                             // Magnetosonic speeds
                             Real cmaxR, cminR;
-                            Flux::vchar(G, Pr_all, m_p, Dtmp, gam, emhd_params, k, j, i,
+                            Flux::vchar(G, Pr_all, m_p, Dtmp, eos, emhd_params, k, j, i,
                                 loc, dir, cmaxR, cminR);
 
                             // Reset cmax/cmin based on our flux
@@ -937,13 +954,13 @@ TaskStatus KBoundaries::FixFlux(MeshData<Real>* md)
                             // Left
                             GRMHD::calc_4vecs(
                                 G, Pl_all, m_p, k, j, i, Loci::center, Dtmp);
-                            Flux::prim_to_flux(G, Pl_all, m_p, Dtmp, emhd_params, gam, k,
+                            Flux::prim_to_flux(G, Pl_all, m_p, Dtmp, emhd_params, eos, k,
                                 j, i, 0, Ul_all, m_u, Loci::center);
-                            Flux::prim_to_flux(G, Pl_all, m_p, Dtmp, emhd_params, gam, k,
+                            Flux::prim_to_flux(G, Pl_all, m_p, Dtmp, emhd_params, eos, k,
                                 j, i, bdir, Fl_all, m_u, Loci::center);
                             // Magnetosonic speeds
                             Real cmaxL, cminL;
-                            Flux::vchar(G, Pl_all, m_p, Dtmp, gam, emhd_params, k, j, i,
+                            Flux::vchar(G, Pl_all, m_p, Dtmp, eos, emhd_params, k, j, i,
                                 Loci::center, bdir, cmaxL, cminL);
                             // Record speeds
                             cmax(bdir - 1, k, j, i) = m::max(0., cmaxL);
@@ -952,13 +969,13 @@ TaskStatus KBoundaries::FixFlux(MeshData<Real>* md)
                             // Right
                             GRMHD::calc_4vecs(
                                 G, Pr_all, m_p, k, j, i, Loci::center, Dtmp);
-                            Flux::prim_to_flux(G, Pr_all, m_p, Dtmp, emhd_params, gam, k,
+                            Flux::prim_to_flux(G, Pr_all, m_p, Dtmp, emhd_params, eos, k,
                                 j, i, 0, Ur_all, m_u, Loci::center);
-                            Flux::prim_to_flux(G, Pr_all, m_p, Dtmp, emhd_params, gam, k,
+                            Flux::prim_to_flux(G, Pr_all, m_p, Dtmp, emhd_params, eos, k,
                                 j, i, bdir, Fr_all, m_u, Loci::center);
                             // Magnetosonic speeds
                             Real cmaxR, cminR;
-                            Flux::vchar(G, Pr_all, m_p, Dtmp, gam, emhd_params, k, j, i,
+                            Flux::vchar(G, Pr_all, m_p, Dtmp, eos, emhd_params, k, j, i,
                                 Loci::center, bdir, cmaxR, cminR);
 
                             // Reset cmax/cmin based on our flux

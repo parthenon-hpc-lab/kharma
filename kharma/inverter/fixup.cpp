@@ -40,6 +40,10 @@
 #include "flux_functions.hpp"
 #include "pack.hpp"
 
+// phoebus includes
+#include "microphysics/eos_kharma/eos_kharma.hpp"
+#include "phoebus_utils/variables.hpp"
+
 // Version of "PLOOP" guaranteeing specifically the 5 GRMHD fixup-amenable primitive vars
 #define NPRIM 5
 #define PRIMLOOP for (int p = 0; p < NPRIM; ++p)
@@ -67,7 +71,10 @@ TaskStatus Inverter::FixUtoP(MeshBlockData<Real>* rc)
     GridScalar pflag = rc->Get("pflag").data;
 
     const auto& pars = pmb->packages.Get("GRMHD")->AllParams();
-    const Real gam = pars.Get<Real>("gamma");
+    // const Real gam = pars.Get<Real>("gamma");
+
+    const auto& eos_params = pmb->packages.Get("eos")->AllParams();
+    auto eos = eos_params.Get<Microphysics::EOS::EOS>("d.EOS");
 
     // Only yell about neighbors on extreme verbosity.
     const int flag_verbose = pmb->packages.Get("Globals")->Param<int>("flag_verbose");
@@ -155,13 +162,13 @@ TaskStatus Inverter::FixUtoP(MeshBlockData<Real>* rc)
                 // Make sure all fixed values still abide by floors
                 // TODO Full floors instead of just geo?
                 int fflagl = fflag(0, k, j, i);
-                fflagl |= Floors::apply_geo_floors(
-                    G, P, m_p, gam, k, j, i, floors, floors_inner);
+                fflagl |=
+                    Floors::apply_geo_floors(G, P, m_p, k, j, i, floors, floors_inner);
                 fflag(0, k, j, i) = fflagl;
 
                 // Make sure to keep lockstep
                 // This will only be run for GRMHD, so we can call its p_to_u
-                GRMHD::p_to_u(G, P, m_p, gam, k, j, i, U, m_u);
+                GRMHD::p_to_u(G, P, m_p, eos, k, j, i, U, m_u);
             }
         });
 
@@ -178,8 +185,10 @@ TaskStatus Inverter::Backstop(MeshBlockData<Real>* rc)
     const Real tol = pars.Get<Real>("err_tol");
     const bool backstop_recover_vel = pars.Get<bool>("backstop_recover_vel");
     const bool backstop_recover_u = pars.Get<bool>("backstop_recover_u");
+    const int iter_max = pars.Get<int>("backstop_iter_max");
 
-    const Real gam = pmb->packages.Get("GRMHD")->Param<Real>("gamma");
+    const auto& eos_params = pmb->packages.Get("eos")->AllParams();
+    auto eos = eos_params.Get<Microphysics::EOS::EOS>("d.EOS");
 
     // Use values from floors package if it's enabled, otherwise any we've been asked to
     // apply
@@ -216,24 +225,30 @@ TaskStatus Inverter::Backstop(MeshBlockData<Real>* rc)
     // const Real umin = floors.u_min_const;
     // const Real umin = 1e-15;
 
-    // If after the first round of floors, we still reconstructed
+    // If after the first round of floors, we still reconstructed something bad, fix it
     pmb->par_for("fix_U_to_P_energy", b.ks, b.ke, b.js, b.je, b.is, b.ie,
         KOKKOS_LAMBDA (const int &k, const int &j, const int &i)
         {
+            // Preserve/append floor flag
+            int fflagl = fflag(0, k, j, i);
+
             // If the solve failed, because we reconstructed a
             // negative or zero internal energy (even after floors!)
             Real rhomin_geom, umin_geom;
             determine_geo_floors(
-                G, P, m_p, gam, k, j, i, floors, floors_inner, rhomin_geom, umin_geom);
+                G, P, m_p, k, j, i, floors, floors_inner, rhomin_geom, umin_geom);
 
             const Real umin =
                 (m_p.KTOT >= 0)
-                    ? P(m_p.KTOT, k, j, i) * m::pow(P(m_p.RHO, k, j, i), gam) / (gam - 1.)
+                    ? m::max(P(m_p.KTOT, k, j, i) *
+                                 m::pow(P(m_p.RHO, k, j, i), floors.gamma_floor) /
+                                 (floors.gamma_floor - 1.),
+                          umin_geom)
                     : umin_geom;
 
-            if (failed(pflag(k, j, i)) && (P(m_p.UU, k, j, i) < umin)) {
-                // const Real rho = P(m_p.RHO, k, j, i);
-                // const Real u = P(m_p.UU, k, j, i);
+            // Don't *trigger* on umin from KTOT, just use it if we need
+            if ((failed(pflag(k, j, i)) || P(m_p.RHO, k, j, i) < rhomin_geom / 10. ||
+                    P(m_p.UU, k, j, i) < umin_geom / 10.)) {
                 const Real uvec[NVEC] = {
                     P(m_p.U1, k, j, i), P(m_p.U2, k, j, i), P(m_p.U3, k, j, i)};
                 Real B_P[NVEC] = {0.};
@@ -242,26 +257,22 @@ TaskStatus Inverter::Backstop(MeshBlockData<Real>* rc)
                     B_P[V2] = P(m_p.B2, k, j, i);
                     B_P[V3] = P(m_p.B3, k, j, i);
                 }
-                // Real rho_ut, T[GR_DIM];
-                // GRMHD::p_to_u_mhd(G, rho, u, uvec, B_P, gam, k, j, i, rho_ut, T);
 
-                int fflagl = fflag(0, k, j, i);
-
-                // Calculate P->U on the inverted values
-                const Real D =
+                const Real D = m::max(rhomin_geom,
                     U(m_u.RHO, k, j, i) / (m::sqrt(-G.gcon(Loci::center, j, i, 0, 0)) *
-                                              G.gdet(Loci::center, j, i));
+                                              G.gdet(Loci::center, j, i)));
                 const Real W = GRMHD::lorentz_calc(G, uvec, k, j, i, Loci::center);
 
                 // Calculate the total energy of the fluid at rest
                 const Real uvec0[NVEC] = {0.};
                 Real rho_ut = 0.;
                 Real Trest[GR_DIM] = {0.};
-                GRMHD::p_to_u_mhd(G, D, umin, uvec0, B_P, gam, k, j, i, rho_ut, Trest);
+                GRMHD::p_to_u_mhd(G, D, umin, uvec0, B_P, eos, k, j, i, rho_ut, Trest);
                 // If we're below the at-rest energy (within tolerance),
                 // just bump it to that and kill all kinetic energy
+                // Also use this if v=0.
                 if ((Trest[0] - U(m_u.UU, k, j, i)) / U(m_u.UU, k, j, i) > -tol ||
-                    (!backstop_recover_vel && !backstop_recover_u)) {
+                    W <= 1.0 || (!backstop_recover_vel && !backstop_recover_u)) {
                     // W = 1
                     P(m_p.RHO, k, j, i) = D;
                     P(m_p.UU, k, j, i) = umin;
@@ -277,7 +288,7 @@ TaskStatus Inverter::Backstop(MeshBlockData<Real>* rc)
                     {
                         // Calculate tensor (we only need T0)
                         Real rho_ut, T[GR_DIM];
-                        GRMHD::p_to_u_mhd(G, D, u, uvec0, B_P, gam, k, j, i, rho_ut, T);
+                        GRMHD::p_to_u_mhd(G, D, u, uvec0, B_P, eos, k, j, i, rho_ut, T);
                         // Check that it matches
                         return (T[0] - U(m_u.UU, k, j, i)) / U(m_u.UU, k, j, i);
                     };
@@ -291,9 +302,9 @@ TaskStatus Inverter::Backstop(MeshBlockData<Real>* rc)
                         fflagl |= Floors::FFlag::FIXUP_U_RANGE;
                     } else {
                         Real uc = (up + um) / 2.;
-                        while (1) {
+                        for (int i = 0; i < 100; i++) {
                             Real resv = m::abs(f(uc));
-                            if ((resv < tol) || (m::abs((up - um) / 2) < tol / 10)) {
+                            if ((resv < tol) || (m::abs((up - um) / 2) < tol) || i > 90) {
                                 uu = uc;
                                 e_solve_failed = (resv > tol);
                                 break;
@@ -339,12 +350,12 @@ TaskStatus Inverter::Backstop(MeshBlockData<Real>* rc)
                         // Calculate tensor (we only need T0)
                         Real rho_ut, T[GR_DIM];
                         GRMHD::p_to_u_mhd(
-                            G, D * iW, umin, uv, B_P, gam, k, j, i, rho_ut, T);
+                            G, D * iW, umin, uv, B_P, eos, k, j, i, rho_ut, T);
                         // Check that it matches
                         return (T[0] - U(m_u.UU, k, j, i)) / U(m_u.UU, k, j, i);
                     };
 
-                    // Rootfind for iW that would have produced the current u
+                    // Rootfind for iW that would have produced the current T00
                     bool e_solve_failed = false;
                     Real iWm = 1 / m::min(W, 50.), iWp = 1.;
                     Real iW;
@@ -353,9 +364,10 @@ TaskStatus Inverter::Backstop(MeshBlockData<Real>* rc)
                         fflagl |= Floors::FFlag::FIXUP_VEL_RANGE;
                     } else {
                         Real iWc = (iWp + iWm) / 2.;
-                        while (1) {
+                        for (int i = 0; i < 100; i++) {
                             Real resv = m::abs(f(iWc));
-                            if ((resv < tol) || (m::abs((iWp - iWm) / 2) < tol / 10)) {
+                            if ((resv < tol) || (m::abs((iWp - iWm) / 2) < tol) ||
+                                i > 90) {
                                 iW = iWc;
                                 e_solve_failed = (resv > tol);
                                 break;
@@ -371,7 +383,7 @@ TaskStatus Inverter::Backstop(MeshBlockData<Real>* rc)
 
                     // Compute what we really need
                     Real gamma_fac = m::sqrt((SQR(1. / iW) - 1.) / (SQR(W) - 1.));
-                    if (gamma_fac > 1 && !e_solve_failed) {
+                    if (!(gamma_fac < 1) && !e_solve_failed) {
                         fflagl |= Floors::FFlag::FIXUP_VEL_GAMMA;
                         e_solve_failed = true;
                         // TO PRINT (for verifying this only happens via round-off error)
@@ -411,24 +423,23 @@ TaskStatus Inverter::Backstop(MeshBlockData<Real>* rc)
                         fflagl |= Floors::FFlag::FIXUP_VEL_FAILED;
                     }
                 }
-
-                // Set remaining floors the dumb way if they're *still* low
-                // Verified this basically never happens. Not sure if it's possible
-                // TODO should this just be up to SMALL and not the constant floor?
-                if (P(m_p.RHO, k, j, i) < floors.rho_min_const) {
-                    P(m_p.RHO, k, j, i) = floors.rho_min_const;
-                    fflagl |= Floors::FFlag::FIXUP_RHO_DIRECT;
-                }
-                if (P(m_p.UU, k, j, i) < floors.u_min_const) {
-                    P(m_p.UU, k, j, i) = floors.u_min_const;
-                    fflagl |= Floors::FFlag::FIXUP_U_DIRECT;
-                }
-                fflag(0, k, j, i) = fflagl;
-
-                // We definitely fixed a zone that definitely needed fixing.  Respect
-                // primitive vars
-                GRMHD::p_to_u(G, P, m_p, gam, k, j, i, U, m_u);
             }
+
+            // Set remaining floors the dumb way if they're *still* low
+            // Verified this basically never happens. Not sure if it's possible
+            // TODO should this just be up to SMALL and not the constant floor?
+            if (P(m_p.RHO, k, j, i) < floors.rho_min_const) {
+                P(m_p.RHO, k, j, i) = floors.rho_min_const;
+                fflagl |= Floors::FFlag::FIXUP_RHO_DIRECT;
+            }
+            if (P(m_p.UU, k, j, i) < floors.u_min_const) {
+                P(m_p.UU, k, j, i) = floors.u_min_const;
+                fflagl |= Floors::FFlag::FIXUP_U_DIRECT;
+            }
+            fflag(0, k, j, i) = fflagl;
+
+            // P->U if we had to apply any of this
+            if (fflagl) GRMHD::p_to_u(G, P, m_p, eos, k, j, i, U, m_u);
         });
     EndFlag();
     return TaskStatus::complete;

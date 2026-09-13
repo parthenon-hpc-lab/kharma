@@ -139,7 +139,7 @@ void BlockUtoP(MeshBlockData<Real>* rc, IndexDomain domain, bool coarse)
     IndexRange jb = bounds.GetBoundsJ(domain);
     IndexRange kb = bounds.GetBoundsK(domain);
     pmb->par_for("UtoP_B_CD", kb.s, kb.e, jb.s, jb.e, ib.s, ib.e,
-                 KOKKOS_LAMBDA(const int& k, const int& j, const int& i)
+        KOKKOS_LAMBDA (const int &k, const int &j, const int &i)
         {
             // Update the primitive B-fields
             Real gdet = G.gdet(Loci::center, j, i);

@@ -30,7 +30,6 @@ set -euo pipefail
 # Set conservatively as nvcc/nvc++ uses a *lot* of memory
 # Set in environment or override in machine file
 NPROC=${NPROC:-8}
-
 # Set variables we expect to use to satisfy bash
 EXTRA_FLAGS=${EXTRA_FLAGS:-}
 CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH:-}
@@ -41,6 +40,7 @@ C_NATIVE=${C_NATIVE:-}
 CXX_NATIVE=${CXX_NATIVE:-}
 HOST_ARCH=${HOST_ARCH:-NATIVE}
 # No default DEVICE_ARCH, only set if defined
+MPI_EXTRA_ARGS=${MPI_EXTRA_ARGS:-}
 
 ### Load basic stuff ###
 HOST=$(hostname -f)

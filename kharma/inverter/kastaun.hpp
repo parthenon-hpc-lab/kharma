@@ -66,6 +66,10 @@
 #include "grmhd_functions.hpp"
 #include "kharma_utils.hpp"
 
+// phoebus includes
+#include "microphysics/eos_kharma/eos_kharma.hpp"
+#include "phoebus_utils/variables.hpp"
+
 // This isn't a vecloop, also it takes an argument.
 // Left it in since it's useful and all over Phoebus, maybe we'll adopt it
 #define SPACELOOP(i) for (int i = 0; i < 3; i++)
@@ -84,7 +88,8 @@ class KastaunResidual
   public:
     KOKKOS_FUNCTION
     KastaunResidual(const Real& D, const Real& q, const Real& bsq, const Real& bsq_rpsq,
-        const Real& rsq, const Real& rbsq, const Real& v0sq, const Real& gam)
+        const Real& rsq, const Real& rbsq, const Real& v0sq,
+        const Microphysics::EOS::EOS& eos)
         : D_(D)
         , q_(q)
         , bsq_(bsq)
@@ -92,7 +97,7 @@ class KastaunResidual
         , rsq_(rsq)
         , rbsq_(rbsq)
         , v0sq_(v0sq)
-        , gam_(gam)
+        , eos_(eos)
     {}
 
     KOKKOS_FORCEINLINE_FUNCTION
@@ -138,8 +143,8 @@ class KastaunResidual
         // TODO technically we should only limit P>0, and allow returning negative u
         const Real rhohat = std::max(rhohat_mu(iWhat), 0.);
         const Real ehat = std::max(ehat_mu(mu, qbar, rbarsq, vhatsq, What), 0.);
-        // TODO this is ideal-only
-        const Real Phat = ehat * rhohat * (gam_ - 1.0);
+        const Real Phat = eos_.PressureFromDensityInternalEnergy(rhohat, ehat);
+        // TODO_EOS: ahat general or ideal-only?
         const Real ahat = Phat / (rhohat * (1.0 + ehat));
 
         const Real nua = (1.0 + ahat) * (1.0 + ehat) * iWhat;
@@ -161,7 +166,8 @@ class KastaunResidual
     }
 
   private:
-    const Real D_, q_, bsq_, bsq_rpsq_, rsq_, rbsq_, v0sq_, gam_;
+    const Real D_, q_, bsq_, bsq_rpsq_, rsq_, rbsq_, v0sq_;
+    const Microphysics::EOS::EOS& eos_;
 };
 
 /**
@@ -175,9 +181,9 @@ class KastaunResidual
  */
 template<>
 KOKKOS_INLINE_FUNCTION int u_to_p<Type::kastaun>(const GRCoordinates& G,
-    const VariablePack<Real>& U, const VarMap& m_u, const Real& gam, const int& k,
-    const int& j, const int& i, const VariablePack<Real>& P, const VarMap& m_p,
-    const Loci& loc, const int& max_iterations, const Real& tol)
+    const VariablePack<Real>& U, const VarMap& m_u, const Microphysics::EOS::EOS& eos,
+    const int& k, const int& j, const int& i, const VariablePack<Real>& P,
+    const VarMap& m_p, const Loci& loc, const int& max_iterations, const Real& tol)
 {
     // Shouldn't need this, KHARMA should die on NaN
     // But it's here for debugging
@@ -186,9 +192,11 @@ KOKKOS_INLINE_FUNCTION int u_to_p<Type::kastaun>(const GRCoordinates& G,
     // static_cast<int>(Status::neg_input);
 
     // This exists only to keep the math stable on first call,
-    // so we can add floors instead of failing outright
-    if (U(m_u.RHO, k, j, i) < 1e-20) {
-        U(m_u.RHO, k, j, i) = 1e-20;
+    // so we can add floors instead of failing completely
+    int returncode = static_cast<int>(Status::success);
+    if (U(m_u.RHO, k, j, i) < 0.) {
+        U(m_u.RHO, k, j, i) = 0.;
+        returncode = static_cast<int>(Status::neg_input);
     }
 
     // Transform GRMHD variables for the SRMHD Kastaun solver
@@ -262,13 +270,12 @@ KOKKOS_INLINE_FUNCTION int u_to_p<Type::kastaun>(const GRCoordinates& G,
     const Real v0sq = std::min(zsq / (1.0 + zsq), 1.0 - 1.0 / SQR(51.));
 
     // residual object. Caches most arguments/floors so calls are single-argument
-    KastaunResidual res(D, q, bsq, bsq_rpsq, rsq, rbsq, v0sq, gam);
+    KastaunResidual res(D, q, bsq, bsq_rpsq, rsq, rbsq, v0sq, eos);
 
     // SOLVE
-    // TODO(CEP) better or faster solver?  (Optionally) skip bracketing?
     // Need to find initial bracket. Requires separate solve
     Real zm = 0.;
-    Real zp = 1.; // This is the lowest specific enthalpy admitted by the EOS
+    Real zp = 1.;
 
     // Evaluate master function (eq 49) at bracket values
     Real fm = res.aux_func(zm);
@@ -360,21 +367,46 @@ KOKKOS_INLINE_FUNCTION int u_to_p<Type::kastaun>(const GRCoordinates& G,
     Real u = res.ehat_mu(mu, qbar, rbarsq, vsq, W) * P(m_p.RHO, k, j, i);
     P(m_p.UU, k, j, i) = m::max(u, 0.);
     // Latter part is a vector/signed quantity, don't set a minimum at 0
-    Real mag_vel = W * mu * x;
-    SPACELOOP(ii)
-    P(m_p.U1 + ii, k, j, i) = std::max(mag_vel, 0.) * (rcon[ii] + mu * bdotr * bu[ii]);
+    const Real mag_vel = W * mu * x;
 
+    if (rho > 0 && u > 0) {
+        // Set velocity normally
+        SPACELOOP(ii)
+        {
+            const Real dir_vel = (rcon[ii] + mu * bdotr * bu[ii]);
+            // Test for NaN or related madness, without isnan since that's often a no-op.
+            // We return 0 here if neg rho/u would give some invalid vel: it's handled in
+            // floors
+            P(m_p.U1 + ii, k, j, i) =
+                (dir_vel < 0. || dir_vel > 0.) ? m::max(mag_vel, 0.) * dir_vel : 0.;
+        }
+    } else {
+        // Reduce the velocity, but don't zero it.
+        // This "droops" very problematic velocities by dividing by the Lorentz factor
+        // We don't actually care about the magnitude much, it will get rescaled
+        SPACELOOP(ii)
+        {
+            const Real dir_vel = (rcon[ii] + mu * bdotr * bu[ii]);
+            // Test for NaN or related madness, without isnan since that's often a no-op.
+            // We return 0 here if neg rho/u would give some invalid vel: it's handled in
+            // floors
+            P(m_p.U1 + ii, k, j, i) =
+                (dir_vel < 0. || dir_vel > 0.) ? m::max(mu * x, 0.) * dir_vel : 0.;
+        }
+    }
+
+    // Mark for fix if the solution is obviously unusable
     if (rho <= 0.) {
         return static_cast<int>(Status::neg_rho);
     } else if (u <= 0.) {
         return static_cast<int>(Status::neg_u);
-    } else if (mag_vel <= 0.) {
+    } else if (mag_vel < 0. || !(W < 50.)) {
         return static_cast<int>(Status::bad_gamma);
+    } else if (returncode) {
+        return returncode;
+    } else {
+        return static_cast<int>(Status::success);
     }
-
-    // Mark for fix only if convergence is not established within max_iterations (should
-    // be *extremely* rare)
-    return static_cast<int>(Status::success);
 }
 
 }

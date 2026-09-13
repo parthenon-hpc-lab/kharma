@@ -42,6 +42,10 @@
 #include "kharma.hpp"
 #include "kharma_driver.hpp"
 
+// phoebus includes
+#include "microphysics/eos_kharma/eos_kharma.hpp"
+#include "phoebus_utils/variables.hpp"
+
 #include <parthenon/parthenon.hpp>
 #include <utils/string_utils.hpp>
 
@@ -243,6 +247,10 @@ TaskStatus InitElectrons(MeshBlockData<Real>* rc, ParameterInput* pin)
     GridScalar rho = rc->Get("prims.rho").data;
     GridScalar u = rc->Get("prims.u").data;
 
+    const auto& eos_params = pmb->packages.Get("eos")->AllParams();
+    auto eos = eos_params.Get<Microphysics::EOS::EOS>("d.EOS");
+
+    // const Real gam = pmb->packages.Get("GRMHD")->Param<Real>("gamma");
     const Real game = pmb->packages.Get("Electrons")->Param<Real>("gamma_e");
     const Real fel0 = pmb->packages.Get("Electrons")->Param<Real>("fel_0");
 
@@ -321,7 +329,10 @@ TaskStatus ApplyElectronHeating(
     auto pmb = rc->GetBlockPointer();
     const auto& G = pmb->coords;
 
-    const Real gam = pmb->packages.Get("GRMHD")->Param<Real>("gamma");
+    const auto& eos_params = pmb->packages.Get("eos")->AllParams();
+    auto eos = eos_params.Get<Microphysics::EOS::EOS>("d.EOS");
+
+    // const Real gam = pmb->packages.Get("GRMHD")->Param<Real>("gamma");
     const Real gamp = pmb->packages.Get("Electrons")->Param<Real>("gamma_p");
     const Real game = pmb->packages.Get("Electrons")->Param<Real>("gamma_e");
     const Real fel_const = pmb->packages.Get("Electrons")->Param<Real>("fel_constant");
@@ -355,6 +366,10 @@ TaskStatus ApplyElectronHeating(
             // Entropy::ApplyEntropyUpdate resets Ktot to this same real value just after
             // this runs; it still needs the pre-update value here.
             // Denotes the solution corresponding to entropy conservation.
+            Real sie = P_new(m_p.UU, k, j, i) / P_new(m_p.RHO, k, j, i);
+            Real gam =
+                eos.BulkModulusFromDensityInternalEnergy(P_new(m_p.RHO, k, j, i), sie) /
+                eos.PressureFromDensityInternalEnergy(P_new(m_p.RHO, k, j, i), sie);
             const Real k_energy_conserving = Entropy::CalcEntropy(
                 P_new(m_p.RHO, k, j, i), P_new(m_p.UU, k, j, i), gam);
             Real diss_fluid_tmp = k_energy_conserving - P_new(m_p.KTOT, k, j, i);

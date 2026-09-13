@@ -42,6 +42,8 @@
 #include "reductions.hpp"
 #include <stdexcept>
 
+#include <singularity-eos/eos/eos_ideal.hpp>
+
 std::shared_ptr<KHARMAPackage> Inverter::Initialize(
     ParameterInput* pin, std::shared_ptr<Packages_t>& packages)
 {
@@ -63,6 +65,17 @@ std::shared_ptr<KHARMAPackage> Inverter::Initialize(
         params.Add("inverter_type", Type::none);
     }
 
+    // An option that exits when someone use onedw with an equation of state that is not
+    // ideal gas. eos_kharma is solely responsible for setting/defaulting "eos"/"type"; we
+    // only ever read it here.
+    if (inverter_name == "onedw") {
+        const std::string eos_name = pin->GetString("eos", "type");
+        if (eos_name != singularity::IdealGas::EosType()) {
+            throw std::invalid_argument(
+                "onedw inverter only works with ideal gas equation of state");
+        }
+    }
+
     // Solver options
     // Any other Noble et al. implemented for fun should use lower tol/iter count, see
     // Noble+06
@@ -71,26 +84,32 @@ std::shared_ptr<KHARMAPackage> Inverter::Initialize(
     int iter_max = pin->GetOrAddInteger("inverter", "iter_max", (use_kastaun) ? 25 : 8);
     params.Add("iter_max", iter_max);
 
+    Real gamma_floor = pin->GetOrAddReal(
+        "floors", "gamma_floor", packages->Get("eos")->AllParams().Get<Real>("gm1") + 1);
+
     // TODO only need these if Floors aren't loaded
     // Floor options
     // Use a custom block for inverter floors to allow customization.  Not sure anyone
     // *wants* that but...
     if (!pin->DoesBlockExist("inverter_floors")) {
-        params.Add("inverter_prescription", Floors::MakePrescription(pin, "floors"));
+        params.Add("inverter_prescription",
+            Floors::MakePrescription(pin, gamma_floor, "floors"));
         if (pin->DoesBlockExist("floors_inner"))
             params.Add("inverter_prescription_inner",
-                Floors::MakePrescriptionInner(
-                    pin, Floors::MakePrescription(pin, "floors"), "floors_inner"));
+                Floors::MakePrescriptionInner(pin,
+                    Floors::MakePrescription(pin, gamma_floor, "floors"),
+                    "floors_inner"));
         else
             params.Add("inverter_prescription_inner",
                 Floors::MakePrescriptionInner(
-                    pin, Floors::MakePrescription(pin, "floors"), "floors"));
+                    pin, Floors::MakePrescription(pin, gamma_floor, "floors"), "floors"));
     } else {
-        params.Add(
-            "inverter_prescription", Floors::MakePrescription(pin, "inverter_floors"));
+        params.Add("inverter_prescription",
+            Floors::MakePrescription(pin, gamma_floor, "inverter_floors"));
         params.Add("inverter_prescription_inner",
             Floors::MakePrescriptionInner(pin,
-                Floors::MakePrescription(pin, "inverter_floors"), "inverter_floors"));
+                Floors::MakePrescription(pin, gamma_floor, "inverter_floors"),
+                "inverter_floors"));
     }
 
     // Fixup options
@@ -117,6 +136,8 @@ std::shared_ptr<KHARMAPackage> Inverter::Initialize(
     bool backstop_recover_u =
         pin->GetOrAddBoolean("inverter", "backstop_recover_u", false);
     params.Add("backstop_recover_u", backstop_recover_u);
+    int backstop_iter_max = pin->GetOrAddInteger("inverter", "backstop_iter_max", 100);
+    params.Add("backstop_iter_max", backstop_iter_max);
     if (backstop && backstop_recover_vel && backstop_recover_u) {
         throw std::runtime_error(
             "Inverter parameters error: cannot recover with backstop_recover_vel and "
@@ -200,7 +221,8 @@ inline void BlockPerformInversion(
 
     if (U.GetDim(4) == 0 || pflag.GetDim(4) == 0) return;
 
-    const Real gam = pmb->packages.Get("GRMHD")->Param<Real>("gamma");
+    const auto& eos_params = pmb->packages.Get("eos")->AllParams();
+    auto eos = eos_params.Get<Microphysics::EOS::EOS>("d.EOS");
 
     auto& pars = pmb->packages.Get("Inverter")->AllParams();
     const Real err_tol = pars.Get<Real>("err_tol");
@@ -228,7 +250,7 @@ inline void BlockPerformInversion(
         KOKKOS_LAMBDA (const int &k, const int &j, const int &i)
         {
             int pflagl = Inverter::u_to_p<inverter>(
-                G, U, m_u, gam, k, j, i, P, m_p, Loci::center, iter_max, err_tol);
+                G, U, m_u, eos, k, j, i, P, m_p, Loci::center, iter_max, err_tol);
             pflag(0, k, j, i) = pflagl;
         });
 }

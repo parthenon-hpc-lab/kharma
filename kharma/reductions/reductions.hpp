@@ -252,6 +252,14 @@ std::vector<int> CheckFlagReduceAndPrintHits(MeshData<Real>* md, std::string fie
     const std::map<int, std::string>& flag_values, IndexDomain domain, bool is_bitflag,
     int channel);
 
+/**
+ * Out of the package modification RADM1
+ * Print out which flags were hit with what % for radm1 package.
+ */
+void PrintFlagPercentages(MeshData<Real>* md, std::string field_name,
+    const std::map<int, std::string>& flag_values, IndexDomain domain,
+    const std::vector<int>& total_flag_counts);
+
 } // namespace Reductions
 
 // See the file for why we do this

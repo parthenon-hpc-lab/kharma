@@ -107,7 +107,7 @@ class SphMinkowskiCoords
         const GReal sth = m::sin(th);
 
         gzero2(gcov);
-        gcov[0][0] = 1.;
+        gcov[0][0] = -1.;
         gcov[1][1] = 1.;
         gcov[2][2] = r * r;
         gcov[3][3] = sth * sth * r * r;

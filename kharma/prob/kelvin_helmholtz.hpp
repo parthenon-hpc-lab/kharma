@@ -68,7 +68,7 @@ TaskStatus InitializeKelvinHelmholtz(
     const Real z2 = pin->GetOrAddReal("kelvin_helmholtz", "z2", 1.5);
 
     const auto& G = pmb->coords;
-    const Real gam = pmb->packages.Get("GRMHD")->Param<Real>("gamma");
+    const Real gam = pmb->packages.Get("eos")->Param<Real>("gm1") + 1.0;
 
     IndexDomain domain = IndexDomain::entire;
     IndexRange3 b = KDomain::GetRange(rc, domain, 0, 0);

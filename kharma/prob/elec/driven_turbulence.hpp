@@ -49,7 +49,7 @@ TaskStatus InitializeDrivenTurbulence(
     GridScalar u = rc->Get("prims.u").data;
     GridVector uvec = rc->Get("prims.uvec").data;
 
-    const Real gam = pmb->packages.Get("GRMHD")->Param<Real>("gamma");
+    const Real gam = pmb->packages.Get("eos")->Param<Real>("gm1") + 1.0;
     const Real rho0 = pin->GetOrAddReal("driven_turbulence", "rho", 1.0);
     const Real cs0 = pin->GetOrAddReal("driven_turbulence", "cs0", 8.6e-4);
     const Real dt_kick = pin->GetOrAddReal("driven_turbulence", "dt_kick", 1);

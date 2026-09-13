@@ -58,7 +58,7 @@ TaskStatus InitializeExplosion(
 
     const auto& G = pmb->coords;
 
-    Real gam = pmb->packages.Get("GRMHD")->Param<Real>("gamma");
+    Real gam = pmb->packages.Get("eos")->Param<Real>("gm1") + 1.0;
 
     // All options are runtime options!
     const bool linear_ramp = pin->GetOrAddBoolean("explosion", "linear_ramp", false);

@@ -174,7 +174,7 @@ fi
 chmod +x $KHARMA_DIR/$EXE_NAME
 
 # Run based on preferences
-if [ -z "$MPI_EXE" ]; then
+if [ -n "$MPI_EXE" ]; then
   echo "Running $PROF_EXE $PROF_OPTS $KHARMA_DIR/$EXE_NAME $@ $KHARMA_PROF_OPTS"
   if [[ $DRYRUN != 1 ]]; then
     $PROF_EXE $PROF_OPTS $KHARMA_DIR/$EXE_NAME -d "$OUTDIR" "$@" $KHARMA_PROF_OPTS
