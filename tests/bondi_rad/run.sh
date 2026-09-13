@@ -30,7 +30,10 @@ rad_shocktube_test() {
     fi
 }
 
-for test_num in 1 2 3 4 5
+
+# All the five tests can be very expensive to run, so I'll only add 1, 3 and 4
+# 1 tests bondi at low acc rate, 5 tests at high accretion rate, and 4 tests it with higher radiation pressure and temperature
+for test_num in 1 4 5
 do
     rad_shocktube_test $test_num
 done

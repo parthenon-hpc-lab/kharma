@@ -77,7 +77,7 @@ std::shared_ptr<KHARMAPackage> Initialize(
 
     flags_prim.push_back(Metadata::Restart);
     flags_prim.push_back(Metadata::FillGhost);
-    
+
     auto flags_cons = driver.Get<std::vector<MetadataFlag>>("cons_flags");
     flags_cons.insert(flags_cons.end(), flags_entropy.begin(), flags_entropy.end());
 
@@ -93,6 +93,8 @@ std::shared_ptr<KHARMAPackage> Initialize(
 
     pkg->BlockUtoP = Entropy::BlockUtoP;
     pkg->BoundaryUtoP = Entropy::BlockUtoP;
+
+    pkg->BlockApplyFloors = Entropy::ApplyFloors;
 
     return pkg;
 }

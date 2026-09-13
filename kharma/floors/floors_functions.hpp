@@ -64,8 +64,8 @@ KOKKOS_INLINE_FUNCTION void apply_ceilings(const GRCoordinates& G,
 {
     // Compute max values for ceilings
     Real gamma = GRMHD::lorentz_calc(G, P, m_p, k, j, i, loc);
-    Real ktot = (myfloors.gamma_floor - 1.) * P(m_p.UU, k, j, i) /
-                m::pow(P(m_p.RHO, k, j, i), myfloors.gamma_floor);
+    Real ktot = (floors.gamma_floor - 1.) * P(m_p.UU, k, j, i) /
+                m::pow(P(m_p.RHO, k, j, i), floors.gamma_floor);
     Real u_over_rho = P(m_p.UU, k, j, i) / P(m_p.RHO, k, j, i);
 
     // 1. Limit gamma with respect to normal observer
@@ -76,8 +76,8 @@ KOKKOS_INLINE_FUNCTION void apply_ceilings(const GRCoordinates& G,
             P(m_p.U1 + v, k, j, i) *= f;
         // This should be here even though it will be checked & possibly replaced.
         // TODO recalculate direct?  This should preserve existing D...
-        P(m_p.RHO, k, j, i) *= gamma / myfloors.gamma_max;
-        P(m_p.UU, k, j, i) *= gamma / myfloors.gamma_max;
+        P(m_p.RHO, k, j, i) *= gamma / floors.gamma_max;
+        P(m_p.UU, k, j, i) *= gamma / floors.gamma_max;
     }
 
     // 2. Limit the entropy by controlling u, to avoid anomalous cooling from funnel wall
