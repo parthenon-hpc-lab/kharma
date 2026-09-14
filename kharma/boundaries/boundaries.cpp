@@ -509,9 +509,11 @@ void KBoundaries::ApplyBoundary(
     }
 
     // Always call through to the registered boundary function
-    Flag("Apply " + bname + " boundary: " + btype_name);
-    pkg->KBoundaries[bface](rc, coarse);
-    EndFlag();
+    if (pkg->KBoundaries[bface] != nullptr) {
+        Flag("Apply " + bname + " boundary: " + btype_name);
+        pkg->KBoundaries[bface](rc, coarse);
+        EndFlag();
+    }
 
     // Then a bunch of common boundary "touchups"
     // Nothing below is designed, nor necessary, for coarse buffers

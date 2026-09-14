@@ -214,11 +214,13 @@ class CoordinateEmbedding
                                 // mesh, future general default
             if (pin->DoesParameterExist("coordinates", "fmks_zero_point")) {
                 startx1 = pin->GetReal("coordinates", "fmks_zero_point");
+            } else if (pin->DoesParameterExist("coordinates", "fmks_start")) {
+                startx1 = m::log(pin->GetReal("coordinates", "fmks_start"));
             } else if (pin->DoesParameterExist("parthenon/mesh", "x1min")) {
                 std::cout << "KHARMA WARNING: Constructing FMKS coordinates using mesh "
                              "x1min is deprecated."
                           << std::endl
-                          << "Set coordinates/fmks_zero_point for consistent behavior."
+                          << "Set coordinates/fmks_start for consistent behavior."
                           << std::endl;
                 startx1 = pin->GetReal("parthenon/mesh", "x1min");
             }

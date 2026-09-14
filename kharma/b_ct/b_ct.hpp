@@ -71,6 +71,7 @@ TaskStatus MeshUtoP(MeshData<Real>* md, IndexDomain domain, bool coarse = false)
  * and only with B_Cleanup::CleanupDivergence directly afterward!
  */
 TaskStatus DangerousPtoU(MeshData<Real>* md, IndexDomain domain, bool coarse = false);
+TaskStatus BlockDangerousPtoU(MeshBlockData<Real>* rc, IndexDomain domain, bool coarse);
 
 /**
  * Calculate the EMF around edges of faces caused by the flux of B field

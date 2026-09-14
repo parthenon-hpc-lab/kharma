@@ -92,10 +92,9 @@ fi
 if option "noimplicit"; then
   EXTRA_FLAGS="-DKHARMA_DISABLE_IMPLICIT=1 $EXTRA_FLAGS"
 fi
-# Always disable old resizing, it's broken w/new tasking
-#if option "nocleanup"; then
-EXTRA_FLAGS="-DKHARMA_DISABLE_CLEANUP=1 $EXTRA_FLAGS"
-#fi
+if option "nocleanup"; then
+  EXTRA_FLAGS="-DKHARMA_DISABLE_CLEANUP=1 $EXTRA_FLAGS"
+fi
 if option "split_implicit"; then
   EXTRA_FLAGS="-DKHARMA_SPLIT_IMPLICIT_SOLVE=1 $EXTRA_FLAGS"
 fi

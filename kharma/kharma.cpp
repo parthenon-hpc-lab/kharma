@@ -43,7 +43,6 @@
 // Packages
 #include "b_cd.hpp"
 #include "b_cleanup.hpp"
-#include "b_cleanup_gmg.hpp"
 #include "b_ct.hpp"
 #include "b_flux_ct.hpp"
 #include "coord_output.hpp"
@@ -419,8 +418,7 @@ Packages_t KHARMA::ProcessPackages(std::unique_ptr<ParameterInput>& pin)
     bool have_b_transport = false;
     bool face_centered_b = false;
     std::string b_field_solver = pin->GetOrAddString("b_field", "solver", "face_ct");
-    if (b_field_solver == "none" || b_field_solver == "cleanup" ||
-        b_field_solver == "b_cleanup") {
+    if (b_field_solver == "none" || b_field_solver == "cleanup") {
         // Don't add a B field here
     } else if (b_field_solver == "constrained_transport" || b_field_solver == "face_ct") {
         t_b_field = tl.AddTask(
@@ -445,7 +443,7 @@ Packages_t KHARMA::ProcessPackages(std::unique_ptr<ParameterInput>& pin)
     // Almost always loaded explicitly in addition to another transport, just for cleaning
     // at simulation start Enable b_cleanup package if we want it explicitly
     bool b_cleanup_package =
-        pin->GetOrAddBoolean("b_cleanup", "on", (b_field_solver == "b_cleanup"));
+        pin->GetOrAddBoolean("b_cleanup", "on", (b_field_solver == "cleanup"));
     // OR if we need it for resizing a dump
     bool is_resize = pin->GetString("parthenon/job", "problem_id") == "resize_restart" &&
                      !pin->GetOrAddBoolean("resize_restart", "skip_b_cleanup", false);
@@ -457,12 +455,13 @@ Packages_t KHARMA::ProcessPackages(std::unique_ptr<ParameterInput>& pin)
     // Load GMG cleanup only if we're using face-centered fields, that's all it supports
     if (use_b_cleanup) {
         if (face_centered_b) {
-            t_b_cleanup = tl.AddTask(t_grmhd, KHARMA::AddPackage, packages,
-                B_CleanupGMG::Initialize, pin.get());
-        } else {
             t_b_cleanup = tl.AddTask(
                 t_grmhd, KHARMA::AddPackage, packages, B_Cleanup::Initialize, pin.get());
-            // If we're the transport, assign us to the transport setup task too
+        } else {
+            throw std::runtime_error(
+                "Cannot clean B field for a simulation using Flux-CT!");
+            // If we're the transport, mark us as such for the dependent tasks/packages
+            // later
             if (!have_b_transport) t_b_field = t_b_cleanup;
         }
     }

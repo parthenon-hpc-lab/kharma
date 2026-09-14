@@ -21,10 +21,10 @@
 #include <kokkos_abstraction.hpp>
 #include <parthenon/package.hpp>
 
-#include "b_cleanup_gmg.hpp"
+#include "b_cleanup.hpp"
 #include "domain.hpp"
 
-namespace B_CleanupGMG
+namespace B_Cleanup
 {
 
 constexpr parthenon::TopologicalElement te = parthenon::TopologicalElement::CC;
@@ -99,7 +99,7 @@ class PoissonEquation
         IndexRange jb = md_diag->GetBoundsJ(IndexDomain::interior, te);
         IndexRange kb = md_diag->GetBoundsK(IndexDomain::interior, te);
 
-        auto pkg = md_diag->GetMeshPointer()->packages.Get("B_CleanupGMG");
+        auto pkg = md_diag->GetMeshPointer()->packages.Get("B_Cleanup");
         const auto alpha = pkg->Param<Real>("diagonal_alpha");
 
         int nblocks = md_diag->NumBlocks();
@@ -264,7 +264,7 @@ class PoissonEquation
         IndexRange jb = md->GetBoundsJ(IndexDomain::interior, te);
         IndexRange kb = md->GetBoundsK(IndexDomain::interior, te);
 
-        auto pkg = md->GetMeshPointer()->packages.Get("B_CleanupGMG");
+        auto pkg = md->GetMeshPointer()->packages.Get("B_Cleanup");
         const auto alpha = pkg->Param<Real>("diagonal_alpha");
 
         int nblocks = md->NumBlocks();
@@ -327,4 +327,4 @@ class PoissonEquation
     }
 };
 
-} // namespace B_CleanupGMG
+} // namespace B_Cleanup
