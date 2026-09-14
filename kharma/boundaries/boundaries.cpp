@@ -488,11 +488,6 @@ void KBoundaries::ApplyBoundary(
     PackIndexMap dummy_map;
     bool full_grmhd_boundary = GRMHD::PackMHDPrims(rc.get(), dummy_map).GetDim(4) > 0;
 
-    if (!full_grmhd_boundary) {
-        EndFlag();
-        return;
-    }
-
     // Averaging ops on *physical* cells must be done before computing boundaries
     // We should do a PreBoundaries callback...
     if (pmb->packages.AllPackages().count("B_CT")) {
@@ -514,9 +509,11 @@ void KBoundaries::ApplyBoundary(
     }
 
     // Always call through to the registered boundary function
-    Flag("Apply " + bname + " boundary: " + btype_name);
-    pkg->KBoundaries[bface](rc, coarse);
-    EndFlag();
+    if (pkg->KBoundaries[bface] != nullptr) {
+        Flag("Apply " + bname + " boundary: " + btype_name);
+        pkg->KBoundaries[bface](rc, coarse);
+        EndFlag();
+    }
 
     // Then a bunch of common boundary "touchups"
     // Nothing below is designed, nor necessary, for coarse buffers
