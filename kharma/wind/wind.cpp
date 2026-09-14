@@ -33,6 +33,11 @@
  */
 #include "wind.hpp"
 
+// phoebus includes
+#include "microphysics/eos_kharma/eos_kharma.hpp"
+#include "phoebus_utils/unit_conversions.hpp"
+#include "phoebus_utils/variables.hpp"
+
 std::shared_ptr<KHARMAPackage> Wind::Initialize(
     ParameterInput* pin, std::shared_ptr<Packages_t>& packages)
 {
@@ -69,7 +74,9 @@ TaskStatus Wind::AddSource(MeshData<Real>* md, MeshData<Real>* mdudt, IndexDomai
     const auto& gpars = pmb0->packages.Get("GRMHD")->AllParams();
     const auto& pars = pmb0->packages.Get("Wind")->AllParams();
     const auto& globals = pmb0->packages.Get("Globals")->AllParams();
-    const Real gam = gpars.Get<Real>("gamma");
+
+    const auto& eos_params = pmb0->packages.Get("eos")->AllParams();
+    auto eos = eos_params.Get<Microphysics::EOS::EOS>("d.EOS");
     const Real n = pars.Get<Real>("ne");
     const Real Tp = pars.Get<Real>("Tp");
     const Real u1 = pars.Get<Real>("u1");
@@ -117,7 +124,7 @@ TaskStatus Wind::AddSource(MeshData<Real>* md, MeshData<Real>* mdudt, IndexDomai
             // Notice that U already contains a factor of sqrt{-g}
             Real rho_ut, T[GR_DIM];
             GRMHD::p_to_u_mhd(
-                G, drhopdt, drhopdt * Tp * 3., uvec, B_P, gam, k, j, i, rho_ut, T);
+                G, drhopdt, drhopdt * Tp * 3., uvec, B_P, eos, k, j, i, rho_ut, T);
 
             dUdt(b, m_u.RHO, k, j, i) += rho_ut;
             dUdt(b, m_u.UU, k, j, i) += T[0];

@@ -42,6 +42,11 @@
 #include "kharma.hpp"
 #include "kharma_driver.hpp"
 
+// phoebus includes
+#include "microphysics/eos_kharma/eos_kharma.hpp"
+#include "phoebus_utils/unit_conversions.hpp"
+#include "phoebus_utils/variables.hpp"
+
 #include <parthenon/parthenon.hpp>
 #include <utils/string_utils.hpp>
 
@@ -253,7 +258,7 @@ TaskStatus InitElectrons(MeshBlockData<Real>* rc, ParameterInput* pin)
     pmb->par_for("UtoP_electrons", 0, e_P.GetDim(4) - 1, ks, ke, js, je, is, ie,
                  KOKKOS_LAMBDA(const int& p, const int& k, const int& j, const int& i)
         {
-            e_P(p, k, j, i) = Entropy::CalcEntropy(rho(k, j, i), fel0 * u(k, j, i), game);
+            e_P(p, k, j, i) = Entropy::CalcIdealEntropy(rho(k, j, i), fel0 * u(k, j, i), game);
         });
 
     EndFlag();
@@ -321,7 +326,8 @@ TaskStatus ApplyElectronHeating(
     auto pmb = rc->GetBlockPointer();
     const auto& G = pmb->coords;
 
-    const Real gam = pmb->packages.Get("GRMHD")->Param<Real>("gamma");
+   const Real gamma1 = pmb->packages.Get("eos")->Param<Real>("gm1")+1.0;
+
     const Real gamp = pmb->packages.Get("Electrons")->Param<Real>("gamma_p");
     const Real game = pmb->packages.Get("Electrons")->Param<Real>("gamma_e");
     const Real fel_const = pmb->packages.Get("Electrons")->Param<Real>("fel_constant");
@@ -355,8 +361,8 @@ TaskStatus ApplyElectronHeating(
             // Entropy::ApplyEntropyUpdate resets Ktot to this same real value just after
             // this runs; it still needs the pre-update value here.
             // Denotes the solution corresponding to entropy conservation.
-            const Real k_energy_conserving = Entropy::CalcEntropy(
-                P_new(m_p.RHO, k, j, i), P_new(m_p.UU, k, j, i), gam);
+            const Real k_energy_conserving = Entropy::CalcIdealEntropy(
+                P(m_p.RHO, k, j, i), P(m_p.UU, k, j, i), gamma1);
             Real diss_fluid_tmp = k_energy_conserving - P_new(m_p.KTOT, k, j, i);
 
             // Under the flag "suppress_highb_heat", we set all dissipation to zero at
@@ -372,19 +378,19 @@ TaskStatus ApplyElectronHeating(
                 enforce_positive_diss ? m::max(diss_fluid_tmp, 0.0) : diss_fluid_tmp;
 
             // Convert dissipation from fluid-entropy units into electron-entropy units
-            const Real diss = (game - 1.) / (gam - 1.) *
-                              m::pow(P(m_p.RHO, k, j, i), gam - game) * diss_fluid;
+           const Real diss = (game - 1.) / (gamma1 - 1.) *
+                              m::pow(P(m_p.RHO, k, j, i), gamma1 - game) * diss_fluid;
             // this is eq27
 
             // We'll be applying floors inline as we heat electrons, so
             // we cache the floors as entropy limits so they'll be cheaper to apply.
             // Note tp_te_min -> kel_max & vice versa
             const Real kel_max =
-                P(m_p.KTOT, k, j, i) * m::pow(P(m_p.RHO, k, j, i), gam - game) /
-                (tptemin * (gam - 1.) / (gamp - 1.) + (gam - 1.) / (game - 1.)); // 0.001
+                P(m_p.KTOT, k, j, i) * m::pow(P(m_p.RHO, k, j, i), gamma1 - game) /
+                (tptemin * (gamma1 - 1.) / (gamp - 1.) + (gamma1 - 1.) / (game - 1.)); // 0.001
             const Real kel_min =
-                P(m_p.KTOT, k, j, i) * m::pow(P(m_p.RHO, k, j, i), gam - game) /
-                (tptemax * (gam - 1.) / (gamp - 1.) + (gam - 1.) / (game - 1.)); // 1000
+                P(m_p.KTOT, k, j, i) * m::pow(P(m_p.RHO, k, j, i), gamma1 - game) /
+                (tptemax * (gamma1 - 1.) / (gamp - 1.) + (gamma1 - 1.) / (game - 1.)); // 1000
             // Note this differs a little from Ressler '15, who ensure u_e/u_g > 0.01
             // rather than use temperatures
 
@@ -467,7 +473,7 @@ TaskStatus ApplyElectronHeating(
                 // Equation (34) in
                 // https://iopscience.iop.org/article/10.3847/1538-4357/aa9380
                 const Real pres = (gamp - 1.) * P(m_p.UU, k, j, i); // Proton pressure
-                const Real pg = (gam - 1) * P(m_p.UU, k, j, i);
+                const Real pg = (gamma1 - 1) * P(m_p.UU, k, j, i);
                 const Real beta = pres / bsq * 2;
                 const Real sigma = bsq / (P(m_p.RHO, k, j, i) + P(m_p.UU, k, j, i) + pg);
                 const Real betamax = 0.25 / sigma;

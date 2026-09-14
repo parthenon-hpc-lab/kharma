@@ -123,13 +123,23 @@ void ReadKharmaRestartHeader(std::string fname, ParameterInput* pin)
     pin->SetString("b_field", "type", fBfield); // (12/07/22) Hyerin need to test
 
     Real gam, tNow, dt, tf;
-    gam = fpinput->GetReal("GRMHD", "gamma");
+
+    auto eos_type = fpinput->GetOrAddString("eos", "type", "IdealGas");
+    if(eos_type == "IdealGas"){
+        if(pin-> DoesParameterExist("GRMHD", "gamma")) {
+            gam = fpinput->GetReal("GRMHD", std::string("gamma"));
+        } else {
+            gam = fpinput->GetReal("eos", std::string("gamma"));
+        }
+        pin->SetReal("eos", "gm1", gam - 1.0);
+    }
+
+
     tNow = restartReader->GetAttr<Real>("Info", "Time");
     dt = restartReader->GetAttr<Real>("Info", "dt");
     tf = fpinput->GetReal("parthenon/time", "tlim");
     // int ncycle = restartReader->GetAttr<int>("Info", "NCycle");
 
-    pin->SetReal("GRMHD", "gamma", gam);
     pin->SetReal("parthenon/time", "start_time", tNow);
     if (use_dt) {
         pin->SetReal("parthenon/time", "dt", dt);
@@ -470,6 +480,7 @@ TaskStatus ReadKharmaRestart(std::shared_ptr<MeshBlockData<Real>> rc, ParameterI
         }
     }
 
+    Real gam = 0.0;
     if (should_fill) {
         // save the grid coordinate values to host array
         for (int iblocktemp = 0; iblocktemp < f_length[0]; iblocktemp++) {
@@ -550,9 +561,9 @@ TaskStatus ReadKharmaRestart(std::shared_ptr<MeshBlockData<Real>> rc, ParameterI
                         x3B_filefill[f_lengthB[3] * iblocktemp + ktemp];
             }
         }
+        gam = pmb->packages.Get("eos")->Param<Real>("gm1") + 1.0;
     }
 
-    const Real gam = pmb->packages.Get("GRMHD")->Param<Real>("gamma");
 
     // Deep copy to device
     x1_f_device.DeepCopy(x1_f_host);

@@ -67,7 +67,6 @@ TaskStatus Implicit::FixSolve(MeshBlockData<Real>* mbd)
 
     GridScalar solve_fail = mbd->Get("solve_fail").data;
 
-    const Real gam = pmb->packages.Get("GRMHD")->Param<Real>("gamma");
     const int flag_verbose = pmb->packages.Get("Globals")->Param<int>("flag_verbose");
 
     pmb->par_for("fix_solver_failures", b.ks, b.ke, b.js, b.je, b.is, b.ie,
@@ -130,6 +129,9 @@ TaskStatus Implicit::FixSolve(MeshBlockData<Real>* mbd)
         mbd->PackVariables(std::vector<MetadataFlag>{Metadata::Conserved}, cons_map);
     const VarMap m_u(cons_map, true), m_p(prims_map, false);
 
+    const auto& eos_params = pmb->packages.Get("eos")->AllParams();
+    auto eos = eos_params.Get<Microphysics::EOS::EOS>("d.EOS");
+
     // Need emhd_params object
     const EMHD::EMHD_parameters emhd_params = EMHD::GetEMHDParameters(pmb->packages);
 
@@ -137,7 +139,7 @@ TaskStatus Implicit::FixSolve(MeshBlockData<Real>* mbd)
         KOKKOS_LAMBDA(const int& k, const int& j, const int& i)
         {
             if (failed(solve_fail(k, j, i)))
-                Flux::p_to_u(G, P_all, m_p, emhd_params, gam, k, j, i, U_all, m_u);
+                Flux::p_to_u(G, P_all, m_p, emhd_params, eos, k, j, i, U_all, m_u);
         });
 
     EndFlag();

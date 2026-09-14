@@ -40,6 +40,12 @@
 #include "grmhd_functions.hpp"
 #include "kharma_utils.hpp"
 
+// phoebus includes
+#include "microphysics/eos_kharma/eos_kharma.hpp"
+#include "phoebus_utils/unit_conversions.hpp"
+#include "phoebus_utils/variables.hpp"
+
+
 namespace Inverter
 {
 
@@ -90,7 +96,7 @@ KOKKOS_INLINE_FUNCTION Real err_eqn(const Real& gam, const Real& Bsq, const Real
  */
 template<>
 KOKKOS_INLINE_FUNCTION int u_to_p<Type::onedw>(const GRCoordinates& G,
-    const VariablePack<Real>& U, const VarMap& m_u, const Real& gam, const int& k,
+    const VariablePack<Real>& U, const VarMap& m_u, const Microphysics::EOS::EOS& eos, const int& k,
     const int& j, const int& i, const VariablePack<Real>& P, const VarMap& m_p,
     const Loci& loc, const int& max_iterations, const Real& tol)
 {
@@ -149,13 +155,17 @@ KOKKOS_INLINE_FUNCTION int u_to_p<Type::onedw>(const GRCoordinates& G,
     Status eflag = Status::success;
 
     // Initial guess from primitives:
-    Real Wp, err;
+    Real Wp, err, gam;
     {
         const Real gamma = GRMHD::lorentz_calc(G, P, m_p, k, j, i, loc);
         if (gamma < 1) return static_cast<int>(Status::bad_ut);
         const Real rho = P(m_p.RHO, k, j, i), u = P(m_p.UU, k, j, i);
 
-        Wp = (rho + u + (gam - 1) * u) * gamma * gamma - rho * gamma;
+        const Real sie = u/rho;
+        const Real pg = eos.PressureFromDensityInternalEnergy(rho, sie);
+        gam = eos.BulkModulusFromDensityInternalEnergy(rho,sie)/pg;
+
+        Wp = (rho + u + pg) * gamma * gamma - rho * gamma;
         err = err_eqn(gam, Bsq, D, Ep, QdB, Qtsq, Wp, eflag);
     }
 

@@ -32,7 +32,7 @@ TaskStatus InitializeOrszagTang(
 
     const auto& G = pmb->coords;
 
-    const Real gam = pmb->packages.Get("GRMHD")->Param<Real>("gamma");
+    const Real gam = pmb->packages.Get("eos")->Param<Real>("gm1") + 1.0;
     const Real tscale = pin->GetOrAddReal("orszag_tang", "tscale", 0.05);
     // Default phase puts the current sheet in the middle of the domain
     const Real phase = pin->GetOrAddReal("orszag_tang", "phase", M_PI);

@@ -133,6 +133,7 @@ class Prescription
 {
   public:
     // Constant sanity limits
+    Real gamma_floor;
     Real rho_min_const, u_min_const;
     // Purely geometric limits
     Real rho_min_geom, u_min_geom, r_char, floors_switch_r;
@@ -153,10 +154,11 @@ class Prescription
 };
 
 inline Prescription MakePrescription(
-    parthenon::ParameterInput* pin, std::string block = "floors")
+    parthenon::ParameterInput* pin, std::string block = "floors", Real gamma_floor_default = 5. / 3.)
 {
     Prescription p;
     // Floor parameters
+    p.gamma_floor = pin->GetOrAddReal(block, "gamma_floor", gamma_floor_default);
     if (pin->GetBoolean("coordinates", "spherical")) {
         // In spherical systems, floors drop as r^2, so set them higher by default
         p.rho_min_geom = pin->GetOrAddReal(block, "rho_min_geom", 1.e-6);

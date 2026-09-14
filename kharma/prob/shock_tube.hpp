@@ -20,7 +20,7 @@ TaskStatus InitializeShockTube(
 
     const auto& G = pmb->coords;
 
-    const Real gam = pmb->packages.Get("GRMHD")->Param<Real>("gamma");
+    const Real gam = pmb->packages.Get("eos")->Param<Real>("gm1") + 1.0;
     // TODO some particular default shock
     const Real rhoL = pin->GetOrAddReal("shock", "rhoL", 0.0);
     const Real rhoR = pin->GetOrAddReal("shock", "rhoR", 0.0);

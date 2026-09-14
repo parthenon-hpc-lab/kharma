@@ -51,7 +51,8 @@ TaskStatus InitializeFMTorus(
     const Real kappa = pin->GetOrAddReal("torus", "kappa", 1.e-3);
     const GReal tilt_deg = pin->GetOrAddReal("torus", "tilt", 0.0);
     const GReal tilt = tilt_deg / 180. * M_PI;
-    const Real gam = pmb->packages.Get("GRMHD")->Param<Real>("gamma");
+
+    const Real gam = pmb->packages.Get("eos")->Param<Real>("gm1") + 1.0;
 
     IndexDomain domain = IndexDomain::interior;
     const int is = pmb->cellbounds.is(domain), ie = pmb->cellbounds.ie(domain);

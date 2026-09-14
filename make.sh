@@ -40,6 +40,8 @@ PREFIX_PATH=${PREFIX_PATH:-}
 C_NATIVE=${C_NATIVE:-}
 CXX_NATIVE=${CXX_NATIVE:-}
 HOST_ARCH=${HOST_ARCH:-NATIVE}
+LDFLAGS=${LDFLAGS:-}
+OMP_FLAG=${OMP_FLAG:-}
 # No default DEVICE_ARCH, only set if defined
 
 ### Load basic stuff ###

@@ -40,6 +40,13 @@
 #include "kharma.hpp"
 #include <stdexcept>
 
+
+// phoebus includes
+#include "microphysics/eos_kharma/eos_kharma.hpp"
+#include "phoebus_utils/unit_conversions.hpp"
+#include "phoebus_utils/variables.hpp"
+
+
 using namespace parthenon;
 
 // GetFlux is in the header file get_flux.hpp, as it is templated on reconstruction scheme
@@ -232,22 +239,24 @@ std::shared_ptr<KHARMAPackage> Flux::Initialize(
         // Use a custom block for fofc floors.  We now do the same for Kastaun, where we
         // can *also* have floors
         // TODO even post-reconstruction/reconstruction fallback?
+
+        Real gamma_floor = packages->Get("eos")->Param<Real>("gm1")+1.;
         if (!pin->DoesBlockExist("fofc_floors")) {
-            params.Add("fofc_prescription", Floors::MakePrescription(pin, "floors"));
+            params.Add("fofc_prescription", Floors::MakePrescription(pin, "floors", gamma_floor));
             if (pin->DoesBlockExist("floors_inner"))
                 params.Add("fofc_prescription_inner",
                     Floors::MakePrescriptionInner(
-                        pin, Floors::MakePrescription(pin, "floors"), "floors_inner"));
+                        pin, Floors::MakePrescription(pin, "floors", gamma_floor), "floors_inner"));
             else
                 params.Add("fofc_prescription_inner",
                     Floors::MakePrescriptionInner(
-                        pin, Floors::MakePrescription(pin, "floors"), "floors"));
+                        pin, Floors::MakePrescription(pin, "floors", gamma_floor), "floors"));
         } else {
             // Override inner and outer floors with `fofc_floors` block
-            params.Add("fofc_prescription", Floors::MakePrescription(pin, "fofc_floors"));
+            params.Add("fofc_prescription", Floors::MakePrescription(pin, "fofc_floors", gamma_floor));
             params.Add("fofc_prescription_inner",
                 Floors::MakePrescriptionInner(
-                    pin, Floors::MakePrescription(pin, "fofc_floors"), "fofc_floors"));
+                    pin, Floors::MakePrescription(pin, "fofc_floors", gamma_floor), "fofc_floors"));
         }
 
         // Flag for whether FOFC was applied, for diagnostics
@@ -284,8 +293,9 @@ TaskStatus Flux::BlockPtoUMHD(MeshBlockData<Real>* rc, IndexDomain domain, bool 
     // Pointers
     auto pmb = rc->GetBlockPointer();
     // Options
-    const auto& pars = pmb->packages.Get("GRMHD")->AllParams();
-    const Real gam = pars.Get<Real>("gamma");
+
+    const auto& eos_params = pmb->packages.Get("eos")->AllParams();
+    auto eos = eos_params.Get<Microphysics::EOS::EOS>("d.EOS");
 
     const EMHD::EMHD_parameters& emhd_params = EMHD::GetEMHDParameters(pmb->packages);
 
@@ -305,7 +315,7 @@ TaskStatus Flux::BlockPtoUMHD(MeshBlockData<Real>* rc, IndexDomain domain, bool 
     pmb->par_for("p_to_u_mhd", kb.s, kb.e, jb.s, jb.e, ib.s, ib.e,
                  KOKKOS_LAMBDA(const int& k, const int& j, const int& i)
         {
-            Flux::p_to_u_mhd(G, P, m_p, emhd_params, gam, k, j, i, U, m_u);
+            Flux::p_to_u_mhd(G, P, m_p, emhd_params, eos, k, j, i, U, m_u);
         });
 
     return TaskStatus::complete;
@@ -316,8 +326,8 @@ TaskStatus Flux::BlockPtoU(MeshBlockData<Real>* rc, IndexDomain domain, bool coa
     // Pointers
     auto pmb = rc->GetBlockPointer();
     // Options
-    const auto& pars = pmb->packages.Get("GRMHD")->AllParams();
-    const Real gam = pars.Get<Real>("gamma");
+    const auto& eos_params = pmb->packages.Get("eos")->AllParams();
+    auto eos = eos_params.Get<Microphysics::EOS::EOS>("d.EOS");
 
     const EMHD::EMHD_parameters& emhd_params = EMHD::GetEMHDParameters(pmb->packages);
 
@@ -345,7 +355,7 @@ TaskStatus Flux::BlockPtoU(MeshBlockData<Real>* rc, IndexDomain domain, bool coa
     pmb->par_for("p_to_u", kb.s, kb.e, jb.s, jb.e, ib.s, ib.e,
                  KOKKOS_LAMBDA(const int& k, const int& j, const int& i)
         {
-            Flux::p_to_u(G, P, m_p, emhd_params, gam, k, j, i, U, m_u);
+            Flux::p_to_u(G, P, m_p, emhd_params, eos, k, j, i, U, m_u);
         });
 
     return TaskStatus::complete;
@@ -364,8 +374,10 @@ TaskStatus Flux::BlockPtoU_Send(MeshBlockData<Real>* rc, IndexDomain domain, boo
     auto pmb = rc->GetBlockPointer();
     const int ndim = pmb->pmy_mesh->ndim;
     // Options
-    const auto& pars = pmb->packages.Get("GRMHD")->AllParams();
-    const Real gam = pars.Get<Real>("gamma");
+
+
+    const auto& eos_params = pmb->packages.Get("eos")->AllParams();
+    auto eos = eos_params.Get<Microphysics::EOS::EOS>("d.EOS");
 
     const EMHD::EMHD_parameters& emhd_params = EMHD::GetEMHDParameters(pmb->packages);
 
@@ -426,7 +438,7 @@ TaskStatus Flux::BlockPtoU_Send(MeshBlockData<Real>* rc, IndexDomain domain, boo
     pmb->par_for("p_to_u_send", kb.s, kb.e, jb.s, jb.e, ib.s, ib.e,
                  KOKKOS_LAMBDA(const int& k, const int& j, const int& i)
         {
-            Flux::p_to_u(G, P, m_p, emhd_params, gam, k, j, i, U, m_u);
+            Flux::p_to_u(G, P, m_p, emhd_params, eos, k, j, i, U, m_u);
         });
 
     return TaskStatus::complete;
@@ -439,8 +451,9 @@ void Flux::AddGeoSource(MeshData<Real>* md, MeshData<Real>* mdudt, IndexDomain d
     auto pmb0 = md->GetBlockData(0)->GetBlockPointer();
     auto pkgs = pmb0->packages;
     // Options
-    const auto& pars = pkgs.Get("GRMHD")->AllParams();
-    const Real gam = pars.Get<Real>("gamma");
+    const auto& eos_params = pkgs.Get("eos")->AllParams();
+    auto eos = eos_params.Get<Microphysics::EOS::EOS>("d.EOS");
+
 
     // All connection coefficients are zero in Cartesian Minkowski space
     // TODO do we know this fully in init?
@@ -473,7 +486,7 @@ void Flux::AddGeoSource(MeshData<Real>* md, MeshData<Real>* mdudt, IndexDomain d
             Real Tmu[GR_DIM] = {0};
             Real new_du[GR_DIM] = {0};
             for (int mu = 0; mu < GR_DIM; ++mu) {
-                Flux::calc_tensor(P(b), m_p, D, emhd_params, gam, k, j, i, mu, Tmu);
+                Flux::calc_tensor(P(b), m_p, D, emhd_params, eos, k, j, i, mu, Tmu);
                 for (int nu = 0; nu < GR_DIM; ++nu) {
                     // Contract mhd stress tensor with connection, and multiply
                     // by metric determinant
