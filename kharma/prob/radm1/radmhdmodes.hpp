@@ -99,11 +99,11 @@ TaskStatus InitializeRadMHDModes(
     Real B20 = pin->GetOrAddReal("mhdmodes", "B20", 0.10075854437197568);
     Real B30 = pin->GetOrAddReal("mhdmodes", "B30", 0.);
 
-    std::complex<Real> omega;
-    std::complex<Real> drho = 0, du = 0;
-    std::complex<Real> du1 = 0, du2 = 0, du3 = 0;
-    std::complex<Real> dB1 = 0, dB2 = 0, dB3 = 0;
-    std::complex<Real> dErad = 0, dF1rad = 0, dF2rad = 0, dF3rad = 0;
+    m::complex<Real> omega;
+    m::complex<Real> drho = 0, du = 0;
+    m::complex<Real> du1 = 0, du2 = 0, du3 = 0;
+    m::complex<Real> dB1 = 0, dB2 = 0, dB3 = 0;
+    m::complex<Real> dErad = 0, dF1rad = 0, dF2rad = 0, dF3rad = 0;
 
     Real P = 0.0;
     if (regime == "thin")
