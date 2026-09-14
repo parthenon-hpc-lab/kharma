@@ -96,7 +96,7 @@ TaskStatus InitializeExplosion(
 
                 if (linear_ramp) {
                     rho(k, j, i) = rho_out + ramp * (rho_in - rho_out);
-                    u(k, j, i) = u_in + ramp * (u_in - u_out);
+                    u(k, j, i) = u_out + ramp * (u_in - u_out);
                 } else {
                     const Real lrho_out = log(rho_out);
                     const Real lrho_in = log(rho_in);

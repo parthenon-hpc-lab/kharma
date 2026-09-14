@@ -35,6 +35,7 @@
 #include "resize_restart.hpp"
 
 #include "b_flux_ct.hpp"
+#include "b_ct.hpp"
 #include "hdf5_utils.h"
 #include "interpolation.hpp"
 #include "kharma_utils.hpp"
@@ -316,7 +317,7 @@ TaskStatus ReadIharmRestart(std::shared_ptr<MeshBlockData<Real>>& rc, ParameterI
 
     // Figure out the subset in global space corresponding to our memory cache
     int gis, gjs, gks, gie, gje, gke;
-    if (regrid_only) {
+    if (1) {
         // For nearest neighbor "interpolation," we don't need any ghost zones
         // Global location of first zone of our new grid
         double X[GR_DIM];
@@ -335,6 +336,7 @@ TaskStatus ReadIharmRestart(std::shared_ptr<MeshBlockData<Real>>& rc, ParameterI
         // Note this will be the *left* side already, so we'll never read below this.
         // The values gis,gjs,gks can/will be <0 sometimes
         Interpolation::Xtoijk(X, startx, dx, gis, gjs, gks, tmp);
+        printf("Xtoijk: %f %f %f -> %d %d %d\n", X[1], X[2], X[3], gis, gjs, gks);
         // Global rightmost corner, same deal
         G.coord(kb.e + 1, jb.e + 1, ib.e + 1, Loci::corner, X);
         Interpolation::Xtoijk(X, startx, dx, gie, gje, gke, tmp);
@@ -376,13 +378,22 @@ TaskStatus ReadIharmRestart(std::shared_ptr<MeshBlockData<Real>>& rc, ParameterI
     hdf5_open(fname.c_str());
     hdf5_set_directory("/");
 
+    printf("Reading main array to memory\n"
+           "memory size %d %d %d %d file size: %d %d %d %d\n"
+           "memory start: %d %d %d %d file start: %d %d %d %d\n"
+           "read size: %d %d %d %d\n",
+            mdims[0], mdims[1], mdims[2], mdims[3],
+            fdims[0], fdims[1], fdims[2], fdims[3],
+            mstart[0], mstart[1], mstart[2], mstart[3],
+            fstart[0], fstart[1], fstart[2], fstart[3],
+            fcount[0], fcount[1], fcount[2], fcount[3]);
+
     // Read the main array
     hdf5_read_array(ptmp, "p", 4, fdims, fstart, fcount, mdims, mstart, H5T_IEEE_F64LE);
 
     // Do some special reads from elsewhere in the file to fill periodic bounds
     // Note we do NOT fill outflow/reflecting bounds here -- instead, we treat them
     // specially below
-    // TODO this could probably be a lot cleaner
     hsize_t fstart_tmp[4], fcount_tmp[4], mstart_tmp[4];
 #define RESET_COUNTS                                                                     \
     DLOOP1 {                                                                             \
@@ -398,6 +409,15 @@ TaskStatus ReadIharmRestart(std::shared_ptr<MeshBlockData<Real>>& rc, ParameterI
         fcount_tmp[1] = nrank;
         // Read it to the FIRST ranks of our array
         mstart_tmp[1] = 0;
+        printf("Reading periodic first ranks into memory\n"
+            "memory size %d %d %d %d file size: %d %d %d %d\n"
+            "memory start: %d %d %d %d file start: %d %d %d %d\n"
+            "read size: %d %d %d %d\n",
+                mdims[0], mdims[1], mdims[2], mdims[3],
+                fdims[0], fdims[1], fdims[2], fdims[3],
+                mstart_tmp[0], mstart_tmp[1], mstart_tmp[2], mstart_tmp[3],
+                fstart_tmp[0], fstart_tmp[1], fstart_tmp[2], fstart_tmp[3],
+                fcount_tmp[0], fcount_tmp[1], fcount_tmp[2], fcount_tmp[3]);
         hdf5_read_array(ptmp, "p", 4, fdims, fstart_tmp, fcount_tmp, mdims, mstart_tmp,
             H5T_IEEE_F64LE);
     }
@@ -471,7 +491,7 @@ TaskStatus ReadIharmRestart(std::shared_ptr<MeshBlockData<Real>>& rc, ParameterI
     // Nearest-neighbor interpolation is currently only used when grids exactly correspond
     // -- otherwise, linear interpolation is used to minimize the resulting B field
     // divergence.
-    if (regrid_only) {
+    if (1) {
         // TODO Kokkos calls here had problems with CUDA, reintroduce/fix
         // OpenMP here conflicts with Kokkos parallel in some cases, so we're stuck
         for (int k = kb.s; k <= kb.e; ++k)
@@ -491,7 +511,7 @@ TaskStatus ReadIharmRestart(std::shared_ptr<MeshBlockData<Real>>& rc, ParameterI
                     VLOOP
                         uvec_host(v, k, j, i) =
                             ptmp[(2 + v) * nmblock + mk * nmj * nmi + mj * nmi + mi];
-                    VLOOP
+                    if (nfprim > 5) VLOOP
                         B_host(v, k, j, i) =
                             ptmp[(5 + v) * nmblock + mk * nmj * nmi + mj * nmi + mi];
                 }
@@ -540,7 +560,7 @@ TaskStatus ReadIharmRestart(std::shared_ptr<MeshBlockData<Real>>& rc, ParameterI
                     VLOOP
                         uvec_host(v, k, j, i) = Interpolation::linear(
                             mi, mj, mk, nmi, nmj, nmk, del, &(ptmp[(2 + v) * nmblock]));
-                    VLOOP
+                    if (nfprim > 5) VLOOP
                         B_host(v, k, j, i) = Interpolation::linear(
                             mi, mj, mk, nmi, nmj, nmk, del, &(ptmp[(5 + v) * nmblock]));
                 }
@@ -552,6 +572,8 @@ TaskStatus ReadIharmRestart(std::shared_ptr<MeshBlockData<Real>>& rc, ParameterI
     uvec.DeepCopy(uvec_host);
     B_P.DeepCopy(B_host);
     Kokkos::fence();
+
+    B_CT::BlockDangerousPtoU(rc.get(), IndexDomain::entire, false);
 
     // Delete our cache.  Only we ever used it, so we're safe here.
     delete[] ptmp;
