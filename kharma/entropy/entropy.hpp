@@ -97,23 +97,18 @@ std::shared_ptr<KHARMAPackage> Initialize(
  * density.  This is the "real"/current value of Ktot, as opposed to the purely-advected
  * value obtained by evolving Ktot as a passive scalar.
  */
-KOKKOS_FORCEINLINE_FUNCTION Real CalcEntropy(
+KOKKOS_FORCEINLINE_FUNCTION Real CalcIdealEntropy(
     const Real& rho, const Real& u, const Real& gam)
 {
     return (gam - 1.) * u * m::pow(rho, -gam);
 }
 
-/**
- * The same entropy as a *density* rather than per unit mass: S = p/rho^(gam-1), i.e.
- * rho*CalcEntropy(). This is Noble+ 2009 eq. 20, the form Ktot_adv is carried in.
- * Kept as its own function rather than a multiply-by-rho so that callers cannot
- * quietly mix the two normalizations.
- */
-KOKKOS_FORCEINLINE_FUNCTION Real CalcEntropyDensity(
+KOKKOS_FORCEINLINE_FUNCTION Real CalcIdealEntropyDensity(
     const Real& rho, const Real& u, const Real& gam)
 {
-    return (gam - 1.) * u * m::pow(rho, 1. - gam);
+    return (gam - 1.) * u * m::pow(rho, 1.0-gam);
 }
+
 
 /**
  * Set the initial values of Ktot (and Ktot_adv, if enabled) from the problem's initial

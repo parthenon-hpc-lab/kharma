@@ -73,10 +73,6 @@ TaskStatus Inverter::FixUtoP(MeshBlockData<Real>* rc)
     GridScalar pflag = rc->Get("pflag").data;
 
     const auto& pars = pmb->packages.Get("GRMHD")->AllParams();
-    //const Real gam = pars.Get<Real>("gamma");
-        
-    const auto& eos_params = pmb->packages.Get("eos")->AllParams();
-    auto eos = eos_params.Get<Microphysics::EOS::EOS>("d.EOS");
 
     // Only yell about neighbors on extreme verbosity.
     const int flag_verbose = pmb->packages.Get("Globals")->Param<int>("flag_verbose");
@@ -189,8 +185,7 @@ TaskStatus Inverter::Backstop(MeshBlockData<Real>* rc)
     const bool backstop_recover_u = pars.Get<bool>("backstop_recover_u");
     const int iter_max = pars.Get<int>("backstop_iter_max");
 
-    const auto& eos_params = pmb->packages.Get("eos")->AllParams();
-    auto eos = eos_params.Get<Microphysics::EOS::EOS>("d.EOS");
+    const Real gamma1 = pmb->packages.Get("eos")->Param<Real>("gm1")+1.0;
 
     // Use values from floors package if it's enabled, otherwise any we've been asked to
     // apply
@@ -235,11 +230,11 @@ TaskStatus Inverter::Backstop(MeshBlockData<Real>* rc)
             // negative or zero internal energy (even after floors!)
             Real rhomin_geom, umin_geom;
             determine_geo_floors(
-                G, P, m_p, gam, k, j, i, floors, floors_inner, rhomin_geom, umin_geom);
+                G, P, m_p, k, j, i, floors, floors_inner, rhomin_geom, umin_geom);
 
             const Real umin =
                 (m_p.KTOT >= 0)
-                    ? P(m_p.KTOT, k, j, i) * m::pow(P(m_p.RHO, k, j, i), gam) / (gam - 1.)
+                    ? P(m_p.KTOT, k, j, i) * m::pow(P(m_p.RHO, k, j, i), gamma1) / (gamma1 - 1.)
                     : umin_geom;
 
             if (failed(pflag(k, j, i)) && (P(m_p.UU, k, j, i) < umin)) {

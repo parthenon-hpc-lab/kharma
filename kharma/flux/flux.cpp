@@ -239,22 +239,24 @@ std::shared_ptr<KHARMAPackage> Flux::Initialize(
         // Use a custom block for fofc floors.  We now do the same for Kastaun, where we
         // can *also* have floors
         // TODO even post-reconstruction/reconstruction fallback?
+
+        Real gamma_floor = packages->Get("eos")->Param<Real>("gm1")+1.;
         if (!pin->DoesBlockExist("fofc_floors")) {
-            params.Add("fofc_prescription", Floors::MakePrescription(pin, "floors"));
+            params.Add("fofc_prescription", Floors::MakePrescription(pin, "floors", gamma_floor));
             if (pin->DoesBlockExist("floors_inner"))
                 params.Add("fofc_prescription_inner",
                     Floors::MakePrescriptionInner(
-                        pin, Floors::MakePrescription(pin, "floors"), "floors_inner"));
+                        pin, Floors::MakePrescription(pin, "floors", gamma_floor), "floors_inner"));
             else
                 params.Add("fofc_prescription_inner",
                     Floors::MakePrescriptionInner(
-                        pin, Floors::MakePrescription(pin, "floors"), "floors"));
+                        pin, Floors::MakePrescription(pin, "floors", gamma_floor), "floors"));
         } else {
             // Override inner and outer floors with `fofc_floors` block
-            params.Add("fofc_prescription", Floors::MakePrescription(pin, "fofc_floors"));
+            params.Add("fofc_prescription", Floors::MakePrescription(pin, "fofc_floors", gamma_floor));
             params.Add("fofc_prescription_inner",
                 Floors::MakePrescriptionInner(
-                    pin, Floors::MakePrescription(pin, "fofc_floors"), "fofc_floors"));
+                    pin, Floors::MakePrescription(pin, "fofc_floors", gamma_floor), "fofc_floors"));
         }
 
         // Flag for whether FOFC was applied, for diagnostics

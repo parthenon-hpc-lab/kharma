@@ -25,6 +25,6 @@ if [[ "$OSTYPE" == "darwin"* ]]; then
   # Parthenon doesn't notice brew HDF5 2.0 is parallel. "Convince" it
   BASE=$PWD
   cd $SOURCE_DIR/external/parthenon
-  git apply --quiet ../patches/mac-parthenon-no-complain-hdf5.patch
+  git apply --quiet ../patches/mac-parthenon-no-complain-hdf5.patch || true
   cd $BASE
 fi

@@ -113,7 +113,7 @@ TaskStatus InitEntropy(MeshBlockData<Real>* rc, ParameterInput* pin)
     const bool advect_entropy =
         pmb->packages.Get("Entropy")->Param<bool>("advect_entropy");
 
-    const Real gam = pmb->packages.Get("GRMHD")->Param<Real>("gamma");
+    const Real gamma1 = pmb->packages.Get("eos")->Param<Real>("gm1")+1.0;
 
     // Over the *entire* domain, ghost zones included. Ktot's ghosts would be fine
     // either way -- ApplyEntropyUpdate rewrites them from rho, u every sub-step -- but
@@ -129,16 +129,16 @@ TaskStatus InitEntropy(MeshBlockData<Real>* rc, ParameterInput* pin)
     pmb->par_for("init_entropy", ks, ke, js, je, is, ie,
         KOKKOS_LAMBDA(const int& k, const int& j, const int& i)
         {
-            ktot(k, j, i) = Entropy::CalcEntropy(rho(k, j, i), u(k, j, i), gam);
+            const Real sie = u(k, j, i) / rho(k, j, i);
+            ktot(k,j,i) = CalcIdealEntropy(rho(k,j,i), u(k,j,i), gamma1);
         });
     if (advect_entropy) {
         GridScalar ktot_adv = rc->Get("prims.Ktot_adv").data;
         pmb->par_for("init_entropy_adv", ks, ke, js, je, is, ie,
             KOKKOS_LAMBDA(const int& k, const int& j, const int& i)
             {
-                ktot_adv(k, j, i) =
-                    Entropy::CalcEntropyDensity(rho(k, j, i), u(k, j, i), gam);
-            });
+                ktot_adv(k, j, i) = CalcIdealEntropyDensity(rho(k, j, i), u(k, j, i), gamma1);
+           });
     }
 
     EndFlag();
@@ -188,12 +188,12 @@ TaskStatus ApplyEntropyUpdate(MeshBlockData<Real>* rc)
 {
     Flag("ApplyEntropyUpdate");
     auto pmb = rc->GetBlockPointer();
-
+    
     GridScalar rho = rc->Get("prims.rho").data;
     GridScalar u = rc->Get("prims.u").data;
     GridScalar ktot = rc->Get("prims.Ktot").data;
 
-    const Real gam = pmb->packages.Get("GRMHD")->Param<Real>("gamma");
+    const Real gamma1 = pmb->packages.Get("eos")->Param<Real>("gm1")+1.0;
 
     // Must be applied over the entire domain, ghost zones included: this needs to stay
     // consistent with the rest of the fluid state, which has already been updated there.
@@ -208,7 +208,7 @@ TaskStatus ApplyEntropyUpdate(MeshBlockData<Real>* rc)
             // be compared against, to isolate that step's dissipation in turn.
             // Note Ktot_adv (if tracked) is deliberately left untouched: it should evolve
             // via pure advection for the whole run, with no such reset.
-            ktot(k, j, i) = Entropy::CalcEntropy(rho(k, j, i), u(k, j, i), gam);
+            ktot(k, j, i) = CalcIdealEntropy(rho(k, j, i), u(k, j, i), gamma1);
         });
 
     EndFlag();

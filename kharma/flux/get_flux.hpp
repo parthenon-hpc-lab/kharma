@@ -293,9 +293,9 @@ inline TaskStatus GetFlux(MeshData<Real>* md)
                 // Determine cells that would hit the floor
                 Real tmp1, tmp2;
                 int fflag_dir = 0;
-                fflag_dir |= Floors::determine_geo_floors(G, Pl_all(bl), m_p, gam, k, j,
+                fflag_dir |= Floors::determine_geo_floors(G, Pl_all(bl), m_p, k, j,
                     i, floors, floors_inner, tmp1, tmp2, loc);
-                fflag_dir |= Floors::determine_geo_floors(G, Pr_all(bl), m_p, gam, k, j,
+                fflag_dir |= Floors::determine_geo_floors(G, Pr_all(bl), m_p, k, j,
                     i, floors, floors_inner, tmp1, tmp2, loc);
 
                 // Preserve (but do not respect) existing flags

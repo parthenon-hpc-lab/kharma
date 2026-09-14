@@ -87,22 +87,23 @@ std::shared_ptr<KHARMAPackage> Inverter::Initialize(
     // Floor options
     // Use a custom block for inverter floors to allow customization.  Not sure anyone
     // *wants* that but...
+    Real gamma_floor = packages->Get("eos")->Param<Real>("gm1")+1.;
     if (!pin->DoesBlockExist("inverter_floors")) {
-        params.Add("inverter_prescription", Floors::MakePrescription(pin, "floors"));
+        params.Add("inverter_prescription", Floors::MakePrescription(pin, "floors", gamma_floor));
         if (pin->DoesBlockExist("floors_inner"))
             params.Add("inverter_prescription_inner",
                 Floors::MakePrescriptionInner(
-                    pin, Floors::MakePrescription(pin, "floors"), "floors_inner"));
+                    pin, Floors::MakePrescription(pin, "floors", gamma_floor), "floors_inner"));
         else
             params.Add("inverter_prescription_inner",
                 Floors::MakePrescriptionInner(
-                    pin, Floors::MakePrescription(pin, "floors"), "floors"));
+                    pin, Floors::MakePrescription(pin, "floors", gamma_floor), "floors"));
     } else {
         params.Add(
-            "inverter_prescription", Floors::MakePrescription(pin, "inverter_floors"));
+            "inverter_prescription", Floors::MakePrescription(pin, "inverter_floors", gamma_floor));
         params.Add("inverter_prescription_inner",
             Floors::MakePrescriptionInner(pin,
-                Floors::MakePrescription(pin, "inverter_floors"), "inverter_floors"));
+                Floors::MakePrescription(pin, "inverter_floors", gamma_floor), "inverter_floors"));
     }
 
     // Fixup options
