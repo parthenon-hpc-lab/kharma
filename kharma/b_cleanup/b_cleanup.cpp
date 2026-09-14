@@ -79,16 +79,16 @@ std::shared_ptr<KHARMAPackage> B_Cleanup::Initialize(
     using BF = parthenon::BoundaryFace;
     pkg->UserBoundaryFunctions[BF::inner_x1].push_back(
         GetBCDirichlet<X1DIR, BCSide::Inner>());
-    pkg->UserBoundaryFunctions[BF::outer_x1].push_back(GetBCDirichlet<X1DIR,
-    BCSide::Outer>());
-    pkg->UserBoundaryFunctions[BF::inner_x2].push_back(GetBCDirichlet<X2DIR,
-    BCSide::Inner>());
-    pkg->UserBoundaryFunctions[BF::outer_x2].push_back(GetBCDirichlet<X2DIR,
-    BCSide::Outer>());
-    pkg->UserBoundaryFunctions[BF::inner_x3].push_back(GetBCDirichlet<X3DIR,
-    BCSide::Inner>());
-    pkg->UserBoundaryFunctions[BF::outer_x3].push_back(GetBCDirichlet<X3DIR,
-    BCSide::Outer>());
+    pkg->UserBoundaryFunctions[BF::outer_x1].push_back(
+        GetBCDirichlet<X1DIR, BCSide::Outer>());
+    pkg->UserBoundaryFunctions[BF::inner_x2].push_back(
+        GetBCDirichlet<X2DIR, BCSide::Inner>());
+    pkg->UserBoundaryFunctions[BF::outer_x2].push_back(
+        GetBCDirichlet<X2DIR, BCSide::Outer>());
+    pkg->UserBoundaryFunctions[BF::inner_x3].push_back(
+        GetBCDirichlet<X3DIR, BCSide::Inner>());
+    pkg->UserBoundaryFunctions[BF::outer_x3].push_back(
+        GetBCDirichlet<X3DIR, BCSide::Outer>());
 
     double init_tolerance = pin->GetOrAddReal("b_cleanup", "no_clean_below", 1.e-10);
     pkg->AddParam<>("init_tolerance", init_tolerance);

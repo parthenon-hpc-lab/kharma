@@ -339,8 +339,8 @@ TaskStatus B_CT::DangerousPtoU(MeshData<Real>* md, IndexDomain domain, bool coar
     return TaskStatus::complete;
 }
 
-
-TaskStatus B_CT::BlockDangerousPtoU(MeshBlockData<Real>* rc, IndexDomain domain, bool coarse)
+TaskStatus B_CT::BlockDangerousPtoU(
+    MeshBlockData<Real>* rc, IndexDomain domain, bool coarse)
 {
     auto B_Uf = rc->PackVariables(std::vector<std::string>{"cons.fB"});
     auto B_U = rc->PackVariables(std::vector<std::string>{"cons.B"});
@@ -392,12 +392,11 @@ TaskStatus B_CT::BlockDangerousPtoU(MeshBlockData<Real>* rc, IndexDomain domain,
 
     // Make sure B on poles is still zero, even though we've interpolated
     if (pmb0->coords.coords.is_spherical()) {
-        //for (int i = 0; i < rc->GetMeshPointer()->GetNumMeshBlocksThisRank(); i++) {
-        //auto rc = rc->GetBlockData(i);
+        // for (int i = 0; i < rc->GetMeshPointer()->GetNumMeshBlocksThisRank(); i++) {
+        // auto rc = rc->GetBlockData(i);
         auto pmb = rc->GetBlockPointer();
         const IndexRange3 be = KDomain::GetRange(rc, IndexDomain::entire, coarse);
-        const IndexRange3 bi2 =
-            KDomain::GetRange(rc, IndexDomain::interior, F2, coarse);
+        const IndexRange3 bi2 = KDomain::GetRange(rc, IndexDomain::interior, F2, coarse);
         auto B_Uf_block = rc->PackVariables(std::vector<std::string>{"cons.fB"});
         if (KBoundaries::IsPhysicalBoundary(pmb, BoundaryFace::inner_x2)) {
             pmb->par_for("B_Uf_boundary", be.ks, be.ke, be.is, be.ie,

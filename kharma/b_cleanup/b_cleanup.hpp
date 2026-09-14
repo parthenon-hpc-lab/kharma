@@ -125,8 +125,10 @@ TaskStatus ApplyPFace(MeshData<Real>* msolve, MeshData<Real>* md);
 TaskCollection MakeSolverTaskCollection(Mesh* pmesh);
 
 /**
- * Return whether to cleanup B this step, when we're the field transport during a simulation.
- * TODO(CEP) no-op, cleanup as transport is not tested.  In fact probably should throw here
+ * Return whether to cleanup B this step, when we're the field transport during a
+ * simulation.
+ * TODO(CEP) no-op, cleanup as transport is not tested.  In fact probably should throw
+ * here
  */
 inline bool CleanupThisStep(Mesh* pmesh, int step) { return false; };
 

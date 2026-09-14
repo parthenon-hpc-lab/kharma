@@ -140,7 +140,7 @@ void KHARMA::PostInitialize(ParameterInput* pin, Mesh* pmesh, bool is_restart)
             } else if (pkgs.count("B_CT")) {
                 // This is dangerous: we're interpolating cell-centered data
                 // to faces, even for identical grids
-                //B_CT::DangerousPtoU(md.get(), IndexDomain::interior, false);
+                // B_CT::DangerousPtoU(md.get(), IndexDomain::interior, false);
                 // TODO always force B field cleanup if we do this
                 // (Generally we're resizing so it gets triggered anyway)
             }

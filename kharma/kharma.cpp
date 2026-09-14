@@ -455,11 +455,13 @@ Packages_t KHARMA::ProcessPackages(std::unique_ptr<ParameterInput>& pin)
     // Load GMG cleanup only if we're using face-centered fields, that's all it supports
     if (use_b_cleanup) {
         if (face_centered_b) {
-            t_b_cleanup = tl.AddTask(t_grmhd, KHARMA::AddPackage, packages,
-                B_Cleanup::Initialize, pin.get());
+            t_b_cleanup = tl.AddTask(
+                t_grmhd, KHARMA::AddPackage, packages, B_Cleanup::Initialize, pin.get());
         } else {
-            throw std::runtime_error("Cannot clean B field for a simulation using Flux-CT!");
-            // If we're the transport, mark us as such for the dependent tasks/packages later
+            throw std::runtime_error(
+                "Cannot clean B field for a simulation using Flux-CT!");
+            // If we're the transport, mark us as such for the dependent tasks/packages
+            // later
             if (!have_b_transport) t_b_field = t_b_cleanup;
         }
     }
