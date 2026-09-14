@@ -70,8 +70,8 @@ KOKKOS_INLINE_FUNCTION void apply_ceilings(const GRCoordinates& G,
             P(m_p.U1 + v, k, j, i) *= f;
         // This should be here even though it will be checked & possibly replaced.
         // TODO recalculate direct?  This should preserve existing D...
-        P(m_p.RHO, k, j, i) *= gamma / myfloors.gamma_max;
-        P(m_p.UU, k, j, i) *= gamma / myfloors.gamma_max;
+        P(m_p.RHO, k, j, i) *= gamma / floors.gamma_max;
+        P(m_p.UU, k, j, i) *= gamma / floors.gamma_max;
     }
 
     // 2. Limit the entropy by controlling u, to avoid anomalous cooling from funnel wall
