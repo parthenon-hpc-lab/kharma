@@ -572,7 +572,9 @@ TaskStatus ReadIharmRestart(std::shared_ptr<MeshBlockData<Real>>& rc, ParameterI
     B_P.DeepCopy(B_host);
     Kokkos::fence();
 
-    B_CT::BlockDangerousPtoU(rc.get(), IndexDomain::entire, false);
+    if (!regrid_only) {
+        B_CT::BlockDangerousPtoU(rc.get(), IndexDomain::entire, false);
+    }
 
     // Delete our cache.  Only we ever used it, so we're safe here.
     delete[] ptmp;
