@@ -378,13 +378,13 @@ TaskStatus ReadIharmRestart(std::shared_ptr<MeshBlockData<Real>>& rc, ParameterI
     hdf5_open(fname.c_str());
     hdf5_set_directory("/");
 
-    printf("Reading main array to memory\n"
-           "memory size %d %d %d %d file size: %d %d %d %d\n"
-           "memory start: %d %d %d %d file start: %d %d %d %d\n"
-           "read size: %d %d %d %d\n",
-        mdims[0], mdims[1], mdims[2], mdims[3], fdims[0], fdims[1], fdims[2], fdims[3],
-        mstart[0], mstart[1], mstart[2], mstart[3], fstart[0], fstart[1], fstart[2],
-        fstart[3], fcount[0], fcount[1], fcount[2], fcount[3]);
+    // printf("Reading main array to memory\n"
+    //        "memory size %d %d %d %d file size: %d %d %d %d\n"
+    //        "memory start: %d %d %d %d file start: %d %d %d %d\n"
+    //        "read size: %d %d %d %d\n",
+    //     mdims[0], mdims[1], mdims[2], mdims[3], fdims[0], fdims[1], fdims[2], fdims[3],
+    //     mstart[0], mstart[1], mstart[2], mstart[3], fstart[0], fstart[1], fstart[2],
+    //     fstart[3], fcount[0], fcount[1], fcount[2], fcount[3]);
 
     // Read the main array
     hdf5_read_array(ptmp, "p", 4, fdims, fstart, fcount, mdims, mstart, H5T_IEEE_F64LE);
@@ -407,14 +407,14 @@ TaskStatus ReadIharmRestart(std::shared_ptr<MeshBlockData<Real>>& rc, ParameterI
         fcount_tmp[1] = nrank;
         // Read it to the FIRST ranks of our array
         mstart_tmp[1] = 0;
-        printf("Reading periodic first ranks into memory\n"
-               "memory size %d %d %d %d file size: %d %d %d %d\n"
-               "memory start: %d %d %d %d file start: %d %d %d %d\n"
-               "read size: %d %d %d %d\n",
-            mdims[0], mdims[1], mdims[2], mdims[3], fdims[0], fdims[1], fdims[2],
-            fdims[3], mstart_tmp[0], mstart_tmp[1], mstart_tmp[2], mstart_tmp[3],
-            fstart_tmp[0], fstart_tmp[1], fstart_tmp[2], fstart_tmp[3], fcount_tmp[0],
-            fcount_tmp[1], fcount_tmp[2], fcount_tmp[3]);
+        // printf("Reading periodic first ranks into memory\n"
+        //        "memory size %d %d %d %d file size: %d %d %d %d\n"
+        //        "memory start: %d %d %d %d file start: %d %d %d %d\n"
+        //        "read size: %d %d %d %d\n",
+        //     mdims[0], mdims[1], mdims[2], mdims[3], fdims[0], fdims[1], fdims[2],
+        //     fdims[3], mstart_tmp[0], mstart_tmp[1], mstart_tmp[2], mstart_tmp[3],
+        //     fstart_tmp[0], fstart_tmp[1], fstart_tmp[2], fstart_tmp[3], fcount_tmp[0],
+        //     fcount_tmp[1], fcount_tmp[2], fcount_tmp[3]);
         hdf5_read_array(ptmp, "p", 4, fdims, fstart_tmp, fcount_tmp, mdims, mstart_tmp,
             H5T_IEEE_F64LE);
     }
