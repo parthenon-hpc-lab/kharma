@@ -408,26 +408,27 @@ void B_CT::ReconnectBoundaryB3(MeshBlockData<Real>* rc, IndexDomain domain,
 
             // Update cell-centered conserved & primitive B, and cell primitive fluid
             // variables, in the zones we touched
-            parthenon::par_for_inner(member, b.ks, b.ke - 1, // iterate over all *cells* k
-                [&](const int& k)
-                {
-                    P(m_p.B3, k, jf, i) =
-                        (fpack(F3, 0, k, jf, i) / G.gdet(Loci::face3, jf, i) +
-                            fpack(F3, 0, k + 1, jf, i) / G.gdet(Loci::face3, jf, i)) /
-                        2;
-                    U(m_u.B3, k, jf, i) =
-                        P(m_p.B3, k, jf, i) * G.gdet(Loci::center, jf, i);
+            // parthenon::par_for_inner(member, b.ks, b.ke - 1, // iterate over all
+            // *cells* k
+            //     [&](const int& k)
+            //     {
+            //         P(m_p.B3, k, jf, i) =
+            //             (fpack(F3, 0, k, jf, i) / G.gdet(Loci::face3, jf, i) +
+            //                 fpack(F3, 0, k + 1, jf, i) / G.gdet(Loci::face3, jf, i)) /
+            //             2;
+            //         U(m_u.B3, k, jf, i) =
+            //             P(m_p.B3, k, jf, i) * G.gdet(Loci::center, jf, i);
 
-                    // Recover primitive GRMHD variables from our modified U
-                    Inverter::u_to_p<Inverter::Type::kastaun>(
-                        G, U, m_u, gam, k, jf, i, P, m_p, Loci::center, 25, 1e-12);
-                    // Floor them
-                    // TODO THIS IS IN FLUID FRAME
-                    int fflag = Floors::apply_geo_floors(
-                        G, P, m_p, gam, k, jf, i, floors, Loci::center);
-                    // Recalculate U on anything we floored
-                    if (fflag)
-                        GRMHD::p_to_u(G, P, m_p, gam, k, jf, i, U, m_u, Loci::center);
-                });
+            //         // Recover primitive GRMHD variables from our modified U
+            //         Inverter::u_to_p<Inverter::Type::kastaun>(
+            //             G, U, m_u, gam, k, jf, i, P, m_p, Loci::center, 25, 1e-12);
+            //         // Floor them
+            //         // TODO THIS IS IN FLUID FRAME
+            //         int fflag = Floors::apply_geo_floors(
+            //             G, P, m_p, gam, k, jf, i, floors, Loci::center);
+            //         // Recalculate U on anything we floored
+            //         if (fflag)
+            //             GRMHD::p_to_u(G, P, m_p, gam, k, jf, i, U, m_u, Loci::center);
+            //     });
         });
 }
