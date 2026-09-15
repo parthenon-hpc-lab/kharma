@@ -155,6 +155,8 @@ void AverageBoundaryEMF(MeshBlockData<Real>* rc, IndexDomain domain,
 void ReconnectBoundaryB3(MeshBlockData<Real>* rc, IndexDomain domain,
     const VariablePack<Real>& emfpack, bool coarse);
 
+TaskStatus ReconnectB3Task(MeshData<Real>* md);
+
 /**
  * Reset an outflow condition to have no divergence, even if a field line exits the
  * domain. Could maybe be used on other boundaries, but resets the perpendicular face so

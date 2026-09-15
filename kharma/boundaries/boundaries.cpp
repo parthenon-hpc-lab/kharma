@@ -505,15 +505,15 @@ void KBoundaries::ApplyBoundary(
 
     // Averaging ops on *physical* cells must be done before computing boundaries
     // We should do a PreBoundaries callback...
-    if (pmb->packages.AllPackages().count("B_CT")) {
-        auto bfpack = rc->PackVariables(
-            {Metadata::Face, Metadata::FillGhost, Metadata::GetUserFlag("B_CT")});
-        if (params.Get<bool>("reconnect_B3_" + bname) && bfpack.GetDim(4) > 0) {
-            Flag("ReconnectFaceB_" + bname);
-            B_CT::ReconnectBoundaryB3(rc.get(), domain, bfpack, coarse);
-            EndFlag();
-        }
-    }
+    // if (pmb->packages.AllPackages().count("B_CT")) {
+    //     auto bfpack = rc->PackVariables(
+    //         {Metadata::Face, Metadata::FillGhost, Metadata::GetUserFlag("B_CT")});
+    //     if (params.Get<bool>("reconnect_B3_" + bname) && bfpack.GetDim(4) > 0) {
+    //         Flag("ReconnectFaceB_" + bname);
+    //         B_CT::ReconnectBoundaryB3(rc.get(), domain, bfpack, coarse);
+    //         EndFlag();
+    //     }
+    // }
     if (pmb->packages.AllPackages().count("GRMHD")) {
         if (params.Get<bool>("cancel_U3_" + bname) && full_grmhd_boundary) {
             GRMHD::CancelBoundaryU3(rc.get(), domain, coarse);
