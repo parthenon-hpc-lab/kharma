@@ -30,12 +30,12 @@ set -euo pipefail
 # Set conservatively as nvcc/nvc++ uses a *lot* of memory
 # Set in environment or override in machine file
 NPROC=${NPROC:-8}
-
 # Set variables we expect to use to satisfy bash
 EXTRA_FLAGS=${EXTRA_FLAGS:-}
 CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH:-}
 CFLAGS=${CFLAGS:-}
 CXXFLAGS=${CXXFLAGS:-}
+CPLUS_INCLUDE_PATH=${CPLUS_INCLUDE_PATH:-}
 PREFIX_PATH=${PREFIX_PATH:-}
 C_NATIVE=${C_NATIVE:-}
 CXX_NATIVE=${CXX_NATIVE:-}

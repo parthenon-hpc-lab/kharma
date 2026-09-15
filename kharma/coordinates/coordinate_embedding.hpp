@@ -316,7 +316,7 @@ class CoordinateEmbedding
             },
             base);
     }
-    GReal startx(int dir) const
+    KOKKOS_INLINE_FUNCTION GReal startx(int dir) const
     {
         return PortsOfCall::visit(
             [&](const auto& self)
@@ -325,7 +325,7 @@ class CoordinateEmbedding
             },
             transform);
     }
-    GReal stopx(int dir) const
+    KOKKOS_INLINE_FUNCTION GReal stopx(int dir) const
     {
         return PortsOfCall::visit(
             [&](const auto& self)

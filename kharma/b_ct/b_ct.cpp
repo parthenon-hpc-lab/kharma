@@ -81,7 +81,7 @@ std::shared_ptr<KHARMAPackage> B_CT::Initialize(
     // TODO don't set this unless we're reconnecting at boundaries (can't just check, we
     // load Boundaries pkg later)
     int reconnection_outer_buffer =
-        pin->GetOrAddBoolean("b_field", "reconnection_outer_buffer", 5);
+        pin->GetOrAddInteger("b_field", "reconnection_outer_buffer", 5);
     params.Add("reconnection_outer_buffer", reconnection_outer_buffer);
 
     // FIELDS
