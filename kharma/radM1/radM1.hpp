@@ -1,0 +1,270 @@
+/*
+ *  File: radM1.hpp
+ *
+ *  BSD 3-Clause License
+ *
+ *  Copyright (c) 2020, AFD Group at UIUC
+ *  All rights reserved.
+ *
+ *  Redistribution and use in source and binary forms, with or without
+ *  modification, are permitted provided that the following conditions are met:
+ *
+ *  1. Redistributions of source code must retain the above copyright notice, this
+ *     list of conditions and the following disclaimer.
+ *
+ *  2. Redistributions in binary form must reproduce the above copyright notice,
+ *     this list of conditions and the following disclaimer in the documentation
+ *     and/or other materials provided with the distribution.
+ *
+ *  3. Neither the name of the copyright holder nor the names of its
+ *     contributors may be used to endorse or promote products derived from
+ *     this software without specific prior written permission.
+ *
+ *  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ *  AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ *  IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+ *  DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+ *  FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ *  DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+ *  SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+ *  CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+ *  OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ *  OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
+#pragma once
+
+#include "decs.hpp"
+#include "microphysics/opac_kharma/opac_kharma.hpp"
+// phoebus includes
+#include "microphysics/eos_kharma/eos_kharma.hpp"
+#include "phoebus_utils/variables.hpp"
+
+#include "gr_coordinates.hpp"
+#include "grmhd_functions.hpp"
+#include "kharma_utils.hpp"
+#include "types.hpp"
+#include "units.hpp"
+#include "utils/constants.hpp"
+
+#include <parthenon/parthenon.hpp>
+
+using pc = parthenon::constants::PhysicalConstants<parthenon::constants::CGS>;
+
+namespace RadM1
+{
+
+// Denote implicit solve failures (rflags)
+// This enum should grow to cover any potential flags
+enum class StatusImplicitStep {
+    success = 0,
+    mhdsolve,
+    radsolve,
+    bothsolve,
+    failure,
+    onedfallback_success,
+    onedfallback_failure,
+    pradfallback_success
+};
+
+static const std::map<int, std::string> status_names_implicit = {
+    {(int)StatusImplicitStep::mhdsolve,
+        "RadM1 MHD Solve Failure"}, // flag that means that the MHD inversion failed (but
+                                    // rad solve worked)
+    {(int)StatusImplicitStep::radsolve,
+        "RadM1 Radiation Solve Failure"}, // flag that means that the radiation solve
+                                          // failed (but mhd solve worked)
+    {(int)StatusImplicitStep::failure, "RadM1 Step Failure"},
+    {(int)StatusImplicitStep::onedfallback_success,
+        "RadM1 4D Solver Fell Back to 1D and succeeded"}, // flag that means the 4D Newton
+                                                          // solve didn't converge/failed
+                                                          // and the 1D fallback solver
+                                                          // was used instead and it
+                                                          // succeeded
+    {(int)StatusImplicitStep::onedfallback_failure,
+        "RadM1 4D Solver Fell Back to 1D and Failed"}, // flag that means the 4D Newton
+                                                       // solve didn't converge/failed and
+                                                       // the 1D fallback solver was used
+                                                       // instead and it also failed
+    {(int)StatusImplicitStep::pradfallback_success,
+        "RadM1 4D Solver Fell Back to P_rad iteration and succeeded"}};
+
+enum class StatusRadiationInversion {
+    success = 0,
+    urad_below_floor,
+    gammarel2_low,
+    gammarel2_high,
+    division_nonfinite,
+    cold_closure_nonfinite
+};
+
+static const std::map<int, std::string> status_names_inversion = {
+    {(int)StatusRadiationInversion::urad_below_floor,
+        "RadM1 Radiation Inversion Failure: Negative Radiation Energy"},
+    {(int)StatusRadiationInversion::gammarel2_low,
+        "RadM1 Radiation Inversion Failure: Low Lorentz Factor"},
+    {(int)StatusRadiationInversion::gammarel2_high,
+        "RadM1 Radiation Inversion Failure: High Lorentz Factor"},
+    {(int)StatusRadiationInversion::division_nonfinite,
+        "RadM1 Radiation Inversion Failure: Non-finite Division"},
+    {(int)StatusRadiationInversion::cold_closure_nonfinite,
+        "RadM1 Radiation Inversion Failure: Non-finite Result from Cold Closure"}
+
+};
+
+TaskStatus BlockPtoU(MeshBlockData<Real>* rc, IndexDomain domain, bool coarse = false);
+/**
+ * Initialize the radM1 package with several options from the input deck
+ */
+std::shared_ptr<KHARMAPackage> Initialize(
+    ParameterInput* pin, std::shared_ptr<Packages_t>& packages);
+
+/**
+ * Perform the implicit solve for radiation and plasma coupled. For now, only 4D
+ * implemented.
+ */
+TaskStatus Step(MeshData<Real>* md_sub_init, MeshData<Real>* md_sub_final, const Real dt);
+
+/**
+ * Convert from conserved to primitive variables for the radiation field.
+ */
+TaskStatus BlockUtoP(MeshBlockData<Real>* rc, IndexDomain domain, bool coarse = false);
+
+/**
+ * Apply floors to the radiation energy variables.
+ */
+void ApplyRadM1Floors(MeshBlockData<Real>* rc, IndexDomain domain);
+
+/**
+ * Anything printed post-step
+ */
+TaskStatus PostStepDiagnostics(const SimTime& tm, MeshData<Real>* md);
+
+// Opacity model selector for calc_kabs/calc_kscattering/compute_covariant_fourforce.
+enum class OpacityType : int {
+    Default = 0,
+    ShocktubeConstant = 1,
+    Bondi = 2,
+    Transparent = 3,
+    ThermalEquilibrium = 4,
+    Constant = 5
+};
+#include "microphysics/opac_kharma/rad_opacities.hpp"
+
+KOKKOS_INLINE_FUNCTION Real calc_kabs(Real rho, Real T, const RadOpac& rad_opac)
+{
+    return rad_opac.kappa_a(rho, T);
+}
+
+KOKKOS_INLINE_FUNCTION Real calc_kscattering(Real rho, Real T, const RadOpac& rad_opac)
+{
+    return rad_opac.kappa_sc(rho, T);
+}
+
+// Global Lorentz Factor for Radiation
+template<typename Global>
+KOKKOS_INLINE_FUNCTION Real lorentz_calc_rad(const GRCoordinates& G, const Global& P,
+    const VarMap& m, const int& k, const int& j, const int& i, const Loci loc)
+{
+    Real qsq =
+        G.gcov(loc, j, i, 1, 1) * P(m.U1_RAD, k, j, i) * P(m.U1_RAD, k, j, i) +
+        G.gcov(loc, j, i, 2, 2) * P(m.U2_RAD, k, j, i) * P(m.U2_RAD, k, j, i) +
+        G.gcov(loc, j, i, 3, 3) * P(m.U3_RAD, k, j, i) * P(m.U3_RAD, k, j, i) +
+        2. * (G.gcov(loc, j, i, 1, 2) * P(m.U1_RAD, k, j, i) * P(m.U2_RAD, k, j, i) +
+                 G.gcov(loc, j, i, 1, 3) * P(m.U1_RAD, k, j, i) * P(m.U3_RAD, k, j, i) +
+                 G.gcov(loc, j, i, 2, 3) * P(m.U2_RAD, k, j, i) * P(m.U3_RAD, k, j, i));
+    return m::sqrt(1. + qsq);
+}
+
+// Global ucon for Radiation
+template<typename Global>
+KOKKOS_INLINE_FUNCTION void calc_ucon_rad(const GRCoordinates& G, const Global& P,
+    const VarMap& m, const int& k, const int& j, const int& i, const Loci loc,
+    Real ucon[GR_DIM])
+{
+    const Real gamma = lorentz_calc_rad(G, P, m, k, j, i, loc);
+    const Real alpha = 1. / m::sqrt(-G.gcon(loc, j, i, 0, 0));
+    ucon[0] = gamma / alpha;
+    VLOOP
+        ucon[v + 1] =
+            P(m.U1_RAD + v, k, j, i) - gamma * alpha * G.gcon(loc, j, i, 0, v + 1);
+}
+
+KOKKOS_INLINE_FUNCTION Real lorentz_calc_rad(
+    const GRCoordinates& G, const Real P[4], const int& j, const int& i)
+{
+    Real qsq = G.gcov(Loci::center, j, i, 1, 1) * P[1] * P[1] +
+               G.gcov(Loci::center, j, i, 2, 2) * P[2] * P[2] +
+               G.gcov(Loci::center, j, i, 3, 3) * P[3] * P[3] +
+               2. * (G.gcov(Loci::center, j, i, 1, 2) * P[1] * P[2] +
+                        G.gcov(Loci::center, j, i, 1, 3) * P[1] * P[3] +
+                        G.gcov(Loci::center, j, i, 2, 3) * P[2] * P[3]);
+    return m::sqrt(1. + qsq);
+}
+
+// Local ucon for Radiation
+KOKKOS_INLINE_FUNCTION void calc_ucon_rad(const GRCoordinates& G, const Real P[4],
+    const int& j, const int& i, Real ucon[GR_DIM])
+{
+    const Real gamma = lorentz_calc_rad(G, P, j, i);
+    const Real alpha = 1. / m::sqrt(-G.gcon(Loci::center, j, i, 0, 0));
+    ucon[0] = gamma / alpha;
+    VLOOP
+        ucon[v + 1] = P[1 + v] - gamma * alpha * G.gcon(Loci::center, j, i, 0, v + 1);
+}
+
+// M1 Tensor construction (Global)
+// This will give you R^mu_dir
+KOKKOS_INLINE_FUNCTION void calc_tensor(const GRCoordinates& G, const Real P[4],
+    const int& dir, const int& j, const int& i, Real R_dir_mu[GR_DIM])
+{
+    Real Erf = P[0];
+    Real ucon_rad[GR_DIM];
+    calc_ucon_rad(G, P, j, i, ucon_rad);
+
+    Real R_con_dir[GR_DIM];
+    for (int nu = 0; nu < 4; ++nu) {
+        R_con_dir[nu] = (4.0 / 3.0) * Erf * ucon_rad[dir] * ucon_rad[nu] +
+                        (1.0 / 3.0) * Erf * G.gcon(Loci::center, j, i, dir, nu);
+    }
+
+    G.lower(R_con_dir, R_dir_mu, 0, j, i, Loci::center);
+}
+
+// M1 Tensor construction (Global)
+// This will give you R^mu_dir
+KOKKOS_INLINE_FUNCTION void calc_tensor(const GRCoordinates& G,
+    const VariablePack<Real>& P, const VarMap& m_p, const int& dir, const int& k,
+    const int& j, const int& i, const Loci loc, Real R_dir_mu[GR_DIM])
+{
+    Real Erf = P(m_p.UU_RAD, k, j, i);
+    Real ucon_rad[GR_DIM];
+    calc_ucon_rad(G, P, m_p, k, j, i, loc, ucon_rad);
+
+    Real R_con_dir[GR_DIM];
+    for (int nu = 0; nu < 4; ++nu) {
+        R_con_dir[nu] = (4.0 / 3.0) * Erf * ucon_rad[dir] * ucon_rad[nu] +
+                        (1.0 / 3.0) * Erf * G.gcon(loc, j, i, dir, nu);
+    }
+
+    G.lower(R_con_dir, R_dir_mu, k, j, i, loc);
+}
+
+KOKKOS_INLINE_FUNCTION void initialize_radiation_pressure(Real UU, Real& UU_rad)
+{
+    // Here we assume that Pgas + Prad = Ptot
+    // This translates to rho * T + 1/3 a_rad * T^4 - Ptot = 0
+    // The derivative gives us rho + 4/3 a_rad * T^3 = 0, which we can use to find the
+    // root of the equation and solve for T given rho and Ptot.
+    //  This should be done if we're simulating high accretion rates, bnecause then we
+    //  should not start with a low radiation pressure, but for all purposes we are gonna
+    //  assume here that the radiation pressure is negligible at the start of the
+    //  simulation, so we can just set it to a small value.
+
+    // radiation pressure is 0.1% of the gas pressure at the start of the simulation.
+    // We should probably to a LTE solution, but I don't know if it matters.
+    UU_rad = UU * 0.001;
+
+    return;
+}
+
+}
