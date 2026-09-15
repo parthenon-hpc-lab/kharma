@@ -86,7 +86,7 @@ TaskStatus SetGIZMO(
 
     const Real mdot = pmb->packages.Get("GRMHD")->Param<Real>("mdot");
     const Real rs = pmb->packages.Get("GRMHD")->Param<Real>("rs");
-    const Real gam = pmb->packages.Get("GRMHD")->Param<Real>("gamma");
+    const Real gam = pmb->packages.Get("eos")->Param<Real>("gm1") + 1.0;
 
     const EMHD::EMHD_parameters& emhd_params = EMHD::GetEMHDParameters(pmb->packages);
 
