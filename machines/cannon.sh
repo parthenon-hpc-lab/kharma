@@ -2,12 +2,19 @@
 
 if [[ $HOST == *"rc.fas.harvard.edu" ]]; then
   HOST_ARCH=SKX
-  # Use all of our usual compute job
-  NPROC=48
 
-  if [[ $HOST == *"login"* ]]; then
-    echo "Processes on head nodes are killed. Using one thread!"
-    export NPROC=1
+  if [[ "$ARGS" != *"login"* ]]; then
+    if [[ $HOST == *"login"* ]]; then
+      echo "Processes on head nodes are killed. Compile on a compute node!"
+      exit
+    fi
+
+    # Use all of the compute node, we're impatient
+    NPROC=48
+
+  else
+    # Stay out of the way on login nodes
+    NPROC=1
   fi
 
   # System HDF5 doesn't have compression, we don't need it
@@ -23,23 +30,26 @@ if [[ $HOST == *"rc.fas.harvard.edu" ]]; then
       DEVICE_ARCH=AMPERE80
     fi
 
+    # Never hurts unless we enable HOST_BUFFERS
+    export MPICH_GPU_SUPPORT_ENABLED=1
+
     if option "nvhpc"; then
       # NVHPC includes Nvidia's MPI that has GPUDirect
       # Currently segfaults...
 
       # Note this compiles hdf5 with nvc, because mpicc->nvc non-negotiably
       # This is fine as long as you allow shared libraries in HDF5 config
-      export MPICH_GPU_SUPPORT_ENABLED=1
       module load gcc/13.2.0-fasrc01
       module load nvhpc
-      # Didn't work for me, but you're welcome to try!
+      # Didn't work for me to get GCC14.2 going, but maybe someday?
       #export CXXFLAGS="$CXXFLAGS -allow-unsupported-compiler"
 
-      # Nvidia's openmpi
+      # Use Nvidia's openmpi
       MPI_EXE="mpirun"
     else
       module load gcc/14.2.0-fasrc01
-      module load openmpi/5.0.5-fasrc1
+      module load openmpi/5.0.5-fasrc01
+      module load hdf5
       module load cuda
     fi
 
@@ -49,7 +59,7 @@ if [[ $HOST == *"rc.fas.harvard.edu" ]]; then
   else
     # TODO Intel's or AMD's compiler is probably faster
     module load gcc/14.2.0-fasrc01
-    module load openmpi/5.0.5-fasrc1
+    module load openmpi/5.0.5-fasrc01
     module load hdf5
     # General Cannon CPU machines have 112 threads
     export OMP_NUM_THREADS=56
@@ -59,5 +69,6 @@ if [[ $HOST == *"rc.fas.harvard.edu" ]]; then
 
   # Load last, might be gated on having a compiler
   module load cmake
+  #module list
 fi
 

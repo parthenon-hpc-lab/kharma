@@ -1,4 +1,3 @@
-
 # Config for NCSA Delta, ACCESS GPU resource
 
 if [[ $HOST == *".delta.internal.ncsa.edu" || $HOST == *".delta.ncsa.illinois.edu" ]]
