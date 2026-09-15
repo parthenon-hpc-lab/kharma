@@ -199,7 +199,6 @@ void RadM1::ApplyRadM1Floors(MeshBlockData<Real>* rc, IndexDomain domain)
         std::vector<std::string>{"cons.u_rad", "cons.uvec_rad"}, cons_map);
     const VarMap m_u(cons_map, true);
 
-
     // We need to check if we actually have B fields enabled to avoid segfaults
     const bool has_b_field = pmb->packages.AllPackages().count("B_FluxCT") ||
                              pmb->packages.AllPackages().count("B_CD");
@@ -233,7 +232,6 @@ void RadM1::ApplyRadM1Floors(MeshBlockData<Real>* rc, IndexDomain domain)
                 U(m_u.U1_RAD, k, j, i) = Urad[1] * gdet;
                 U(m_u.U2_RAD, k, j, i) = Urad[2] * gdet;
                 U(m_u.U3_RAD, k, j, i) = Urad[3] * gdet;
-
             }
         });
 }
@@ -294,7 +292,6 @@ TaskStatus RadM1::BlockPtoU(MeshBlockData<Real>* rc, IndexDomain domain, bool co
     return TaskStatus::complete;
 }
 
-
 TaskStatus RadM1::BlockUtoP(MeshBlockData<Real>* rc, IndexDomain domain, bool coarse)
 {
     auto pmb = rc->GetBlockPointer();
@@ -320,8 +317,8 @@ TaskStatus RadM1::BlockUtoP(MeshBlockData<Real>* rc, IndexDomain domain, bool co
         KOKKOS_LAMBDA (const int &k, const int &j, const int &i)
         {
             Real Prad[4];
-            Real Urad[4] = {U(m_u.UU_RAD, k, j, i), U(m_u.U1_RAD, k, j, i), U(m_u.U2_RAD, k, j, i),
-                U(m_u.U3_RAD, k, j, i)};
+            Real Urad[4] = {U(m_u.UU_RAD, k, j, i), U(m_u.U1_RAD, k, j, i),
+                U(m_u.U2_RAD, k, j, i), U(m_u.U3_RAD, k, j, i)};
             RadM1::u_to_p_rad(G, Urad, Prad, k, j, i);
 
             P(m_p.UU_RAD, k, j, i) = Prad[0];
@@ -330,9 +327,7 @@ TaskStatus RadM1::BlockUtoP(MeshBlockData<Real>* rc, IndexDomain domain, bool co
             P(m_p.U3_RAD, k, j, i) = Prad[3];
         });
     return TaskStatus::complete;
-
 }
-            
 
 TaskStatus RadM1::Step(
     MeshData<Real>* md_sub_init, MeshData<Real>* md_sub_final, const Real dt)
