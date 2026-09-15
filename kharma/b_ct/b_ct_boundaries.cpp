@@ -299,6 +299,46 @@ void B_CT::DestructiveBoundaryClean(MeshBlockData<Real>* rc, IndexDomain domain,
     }
 }
 
+// TODO make this respect params?
+TaskStatus B_CT::ReconnectB3Task(MeshData<Real>* md)
+{
+    bool coarse = false;
+    auto pmb0 = md->GetBlockData(0)->GetBlockPointer();
+    // Make sure B on poles is still zero, even though we've interpolated
+    if (pmb0->coords.coords.is_spherical()) {
+        for (int i = 0; i < md->GetMeshPointer()->GetNumMeshBlocksThisRank(); i++) {
+            auto rc = md->GetBlockData(i);
+            auto pmb = rc->GetBlockPointer();
+            const IndexRange3 be = KDomain::GetRange(md, IndexDomain::entire, coarse);
+            const IndexRange3 bi2 =
+                KDomain::GetRange(md, IndexDomain::interior, F2, coarse);
+            auto B_Uf_block = rc->PackVariables(std::vector<std::string>{"cons.fB"});
+            if (KBoundaries::IsPhysicalBoundary(pmb, BoundaryFace::inner_x2)) {
+                auto bfpack = rc->PackVariables(
+                    {Metadata::Face, Metadata::FillGhost, Metadata::GetUserFlag("B_CT")});
+                if (bfpack.GetDim(4) > 0) {
+                    Flag("ReconnectFaceB_inner_x2");
+                    B_CT::ReconnectBoundaryB3(
+                        rc.get(), IndexDomain::inner_x2, bfpack, coarse);
+                    EndFlag();
+                }
+            }
+            if (KBoundaries::IsPhysicalBoundary(pmb, BoundaryFace::outer_x2)) {
+
+                auto bfpack = rc->PackVariables(
+                    {Metadata::Face, Metadata::FillGhost, Metadata::GetUserFlag("B_CT")});
+                if (bfpack.GetDim(4) > 0) {
+                    Flag("ReconnectFaceB_outer_x2");
+                    B_CT::ReconnectBoundaryB3(
+                        rc.get(), IndexDomain::outer_x2, bfpack, coarse);
+                    EndFlag();
+                }
+            }
+        }
+    }
+    return TaskStatus::complete;
+}
+
 void B_CT::ReconnectBoundaryB3(MeshBlockData<Real>* rc, IndexDomain domain,
     const VariablePack<Real>& fpack, bool coarse)
 {
