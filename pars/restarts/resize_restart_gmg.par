@@ -20,7 +20,7 @@ nx3 = 32
 
 <coordinates>
 base = spherical_ks
-transform = fmks
+transform = mks
 a = 0.9375
 hslope = 0.3
 r_out = 500
@@ -43,11 +43,15 @@ skip_b_cleanup = false
 <b_cleanup>
 solver = BiCGSTAB
 flux_correct = true
-tolerance = 1.e-12
-precondition = true
+tolerance = 1.e-10
+#precondition = true
 print_per_step = true
-smoother = SRJ2
-do_FAS = true
+#smoother = SRJ2
+#do_FAS = true
+
+#<boundaries>
+#inner_x2 = transmitting
+#outer_x2 = transmitting
 
 <floors>
 rho_min_geom = 1e-6

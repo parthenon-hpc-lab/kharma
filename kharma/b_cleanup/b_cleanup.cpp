@@ -50,6 +50,7 @@
 #include <solvers/cg_solver.hpp>
 #include <solvers/mg_solver.hpp>
 #include <solvers/solver_utils.hpp>
+#include <solvers/tridiag_solver.hpp>
 
 #if DISABLE_CLEANUP
 
@@ -81,10 +82,14 @@ std::shared_ptr<KHARMAPackage> B_Cleanup::Initialize(
         GetBCDirichlet<X1DIR, BCSide::Inner>());
     pkg->UserBoundaryFunctions[BF::outer_x1].push_back(
         GetBCDirichlet<X1DIR, BCSide::Outer>());
+    // pkg->UserBoundaryFunctions[BF::inner_x2].push_back(
+    //     GetBCDirichlet<X2DIR, BCSide::Inner>());
+    // pkg->UserBoundaryFunctions[BF::outer_x2].push_back(
+    //     GetBCDirichlet<X2DIR, BCSide::Outer>());
     pkg->UserBoundaryFunctions[BF::inner_x2].push_back(
-        GetBCDirichlet<X2DIR, BCSide::Inner>());
+        GetBCReflecting<X2DIR, BCSide::Inner>());
     pkg->UserBoundaryFunctions[BF::outer_x2].push_back(
-        GetBCDirichlet<X2DIR, BCSide::Outer>());
+        GetBCReflecting<X2DIR, BCSide::Outer>());
     pkg->UserBoundaryFunctions[BF::inner_x3].push_back(
         GetBCDirichlet<X3DIR, BCSide::Inner>());
     pkg->UserBoundaryFunctions[BF::outer_x3].push_back(
@@ -99,50 +104,56 @@ std::shared_ptr<KHARMAPackage> B_Cleanup::Initialize(
     Real diagonal_alpha = pin->GetOrAddReal("b_cleanup", "diagonal_alpha", 0.0);
     pkg->AddParam<>("diagonal_alpha", diagonal_alpha);
 
-    std::string solver = pin->GetOrAddString("b_cleanup", "solver", "BiCGSTAB");
+    std::string solver = pin->GetOrAddString("b_cleanup", "solver", "MG");
     pkg->AddParam<>("solver", solver);
 
     double tolerance = pin->GetOrAddReal("b_cleanup", "tolerance", 1.e-8);
     pkg->AddParam<>("tolerance", tolerance);
-    pin->SetReal("b_cleanup/solver_params", "residual_tolerance", tolerance);
+    pin->SetReal("b_cleanup", "residual_tolerance", tolerance);
 
     std::string prolong =
         pin->GetOrAddString("b_cleanup", "boundary_prolongation", "Linear");
 
-    using PoissEq = PoissonEquation<p>;
-    using prolongator_t = parthenon::solvers::ProlongationBlockInteriorZeroDirichlet;
-    using preconditioner_t = parthenon::solvers::MGSolver<PoissEq, prolongator_t>;
+    using PoissEq = B_Cleanup::PoissonEquation<u, D>;
+    // PoissEq eq(pin, "b_cleanup");
+    // pkg->AddParam<>("poisson_equation", eq, parthenon::Params::Mutability::Mutable);
 
     std::shared_ptr<parthenon::solvers::SolverBase> psolver;
-    PoissEq poisson = PoissEq(pin, "b_cleanup");
-    //   if (solver == "MG") {
-    //     parthenon::solvers::MGParams params(pin, "b_cleanup/solver_params");
-    //     psolver = std::make_shared<parthenon::solvers::MGSolver<p, rhs,
-    //     PoissonEquation>>(
-    //         pkg.get(), params, eq);
-    //   } else
-    if (solver == "CG") {
+    using prolongator_t = parthenon::solvers::ProlongationBlockInteriorZeroDirichlet;
+    using restrictor_t = parthenon::solvers::RestrictionCombined;
+    using preconditioner_t =
+        parthenon::solvers::MGSolver<PoissEq, prolongator_t, restrictor_t>;
+    if (solver == "MG") {
+        psolver = std::make_shared<parthenon::solvers::MGSolver<PoissEq, prolongator_t>>(
+            "base", "u", "rhs", pin, "b_cleanup", PoissEq(pin, "b_cleanup"));
+    } else if (solver == "CG") {
         psolver =
             std::make_shared<parthenon::solvers::CGSolver<PoissEq, preconditioner_t>>(
-                "base", "p", "rhs", pin, "b_cleanup/solver_params", poisson);
+                "base", "u", "rhs", pin, "b_cleanup", PoissEq(pin, "b_cleanup"));
     } else if (solver == "BiCGSTAB") {
         psolver = std::make_shared<
             parthenon::solvers::BiCGSTABSolver<PoissEq, preconditioner_t>>(
-            "base", "p", "rhs", pin, "b_cleanup/solver_params", poisson);
+            "base", "u", "rhs", pin, "b_cleanup", PoissEq(pin, "b_cleanup"));
+    } else if (solver == "Tridiag") {
+        psolver = std::make_shared<parthenon::solvers::TridiagSolver<PoissEq>>(
+            "base", "u", "rhs", pin, "b_cleanup", PoissEq(pin, "b_cleanup"));
     } else {
-        PARTHENON_FAIL("Unknown solver type.");
+        PARTHENON_FAIL("Unknown solver type " + solver + ".");
     }
     pkg->AddParam<>("solver_pointer", psolver);
-    pkg->AddParam<>("poisson_eq", poisson);
 
-    // Setup flags for the solve variable "p"
     using namespace parthenon::refinement_ops;
+    auto mD = Metadata({Metadata::Independent, Metadata::OneCopy, Metadata::Face,
+        Metadata::GMGRestrict});
+    mD.RegisterRefinementOps<ProlongateSharedLinear, RestrictAverage>();
+
+    // Holds the discretized version of D in \nabla \cdot D(\vec{x}) \nabla u = rhs. D = 1
+    // for the standard Poisson equation.
+    pkg->AddField(D::name(), mD);
+
     std::vector<MetadataFlag> flags{Metadata::Cell, Metadata::Independent,
         Metadata::FillGhost, Metadata::WithFluxes, Metadata::GMGRestrict,
-        Metadata::GetUserFlag("StartupOnly")};
-    if (solver == "CG" || solver == "BiCGSTAB") {
-        flags.push_back(Metadata::GMGProlongate);
-    }
+        Metadata::GMGProlongate, Metadata::CommunicateOne};
     auto mflux_comm = Metadata(flags);
     if (prolong == "Linear") {
         mflux_comm.RegisterRefinementOps<ProlongateSharedLinear, RestrictAverage>();
@@ -151,26 +162,36 @@ std::shared_ptr<KHARMAPackage> B_Cleanup::Initialize(
     } else {
         PARTHENON_FAIL("Unknown prolongation method for Poisson boundaries.");
     }
-    mflux_comm.SetFluxName("custom_flux::" + p::name());
+    // u is the solution vector that starts with an initial guess and then gets updated
+    // by the solver
+    pkg->AddField(u::name(), mflux_comm);
 
-    // Setup flux of the solve variable manually, as we need to sync its ghosts always,
-    // not just for flux corrections
-    std::vector<MetadataFlag> flux_flags{Metadata::Face, Metadata::Derived,
-        Metadata::OneCopy,
-        // Metadata::FillGhost, //Metadata::Flux,
-        Metadata::GetUserFlag("StartupOnly")};
-    auto mflux = Metadata(flux_flags);
-
-    // Declare them
-    pkg->AddField(p::name(), mflux_comm);
-    pkg->AddField("custom_flux::" + p::name(), mflux);
-
+    auto m_no_ghost = Metadata({Metadata::Cell, Metadata::Derived, Metadata::OneCopy});
     // rhs is the field that contains the desired rhs side
-    auto m_rhs = Metadata({Metadata::Cell, Metadata::Derived, Metadata::OneCopy,
-        Metadata::GetUserFlag("StartupOnly")});
-    pkg->AddField(rhs::name(), m_rhs);
-    // #endif
+    pkg->AddField(rhs::name(), m_no_ghost);
+
     return pkg;
+}
+
+void InitializeD(MeshData<Real>* md)
+{
+    auto pmb = md->GetBlockData(0)->GetBlockPointer();
+    auto desc = parthenon::MakePackDescriptor<B_Cleanup::D>(md);
+    auto pack = desc.GetPack(md);
+
+    constexpr auto te = B_Cleanup::te;
+    using TE = parthenon::TopologicalElement;
+    auto& cellbounds = pmb->cellbounds;
+    auto ib = cellbounds.GetBoundsI(IndexDomain::entire, te);
+    auto jb = cellbounds.GetBoundsJ(IndexDomain::entire, te);
+    auto kb = cellbounds.GetBoundsK(IndexDomain::entire, te);
+    pmb->par_for("Poisson::ProblemGenerator", 0, pack.GetNBlocks() - 1, kb.s, kb.e, jb.s,
+        jb.e, ib.s, ib.e, KOKKOS_LAMBDA(const int b, const int k, const int j, const int i)
+        {
+            pack(b, TE::F1, B_Cleanup::D(), k, j, i) = 1.;
+            pack(b, TE::F2, B_Cleanup::D(), k, j, i) = 1.;
+            pack(b, TE::F3, B_Cleanup::D(), k, j, i) = 1.;
+        });
 }
 
 TaskStatus B_Cleanup::CleanupDivergence(std::shared_ptr<MeshData<Real>>& md)
@@ -180,6 +201,7 @@ TaskStatus B_Cleanup::CleanupDivergence(std::shared_ptr<MeshData<Real>>& md)
     auto init_tolerance = pkg->Param<double>("init_tolerance");
     auto tolerance = pkg->Param<double>("tolerance");
     auto use_normalized = pkg->Param<bool>("use_normalized_divb");
+    auto solver = pkg->Param<std::string>("solver");
 
     auto verbose = pmesh->packages.Get("Globals")->Param<int>("verbose");
 
@@ -189,7 +211,8 @@ TaskStatus B_Cleanup::CleanupDivergence(std::shared_ptr<MeshData<Real>>& md)
     // auto fail_flag = pkg->Param<bool>("fail_without_convergence");
     // auto warn_flag = pkg->Param<bool>("warn_without_convergence");
     if (MPIRank0() && verbose > 0) {
-        std::cout << "Cleaning divB to tolerance " << tolerance << std::endl;
+        std::cout << "Cleaning divB to tolerance " << tolerance << " using solver "
+                  << solver << std::endl;
         // if (warn_flag) std::cout << "Convergence failure will produce a warning." <<
         // std::endl; if (fail_flag) std::cout << "Convergence failure will produce an
         // error." << std::endl;
@@ -209,6 +232,9 @@ TaskStatus B_Cleanup::CleanupDivergence(std::shared_ptr<MeshData<Real>>& md)
             std::cout << "Starting magnetic field divergence: " << divb_start
                       << std::endl;
     }
+
+    // make sure B is sync'd before computing RHS
+    KHARMADriver::SyncAllBounds(md);
 
     // Initialize the divB variable, which we'll be solving against.
     // This includes ghosts
@@ -231,42 +257,43 @@ TaskStatus B_Cleanup::CleanupDivergence(std::shared_ptr<MeshData<Real>>& md)
             });
     }
 
-    // make sure RHS is sync'd
-    // KHARMADriver::SyncAllBounds(md);
+    // Set D=1.  TODO remove D altogether
+    InitializeD(md.get());
 
     // Pull a switcheroo: avoid calling KHARMA's boundaries during this solve, ever.
-    auto bound_pkg = pmesh->packages.Get<KHARMAPackage>("Boundaries");
-    for (int i_bnd = 0; i_bnd < BOUNDARY_NFACES; i_bnd++) {
-        auto bface = (BoundaryFace)i_bnd;
-        pkg->KBoundaries[bface] = bound_pkg->KBoundaries[bface];
-        bound_pkg->KBoundaries[bface] = nullptr;
-    }
+    // auto bound_pkg = pmesh->packages.Get<KHARMAPackage>("Boundaries");
+    // for (int i_bnd = 0; i_bnd < BOUNDARY_NFACES; i_bnd++) {
+    //     auto bface = (BoundaryFace)i_bnd;
+    //     pkg->KBoundaries[bface] = bound_pkg->KBoundaries[bface];
+    //     bound_pkg->KBoundaries[bface] = nullptr;
+    // }
 
     // Execute the solve
     // Solver only syncs what it needs, so we don't need the container trick from
     // B_Cleanup
-    MakeSolverTaskCollection(pmesh).Execute();
+    MakeTaskCollection(pmesh).Execute();
+    ApplySolution(md.get());
 
     // Recalculate divB max for post-solve check
     double divb_post = B_CT::GlobalMaxDivB(md.get());
     // TODO fail if not converged!
     if (MPIRank0()) {
-        std::cout << "Magnetic field according to cleanup: " << divb_post << std::endl;
+        std::cout << "Magnetic field after cleanup/before sync: " << divb_post
+                  << std::endl;
     }
 
-    for (int i_bnd = 0; i_bnd < BOUNDARY_NFACES; i_bnd++) {
-        auto bface = (BoundaryFace)i_bnd;
-        bound_pkg->KBoundaries[bface] = pkg->KBoundaries[bface];
-    }
+    // for (int i_bnd = 0; i_bnd < BOUNDARY_NFACES; i_bnd++) {
+    //     auto bface = (BoundaryFace)i_bnd;
+    //     bound_pkg->KBoundaries[bface] = pkg->KBoundaries[bface];
+    // }
 
     // Synchronize to update cons.B's ghost zones
     KHARMADriver::SyncAllBounds(md);
     // Make sure prims.B reflects solution
     B_CT::MeshUtoP(md.get(), IndexDomain::entire, false);
+
     // Recalculate divB max for one last check
     double divb_end = B_CT::GlobalMaxDivB(md.get());
-
-    // TODO fail if not converged!
     if (MPIRank0()) {
         std::cout << "Magnetic field divergence after sync: " << divb_end << std::endl;
     }
@@ -274,18 +301,18 @@ TaskStatus B_Cleanup::CleanupDivergence(std::shared_ptr<MeshData<Real>>& md)
     return TaskStatus::complete;
 }
 
-TaskStatus B_Cleanup::ApplyPFace(MeshData<Real>* msolve, MeshData<Real>* md)
+TaskStatus B_Cleanup::ApplySolution(MeshData<Real>* md)
 {
     auto pmb0 = md->GetBlockData(0)->GetBlockPointer();
 
-    auto P = msolve->PackVariablesAndFluxes(std::vector<std::string>{p::name()});
+    auto P = md->PackVariablesAndFluxes(std::vector<std::string>{u::name()});
     auto B = md->PackVariables(std::vector<std::string>{"cons.fB"});
 
     const int ndim = P.GetNdim();
 
     // dB = grad(p), defined at cell centers, subtract to make field divergence-free
     // Apply on all physical faces, we'll be syncing/updating ghosts
-    const IndexRange3 b = KDomain::GetRange(msolve, IndexDomain::interior, 0, 1);
+    const IndexRange3 b = KDomain::GetRange(md, IndexDomain::entire, 1, 0);
     pmb0->par_for("gradient_P", 0, P.GetDim(5) - 1, b.ks, b.ke, b.js, b.je, b.is, b.ie,
                   KOKKOS_LAMBDA(const int& b, const int& k, const int& j, const int& i)
         {
