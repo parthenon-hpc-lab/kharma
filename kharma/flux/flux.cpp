@@ -40,6 +40,13 @@
 #include "kharma.hpp"
 #include <stdexcept>
 
+// Out of the package modification RADM1.
+#include "radM1.hpp"
+
+// phoebus includes
+#include "microphysics/eos_kharma/eos_kharma.hpp"
+#include "phoebus_utils/variables.hpp"
+
 using namespace parthenon;
 
 // GetFlux is in the header file get_flux.hpp, as it is templated on reconstruction scheme
@@ -88,9 +95,9 @@ std::shared_ptr<KHARMAPackage> Flux::Initialize(
     if (lower_edges && lower_poles)
         throw std::runtime_error(
             "Cannot enable lowered reconstruction on edges and poles!");
-    if ((lower_edges || lower_poles) && recon != "weno5")
+    if ((lower_edges || lower_poles)) // && recon != "weno5")
         throw std::runtime_error(
-            "Lowered reconstructions can only be enabled with weno5!");
+            "Spatially lowered-order reconstructions are not supported currently!");
 
     int stencil = 0;
     if (recon == "donor_cell" || recon == "donor_cell_c") {
@@ -102,12 +109,12 @@ std::shared_ptr<KHARMAPackage> Flux::Initialize(
     } else if (recon == "linear_mc") {
         params.Add("recon", KReconstruction::Type::linear_mc);
         stencil = 3;
-    } else if (recon == "weno5" && lower_edges) {
-        params.Add("recon", KReconstruction::Type::weno5_lower_edges);
-        stencil = 5;
-    } else if (recon == "weno5" && lower_poles) {
-        params.Add("recon", KReconstruction::Type::weno5_lower_poles);
-        stencil = 5;
+        // } else if (recon == "weno5" && lower_edges) {
+        //     params.Add("recon", KReconstruction::Type::weno5_lower_edges);
+        //     stencil = 5;
+        // } else if (recon == "weno5" && lower_poles) {
+        //     params.Add("recon", KReconstruction::Type::weno5_lower_poles);
+        //     stencil = 5;
     } else if (recon == "weno5") {
         params.Add("recon", KReconstruction::Type::weno5);
         stencil = 5;
@@ -129,8 +136,9 @@ std::shared_ptr<KHARMAPackage> Flux::Initialize(
     } // we only allow these options
     // Warn if using less than 3 ghost zones w/WENO etc, 2 w/Linear, etc.
     // SMR/AMR independently requires an even number of zones, so we usually use 4
-    if (Globals::nghost < (stencil / 2 + 1)) {
-        throw std::runtime_error("Not enough ghost zones for specified reconstruction!");
+    if (Globals::nghost < 4) {
+        throw std::runtime_error(
+            "Not enough ghost zones!  KHARMA currently requires 4 ghosts to avoid OOB");
     }
 
     // Fallback to TVD reconstruction when these algorithms reconstruct something outside
@@ -186,6 +194,12 @@ std::shared_ptr<KHARMAPackage> Flux::Initialize(
     pkg->AddField("Flux.cmax", m);
     pkg->AddField("Flux.cmin", m);
 
+    // Out of the package modification RADM1.
+    if (packages->AllPackages().count("RadM1")) {
+        pkg->AddField("Flux.cmax_rad", m);
+        pkg->AddField("Flux.cmin_rad", m);
+    }
+
     // PROCESS FOFC
     // Accept this a bunch of places, maybe we'll trim this...
     bool default_fofc = false;
@@ -229,27 +243,6 @@ std::shared_ptr<KHARMAPackage> Flux::Initialize(
             params.Add("fofc_consistent_face_b", fofc_consistent_face_b);
         }
 
-        // Use a custom block for fofc floors.  We now do the same for Kastaun, where we
-        // can *also* have floors
-        // TODO even post-reconstruction/reconstruction fallback?
-        if (!pin->DoesBlockExist("fofc_floors")) {
-            params.Add("fofc_prescription", Floors::MakePrescription(pin, "floors"));
-            if (pin->DoesBlockExist("floors_inner"))
-                params.Add("fofc_prescription_inner",
-                    Floors::MakePrescriptionInner(
-                        pin, Floors::MakePrescription(pin, "floors"), "floors_inner"));
-            else
-                params.Add("fofc_prescription_inner",
-                    Floors::MakePrescriptionInner(
-                        pin, Floors::MakePrescription(pin, "floors"), "floors"));
-        } else {
-            // Override inner and outer floors with `fofc_floors` block
-            params.Add("fofc_prescription", Floors::MakePrescription(pin, "fofc_floors"));
-            params.Add("fofc_prescription_inner",
-                Floors::MakePrescriptionInner(
-                    pin, Floors::MakePrescription(pin, "fofc_floors"), "fofc_floors"));
-        }
-
         // Flag for whether FOFC was applied, for diagnostics
         // This could be another bitflag in fflag, but that would be really confusing...
         Metadata m = Metadata({Metadata::Real, Metadata::Cell, Metadata::Derived,
@@ -284,8 +277,9 @@ TaskStatus Flux::BlockPtoUMHD(MeshBlockData<Real>* rc, IndexDomain domain, bool 
     // Pointers
     auto pmb = rc->GetBlockPointer();
     // Options
-    const auto& pars = pmb->packages.Get("GRMHD")->AllParams();
-    const Real gam = pars.Get<Real>("gamma");
+
+    const auto& eos_params = pmb->packages.Get("eos")->AllParams();
+    auto eos = eos_params.Get<Microphysics::EOS::EOS>("d.EOS");
 
     const EMHD::EMHD_parameters& emhd_params = EMHD::GetEMHDParameters(pmb->packages);
 
@@ -305,7 +299,7 @@ TaskStatus Flux::BlockPtoUMHD(MeshBlockData<Real>* rc, IndexDomain domain, bool 
     pmb->par_for("p_to_u_mhd", kb.s, kb.e, jb.s, jb.e, ib.s, ib.e,
                  KOKKOS_LAMBDA(const int& k, const int& j, const int& i)
         {
-            Flux::p_to_u_mhd(G, P, m_p, emhd_params, gam, k, j, i, U, m_u);
+            Flux::p_to_u_mhd(G, P, m_p, emhd_params, eos, k, j, i, U, m_u);
         });
 
     return TaskStatus::complete;
@@ -316,8 +310,8 @@ TaskStatus Flux::BlockPtoU(MeshBlockData<Real>* rc, IndexDomain domain, bool coa
     // Pointers
     auto pmb = rc->GetBlockPointer();
     // Options
-    const auto& pars = pmb->packages.Get("GRMHD")->AllParams();
-    const Real gam = pars.Get<Real>("gamma");
+    const auto& eos_params = pmb->packages.Get("eos")->AllParams();
+    auto eos = eos_params.Get<Microphysics::EOS::EOS>("d.EOS");
 
     const EMHD::EMHD_parameters& emhd_params = EMHD::GetEMHDParameters(pmb->packages);
 
@@ -345,7 +339,7 @@ TaskStatus Flux::BlockPtoU(MeshBlockData<Real>* rc, IndexDomain domain, bool coa
     pmb->par_for("p_to_u", kb.s, kb.e, jb.s, jb.e, ib.s, ib.e,
                  KOKKOS_LAMBDA(const int& k, const int& j, const int& i)
         {
-            Flux::p_to_u(G, P, m_p, emhd_params, gam, k, j, i, U, m_u);
+            Flux::p_to_u(G, P, m_p, emhd_params, eos, k, j, i, U, m_u);
         });
 
     return TaskStatus::complete;
@@ -364,8 +358,9 @@ TaskStatus Flux::BlockPtoU_Send(MeshBlockData<Real>* rc, IndexDomain domain, boo
     auto pmb = rc->GetBlockPointer();
     const int ndim = pmb->pmy_mesh->ndim;
     // Options
-    const auto& pars = pmb->packages.Get("GRMHD")->AllParams();
-    const Real gam = pars.Get<Real>("gamma");
+
+    const auto& eos_params = pmb->packages.Get("eos")->AllParams();
+    auto eos = eos_params.Get<Microphysics::EOS::EOS>("d.EOS");
 
     const EMHD::EMHD_parameters& emhd_params = EMHD::GetEMHDParameters(pmb->packages);
 
@@ -426,7 +421,7 @@ TaskStatus Flux::BlockPtoU_Send(MeshBlockData<Real>* rc, IndexDomain domain, boo
     pmb->par_for("p_to_u_send", kb.s, kb.e, jb.s, jb.e, ib.s, ib.e,
                  KOKKOS_LAMBDA(const int& k, const int& j, const int& i)
         {
-            Flux::p_to_u(G, P, m_p, emhd_params, gam, k, j, i, U, m_u);
+            Flux::p_to_u(G, P, m_p, emhd_params, eos, k, j, i, U, m_u);
         });
 
     return TaskStatus::complete;
@@ -439,8 +434,11 @@ void Flux::AddGeoSource(MeshData<Real>* md, MeshData<Real>* mdudt, IndexDomain d
     auto pmb0 = md->GetBlockData(0)->GetBlockPointer();
     auto pkgs = pmb0->packages;
     // Options
-    const auto& pars = pkgs.Get("GRMHD")->AllParams();
-    const Real gam = pars.Get<Real>("gamma");
+    const auto& eos_params = pkgs.Get("eos")->AllParams();
+    auto eos = eos_params.Get<Microphysics::EOS::EOS>("d.EOS");
+
+    // Out of the package modification RADM1.
+    const bool use_rad = pmb0->packages.AllPackages().count("RadM1");
 
     // All connection coefficients are zero in Cartesian Minkowski space
     // TODO do we know this fully in init?
@@ -472,8 +470,24 @@ void Flux::AddGeoSource(MeshData<Real>* md, MeshData<Real>* mdudt, IndexDomain d
             // calc_tensor based on the number of primitives
             Real Tmu[GR_DIM] = {0};
             Real new_du[GR_DIM] = {0};
+
+            // Out of the package modification RADM1.
+            Real Rmu[GR_DIM] = {0};
+            Real new_du_rad[GR_DIM] = {0};
             for (int mu = 0; mu < GR_DIM; ++mu) {
-                Flux::calc_tensor(P(b), m_p, D, emhd_params, gam, k, j, i, mu, Tmu);
+                Flux::calc_tensor(P(b), m_p, D, emhd_params, eos, k, j, i, mu, Tmu);
+
+                // Out of the package modification RADM1.
+                if (use_rad) {
+
+                    RadM1::calc_tensor(G, P(b), m_p, mu, k, j, i, Loci::center, Rmu);
+
+                    for (int nu = 0; nu < GR_DIM; ++nu) {
+                        for (int lam = 0; lam < GR_DIM; ++lam) {
+                            new_du_rad[lam] += Rmu[nu] * G.gdet_conn(j, i, nu, lam, mu);
+                        }
+                    }
+                }
                 for (int nu = 0; nu < GR_DIM; ++nu) {
                     // Contract mhd stress tensor with connection, and multiply
                     // by metric determinant
@@ -486,6 +500,13 @@ void Flux::AddGeoSource(MeshData<Real>* md, MeshData<Real>* mdudt, IndexDomain d
             dUdt(b, m_u.UU, k, j, i) += new_du[0];
             VLOOP
                 dUdt(b, m_u.U1 + v, k, j, i) += new_du[1 + v];
+
+            // Out of the package modification RADM1.
+            if (use_rad) {
+                dUdt(b, m_u.UU_RAD, k, j, i) += new_du_rad[0];
+                VLOOP
+                    dUdt(b, m_u.U1_RAD + v, k, j, i) += new_du_rad[1 + v];
+            }
         });
 }
 

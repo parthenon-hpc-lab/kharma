@@ -200,7 +200,9 @@ TaskStatus Implicit::Step(MeshData<Real>* md_full_step_init,
     const auto& globals = pmb_full_step_init->packages.Get("Globals")->AllParams();
     const int verbose = globals.Get<int>("verbose");
     const int flag_verbose = globals.Get<int>("flag_verbose");
-    const Real gam = pmb_full_step_init->packages.Get("GRMHD")->Param<Real>("gamma");
+
+    const auto& eos_params = pmb_full_step_init->packages.Get("eos")->AllParams();
+    auto eos = eos_params.Get<Microphysics::EOS::EOS>("d.EOS");
 
     const bool linesearch = implicit_par.Get<bool>("linesearch");
     const int max_linesearch_iter = implicit_par.Get<int>("max_linesearch_iter");
@@ -365,8 +367,8 @@ TaskStatus Implicit::Step(MeshData<Real>* md_full_step_init,
                                                    : throwaway;
                         Real tau, chi_e, nu_e;
                         EMHD::set_parameters(G, P_sub_step_init_all(b), m_p,
-                            emhd_params_sub_step_init, gam, k, j, i, tau, chi_e, nu_e);
-                        EMHD::implicit_sources(G, P_full_step_init_all(b), m_p, gam, tau,
+                            emhd_params_sub_step_init, eos, k, j, i, tau, chi_e, nu_e);
+                        EMHD::implicit_sources(G, P_full_step_init_all(b), m_p, eos, tau,
                             k, j, i, dUq, dUdP);
                     }
 
@@ -375,7 +377,7 @@ TaskStatus Implicit::Step(MeshData<Real>* md_full_step_init,
                     calc_jacobian(G, P_solver_all(b), P_full_step_init_all(b),
                         U_full_step_init_all(b), P_sub_step_init_all(b), flux_src_all(b),
                         dU_implicit_all(b), m_p, m_u, emhd_params_solver,
-                        emhd_params_sub_step_init, nvar, nfvar, k, j, i, delta, gam, dt,
+                        emhd_params_sub_step_init, nvar, nfvar, k, j, i, delta, eos, dt,
                         jacobian_all(b), residual_all(b));
                 }
 #if SPLIT_IMPLICIT_SOLVE
@@ -463,6 +465,7 @@ TaskStatus Implicit::Step(MeshData<Real>* md_full_step_init,
                                 KokkosBatched::SerialLU<
                                     KokkosBatched::Algo::LU::Unblocked>::invoke(jacobian,
                                     tiny);
+                                // TODO(CEP) does Kokkos Trsv need separate Ly=b Ux=y?
                                 KokkosBatched::SerialTrsv<KokkosBatched::Uplo::Upper,
                                     KokkosBatched::Trans::NoTranspose,
                                     KokkosBatched::Diag::NonUnit,
@@ -557,7 +560,7 @@ TaskStatus Implicit::Step(MeshData<Real>* md_full_step_init,
                             U_full_step_init_all(b), P_sub_step_init_all(b),
                             flux_src_all(b), dU_implicit_all(b), m_p, m_u,
                             emhd_params_linesearch, emhd_params_solver, nfvar, k, j, i,
-                            gam, dt, residual_all(b));
+                            eos, dt, residual_all(b));
 
                         solve_norm = 0.;
                         FLOOP solve_norm += SQR(residual_all(b, ip, k, j, i));
@@ -584,7 +587,7 @@ TaskStatus Implicit::Step(MeshData<Real>* md_full_step_init,
                 calc_residual(G, P_solver_all(b), P_full_step_init_all(b),
                     U_full_step_init_all(b), P_sub_step_init_all(b), flux_src_all(b),
                     dU_implicit_all(b), m_p, m_u, emhd_params_solver,
-                    emhd_params_sub_step_init, nfvar, k, j, i, gam, dt, residual_all(b));
+                    emhd_params_sub_step_init, nfvar, k, j, i, eos, dt, residual_all(b));
 
                 // Store for maximum/output
                 solve_norm = 0;

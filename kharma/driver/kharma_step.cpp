@@ -44,6 +44,10 @@
 #include "grmhd.hpp"
 #include "inverter.hpp"
 #include "ismr.hpp"
+// Out of the package modification units.
+#include "units.hpp"
+// Out of the package modification RADM1.
+#include "radM1.hpp"
 #include "wind.hpp"
 // Other headers
 #include "boundaries.hpp"
@@ -158,6 +162,9 @@ TaskCollection KHARMADriver::MakeDefaultTaskCollection(BlockList_t& blocks, int 
             pmesh->mesh_data.Add("fofc_source", base);
             pmesh->mesh_data.Add("fofc_guess", base);
         }
+        if (track_additions) {
+            pmesh->mesh_data.Add("pre_fix", base);
+        }
     }
 
     EndFlag();
@@ -251,7 +258,7 @@ TaskCollection KHARMADriver::MakeDefaultTaskCollection(BlockList_t& blocks, int 
         if (use_fofc) {
             auto& guess_src = pmesh->mesh_data.GetOrAdd("fofc_source", i);
             auto& guess = pmesh->mesh_data.GetOrAdd("fofc_guess", i);
-            auto t_fluxes = KHARMADriver::AddFOFC(t_flux_calc, tl, md_sub_step_init.get(),
+            t_fluxes = KHARMADriver::AddFOFC(t_flux_calc, tl, md_sub_step_init.get(),
                 md_full_step_init.get(), md_sub_step_init.get(), guess_src.get(),
                 guess.get(), stage);
         }

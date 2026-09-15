@@ -40,6 +40,10 @@
 // Satisfy IDE parsers who aren't wise to our schemes
 #include "reductions.hpp"
 
+// phoebus includes
+#include "microphysics/eos_kharma/eos_kharma.hpp"
+#include "phoebus_utils/variables.hpp"
+
 template<typename T, bool all_reduce>
 inline std::string GetPoolName()
 {
@@ -127,19 +131,24 @@ T Reductions::DomainReduction(MeshData<Real>* md, const GReal startx[3],
 {
     Flag("DomainReduction");
     auto pmesh = md->GetMeshPointer();
+    const auto ndim = pmesh->ndim;
 
     const auto& pars = pmesh->packages.Get("GRMHD")->AllParams();
-    const Real gam = pars.Get<Real>("gamma");
     const auto& emhd_params = EMHD::GetEMHDParameters(pmesh->packages);
 
+    const auto& eos_params = pmesh->packages.Get("eos")->AllParams();
+    auto eos = eos_params.Get<Microphysics::EOS::EOS>("d.EOS");
+
     // Just pass in everything we might want. Probably slow?
-    PackIndexMap prims_map, cons_map;
+    PackIndexMap prims_map, cons_map, flux_map;
     const auto& P = md->PackVariables(
         std::vector<MetadataFlag>{Metadata::GetUserFlag("Primitive"), Metadata::Cell},
         prims_map);
-    const auto& U = md->PackVariablesAndFluxes(
+    const auto& U = md->PackVariables(
         std::vector<MetadataFlag>{Metadata::Conserved, Metadata::Cell}, cons_map);
-    const VarMap m_u(cons_map, true), m_p(prims_map, false);
+    const auto& F = md->PackVariablesAndFluxes(
+        std::vector<MetadataFlag>{Metadata::WithFluxes, Metadata::Cell}, flux_map);
+    const VarMap m_p(prims_map, false), m_u(cons_map, true), m_f(flux_map, true);
     const auto& cmax = md->PackVariables(std::vector<std::string>{"Flux.cmax"});
     const auto& cmin = md->PackVariables(std::vector<std::string>{"Flux.cmin"});
 

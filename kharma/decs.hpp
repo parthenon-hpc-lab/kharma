@@ -80,6 +80,8 @@ using GReal = double;
 
 // A small number, compared to the grid or problem scale
 #define SMALL_NUM 1e-20
+// Even smaller.  Probably need different values for Real==float
+#define VSMALL_NUM 1e-40
 
 // GEOMETRY
 // This stuff needs to be in decs.h as it's used by functions in coordinates/,

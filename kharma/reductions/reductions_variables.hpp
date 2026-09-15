@@ -36,19 +36,23 @@
 #include "decs.hpp"
 #include "types.hpp"
 
+// phoebus includes
+#include "microphysics/eos_kharma/eos_kharma.hpp"
+#include "phoebus_utils/variables.hpp"
+
 #include "emhd.hpp"
 #include "flux_functions.hpp"
 
 // Arguments to computing any variable defined below
 #define REDUCE_FUNCTION_ARGS                                                             \
     const GRCoordinates &G, const VariablePack<Real>&P, const VarMap &m_p,               \
-        const VariableFluxPack<Real>&U, const VarMap &m_u,                               \
-        const VariablePack<Real>&cmax, const VariablePack<Real>&cmin,                    \
-        const EMHD::EMHD_parameters &emhd_params, const Real &gam, const int &k,         \
-        const int &j, const int &i
+        const VariablePack<Real>&U, const VarMap &m_u, const VariableFluxPack<Real>&F,   \
+        const VarMap &m_f, const VariablePack<Real>&cmax, const VariablePack<Real>&cmin, \
+        const EMHD::EMHD_parameters &emhd_params, const Microphysics::EOS::EOS &eos,     \
+        const int &k, const int &j, const int &i
 // Call for passing a particular block's values
 #define REDUCE_FUNCTION_CALL                                                             \
-    G, P(b), m_p, U(b), m_u, cmax(b), cmin(b), emhd_params, gam, k, j, i
+    G, P(b), m_p, U(b), m_u, F(b), m_f, cmax(b), cmin(b), emhd_params, eos, k, j, i
 
 using namespace parthenon;
 
@@ -142,15 +146,18 @@ KOKKOS_INLINE_FUNCTION Real reduction_var<Var::bsq>(REDUCE_FUNCTION_ARGS)
 template<>
 KOKKOS_INLINE_FUNCTION Real reduction_var<Var::gas_pressure>(REDUCE_FUNCTION_ARGS)
 {
-    return (gam - 1) * P(m_p.UU, k, j, i);
+    const Real sie = P(m_p.UU, k, j, i) / P(m_p.RHO, k, j, i);
+    return eos.PressureFromDensityInternalEnergy(P(m_p.RHO, k, j, i), sie);
+    // return (gam - 1) * P(m_p.UU, k, j, i);
 }
 template<>
 KOKKOS_INLINE_FUNCTION Real reduction_var<Var::beta>(REDUCE_FUNCTION_ARGS)
 {
     FourVectors Dtmp;
     GRMHD::calc_4vecs(G, P, m_p, k, j, i, Loci::center, Dtmp);
-    return ((gam - 1) * P(m_p.UU, k, j, i)) /
-           (0.5 * (dot(Dtmp.bcon, Dtmp.bcov) + SMALL_NUM));
+    const Real sie = P(m_p.UU, k, j, i) / P(m_p.RHO, k, j, i);
+    const Real Pg = eos.PressureFromDensityInternalEnergy(P(m_p.RHO, k, j, i), sie);
+    return Pg / (0.5 * (dot(Dtmp.bcon, Dtmp.bcov) + SMALL_NUM));
 }
 
 // Stuff that should be conserved
@@ -221,7 +228,7 @@ KOKKOS_INLINE_FUNCTION Real reduction_var<Var::edot>(REDUCE_FUNCTION_ARGS)
     FourVectors Dtmp;
     Real T1[GR_DIM];
     GRMHD::calc_4vecs(G, P, m_p, k, j, i, Loci::center, Dtmp);
-    Flux::calc_tensor(P, m_p, Dtmp, emhd_params, gam, k, j, i, X1DIR, T1);
+    Flux::calc_tensor(P, m_p, Dtmp, emhd_params, eos, k, j, i, X1DIR, T1);
     // \dot{E} == \int - T^1_0 * gdet * dx2 * dx3
     return -T1[X0DIR] * G.gdet(Loci::center, j, i);
 }
@@ -231,7 +238,7 @@ KOKKOS_INLINE_FUNCTION Real reduction_var<Var::ldot>(REDUCE_FUNCTION_ARGS)
     FourVectors Dtmp;
     Real T1[GR_DIM];
     GRMHD::calc_4vecs(G, P, m_p, k, j, i, Loci::center, Dtmp);
-    Flux::calc_tensor(P, m_p, Dtmp, emhd_params, gam, k, j, i, X1DIR, T1);
+    Flux::calc_tensor(P, m_p, Dtmp, emhd_params, eos, k, j, i, X1DIR, T1);
     // \dot{L} == \int T^1_3 * gdet * dx2 * dx3
     return T1[X3DIR] * G.gdet(Loci::center, j, i);
 }
@@ -240,17 +247,17 @@ KOKKOS_INLINE_FUNCTION Real reduction_var<Var::ldot>(REDUCE_FUNCTION_ARGS)
 template<>
 KOKKOS_INLINE_FUNCTION Real reduction_var<Var::mdot_flux>(REDUCE_FUNCTION_ARGS)
 {
-    return -U.flux(X1DIR, m_u.RHO, k, j, i);
+    return -F.flux(X1DIR, m_u.RHO, k, j, i);
 }
 template<>
 KOKKOS_INLINE_FUNCTION Real reduction_var<Var::edot_flux>(REDUCE_FUNCTION_ARGS)
 {
-    return (U.flux(X1DIR, m_u.UU, k, j, i) - U.flux(X1DIR, m_u.RHO, k, j, i));
+    return (F.flux(X1DIR, m_u.UU, k, j, i) - F.flux(X1DIR, m_u.RHO, k, j, i));
 }
 template<>
 KOKKOS_INLINE_FUNCTION Real reduction_var<Var::ldot_flux>(REDUCE_FUNCTION_ARGS)
 {
-    return U.flux(X1DIR, m_u.U3, k, j, i);
+    return F.flux(X1DIR, m_u.U3, k, j, i);
 }
 
 // Amount of conserved fluid vars added to grid/subtracted from grid
@@ -336,81 +343,81 @@ KOKKOS_INLINE_FUNCTION Real reduction_var<Var::T03change>(REDUCE_FUNCTION_ARGS)
 template<>
 KOKKOS_INLINE_FUNCTION Real reduction_var<Var::Uflux1RHO>(REDUCE_FUNCTION_ARGS)
 {
-    return U.flux(X1DIR, m_u.RHO, k, j, i);
+    return F.flux(X1DIR, m_u.RHO, k, j, i);
 }
 template<>
 KOKKOS_INLINE_FUNCTION Real reduction_var<Var::Uflux1UU>(REDUCE_FUNCTION_ARGS)
 {
-    return U.flux(X1DIR, m_u.UU, k, j, i);
+    return F.flux(X1DIR, m_u.UU, k, j, i);
 }
 template<>
 KOKKOS_INLINE_FUNCTION Real reduction_var<Var::Uflux1U1>(REDUCE_FUNCTION_ARGS)
 {
-    return U.flux(X1DIR, m_u.U1, k, j, i);
+    return F.flux(X1DIR, m_u.U1, k, j, i);
 }
 template<>
 KOKKOS_INLINE_FUNCTION Real reduction_var<Var::Uflux1U2>(REDUCE_FUNCTION_ARGS)
 {
-    return U.flux(X1DIR, m_u.U2, k, j, i);
+    return F.flux(X1DIR, m_u.U2, k, j, i);
 }
 template<>
 KOKKOS_INLINE_FUNCTION Real reduction_var<Var::Uflux1U3>(REDUCE_FUNCTION_ARGS)
 {
-    return U.flux(X1DIR, m_u.U3, k, j, i);
+    return F.flux(X1DIR, m_u.U3, k, j, i);
 }
 
 // Fluxes of conserved fluid vars, X2
 template<>
 KOKKOS_INLINE_FUNCTION Real reduction_var<Var::Uflux2RHO>(REDUCE_FUNCTION_ARGS)
 {
-    return U.flux(X2DIR, m_u.RHO, k, j, i);
+    return F.flux(X2DIR, m_u.RHO, k, j, i);
 }
 template<>
 KOKKOS_INLINE_FUNCTION Real reduction_var<Var::Uflux2UU>(REDUCE_FUNCTION_ARGS)
 {
-    return U.flux(X2DIR, m_u.UU, k, j, i);
+    return F.flux(X2DIR, m_u.UU, k, j, i);
 }
 template<>
 KOKKOS_INLINE_FUNCTION Real reduction_var<Var::Uflux2U1>(REDUCE_FUNCTION_ARGS)
 {
-    return U.flux(X2DIR, m_u.U1, k, j, i);
+    return F.flux(X2DIR, m_u.U1, k, j, i);
 }
 template<>
 KOKKOS_INLINE_FUNCTION Real reduction_var<Var::Uflux2U2>(REDUCE_FUNCTION_ARGS)
 {
-    return U.flux(X2DIR, m_u.U2, k, j, i);
+    return F.flux(X2DIR, m_u.U2, k, j, i);
 }
 template<>
 KOKKOS_INLINE_FUNCTION Real reduction_var<Var::Uflux2U3>(REDUCE_FUNCTION_ARGS)
 {
-    return U.flux(X2DIR, m_u.U3, k, j, i);
+    return F.flux(X2DIR, m_u.U3, k, j, i);
 }
 
 // Fluxes of conserved fluid vars, X3
 template<>
 KOKKOS_INLINE_FUNCTION Real reduction_var<Var::Uflux3RHO>(REDUCE_FUNCTION_ARGS)
 {
-    return U.flux(X3DIR, m_u.RHO, k, j, i);
+    return F.flux(X3DIR, m_u.RHO, k, j, i);
 }
 template<>
 KOKKOS_INLINE_FUNCTION Real reduction_var<Var::Uflux3UU>(REDUCE_FUNCTION_ARGS)
 {
-    return U.flux(X3DIR, m_u.UU, k, j, i);
+    return F.flux(X3DIR, m_u.UU, k, j, i);
 }
 template<>
 KOKKOS_INLINE_FUNCTION Real reduction_var<Var::Uflux3U1>(REDUCE_FUNCTION_ARGS)
 {
-    return U.flux(X3DIR, m_u.U1, k, j, i);
+    return F.flux(X3DIR, m_u.U1, k, j, i);
 }
 template<>
 KOKKOS_INLINE_FUNCTION Real reduction_var<Var::Uflux3U2>(REDUCE_FUNCTION_ARGS)
 {
-    return U.flux(X3DIR, m_u.U2, k, j, i);
+    return F.flux(X3DIR, m_u.U2, k, j, i);
 }
 template<>
 KOKKOS_INLINE_FUNCTION Real reduction_var<Var::Uflux3U3>(REDUCE_FUNCTION_ARGS)
 {
-    return U.flux(X3DIR, m_u.U3, k, j, i);
+    return F.flux(X3DIR, m_u.U3, k, j, i);
 }
 
 // Luminosity proxy from (for example) Porth et al 2019.
@@ -420,7 +427,9 @@ KOKKOS_INLINE_FUNCTION Real reduction_var<Var::eht_lum>(REDUCE_FUNCTION_ARGS)
     FourVectors Dtmp;
     GRMHD::calc_4vecs(G, P, m_p, k, j, i, Loci::center, Dtmp);
     Real rho = P(m_p.RHO, k, j, i);
-    Real Pg = (gam - 1.) * P(m_p.UU, k, j, i);
+    // Real Pg = (gam - 1.) * P(m_p.UU, k, j, i);
+    Real sie = P(m_p.UU, k, j, i) / rho;
+    Real Pg = eos.PressureFromDensityInternalEnergy(rho, sie);
     Real Bmag = m::sqrt(dot(Dtmp.bcon, Dtmp.bcov));
     Real j_eht =
         rho * rho * rho / Pg / Pg * m::exp(-0.2 * m::cbrt(rho * rho / (Bmag * Pg * Pg)));
@@ -436,7 +445,7 @@ KOKKOS_INLINE_FUNCTION Real reduction_var<Var::jet_lum>(REDUCE_FUNCTION_ARGS)
     FourVectors Dtmp;
     Real T1[GR_DIM];
     GRMHD::calc_4vecs(G, P, m_p, k, j, i, Loci::center, Dtmp);
-    Flux::calc_tensor(P, m_p, Dtmp, emhd_params, gam, k, j, i, X1DIR, T1);
+    Flux::calc_tensor(P, m_p, Dtmp, emhd_params, eos, k, j, i, X1DIR, T1);
     // If sigma > 1...
     if ((dot(Dtmp.bcon, Dtmp.bcov) / P(m_p.RHO, k, j, i)) > 1.) {
         // Energy flux, like at EH

@@ -137,8 +137,6 @@ class VarMap
     // Use int8. 127 values ought to be enough for anybody, right?
     // Basic primitive variables
     int8_t RHO, UU, U1, U2, U3, B1, B2, B3, Bf1, Bf2, Bf3;
-    // Tracker variables
-    int8_t RHO_ADDED, UU_ADDED, PASSIVE;
     // Total/idealized (advected, no-dissipation) fluid entropy tracking
     int8_t KTOT, KTOT_ADV;
     // Electron entropy/energy tracking
@@ -148,7 +146,8 @@ class VarMap
     // Added material
     int8_t RHOADD, T0ADD, T1ADD, T2ADD, T3ADD;
     // Total struct size ~20 bytes, < 1 vector of 4 doubles
-
+    int8_t UU_RAD, U1_RAD, U2_RAD, U3_RAD;
+    // RAD_M1 variables. Out of the package modification RADM1.
     VarMap(parthenon::PackIndexMap& name_map, bool is_cons)
     {
         if (is_cons) {
@@ -160,9 +159,6 @@ class VarMap
             B1 = name_map["cons.B"].first;
             Bf1 = name_map["cons.fB"].first;
             PSI = name_map["cons.psi_cd"].first;
-            // Floors
-            RHO_ADDED = name_map["cons.rho_added"].first;
-            UU_ADDED = name_map["cons.u_added"].first;
             // Entropy tracking
             KTOT = name_map["cons.Ktot"].first;
             KTOT_ADV = name_map["cons.Ktot_adv"].first;
@@ -176,6 +172,9 @@ class VarMap
             // Extended MHD
             Q = name_map["cons.q"].first;
             DP = name_map["cons.dP"].first;
+            // RAD_M1. Out of the package modification RADM1.
+            UU_RAD = name_map["cons.u_rad"].first;
+            U1_RAD = name_map["cons.uvec_rad"].first;
 
             // Added material
             RHOADD = name_map["Floors.rhou0add"].first;
@@ -190,9 +189,6 @@ class VarMap
             B1 = name_map["prims.B"].first;
             Bf1 = name_map["prims.fB"].first;
             PSI = name_map["prims.psi_cd"].first;
-            // Floors (TODO cons only?)
-            RHO_ADDED = name_map["prims.rho_added"].first;
-            UU_ADDED = name_map["prims.u_added"].first;
             // Entropy tracking
             KTOT = name_map["prims.Ktot"].first;
             KTOT_ADV = name_map["prims.Ktot_adv"].first;
@@ -206,6 +202,13 @@ class VarMap
             // Extended MHD
             Q = name_map["prims.q"].first;
             DP = name_map["prims.dP"].first;
+            // RAD_M1. Out of the package modification RADM1.
+            UU_RAD = name_map["prims.u_rad"].first;
+            U1_RAD = name_map["prims.uvec_rad"].first;
+
+            // Never present in prims
+            RHOADD = -1;
+            T0ADD = -1;
         }
         if (U1 >= 0) {
             U2 = U1 + 1;
@@ -237,6 +240,16 @@ class VarMap
             T2ADD = -1;
             T3ADD = -1;
         }
+
+        // if U1_RAD is present, we assume the rest of the RAD_M1 variables are too.  If
+        // not, we assume none of them are. Out of the package modification RADM1.
+        if (U1_RAD >= 0) {
+            U2_RAD = U1_RAD + 1;
+            U3_RAD = U1_RAD + 2;
+        } else {
+            U2_RAD = -1;
+            U3_RAD = -1;
+        }
     }
 
     void print() const
@@ -250,8 +263,9 @@ class VarMap
 
 // Reasonable maximum number of fluid primitive or conserved variables being evolved
 // e.g. 8 for GRMHD, 10 for EMHD, and additional vars for e-/passives
-// TODO(CEP) make configurable.  Currently only used for implicit kernel temporaries
-#define MAX_VARS 20
+// Added + 4 for RAD_M1 variables
+// TODO(BSP) make configurable.  Currently only used for implicit kernel temporaries
+#define MAX_VARS 24
 
 #if DEBUG
 /**

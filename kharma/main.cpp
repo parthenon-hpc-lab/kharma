@@ -137,8 +137,9 @@ int main(int argc, char* argv[])
         std::cout << "Branch " << branch << ", commit hash: " << sha1 << std::endl;
         std::cout << std::endl;
         std::cout << "KHARMA is released under the BSD 3-clause license." << std::endl;
-        std::cout << "Source code is available at https://github.com/AFD-Illinois/kharma/"
-                  << std::endl;
+        std::cout
+            << "Source code is available at https://github.com/parthenon-hpc-lab/kharma/"
+            << std::endl;
         std::cout << std::endl;
     }
 

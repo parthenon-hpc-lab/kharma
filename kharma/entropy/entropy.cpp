@@ -74,6 +74,10 @@ std::shared_ptr<KHARMAPackage> Initialize(
     auto& driver = packages->Get("Driver")->AllParams();
     auto flags_prim = driver.Get<std::vector<MetadataFlag>>("prim_flags");
     flags_prim.insert(flags_prim.end(), flags_entropy.begin(), flags_entropy.end());
+
+    flags_prim.push_back(Metadata::Restart);
+    flags_prim.push_back(Metadata::FillGhost);
+
     auto flags_cons = driver.Get<std::vector<MetadataFlag>>("cons_flags");
     flags_cons.insert(flags_cons.end(), flags_entropy.begin(), flags_entropy.end());
 
@@ -89,6 +93,8 @@ std::shared_ptr<KHARMAPackage> Initialize(
 
     pkg->BlockUtoP = Entropy::BlockUtoP;
     pkg->BoundaryUtoP = Entropy::BlockUtoP;
+
+    pkg->BlockApplyFloors = Entropy::ApplyFloors;
 
     return pkg;
 }
@@ -230,24 +236,14 @@ void ApplyFloors(MeshBlockData<Real>* mbd, IndexDomain domain)
 
     const Floors::Prescription floors =
         packages.Get("Floors")->Param<Floors::Prescription>("prescription");
-    const Floors::Prescription floors_inner =
-        packages.Get("Floors")->Param<Floors::Prescription>("prescription_inner");
 
     const IndexRange3 b = KDomain::GetRange(mbd, domain);
     pmb->par_for("apply_entropy_floors", b.ks, b.ke, b.js, b.je, b.is, b.ie,
         KOKKOS_LAMBDA(const int& k, const int& j, const int& i)
         {
-            Real ktot_max;
-            if (floors.radius_dependent_floors && G.coords.is_spherical() &&
-                G.r(k, j, i) < floors.floors_switch_r) {
-                ktot_max = floors_inner.ktot_max;
-            } else {
-                ktot_max = floors.ktot_max;
-            }
-
-            if (P(m_p.KTOT, k, j, i) > ktot_max) {
+            if (P(m_p.KTOT, k, j, i) > floors.ktot_max) {
                 fflag(0, k, j, i) = Floors::FFlag::KTOT | (int)fflag(0, k, j, i);
-                P(m_p.KTOT, k, j, i) = ktot_max;
+                P(m_p.KTOT, k, j, i) = floors.ktot_max;
             }
 
             // TODO(CEP) restore Ressler adjustment option
