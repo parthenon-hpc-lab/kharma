@@ -234,7 +234,6 @@ void RadM1::ApplyRadM1Floors(MeshBlockData<Real>* rc, IndexDomain domain)
                 U(m_u.U2_RAD, k, j, i) = Urad[2] * gdet;
                 U(m_u.U3_RAD, k, j, i) = Urad[3] * gdet;
 
-                RadM1::calc_tensor
             }
         });
 }
