@@ -472,19 +472,19 @@ KOKKOS_INLINE_FUNCTION StatusImplicitStep solve_radiation_1d(const GRCoordinates
 
     const Real gdet = G.gdet(Loci::center, j, i);
     const Real uvec_frozen[NVEC] = {
-        P_init(m_p.U1, k, j, i), P_init(m_p.U2, k, j, i), P_init(m_p.U3, k, j, i)};
+        P_new(m_p.U1, k, j, i), P_new(m_p.U2, k, j, i), P_new(m_p.U3, k, j, i)};
     Real B_P[NVEC] = {0.};
     if (m_p.B1 >= 0) {
         B_P[0] = P_init(m_p.B1, k, j, i);
         B_P[1] = P_init(m_p.B2, k, j, i);
         B_P[2] = P_init(m_p.B3, k, j, i);
     }
-    const Real U_mhd_0[4] = {U_init(m_u.UU, k, j, i), U_init(m_u.U1, k, j, i),
-        U_init(m_u.U2, k, j, i), U_init(m_u.U3, k, j, i)};
-    const Real U_rad_0[4] = {U_init(m_u.UU_RAD, k, j, i), U_init(m_u.U1_RAD, k, j, i),
-        U_init(m_u.U2_RAD, k, j, i), U_init(m_u.U3_RAD, k, j, i)};
-    const Real rho_init = P_init(m_p.RHO, k, j, i);
-    const Real u_init = P_init(m_p.UU, k, j, i);
+    const Real U_mhd_0[4] = {U_new(m_u.UU, k, j, i), U_new(m_u.U1, k, j, i),
+        U_new(m_u.U2, k, j, i), U_new(m_u.U3, k, j, i)};
+    const Real U_rad_0[4] = {U_new(m_u.UU_RAD, k, j, i), U_new(m_u.U1_RAD, k, j, i),
+        U_new(m_u.U2_RAD, k, j, i), U_new(m_u.U3_RAD, k, j, i)};
+    const Real rho_init = P_new(m_p.RHO, k, j, i);
+    const Real u_init = P_new(m_p.UU, k, j, i);
 
     Real U_mhd_trial[4], U_rad_trial[4], P_rad_trial[4], dS_trial[4];
     bool rad_ok;
@@ -676,26 +676,26 @@ KOKKOS_INLINE_FUNCTION int solve_4d_pmhd(const GRCoordinates& G,
     const RadOpac& rad_opac, const VariablePack<Real> pflag,
     const VariablePack<Real> rinvflag, const Real U_entry[8])
 {
-    const Real rho_init = P_init(m_p.RHO, k, j, i);
+    const Real rho_init = P_new(m_p.RHO, k, j, i);
 
     Real B_P[NVEC] = {0.};
     if (m_p.B1 >= 0) {
-        B_P[V1] = P_init(m_p.B1, k, j, i);
-        B_P[V2] = P_init(m_p.B2, k, j, i);
-        B_P[V3] = P_init(m_p.B3, k, j, i);
+        B_P[V1] = P_new(m_p.B1, k, j, i);
+        B_P[V2] = P_new(m_p.B2, k, j, i);
+        B_P[V3] = P_new(m_p.B3, k, j, i);
     }
-    Real P_mhd_guess[4] = {P_init(m_p.UU, k, j, i), P_init(m_p.U1, k, j, i),
-        P_init(m_p.U2, k, j, i), P_init(m_p.U3, k, j, i)};
+    Real P_mhd_guess[4] = {P_new(m_p.UU, k, j, i), P_new(m_p.U1, k, j, i),
+        P_new(m_p.U2, k, j, i), P_new(m_p.U3, k, j, i)};
 
-    Real U_rad_0[4] = {U_init(m_u.UU_RAD, k, j, i), U_init(m_u.U1_RAD, k, j, i),
-        U_init(m_u.U2_RAD, k, j, i), U_init(m_u.U3_RAD, k, j, i)};
+    Real U_rad_0[4] = {U_new(m_u.UU_RAD, k, j, i), U_new(m_u.U1_RAD, k, j, i),
+        U_new(m_u.U2_RAD, k, j, i), U_new(m_u.U3_RAD, k, j, i)};
 
     Real resid[4];
 
     Real U_mhd_0[4];
 
     Real uvec[NVEC] = {
-        P_init(m_p.U1, k, j, i), P_init(m_p.U2, k, j, i), P_init(m_p.U3, k, j, i)};
+        P_new(m_p.U1, k, j, i), P_new(m_p.U2, k, j, i), P_new(m_p.U3, k, j, i)};
 
     Real U_mhd_guess[4];
     Real U_rad_guess[4];
@@ -703,10 +703,10 @@ KOKKOS_INLINE_FUNCTION int solve_4d_pmhd(const GRCoordinates& G,
     Real dS_guess[4];
     Real dcov_rad[4] = {0., 0., 0., 0.};
 
-    U_mhd_0[0] = U_init(m_u.UU, k, j, i);
-    U_mhd_0[1] = U_init(m_u.U1, k, j, i);
-    U_mhd_0[2] = U_init(m_u.U2, k, j, i);
-    U_mhd_0[3] = U_init(m_u.U3, k, j, i);
+    U_mhd_0[0] = U_new(m_u.UU, k, j, i);
+    U_mhd_0[1] = U_new(m_u.U1, k, j, i);
+    U_mhd_0[2] = U_new(m_u.U2, k, j, i);
+    U_mhd_0[3] = U_new(m_u.U3, k, j, i);
 
     // Iteration 0
     U_mhd_guess[0] = U_mhd_0[0];
@@ -1200,24 +1200,24 @@ KOKKOS_INLINE_FUNCTION int solve_4d_prad(const GRCoordinates& G,
     const RadOpac& rad_opac, const VariablePack<Real> pflag,
     const VariablePack<Real> rinvflag, const Real U_entry[8])
 {
-    const Real rho_init = P_init(m_p.RHO, k, j, i);
+    const Real rho_init = P_new(m_p.RHO, k, j, i);
 
     Real B_P[NVEC] = {0.};
     if (m_p.B1 >= 0) {
-        B_P[V1] = P_init(m_p.B1, k, j, i);
-        B_P[V2] = P_init(m_p.B2, k, j, i);
-        B_P[V3] = P_init(m_p.B3, k, j, i);
+        B_P[V1] = P_new(m_p.B1, k, j, i);
+        B_P[V2] = P_new(m_p.B2, k, j, i);
+        B_P[V3] = P_new(m_p.B3, k, j, i);
     }
-    Real P_mhd_guess[4] = {P_init(m_p.UU, k, j, i), P_init(m_p.U1, k, j, i),
-        P_init(m_p.U2, k, j, i), P_init(m_p.U3, k, j, i)};
+    Real P_mhd_guess[4] = {P_new(m_p.UU, k, j, i), P_new(m_p.U1, k, j, i),
+        P_new(m_p.U2, k, j, i), P_new(m_p.U3, k, j, i)};
 
-    Real U_rad_0[4] = {U_init(m_u.UU_RAD, k, j, i), U_init(m_u.U1_RAD, k, j, i),
-        U_init(m_u.U2_RAD, k, j, i), U_init(m_u.U3_RAD, k, j, i)};
+    Real U_rad_0[4] = {U_new(m_u.UU_RAD, k, j, i), U_new(m_u.U1_RAD, k, j, i),
+        U_new(m_u.U2_RAD, k, j, i), U_new(m_u.U3_RAD, k, j, i)};
 
     Real resid[4];
 
-    Real U_mhd_0[4] = {U_init(m_u.UU, k, j, i), U_init(m_u.U1, k, j, i),
-        U_init(m_u.U2, k, j, i), U_init(m_u.U3, k, j, i)};
+    Real U_mhd_0[4] = {U_new(m_u.UU, k, j, i), U_new(m_u.U1, k, j, i),
+        U_new(m_u.U2, k, j, i), U_new(m_u.U3, k, j, i)};
 
     Real U_mhd_guess[4];
     Real U_rad_guess[4];
@@ -1303,6 +1303,7 @@ KOKKOS_INLINE_FUNCTION int solve_4d_prad(const GRCoordinates& G,
 
             // Evaluate minus perturbation
             RadM1::calc_tensor(G, P_rad_m, 0, j, i, U_rad_m);
+            for (int n = 0; n < 4; n++) U_rad_m[n] *= gdet;
 
             // set U_mhd from U_rad
             for (int n = 0; n < 4; n++) {
@@ -1339,6 +1340,7 @@ KOKKOS_INLINE_FUNCTION int solve_4d_prad(const GRCoordinates& G,
 
             // Evaluate plus perturbation
             RadM1::calc_tensor(G, P_rad_p, 0, j, i, U_rad_p);
+            for (int n = 0; n < 4; n++) U_rad_p[n] *= gdet;
             // set U_mhd from U_rad
             for (int n = 0; n < 4; n++) {
                 U_mhd_p[n] = U_mhd_0[n] - (U_rad_p[n] - U_rad_0[n]);
@@ -1397,6 +1399,7 @@ KOKKOS_INLINE_FUNCTION int solve_4d_prad(const GRCoordinates& G,
                     src_rootfind_eps * m::abs(P_rad_p[m]));
 
                 RadM1::calc_tensor(G, P_rad_p, 0, j, i, U_rad_p);
+                for (int n = 0; n < 4; n++) U_rad_p[n] *= gdet;
 
                 for (int n = 0; n < 4; n++) {
                     U_mhd_p[n] = U_mhd_0[n] - (U_rad_p[n] - U_rad_0[n]);
@@ -1445,6 +1448,7 @@ KOKKOS_INLINE_FUNCTION int solve_4d_prad(const GRCoordinates& G,
                     src_rootfind_eps * m::abs(P_rad_m[m]));
 
                 RadM1::calc_tensor(G, P_rad_m, 0, j, i, U_rad_m);
+                for (int n = 0; n < 4; n++) U_rad_m[n] *= gdet;
 
                 for (int n = 0; n < 4; n++) {
                     U_mhd_m[n] = U_mhd_0[n] - (U_rad_m[n] - U_rad_0[n]);
@@ -1500,6 +1504,7 @@ KOKKOS_INLINE_FUNCTION int solve_4d_prad(const GRCoordinates& G,
         }
 
         RadM1::calc_tensor(G, P_rad_guess, 0, j, i, U_rad_guess);
+        for (int n = 0; n < 4; n++) U_rad_guess[n] *= gdet;
 
         for (int n = 0; n < 4; n++) {
             U_mhd_guess[n] = U_mhd_0[n] - (U_rad_guess[n] - U_rad_0[n]);
@@ -1569,6 +1574,7 @@ KOKKOS_INLINE_FUNCTION int solve_4d_prad(const GRCoordinates& G,
             }
 
             RadM1::calc_tensor(G, P_rad_guess, 0, j, i, U_rad_guess);
+            for (int n = 0; n < 4; n++) U_rad_guess[n] *= gdet;
 
             for (int n = 0; n < 4; n++) {
                 U_mhd_guess[n] = U_mhd_0[n] - (U_rad_guess[n] - U_rad_0[n]);

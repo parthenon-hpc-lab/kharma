@@ -177,6 +177,7 @@ std::shared_ptr<KHARMAPackage> RadM1::Initialize(
     if (pin->GetOrAddBoolean("floors", "on", floors_on_default))
         pkg->BlockApplyFloors = RadM1::ApplyRadM1Floors;
 
+    pkg->BlockUtoP = RadM1::BlockUtoP;
     pkg->PostStepDiagnosticsMesh = RadM1::PostStepDiagnostics;
 
     return pkg;
@@ -185,12 +186,19 @@ std::shared_ptr<KHARMAPackage> RadM1::Initialize(
 void RadM1::ApplyRadM1Floors(MeshBlockData<Real>* rc, IndexDomain domain)
 {
     auto pmb = rc->GetBlockPointer();
+    const auto& G = pmb->coords;
     auto& params = pmb->packages.Get("RadM1")->AllParams();
 
     const Real erad_floor = params.Get<Real>("u_rad_floor");
     PackIndexMap prims_map;
     auto P = rc->PackVariables({Metadata::GetUserFlag("Primitive")}, prims_map);
     const VarMap m_p(prims_map, false);
+
+    PackIndexMap cons_map;
+    auto U = rc->PackVariables(
+        std::vector<std::string>{"cons.u_rad", "cons.uvec_rad"}, cons_map);
+    const VarMap m_u(cons_map, true);
+
 
     // We need to check if we actually have B fields enabled to avoid segfaults
     const bool has_b_field = pmb->packages.AllPackages().count("B_FluxCT") ||
@@ -214,6 +222,19 @@ void RadM1::ApplyRadM1Floors(MeshBlockData<Real>* rc, IndexDomain domain)
                 P(m_p.U1_RAD, k, j, i) = 0.0;
                 P(m_p.U2_RAD, k, j, i) = 0.0;
                 P(m_p.U3_RAD, k, j, i) = 0.0;
+
+                Real Prad[4] = {P(m_p.UU_RAD, k, j, i), P(m_p.U1_RAD, k, j, i),
+                    P(m_p.U2_RAD, k, j, i), P(m_p.U3_RAD, k, j, i)};
+                Real Urad[4];
+                RadM1::calc_tensor(G, Prad, 0, j, i, Urad);
+
+                const Real gdet = G.gdet(Loci::center, j, i);
+                U(m_u.UU_RAD, k, j, i) = Urad[0] * gdet;
+                U(m_u.U1_RAD, k, j, i) = Urad[1] * gdet;
+                U(m_u.U2_RAD, k, j, i) = Urad[2] * gdet;
+                U(m_u.U3_RAD, k, j, i) = Urad[3] * gdet;
+
+                RadM1::calc_tensor
             }
         });
 }
@@ -273,6 +294,46 @@ TaskStatus RadM1::BlockPtoU(MeshBlockData<Real>* rc, IndexDomain domain, bool co
         });
     return TaskStatus::complete;
 }
+
+
+TaskStatus RadM1::BlockUtoP(MeshBlockData<Real>* rc, IndexDomain domain, bool coarse)
+{
+    auto pmb = rc->GetBlockPointer();
+    const auto& G = pmb->coords;
+
+    // Pack Conserved Variables (Source)
+    PackIndexMap cons_map;
+    auto& U = rc->PackVariables(
+        std::vector<std::string>{"cons.u_rad", "cons.uvec_rad"}, cons_map);
+    VarMap m_u(cons_map, true);
+
+    // Pack Primitive Variables (Destination)
+    PackIndexMap prim_map;
+    auto P = rc->PackVariables(
+        std::vector<MetadataFlag>{Metadata::GetUserFlag("Primitive")}, prim_map);
+    const VarMap m_p(prim_map, false);
+
+    // Get Loop Bounds
+    IndexRange3 b = KDomain::GetRange(rc, domain, coarse);
+
+    // Parallel Loop
+    pmb->par_for("RadM1_UtoP", b.ks, b.ke, b.js, b.je, b.is, b.ie,
+        KOKKOS_LAMBDA (const int &k, const int &j, const int &i)
+        {
+            Real Prad[4];
+            Real Urad[4] = {U(m_u.UU_RAD, k, j, i), U(m_u.U1_RAD, k, j, i), U(m_u.U2_RAD, k, j, i),
+                U(m_u.U3_RAD, k, j, i)};
+            RadM1::u_to_p_rad(G, Urad, Prad, k, j, i);
+
+            P(m_p.UU_RAD, k, j, i) = Prad[0];
+            P(m_p.U1_RAD, k, j, i) = Prad[1];
+            P(m_p.U2_RAD, k, j, i) = Prad[2];
+            P(m_p.U3_RAD, k, j, i) = Prad[3];
+        });
+    return TaskStatus::complete;
+
+}
+            
 
 TaskStatus RadM1::Step(
     MeshData<Real>* md_sub_init, MeshData<Real>* md_sub_final, const Real dt)
@@ -344,7 +405,7 @@ TaskStatus RadM1::Step(
                     dt, eos, src_rootfind_eps, src_rootfind_tol, src_rootfind_maxiter,
                     rad_opac, pflag, rinvflag, U_entry);
 
-                update_ktot_from_gas(G, P_new, U_new, m_p, m_u, eos, k, j, i);
+                // update_ktot_from_gas(G, P_new, U_new, m_p, m_u, eos, k, j, i);
 
                 if (rflagl == static_cast<int>(StatusImplicitStep::success)) {
                     rimplflag(0, k, j, i) = rflagl;
@@ -355,7 +416,7 @@ TaskStatus RadM1::Step(
                     dt, eos, src_rootfind_eps, src_rootfind_tol, src_rootfind_maxiter,
                     rad_opac, pflag, rinvflag, U_entry);
 
-                update_ktot_from_gas(G, P_new, U_new, m_p, m_u, eos, k, j, i);
+                // update_ktot_from_gas(G, P_new, U_new, m_p, m_u, eos, k, j, i);
 
                 if (rflagl == static_cast<int>(StatusImplicitStep::success)) {
                     rimplflag(0, k, j, i) =
@@ -367,7 +428,7 @@ TaskStatus RadM1::Step(
                     P_new, eos, rad_opac, k, j, i, dt, src_rootfind_tol,
                     src_rootfind_maxiter, pflag, rinvflag, U_entry);
 
-                update_ktot_from_gas(G, P_new, U_new, m_p, m_u, eos, k, j, i);
+                // update_ktot_from_gas(G, P_new, U_new, m_p, m_u, eos, k, j, i);
                 if (status_1d == StatusImplicitStep::success) {
                     rimplflag(0, k, j, i) =
                         static_cast<int>(StatusImplicitStep::onedfallback_success);
