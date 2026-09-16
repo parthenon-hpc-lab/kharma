@@ -405,7 +405,9 @@ TaskStatus RadM1::Step(
                     dt, eos, src_rootfind_eps, src_rootfind_tol, src_rootfind_maxiter,
                     rad_opac, pflag, rinvflag, U_entry);
 
-                // If the solver converged, but the final U_to_p for the fluid failed, we should not be dealing with this, just accept this as it worked and send straight to fixup.
+                // If the solver converged, but the final U_to_p for the fluid failed, we
+                // should not be dealing with this, just accept this as it worked and send
+                // straight to fixup.
                 if (rflagl == static_cast<int>(StatusImplicitStep::success)) {
                     rimplflag(0, k, j, i) = rflagl;
                     return;
@@ -421,9 +423,11 @@ TaskStatus RadM1::Step(
                     return;
                 }
 
-
-                // Because of how Prad needs to do multiple kaustaun and kaustaun will write to P_new, we need to reset P_new to the original values before calling the 1D fallback.
-                // We don't need to do the same for pmhd because we roll it back inside the function in case it fails (since it's only 1 u_to_p call for the plasma).
+                // Because of how Prad needs to do multiple kaustaun and kaustaun will
+                // write to P_new, we need to reset P_new to the original values before
+                // calling the 1D fallback. We don't need to do the same for pmhd because
+                // we roll it back inside the function in case it fails (since it's only 1
+                // u_to_p call for the plasma).
                 P_new(m_p.RHO, k, j, i) = P_entry[0];
                 P_new(m_p.UU, k, j, i) = P_entry[1];
                 P_new(m_p.U1, k, j, i) = P_entry[2];

@@ -1617,7 +1617,6 @@ KOKKOS_INLINE_FUNCTION int solve_4d_prad(const GRCoordinates& G,
         niter++;
     } while (err > src_rootfind_tol && niter < src_rootfind_maxiter);
 
-
     if (niter == src_rootfind_maxiter || err > src_rootfind_tol ||
         !m::isfinite(U_mhd_guess[0]) || !m::isfinite(U_mhd_guess[1]) ||
         !m::isfinite(U_mhd_guess[2]) || !m::isfinite(U_mhd_guess[3]) || bad_guess) {
