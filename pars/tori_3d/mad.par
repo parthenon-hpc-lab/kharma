@@ -30,6 +30,7 @@ tlim = 60000.0
 nlim = -1
 
 <torus>
+type = fishbone_moncrief
 rin = 20.0
 rmax = 41.0
 
