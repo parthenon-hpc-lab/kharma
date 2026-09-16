@@ -393,14 +393,19 @@ TaskStatus RadM1::Step(
                     U_new(m_u.U2, k, j, i), U_new(m_u.U3, k, j, i),
                     U_new(m_u.UU_RAD, k, j, i), U_new(m_u.U1_RAD, k, j, i),
                     U_new(m_u.U2_RAD, k, j, i), U_new(m_u.U3_RAD, k, j, i)};
+
+                const Real P_entry[9] = {P_new(m_p.RHO, k, j, i), P_new(m_p.UU, k, j, i),
+                    P_new(m_p.U1, k, j, i), P_new(m_p.U2, k, j, i),
+                    P_new(m_p.U3, k, j, i), P_new(m_p.UU_RAD, k, j, i),
+                    P_new(m_p.U1_RAD, k, j, i), P_new(m_p.U2_RAD, k, j, i),
+                    P_new(m_p.U3_RAD, k, j, i)};
                 int rflagl;
 
                 rflagl = solve_4d_pmhd(G, U_init, P_init, P_new, U_new, m_p, m_u, k, j, i,
                     dt, eos, src_rootfind_eps, src_rootfind_tol, src_rootfind_maxiter,
                     rad_opac, pflag, rinvflag, U_entry);
 
-                // update_ktot_from_gas(G, P_new, U_new, m_p, m_u, eos, k, j, i);
-
+                // If the solver converged, but the final U_to_p for the fluid failed, we should not be dealing with this, just accept this as it worked and send straight to fixup.
                 if (rflagl == static_cast<int>(StatusImplicitStep::success)) {
                     rimplflag(0, k, j, i) = rflagl;
                     return;
@@ -410,19 +415,29 @@ TaskStatus RadM1::Step(
                     dt, eos, src_rootfind_eps, src_rootfind_tol, src_rootfind_maxiter,
                     rad_opac, pflag, rinvflag, U_entry);
 
-                // update_ktot_from_gas(G, P_new, U_new, m_p, m_u, eos, k, j, i);
-
                 if (rflagl == static_cast<int>(StatusImplicitStep::success)) {
                     rimplflag(0, k, j, i) =
                         static_cast<int>(StatusImplicitStep::pradfallback_success);
                     return;
                 }
 
+
+                // Because of how Prad needs to do multiple kaustaun and kaustaun will write to P_new, we need to reset P_new to the original values before calling the 1D fallback.
+                // We don't need to do the same for pmhd because we roll it back inside the function in case it fails (since it's only 1 u_to_p call for the plasma).
+                P_new(m_p.RHO, k, j, i) = P_entry[0];
+                P_new(m_p.UU, k, j, i) = P_entry[1];
+                P_new(m_p.U1, k, j, i) = P_entry[2];
+                P_new(m_p.U2, k, j, i) = P_entry[3];
+                P_new(m_p.U3, k, j, i) = P_entry[4];
+                P_new(m_p.UU_RAD, k, j, i) = P_entry[5];
+                P_new(m_p.U1_RAD, k, j, i) = P_entry[6];
+                P_new(m_p.U2_RAD, k, j, i) = P_entry[7];
+                P_new(m_p.U3_RAD, k, j, i) = P_entry[8];
+
                 auto status_1d = solve_radiation_1d(G, U_init, P_init, m_p, m_u, U_new,
                     P_new, eos, rad_opac, k, j, i, dt, src_rootfind_tol,
                     src_rootfind_maxiter, pflag, rinvflag, U_entry);
 
-                // update_ktot_from_gas(G, P_new, U_new, m_p, m_u, eos, k, j, i);
                 if (status_1d == StatusImplicitStep::success) {
                     rimplflag(0, k, j, i) =
                         static_cast<int>(StatusImplicitStep::onedfallback_success);
