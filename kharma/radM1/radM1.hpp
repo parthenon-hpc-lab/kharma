@@ -57,13 +57,14 @@ namespace RadM1
 // This enum should grow to cover any potential flags
 enum class StatusImplicitStep {
     success = 0,
+    pradfallback_success,
+    onedfallback_success,
     mhdsolve,
+    mhdfinalsolve,
     radsolve,
     bothsolve,
     failure,
-    onedfallback_success,
-    onedfallback_failure,
-    pradfallback_success
+    onedfallback_failure
 };
 
 static const std::map<int, std::string> status_names_implicit = {
@@ -86,7 +87,9 @@ static const std::map<int, std::string> status_names_implicit = {
                                                        // the 1D fallback solver was used
                                                        // instead and it also failed
     {(int)StatusImplicitStep::pradfallback_success,
-        "RadM1 4D Solver Fell Back to P_rad iteration and succeeded"}};
+        "RadM1 4D Solver Fell Back to P_rad iteration and succeeded"},
+    {(int)StatusImplicitStep::mhdfinalsolve,
+        "PMHD solver converged but UtoP failed. Sending it to fixup."}};
 
 enum class StatusRadiationInversion {
     success = 0,

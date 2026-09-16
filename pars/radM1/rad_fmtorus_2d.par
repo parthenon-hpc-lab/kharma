@@ -72,6 +72,7 @@ u_min_geom   = 1e-8
 <fofc>
 on = false
 
+
 <radM1>
 on = true
 mu = 0.6
@@ -101,15 +102,18 @@ verbose = 1
 extra_checks = 2
 flag_verbose = 2
 
+<entropy>
+init_to_default = false
+
 <parthenon/output0>
 file_type = hdf5
-dt = 5.0
+dt = 1.0
 single_precision_output = true
 variables = prims, divB, jcon, fflag, pflag, rimplflag, rinvflag, fofcflag
 
 <parthenon/output1>
 file_type = rst
-dt = 2.0
+dt = 1.0
 
 <parthenon/output2>
 file_type = hst
