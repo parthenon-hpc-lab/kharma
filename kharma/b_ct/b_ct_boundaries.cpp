@@ -391,7 +391,7 @@ void B_CT::ReconnectBoundaryB3(MeshBlockData<Real>* rc, IndexDomain domain,
                     // Floor them
                     // TODO THIS IS IN FLUID FRAME
                     int fflag = Floors::apply_geo_floors(
-                        G, P, m_p, eos, k, jf, i, floors, floors, Loci::center);
+                        G, P, m_p, k, jf, i, floors, floors, Loci::center);
                     // Recalculate U on anything we floored
                     if (fflag)
                         GRMHD::p_to_u(G, P, m_p, eos, k, jf, i, U, m_u, Loci::center);

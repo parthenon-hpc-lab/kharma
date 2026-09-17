@@ -42,6 +42,8 @@
 #include "kharma_driver.hpp"
 #include "pack.hpp"
 
+#include <singularity-eos/eos/eos_ideal.hpp>
+
 // Floors.  Apply limits to fluid values to maintain integrable state
 
 std::shared_ptr<KHARMAPackage> Floors::Initialize(
@@ -49,9 +51,11 @@ std::shared_ptr<KHARMAPackage> Floors::Initialize(
 {
     auto pkg = std::make_shared<KHARMAPackage>("Floors");
     Params& params = pkg->AllParams();
+    const bool is_ideal = pin->GetString("eos","type") == singularity::IdealGas::EosType();
+    Real gamma1 = packages->Get("eos")->Param<Real>("gm1")+1.;
 
     // Parse all the particular floor values into a nice struct we can pass device-side
-    params.Add("prescription", MakePrescription(pin));
+    params.Add("prescription", MakePrescription(pin, "floors", gamma1, is_ideal));
 
     // Frame to apply floors: usually we use normal observer frame, but
     // the option exists to use the fluid frame exclusively 'fluid' or outside a
@@ -119,10 +123,10 @@ std::shared_ptr<KHARMAPackage> Floors::Initialize(
     // Avoids a bunch of if (radius_dependent_floors) else while determining floors.
     if (pin->DoesBlockExist("floors_inner"))
         params.Add(
-            "prescription_inner", MakePrescriptionInner(pin, MakePrescription(pin)));
+            "prescription_inner", MakePrescriptionInner(pin, MakePrescription(pin,"floors", gamma1, is_ideal), "floors_inner", is_ideal));
     else
         params.Add("prescription_inner",
-            MakePrescriptionInner(pin, MakePrescription(pin)), "floors");
+            MakePrescriptionInner(pin, MakePrescription(pin,"floors", gamma1, is_ideal),"floors", is_ideal));
 
     // All of these are now the same option: disable the *call* only.
     // This lets us assume that the floors package is loaded, which is convenient many

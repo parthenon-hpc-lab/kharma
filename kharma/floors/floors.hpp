@@ -154,11 +154,12 @@ class Prescription
 };
 
 inline Prescription MakePrescription(
-    parthenon::ParameterInput* pin, std::string block = "floors", Real gamma_floor_default = 5. / 3.)
+    parthenon::ParameterInput* pin, std::string block = "floors",Real gamma_floor_default = 5./3., bool is_ideal = true)
 {
     Prescription p;
     // Floor parameters
-    p.gamma_floor = pin->GetOrAddReal(block, "gamma_floor", gamma_floor_default);
+    //TODO(JWM): Delete
+    p.gamma_floor = gamma_floor_default;
     if (pin->GetBoolean("coordinates", "spherical")) {
         // In spherical systems, floors drop as r^2, so set them higher by default
         p.rho_min_geom = pin->GetOrAddReal(block, "rho_min_geom", 1.e-6);
@@ -211,7 +212,7 @@ inline Prescription MakePrescription(
 
     p.use_rho_to_slow = pin->GetOrAddBoolean("floors", "use_rho_to_slow", false);
 
-    p.use_u_min_entropy = pin->GetOrAddBoolean("floors", "u_min_from_entropy", false);
+    p.use_u_min_entropy = is_ideal && pin->GetOrAddBoolean("floors", "u_min_from_entropy", false);
 
     return p;
 }
@@ -223,7 +224,7 @@ inline Prescription MakePrescription(
  * domain.
  */
 inline Prescription MakePrescriptionInner(parthenon::ParameterInput* pin,
-    Prescription p_outer, std::string block = "floors_inner")
+    Prescription p_outer, std::string block = "floors_inner", bool is_ideal = true)
 {
     // TODO(CEP) I wonder if there's an easier way to "set if parameter exists" from pin,
     // that would be broadly useful
@@ -271,8 +272,7 @@ inline Prescription MakePrescriptionInner(parthenon::ParameterInput* pin,
 
     p_inner.gamma_max = pin->GetOrAddReal(block, "gamma_max", p_outer.gamma_max);
 
-    p_inner.use_u_min_entropy =
-        pin->GetOrAddBoolean("floors", "u_min_from_entropy", p_outer.use_u_min_entropy);
+    p_inner.use_u_min_entropy = is_ideal && pin->GetOrAddBoolean(block, "u_min_from_entropy", p_outer.use_u_min_entropy);
 
     // Always grab these from p_outer, they should never differ between outer/inner floors
     p_inner.radius_dependent_floors = p_outer.radius_dependent_floors;

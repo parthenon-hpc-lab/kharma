@@ -1,5 +1,6 @@
 #!/bin/bash
 set -euo pipefail
+[ -n "$ZSH_VERSION" ] && setopt SH_WORD_SPLIT
 
 # Make script for KHARMA
 # Used to set sensible default flags and call cmake/make

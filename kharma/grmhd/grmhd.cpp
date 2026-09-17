@@ -706,7 +706,7 @@ void CancelBoundaryU3(MeshBlockData<Real>* rc, IndexDomain domain, bool coarse)
 
                     // Apply floors
                     Floors::apply_geo_floors(
-                        G, P, m_p, eos, k, jf, i, floors, floors, Loci::center);
+                        G, P, m_p, k, jf, i, floors, floors, Loci::center);
 
                     // Always PtoU, we modified P.  Accommodate EMHD
                     Flux::p_to_u_mhd(G, P, m_p, emhd_params, eos, k, jf, i, U, m_u);
@@ -791,7 +791,7 @@ void CancelBoundaryT3(MeshBlockData<Real>* rc, IndexDomain domain, bool coarse)
                         G, U, m_u, eos, k, jf, i, P, m_p, Loci::center, 25, 1e-12);
                     // Floor them
                     int fflag = Floors::apply_geo_floors(
-                        G, P, m_p, eos, k, jf, i, floors, floors, Loci::center);
+                        G, P, m_p, k, jf, i, floors, floors, Loci::center);
                     // Recalculate U on anything we floored
                     if (fflag) p_to_u(G, P, m_p, eos, k, jf, i, U, m_u, Loci::center);
                 });

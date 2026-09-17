@@ -42,6 +42,7 @@
 
 
 // phoebus includes
+#include <singularity-eos/eos/eos_ideal.hpp>
 #include "microphysics/eos_kharma/eos_kharma.hpp"
 #include "phoebus_utils/unit_conversions.hpp"
 #include "phoebus_utils/variables.hpp"
@@ -240,23 +241,24 @@ std::shared_ptr<KHARMAPackage> Flux::Initialize(
         // can *also* have floors
         // TODO even post-reconstruction/reconstruction fallback?
 
+        const bool is_ideal = pin->GetString("eos","type") == singularity::IdealGas::EosType();
         Real gamma_floor = packages->Get("eos")->Param<Real>("gm1")+1.;
         if (!pin->DoesBlockExist("fofc_floors")) {
-            params.Add("fofc_prescription", Floors::MakePrescription(pin, "floors", gamma_floor));
+            params.Add("fofc_prescription", Floors::MakePrescription(pin, "floors", gamma_floor, is_ideal));
             if (pin->DoesBlockExist("floors_inner"))
                 params.Add("fofc_prescription_inner",
                     Floors::MakePrescriptionInner(
-                        pin, Floors::MakePrescription(pin, "floors", gamma_floor), "floors_inner"));
+                        pin, Floors::MakePrescription(pin, "floors", gamma_floor, is_ideal), "floors_inner", is_ideal));
             else
                 params.Add("fofc_prescription_inner",
                     Floors::MakePrescriptionInner(
-                        pin, Floors::MakePrescription(pin, "floors", gamma_floor), "floors"));
+                        pin, Floors::MakePrescription(pin, "floors", gamma_floor, is_ideal), "floors", is_ideal));
         } else {
             // Override inner and outer floors with `fofc_floors` block
-            params.Add("fofc_prescription", Floors::MakePrescription(pin, "fofc_floors", gamma_floor));
+            params.Add("fofc_prescription", Floors::MakePrescription(pin, "fofc_floors", gamma_floor, is_ideal));
             params.Add("fofc_prescription_inner",
                 Floors::MakePrescriptionInner(
-                    pin, Floors::MakePrescription(pin, "fofc_floors", gamma_floor), "fofc_floors"));
+                    pin, Floors::MakePrescription(pin, "fofc_floors", gamma_floor, is_ideal), "fofc_floors", is_ideal));
         }
 
         // Flag for whether FOFC was applied, for diagnostics

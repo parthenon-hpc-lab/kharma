@@ -273,9 +273,9 @@ inline TaskStatus GetFlux(MeshData<Real>* md)
                 // zero (as intended)
                 int fflagl = fflag(bl, 0, k, j, i);
                 fflagl |= Floors::apply_geo_floors(
-                    G, Pl_all(bl), m_p, eos, k, j, i, floors, floors_inner, loc);
+                    G, Pl_all(bl), m_p, k, j, i, floors, floors_inner, loc);
                 fflagl |= Floors::apply_geo_floors(
-                    G, Pr_all(bl), m_p, eos, k, j, i, floors, floors_inner, loc);
+                    G, Pr_all(bl), m_p, k, j, i, floors, floors_inner, loc);
                 fflag(bl, 0, k, j, i) = fflagl;
             });
     }

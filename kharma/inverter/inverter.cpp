@@ -87,23 +87,24 @@ std::shared_ptr<KHARMAPackage> Inverter::Initialize(
     // Floor options
     // Use a custom block for inverter floors to allow customization.  Not sure anyone
     // *wants* that but...
+    const bool is_ideal = pin->GetString("eos","type") == singularity::IdealGas::EosType();
     Real gamma_floor = packages->Get("eos")->Param<Real>("gm1")+1.;
     if (!pin->DoesBlockExist("inverter_floors")) {
-        params.Add("inverter_prescription", Floors::MakePrescription(pin, "floors", gamma_floor));
+        params.Add("inverter_prescription", Floors::MakePrescription(pin, "floors", gamma_floor, is_ideal));
         if (pin->DoesBlockExist("floors_inner"))
             params.Add("inverter_prescription_inner",
                 Floors::MakePrescriptionInner(
-                    pin, Floors::MakePrescription(pin, "floors", gamma_floor), "floors_inner"));
+                    pin, Floors::MakePrescription(pin, "floors", gamma_floor, is_ideal), "floors_inner", is_ideal));
         else
             params.Add("inverter_prescription_inner",
                 Floors::MakePrescriptionInner(
-                    pin, Floors::MakePrescription(pin, "floors", gamma_floor), "floors"));
+                    pin, Floors::MakePrescription(pin, "floors", gamma_floor, is_ideal), "floors", is_ideal));
     } else {
         params.Add(
-            "inverter_prescription", Floors::MakePrescription(pin, "inverter_floors", gamma_floor));
+            "inverter_prescription", Floors::MakePrescription(pin, "inverter_floors", gamma_floor, is_ideal));
         params.Add("inverter_prescription_inner",
             Floors::MakePrescriptionInner(pin,
-                Floors::MakePrescription(pin, "inverter_floors", gamma_floor), "inverter_floors"));
+                Floors::MakePrescription(pin, "inverter_floors", gamma_floor, is_ideal), "inverter_floors", is_ideal));
     }
 
     // Fixup options

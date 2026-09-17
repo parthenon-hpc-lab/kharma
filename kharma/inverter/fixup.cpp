@@ -74,6 +74,9 @@ TaskStatus Inverter::FixUtoP(MeshBlockData<Real>* rc)
 
     const auto& pars = pmb->packages.Get("GRMHD")->AllParams();
 
+    const auto& eos_params = pmb->packages.Get("eos")->AllParams();
+    auto eos = eos_params.Get<Microphysics::EOS::EOS>("d.EOS");
+
     // Only yell about neighbors on extreme verbosity.
     const int flag_verbose = pmb->packages.Get("Globals")->Param<int>("flag_verbose");
 
@@ -161,7 +164,7 @@ TaskStatus Inverter::FixUtoP(MeshBlockData<Real>* rc)
                 // TODO Full floors instead of just geo?
                 int fflagl = fflag(0, k, j, i);
                 fflagl |= Floors::apply_geo_floors(
-                    G, P, m_p, eos, k, j, i, floors, floors_inner);
+                    G, P, m_p, k, j, i, floors, floors_inner);
                 fflag(0, k, j, i) = fflagl;
 
                 // Make sure to keep lockstep
@@ -185,6 +188,8 @@ TaskStatus Inverter::Backstop(MeshBlockData<Real>* rc)
     const bool backstop_recover_u = pars.Get<bool>("backstop_recover_u");
     const int iter_max = pars.Get<int>("backstop_iter_max");
 
+    const auto& eos_params = pmb->packages.Get("eos")->AllParams();
+    auto eos = eos_params.Get<Microphysics::EOS::EOS>("d.EOS");
     const Real gamma1 = pmb->packages.Get("eos")->Param<Real>("gm1")+1.0;
 
     // Use values from floors package if it's enabled, otherwise any we've been asked to

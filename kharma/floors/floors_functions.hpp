@@ -97,7 +97,7 @@ KOKKOS_INLINE_FUNCTION void apply_ceilings(const GRCoordinates& G,
         P(m_p.UU, k, j, i) = myfloors.u_over_rho_max * P(m_p.RHO, k, j, i);
     }
 }
-
+//TODO(JWM): I don't think that we need the eos object anymore.  gamma1 is now in Floors::Prescription via gamma_floor.
 KOKKOS_INLINE_FUNCTION int determine_floors(const GRCoordinates& G,
     const VariablePack<Real>& P, const VarMap& m_p, const Microphysics::EOS::EOS& eos, const int& k,
     const int& j, const int& i, const Floors::Prescription& floors,
@@ -143,7 +143,7 @@ KOKKOS_INLINE_FUNCTION int determine_floors(const GRCoordinates& G,
     // Entropy floor on U, experimental
     if (m_p.KTOT >= 0 && myfloors.use_u_min_entropy)
         uflr_max = m::max(uflr_max,
-            P(m_p.KTOT, k, j, i) * m::pow(P(m_p.RHO, k, j, i), gam) / (gam - 1.));
+            P(m_p.KTOT, k, j, i) * m::pow(P(m_p.RHO, k, j, i), myfloors.gamma_floor) / (myfloors.gamma_floor - 1.));
 
     const auto& rho = P(m_p.RHO, k, j, i);
     const auto& u = P(m_p.UU, k, j, i);
