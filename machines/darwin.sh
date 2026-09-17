@@ -3,6 +3,18 @@
 # Must list which node you're compiling for,
 # from the options below
 
+# SUGGESTED FIX (untested by us -- we don't use this machine, so leaving as a
+# comment rather than changing behavior for actual Darwin users):
+# $HOSTNAME is unset by default in bash/zsh (unlike csh/tcsh), so under
+# `set -u` (which make.sh uses, and which zsh also enforces via the
+# `setopt SH_WORD_SPLIT` compatibility shim), this line throws
+# "HOSTNAME: parameter not set" for EVERYONE running make.sh, including
+# machines that aren't Darwin at all -- every machines/*.sh gets sourced
+# unconditionally, so this one still executes and fails even when it doesn't
+# apply. Suggested change:
+#   if [[ (${HOSTNAME:-} == "cn"* || ${HOSTNAME:-} == "darwin"*) &&
+# (same effect when $HOSTNAME is set; falls through safely to "no match"
+# rather than aborting the whole script when it isn't.)
 if [[ ($HOSTNAME == "cn"* || $HOSTNAME == "darwin"*) &&
       ("$PWD" == "/projects/jacamar-ci"* || "$PWD" == "/vast"*) ]]; then
   #module purge
