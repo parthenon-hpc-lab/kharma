@@ -73,7 +73,7 @@ class GRCoordinates : public parthenon::UniformCartesian
     CoordinateEmbedding coords;
 
     // Store the block size, since UniformCartesian doesn't
-    int n1, n2, n3;
+    int n1, n2, n3, ng;
 
     // Points to average (one side of a square, odd) when calculating the connections,
     // and metric determinants on faces
@@ -131,6 +131,7 @@ class GRCoordinates : public parthenon::UniformCartesian
         n1 = src.n1;
         n2 = src.n2;
         n3 = src.n3;
+        ng = src.ng;
         connection_average_points = src.connection_average_points;
         correct_connections = src.correct_connections;
 #if !FAST_CARTESIAN && !NO_CACHE

@@ -7,6 +7,7 @@ cmake_minimum_required(VERSION 3.10)
 project(kharma LANGUAGES C CXX)
 
 option(KHARMA_BUILD_TESTS "Build unit tests" OFF)
+option(KHARMA_BUILD_IRIS "Build iris *instead* of KHARMA" OFF)
 
 # We follow Parthenon in requiring C++17 going forward
 set(CMAKE_CXX_STANDARD 20)
@@ -96,7 +97,11 @@ set(SINGULARITY_USE_HDF5 ON CACHE BOOL "" FORCE)
 add_subdirectory(external/singularity-opac)
 
 # Build KHARMA
-add_subdirectory(kharma)
+if (KHARMA_BUILD_IRIS)
+  add_subdirectory(iris)  
+else()
+  add_subdirectory(kharma)
+endif()
 
 # Install scripts and stuff
 # run.sh as 'kharma' w/o suffix (for now?)
@@ -108,3 +113,4 @@ if (KHARMA_BUILD_TESTS)
    enable_testing()
    add_subdirectory(tests/unit)
 endif()
+

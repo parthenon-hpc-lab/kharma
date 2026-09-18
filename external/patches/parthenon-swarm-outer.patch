@@ -1,0 +1,16 @@
+diff --git a/src/interface/swarm_device_context.hpp b/src/interface/swarm_device_context.hpp
+index e438dcf53..894e54daa 100644
+--- a/src/interface/swarm_device_context.hpp
++++ b/src/interface/swarm_device_context.hpp
+@@ -62,6 +62,11 @@ class SwarmDeviceContext {
+     int j = static_cast<int>(std::floor((y - y_min_) / ((y_max_ - y_min_) / 2.))) + 1;
+     int k = static_cast<int>(std::floor((z - z_min_) / ((z_max_ - z_min_) / 2.))) + 1;
+ 
++    // Allow particles/rays past the outer boundary.
++    // If this is the last block, the "domain" stretches forever
++    if (x_max_ == x_max_global_ && i > 1)
++      i = 1;
++
+     // Particle is on neither this block nor a neighboring block
+     if (i < 0 || i > 3 || ((j < 0 || j > 3) && ndim_ > 1) ||
+         ((k < 0 || k > 3) && ndim_ > 2)) {

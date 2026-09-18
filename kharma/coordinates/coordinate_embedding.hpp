@@ -305,6 +305,21 @@ class CoordinateEmbedding
             return 0.0;
         }
     }
+    KOKKOS_INLINE_FUNCTION GReal get_isco() const
+    {
+        if (PortsOfCall::holds_alternative<SphKSCoords>(base) ||
+            PortsOfCall::holds_alternative<SphBLCoords>(base) ||
+            PortsOfCall::holds_alternative<SphKSExtG>(base) ||
+            PortsOfCall::holds_alternative<SphBLExtG>(base)) {
+            const GReal a = get_a();
+            const GReal z1 = 1. + m::pow(1. - a * a, 1. / 3.) *
+                                      (m::pow(1. + a, 1. / 3.) + m::pow(1. - a, 1. / 3.));
+            const GReal z2 = m::sqrt(3. * a * a + z1 * z1);
+            return 3. + z2 - copysign(m::sqrt((3. - z1) * (3. + z1 + 2. * z2)), a);
+        } else {
+            return 0.0;
+        }
+    }
     KOKKOS_INLINE_FUNCTION GReal get_a() const
     {
         return PortsOfCall::visit(
@@ -314,7 +329,7 @@ class CoordinateEmbedding
             },
             base);
     }
-    GReal startx(int dir) const
+    KOKKOS_INLINE_FUNCTION GReal startx(int dir) const
     {
         return PortsOfCall::visit(
             [&](const auto& self)
@@ -323,7 +338,7 @@ class CoordinateEmbedding
             },
             transform);
     }
-    GReal stopx(int dir) const
+    KOKKOS_INLINE_FUNCTION GReal stopx(int dir) const
     {
         return PortsOfCall::visit(
             [&](const auto& self)
@@ -698,9 +713,30 @@ class CoordinateEmbedding
         }
     }
 
+    KOKKOS_INLINE_FUNCTION void bl_vec_to_native(const Real Xnative[GR_DIM],
+        const Real bl_fourv[GR_DIM], Real ucon_native[GR_DIM]) const
+    {
+        GReal Xembed[GR_DIM];
+        coord_to_embed(Xnative, Xembed);
+
+        // Then transform a BL 4-vector to KS (or not, if we're using BL base coords)
+        Real vcon_base[GR_DIM];
+        if (PortsOfCall::holds_alternative<SphKSCoords>(base)) {
+            PortsOfCall::get<SphKSCoords>(base).vec_from_bl(Xembed, bl_fourv, vcon_base);
+        } else if (PortsOfCall::holds_alternative<SphKSExtG>(base)) {
+            PortsOfCall::get<SphKSExtG>(base).vec_from_bl(Xembed, bl_fourv, vcon_base);
+        } else if (PortsOfCall::holds_alternative<SphBLCoords>(base) ||
+                   PortsOfCall::holds_alternative<SphBLExtG>(base)) {
+            DLOOP1
+                vcon_base[mu] = bl_fourv[mu];
+        }
+        // Finally, apply any transform to native coordinates
+        con_vec_to_native(Xnative, vcon_base, ucon_native);
+    }
     /**
-     * Takes a velocity in Boyer-Lindquist coordinates (optionally without time component)
-     * and converts it to KS, and then to native coordinates. Not guaranteed to be fast.
+     * Takes a *velocity* in Boyer-Lindquist coordinates (re/calculates the time
+     * component) and converts it to KS, and then to native coordinates. Not particularly
+     * efficient -- branches a lot, transforms vectors repeatedly, etc.
      */
     KOKKOS_INLINE_FUNCTION void bl_fourvel_to_native(const Real Xnative[GR_DIM],
         const Real ucon_bl[GR_DIM], Real ucon_native[GR_DIM]) const
