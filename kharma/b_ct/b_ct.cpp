@@ -81,7 +81,7 @@ std::shared_ptr<KHARMAPackage> B_CT::Initialize(
     // TODO don't set this unless we're reconnecting at boundaries (can't just check, we
     // load Boundaries pkg later)
     int reconnection_outer_buffer =
-        pin->GetOrAddBoolean("b_field", "reconnection_outer_buffer", 5);
+        pin->GetOrAddInteger("b_field", "reconnection_outer_buffer", 5);
     params.Add("reconnection_outer_buffer", reconnection_outer_buffer);
 
     // FIELDS
@@ -260,8 +260,8 @@ TaskStatus B_CT::DangerousPtoU(MeshData<Real>* md, IndexDomain domain, bool coar
 
     auto pmb0 = md->GetBlockData(0)->GetBlockPointer();
     // Average the primitive vals to faces and multiply by gdet
-    const IndexRange3 bf1 = (domain == IndexDomain::interior)
-                                ? KDomain::GetRange(md, domain, F1, 1, 0, coarse)
+    const IndexRange3 bf1 = (domain == IndexDomain::entire)
+                                ? KDomain::GetRange(md, domain, F1, 1, -1, coarse)
                                 : KDomain::GetRange(md, domain, F1, coarse);
     pmb0->par_for("PtoU_B_F1", block.s, block.e, bf1.ks, bf1.ke, bf1.js, bf1.je, bf1.is,
         bf1.ie,
@@ -271,8 +271,8 @@ TaskStatus B_CT::DangerousPtoU(MeshData<Real>* md, IndexDomain domain, bool coar
             B_Uf(b, F1, 0, k, j, i) = G.gdet(Loci::face1, j, i) *
                                       (B_P(b, V1, k, j, i - 1) + B_P(b, V1, k, j, i)) / 2;
         });
-    const IndexRange3 bf2 = (domain == IndexDomain::interior)
-                                ? KDomain::GetRange(md, domain, F2, 1, 0, coarse)
+    const IndexRange3 bf2 = (domain == IndexDomain::entire)
+                                ? KDomain::GetRange(md, domain, F2, 1, -1, coarse)
                                 : KDomain::GetRange(md, domain, F2, coarse);
     pmb0->par_for("PtoU_B_F2", block.s, block.e, bf2.ks, bf2.ke, bf2.js, bf2.je, bf2.is,
         bf2.ie,
@@ -284,8 +284,8 @@ TaskStatus B_CT::DangerousPtoU(MeshData<Real>* md, IndexDomain domain, bool coar
                                  : B_P(b, V2, k, j, i);
             B_Uf(b, F2, 0, k, j, i) = G.gdet(Loci::face2, j, i) * avg;
         });
-    const IndexRange3 bf3 = (domain == IndexDomain::interior)
-                                ? KDomain::GetRange(md, domain, F3, 1, 0, coarse)
+    const IndexRange3 bf3 = (domain == IndexDomain::entire)
+                                ? KDomain::GetRange(md, domain, F3, 1, -1, coarse)
                                 : KDomain::GetRange(md, domain, F3, coarse);
     pmb0->par_for("PtoU_B_F3", block.s, block.e, bf3.ks, bf3.ke, bf3.js, bf3.je, bf3.is,
         bf3.ie,
@@ -327,6 +327,97 @@ TaskStatus B_CT::DangerousPtoU(MeshData<Real>* md, IndexDomain domain, bool coar
     // Also recover conserved B at centers, just in case
     // TODO would calling UtoP be more stable?
     const IndexRange3 bc = KDomain::GetRange(md, domain, CC, coarse);
+    pmb0->par_for("UtoP_B_centerPtoU", block.s, block.e, 0, NVEC - 1, bc.ks, bc.ke, bc.js,
+        bc.je, bc.is, bc.ie,
+                  KOKKOS_LAMBDA(const int& b, const int& v, const int& k, const int& j,
+                                const int& i)
+        {
+            const auto& G = B_U.GetCoords(b);
+            B_U(b, v, k, j, i) = B_P(b, v, k, j, i) * G.gdet(Loci::center, j, i);
+        });
+
+    return TaskStatus::complete;
+}
+
+TaskStatus B_CT::BlockDangerousPtoU(
+    MeshBlockData<Real>* rc, IndexDomain domain, bool coarse)
+{
+    auto B_Uf = rc->PackVariables(std::vector<std::string>{"cons.fB"});
+    auto B_U = rc->PackVariables(std::vector<std::string>{"cons.B"});
+    auto B_P = rc->PackVariables(std::vector<std::string>{"prims.B"});
+
+    // Figure out indices
+    const auto ndim = rc->GetMeshPointer()->ndim;
+    const IndexRange block = IndexRange{0, B_Uf.GetDim(5) - 1};
+
+    auto pmb0 = rc->GetBlockPointer();
+    // Average the primitive vals to faces and multiply by gdet
+    const IndexRange3 bf1 = (domain == IndexDomain::entire)
+                                ? KDomain::GetRange(rc, domain, F1, 1, -1, coarse)
+                                : KDomain::GetRange(rc, domain, F1, coarse);
+    pmb0->par_for("PtoU_B_F1", block.s, block.e, bf1.ks, bf1.ke, bf1.js, bf1.je, bf1.is,
+        bf1.ie,
+        KOKKOS_LAMBDA(const int& b, const int& k, const int& j, const int& i)
+        {
+            const auto& G = B_Uf.GetCoords(b);
+            B_Uf(b, F1, 0, k, j, i) = G.gdet(Loci::face1, j, i) *
+                                      (B_P(b, V1, k, j, i - 1) + B_P(b, V1, k, j, i)) / 2;
+        });
+    const IndexRange3 bf2 = (domain == IndexDomain::entire)
+                                ? KDomain::GetRange(rc, domain, F2, 1, -1, coarse)
+                                : KDomain::GetRange(rc, domain, F2, coarse);
+    pmb0->par_for("PtoU_B_F2", block.s, block.e, bf2.ks, bf2.ke, bf2.js, bf2.je, bf2.is,
+        bf2.ie,
+        KOKKOS_LAMBDA(const int& b, const int& k, const int& j, const int& i)
+        {
+            const auto& G = B_Uf.GetCoords(b);
+            const Real avg = (ndim > 1)
+                                 ? (B_P(b, V2, k, j - 1, i) + B_P(b, V2, k, j, i)) / 2
+                                 : B_P(b, V2, k, j, i);
+            B_Uf(b, F2, 0, k, j, i) = G.gdet(Loci::face2, j, i) * avg;
+        });
+    const IndexRange3 bf3 = (domain == IndexDomain::entire)
+                                ? KDomain::GetRange(rc, domain, F3, 1, -1, coarse)
+                                : KDomain::GetRange(rc, domain, F3, coarse);
+    pmb0->par_for("PtoU_B_F3", block.s, block.e, bf3.ks, bf3.ke, bf3.js, bf3.je, bf3.is,
+        bf3.ie,
+        KOKKOS_LAMBDA(const int& b, const int& k, const int& j, const int& i)
+        {
+            const auto& G = B_Uf.GetCoords(b);
+            const Real avg = (ndim > 2)
+                                 ? (B_P(b, V3, k - 1, j, i) + B_P(b, V3, k, j, i)) / 2
+                                 : B_P(b, V3, k, j, i);
+            B_Uf(b, F3, 0, k, j, i) = G.gdet(Loci::face3, j, i) * avg;
+        });
+
+    // Make sure B on poles is still zero, even though we've interpolated
+    if (pmb0->coords.coords.is_spherical()) {
+        // for (int i = 0; i < rc->GetMeshPointer()->GetNumMeshBlocksThisRank(); i++) {
+        // auto rc = rc->GetBlockData(i);
+        auto pmb = rc->GetBlockPointer();
+        const IndexRange3 be = KDomain::GetRange(rc, IndexDomain::entire, coarse);
+        const IndexRange3 bi2 = KDomain::GetRange(rc, IndexDomain::interior, F2, coarse);
+        auto B_Uf_block = rc->PackVariables(std::vector<std::string>{"cons.fB"});
+        if (KBoundaries::IsPhysicalBoundary(pmb, BoundaryFace::inner_x2)) {
+            pmb->par_for("B_Uf_boundary", be.ks, be.ke, be.is, be.ie,
+                            KOKKOS_LAMBDA(const int& k, const int& i)
+                {
+                    B_Uf_block(F2, 0, k, bi2.js, i) = 0.;
+                });
+        }
+        if (KBoundaries::IsPhysicalBoundary(pmb, BoundaryFace::outer_x2)) {
+            pmb->par_for("B_Uf_boundary", be.ks, be.ke, be.is, be.ie,
+                            KOKKOS_LAMBDA(const int& k, const int& i)
+                {
+                    B_Uf_block(F2, 0, k, bi2.je, i) = 0.;
+                });
+        }
+        //}
+    }
+
+    // Also recover conserved B at centers, just in case
+    // TODO would calling UtoP be more stable?
+    const IndexRange3 bc = KDomain::GetRange(rc, domain, CC, coarse);
     pmb0->par_for("UtoP_B_centerPtoU", block.s, block.e, 0, NVEC - 1, bc.ks, bc.ke, bc.js,
         bc.je, bc.is, bc.ie,
                   KOKKOS_LAMBDA(const int& b, const int& v, const int& k, const int& j,
