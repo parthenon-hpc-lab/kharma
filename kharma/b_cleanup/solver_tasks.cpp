@@ -37,6 +37,7 @@
 #include <solvers/solver_base.hpp>
 #include <solvers/solver_utils.hpp>
 
+#include "b_cleanup.hpp"
 #include "kharma.hpp"
 #include "poisson_equation.hpp"
 
@@ -46,60 +47,39 @@
 
 #else
 
-TaskCollection B_Cleanup::MakeSolverTaskCollection(Mesh* pmesh)
+TaskCollection B_Cleanup::MakeTaskCollection(Mesh* pmesh)
 {
     using namespace parthenon;
     TaskCollection tc;
-    TaskID t_none(0);
+    TaskID none(0);
 
     auto pkg = pmesh->packages.Get("B_Cleanup");
-    // auto solver_name = pkg->Param<std::string>("solver");
     auto psolver =
         pkg->Param<std::shared_ptr<parthenon::solvers::SolverBase>>("solver_pointer");
-    auto poisson_eq = pkg->Param<PoissonEquation<p>>("poisson_eq");
-
-    // List out solver-related vars for faster MPI by skipping base variables
-    // using FC = Metadata::FlagCollection;
-    // static std::vector<std::string> solver_vars;
-    // if (solver_vars.size() == 0) {
-    //     // Build the universe of variables to let Parthenon see when exchanging
-    //     boundaries.
-    //     // This is built to exclude incidental variables like B field initialization
-    //     stuff, EMFs, etc.
-    //     // "Boundaries" packs in buffers e.g. Dirichlet boundaries
-    //     auto solver_flags = FC({Metadata::GetUserFlag("B_Cleanup")});
-    //     solver_vars = KHARMA::GetVariableNames(&(pmesh->packages), solver_flags);
-    // }
 
     auto partitions = pmesh->GetDefaultBlockPartitions();
     const int num_partitions = partitions.size();
     TaskRegion& region = tc.AddRegion(num_partitions);
-
-    for (int i = 0; i < num_partitions; i++) {
-        auto& tl = region[i];
+    for (int i = 0; i < num_partitions; ++i) {
+        TaskList& tl = region[i];
         auto& md = pmesh->mesh_data.Add("base", partitions[i]);
-        auto& md_p = pmesh->mesh_data.Add("p", md, {p::name()});
-        auto& md_rhs = pmesh->mesh_data.Add("rhs", md, {p::name()});
+        auto& md_u = pmesh->mesh_data.Add("u", md, {u::name()});
+        auto& md_rhs = pmesh->mesh_data.Add("rhs", md, {u::name()});
 
-        // Copy RHS to p, then to "rhs" stage
-        // TF() is a macro for outputting function name string + function as args
-        auto t_copy_rhs =
-            tl.AddTask(t_none, TF(solvers::utils::between_fields::CopyData<rhs, p>), md);
-        t_copy_rhs = tl.AddTask(
-            t_copy_rhs, TF(solvers::utils::CopyData<parthenon::TypeList<p>>), md, md_rhs);
+        // Move the rhs variable into the rhs stage for stage based solver
+        auto copy_rhs =
+            tl.AddTask(none, TF(solvers::utils::between_fields::CopyData<rhs, u>), md);
+        copy_rhs = tl.AddTask(
+            copy_rhs, TF(solvers::utils::CopyData<parthenon::TypeList<u>>), md, md_rhs);
 
-        // Zero out p
-        auto t_zero_p = tl.AddTask(t_copy_rhs, TF(solvers::utils::SetToZero<p>), md);
-        t_zero_p = tl.AddTask(t_zero_p, TF(solvers::utils::SetToZero<p>), md_p);
+        // Set initial solution guess to zero
+        auto zero_u = tl.AddTask(copy_rhs, TF(solvers::utils::SetToZero<u>), md_u);
+        auto setup = psolver->AddSetupTasks(tl, zero_u, i, pmesh);
+        auto solve = psolver->AddTasks(tl, setup, i, pmesh);
 
-        auto t_setup = psolver->AddSetupTasks(tl, t_zero_p, i, pmesh); // t_zero_p
-        auto t_solve = psolver->AddTasks(tl, t_setup, i, pmesh);
-
-        // (Re-)Calculate and apply the fluxes directly, as they're our divB
-        // `Ax` is exactly what the solver calls, i.e. applies boundaries etc.
-        auto t_solve_end = poisson_eq.Ax(tl, t_solve, md, md_p, md);
-
-        auto t_apply_dB = tl.AddTask(t_solve_end, TF(ApplyPFace), md_p.get(), md.get());
+        // Move the solution back so it is output
+        auto copy_back =
+            tl.AddTask(solve, TF(B_Cleanup::ApplySolution), md_u.get(), md.get());
     }
 
     return tc;

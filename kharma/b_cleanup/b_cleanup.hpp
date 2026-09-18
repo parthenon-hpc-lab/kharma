@@ -63,8 +63,10 @@ namespace B_Cleanup
 
 // New type-based variables: pre-declare variable names and get the VarMap() for free!
 // All of KHARMA will be switching to these eventually...
-VARIABLE(b_clean, p);
+VARIABLE(b_clean, D);
+VARIABLE(b_clean, u);
 VARIABLE(b_clean, rhs);
+VARIABLE(b_clean, exact);
 
 // Build type that selects only variables within our namespace. Internal solver
 // variables have the namespace of input variables prepended, so they will also be
@@ -116,13 +118,14 @@ TaskStatus CleanupDivergence(std::shared_ptr<MeshData<Real>>& md);
 /**
  * Apply B -= grad(P) on faces to subtract divergence from the magnetic field
  */
-TaskStatus ApplyPFace(MeshData<Real>* msolve, MeshData<Real>* md);
+// TaskStatus ApplySolution(MeshData<Real>* md);
+TaskStatus ApplySolution(MeshData<Real>* mdsolve, MeshData<Real>* md);
 
 /**
  * Function to make this solver's task collection.
  * TODO try adding to e.g. kharma_step task list
  */
-TaskCollection MakeSolverTaskCollection(Mesh* pmesh);
+TaskCollection MakeTaskCollection(Mesh* pmesh);
 
 /**
  * Return whether to cleanup B this step, when we're the field transport during a
