@@ -373,8 +373,8 @@ TaskCollection KHARMADriver::MakeDefaultTaskCollection(BlockList_t& blocks, int 
         auto t_floors = tl.AddTask(t_utop, Packages::MeshApplyFloors,
             md_sub_step_final.get(), IndexDomain::entire);
 
-        // Then, fix any inversions which failed. Fixups may average the adjacent zones, so we
-        // want to work from post-floor data. Floors are re-applied after fixups.
+        // Then, fix any inversions which failed. Fixups may average the adjacent zones,
+        // so we want to work from post-floor data. Floors are re-applied after fixups.
         auto t_fix_p =
             tl.AddTask(t_floors, Inverter::MeshFixUtoP, md_sub_step_final.get());
 

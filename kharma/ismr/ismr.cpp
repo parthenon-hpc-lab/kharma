@@ -95,8 +95,8 @@ TaskStatus ISMR::DerefinePoles(MeshData<Real>* md)
         auto& rc = md->GetBlockData(iblock);
         auto pmb = rc->GetBlockPointer();
         PackIndexMap cons_map, cons_map_utop;
-        auto vars = rc->PackVariables(std::vector<MetadataFlag>{Metadata::WithFluxes},
-            cons_map);
+        auto vars =
+            rc->PackVariables(std::vector<MetadataFlag>{Metadata::WithFluxes}, cons_map);
         auto vars_avg = rc->PackVariables(std::vector<std::string>{"ismr.vars_avg"});
         auto vars_utop = rc->PackVariables(
             std::vector<MetadataFlag>{Metadata::Conserved, Metadata::Cell},
