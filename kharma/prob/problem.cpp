@@ -62,6 +62,15 @@
 #include "emhd/conducting_atmosphere.hpp"
 #include "emhd/emhdmodes.hpp"
 #include "emhd/emhdshock.hpp"
+
+// Out of the Package RadM1 modification
+// RadM1 problem headers
+#include "radm1/beam_of_light.hpp"
+#include "radm1/bondi_rad.hpp"
+#include "radm1/rad_pulse.hpp"
+#include "radm1/radmhdmodes.hpp"
+#include "radm1/thermal_equilibrium.hpp"
+
 // Electron problem headers
 #include "elec/driven_turbulence.hpp"
 #include "elec/hubble.hpp"
@@ -117,6 +126,17 @@ void KHARMA::ProblemGenerator(MeshBlock* pmb, ParameterInput* pin)
         status = InitializeEMHDShock(rc, pin);
     } else if (prob == "conducting_atmosphere") {
         status = InitializeAtmosphere(rc, pin);
+        // RadM1
+    } else if (prob == "rad_pulse") {
+        status = InitializeRadiationPulse(rc, pin);
+    } else if (prob == "bondi_rad") {
+        status = InitializeRadiativeBondi(rc, pin);
+    } else if (prob == "beam_of_light") {
+        status = InitializeBeamOfLight(rc, pin);
+    } else if (prob == "thermal_equilibrium") {
+        status = InitializeThermalEquilibrium(rc, pin);
+    } else if (prob == "radmhdmodes") {
+        status = InitializeRadMHDModes(rc, pin);
         // Everything
     } else if (prob == "torus") {
         status = InitializeFMTorus(rc, pin);
