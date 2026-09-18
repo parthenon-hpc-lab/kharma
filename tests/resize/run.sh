@@ -13,6 +13,7 @@ test_resize () {
                     b_field/solver=face_ct parthenon/time/nlim=5 $2 >log_resize_${1}_1.txt 2>&1
 
     # We can only resize/restart from iharm3d-format files
+    # Note we convert a .phdf file, for presence of cell-centered B
     pyharm convert --to-restart torus.out0.final.phdf
 
     sleep 1

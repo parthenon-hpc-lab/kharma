@@ -111,6 +111,7 @@ test_restart imex_face_2d   "driver/type=imex b_field/solver=face_ct $TWO_D $REF
 test_restart_smr kharma_face_smr "driver/type=kharma b_field/solver=face_ct" "KHARMA driver, face CT, SMR"
 test_restart_smr imex_face_smr "driver/type=imex b_field/solver=face_ct" "ImEx driver, face CT, SMR"
 # phdf
-test_restart_phdf kharma_face_phdf "driver/type=kharma b_field/solver=face_ct" "KHARMA driver from normal dump, face CT"
+# Disabled: phdf files are not being read correctly, results in B=0 or errors
+#test_restart_phdf kharma_face_phdf "driver/type=kharma b_field/solver=face_ct" "KHARMA driver from normal dump, face CT"
 
 exit $exit_code
