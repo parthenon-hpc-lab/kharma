@@ -321,7 +321,20 @@ class CoordinateEmbedding
         return PortsOfCall::visit(
             [&](const auto& self)
             {
-                return self.startx[dir - 1];
+                switch (dir) {
+                    case 1:
+                        return self.startx1;
+                        break;
+                    case 2:
+                        return self.startx2;
+                        break;
+                    case 3:
+                        return self.startx3;
+                        break;
+                    default:
+                        return -1.;
+                        break;
+                }
             },
             transform);
     }
@@ -330,7 +343,20 @@ class CoordinateEmbedding
         return PortsOfCall::visit(
             [&](const auto& self)
             {
-                return self.stopx[dir - 1];
+                switch (dir) {
+                    case 1:
+                        return self.stopx1;
+                        break;
+                    case 2:
+                        return self.stopx2;
+                        break;
+                    case 3:
+                        return self.stopx3;
+                        break;
+                    default:
+                        return -1.;
+                        break;
+                }
             },
             transform);
     }
