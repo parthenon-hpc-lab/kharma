@@ -125,7 +125,7 @@ std::shared_ptr<KHARMAPackage> Initialize(
  * Perform the implicit solve for radiation and plasma coupled. For now, only 4D
  * implemented.
  */
-TaskStatus Step(MeshData<Real>* md_sub_init, MeshData<Real>* md_sub_final, const Real dt);
+void AddSourceImplicitly(MeshData<Real>* md_sub_init, MeshData<Real>* md_flux_src, IndexDomain domain);
 
 /**
  * Convert from conserved to primitive variables for the radiation field.

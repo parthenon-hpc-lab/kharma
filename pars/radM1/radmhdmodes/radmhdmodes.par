@@ -43,7 +43,7 @@ transform = null
 <parthenon/time>
 # tlim will be overridden depending on the problem
 tlim = 5.0
-integrator = vl2
+integrator = rk2
 # Minimum is also the starting timestep
 dt_min = 0.0001
 
