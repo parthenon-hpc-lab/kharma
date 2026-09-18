@@ -51,7 +51,9 @@ test_restart_phdf() {
 
     sleep 1
 
-    $KHARMADIR/run.sh -d . -r torus.out0.00000.phdf b_field/restart_from_prims=true b_field/initial_cleanup=true >log_restart_${1}_second.txt 2>&1
+    $KHARMADIR/run.sh -d . -r torus.out0.00000.phdf \
+                      b_field/restart_from_prims=true b_field/initial_cleanup=true \
+                      parthenon/mesh/multigrid=true >log_restart_${1}_second.txt 2>&1
 
     mv torus.out0.final.phdf restart_${1}_second.phdf
 
@@ -95,7 +97,6 @@ test_restart_smr() {
         echo Restart test \"$3\" success
     fi
 }
-
 
 test_restart kharma "driver/type=kharma b_field/solver=flux_ct" "KHARMA driver"
 test_restart imex "driver/type=imex b_field/solver=flux_ct" "ImEx driver"
