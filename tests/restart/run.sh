@@ -4,9 +4,6 @@ set -euo pipefail
 # Bash script testing initialization vs restart of a torus problem
 # Require similarity to round-off after 5 steps
 
-# TODO figure out why I need the following.  Sure smells like a Parthenon bug
-#export MPI_NUM_PROCS=1
-
 # Set paths
 KHARMADIR=../..
 
@@ -99,6 +96,7 @@ test_restart_smr() {
     fi
 }
 
+
 test_restart kharma "driver/type=kharma b_field/solver=flux_ct" "KHARMA driver"
 test_restart imex "driver/type=imex b_field/solver=flux_ct" "ImEx driver"
 #test_restart imex_emhd "driver/type=imex emhd/on=true" "ImEx driver, EMHD"
@@ -112,7 +110,6 @@ test_restart imex_face_2d   "driver/type=imex b_field/solver=face_ct $TWO_D $REF
 test_restart_smr kharma_face_smr "driver/type=kharma b_field/solver=face_ct" "KHARMA driver, face CT, SMR"
 test_restart_smr imex_face_smr "driver/type=imex b_field/solver=face_ct" "ImEx driver, face CT, SMR"
 # phdf
-# TODO(CEP) restore when solvers are back
-#test_restart_phdf kharma_face_phdf "driver/type=kharma b_field/solver=face_ct" "KHARMA driver from normal dump, face CT"
+test_restart_phdf kharma_face_phdf "driver/type=kharma b_field/solver=face_ct" "KHARMA driver from normal dump, face CT"
 
 exit $exit_code

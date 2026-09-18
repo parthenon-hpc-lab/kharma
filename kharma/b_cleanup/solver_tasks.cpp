@@ -78,8 +78,8 @@ TaskCollection B_Cleanup::MakeTaskCollection(Mesh* pmesh)
         auto solve = psolver->AddTasks(tl, setup, i, pmesh);
 
         // Move the solution back so it is output
-        auto copy_back = tl.AddTask(
-            solve, TF(solvers::utils::CopyData<parthenon::TypeList<u>>), md_u, md);
+        auto copy_back =
+            tl.AddTask(solve, TF(B_Cleanup::ApplySolution), md_u.get(), md.get());
     }
 
     return tc;

@@ -118,7 +118,8 @@ TaskStatus CleanupDivergence(std::shared_ptr<MeshData<Real>>& md);
 /**
  * Apply B -= grad(P) on faces to subtract divergence from the magnetic field
  */
-TaskStatus ApplySolution(MeshData<Real>* md);
+// TaskStatus ApplySolution(MeshData<Real>* md);
+TaskStatus ApplySolution(MeshData<Real>* mdsolve, MeshData<Real>* md);
 
 /**
  * Function to make this solver's task collection.

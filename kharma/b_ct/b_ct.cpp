@@ -261,7 +261,7 @@ TaskStatus B_CT::DangerousPtoU(MeshData<Real>* md, IndexDomain domain, bool coar
     auto pmb0 = md->GetBlockData(0)->GetBlockPointer();
     // Average the primitive vals to faces and multiply by gdet
     const IndexRange3 bf1 = (domain == IndexDomain::entire)
-                                ? KDomain::GetRange(md, domain, F1, 1, 0, coarse)
+                                ? KDomain::GetRange(md, domain, F1, 1, -1, coarse)
                                 : KDomain::GetRange(md, domain, F1, coarse);
     pmb0->par_for("PtoU_B_F1", block.s, block.e, bf1.ks, bf1.ke, bf1.js, bf1.je, bf1.is,
         bf1.ie,
@@ -272,7 +272,7 @@ TaskStatus B_CT::DangerousPtoU(MeshData<Real>* md, IndexDomain domain, bool coar
                                       (B_P(b, V1, k, j, i - 1) + B_P(b, V1, k, j, i)) / 2;
         });
     const IndexRange3 bf2 = (domain == IndexDomain::entire)
-                                ? KDomain::GetRange(md, domain, F2, 1, 0, coarse)
+                                ? KDomain::GetRange(md, domain, F2, 1, -1, coarse)
                                 : KDomain::GetRange(md, domain, F2, coarse);
     pmb0->par_for("PtoU_B_F2", block.s, block.e, bf2.ks, bf2.ke, bf2.js, bf2.je, bf2.is,
         bf2.ie,
@@ -285,7 +285,7 @@ TaskStatus B_CT::DangerousPtoU(MeshData<Real>* md, IndexDomain domain, bool coar
             B_Uf(b, F2, 0, k, j, i) = G.gdet(Loci::face2, j, i) * avg;
         });
     const IndexRange3 bf3 = (domain == IndexDomain::entire)
-                                ? KDomain::GetRange(md, domain, F3, 1, 0, coarse)
+                                ? KDomain::GetRange(md, domain, F3, 1, -1, coarse)
                                 : KDomain::GetRange(md, domain, F3, coarse);
     pmb0->par_for("PtoU_B_F3", block.s, block.e, bf3.ks, bf3.ke, bf3.js, bf3.je, bf3.is,
         bf3.ie,
@@ -353,7 +353,7 @@ TaskStatus B_CT::BlockDangerousPtoU(
     auto pmb0 = rc->GetBlockPointer();
     // Average the primitive vals to faces and multiply by gdet
     const IndexRange3 bf1 = (domain == IndexDomain::entire)
-                                ? KDomain::GetRange(rc, domain, F1, 1, 0, coarse)
+                                ? KDomain::GetRange(rc, domain, F1, 1, -1, coarse)
                                 : KDomain::GetRange(rc, domain, F1, coarse);
     pmb0->par_for("PtoU_B_F1", block.s, block.e, bf1.ks, bf1.ke, bf1.js, bf1.je, bf1.is,
         bf1.ie,
@@ -364,7 +364,7 @@ TaskStatus B_CT::BlockDangerousPtoU(
                                       (B_P(b, V1, k, j, i - 1) + B_P(b, V1, k, j, i)) / 2;
         });
     const IndexRange3 bf2 = (domain == IndexDomain::entire)
-                                ? KDomain::GetRange(rc, domain, F2, 1, 0, coarse)
+                                ? KDomain::GetRange(rc, domain, F2, 1, -1, coarse)
                                 : KDomain::GetRange(rc, domain, F2, coarse);
     pmb0->par_for("PtoU_B_F2", block.s, block.e, bf2.ks, bf2.ke, bf2.js, bf2.je, bf2.is,
         bf2.ie,
@@ -377,7 +377,7 @@ TaskStatus B_CT::BlockDangerousPtoU(
             B_Uf(b, F2, 0, k, j, i) = G.gdet(Loci::face2, j, i) * avg;
         });
     const IndexRange3 bf3 = (domain == IndexDomain::entire)
-                                ? KDomain::GetRange(rc, domain, F3, 1, 0, coarse)
+                                ? KDomain::GetRange(rc, domain, F3, 1, -1, coarse)
                                 : KDomain::GetRange(rc, domain, F3, coarse);
     pmb0->par_for("PtoU_B_F3", block.s, block.e, bf3.ks, bf3.ke, bf3.js, bf3.je, bf3.is,
         bf3.ie,
