@@ -60,6 +60,10 @@
 
 using FC = Metadata::FlagCollection;
 
+// TODO(CEP) ImEx is behind:
+// 1. No reordered/new polar/ISMR consolidation
+// 2. No fixups based on PCP guess
+
 TaskCollection KHARMADriver::MakeImExTaskCollection(BlockList_t& blocks, int stage)
 {
     // Reminder that this list is created BEFORE any of the list contents are run!

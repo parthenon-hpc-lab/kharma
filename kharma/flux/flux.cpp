@@ -235,12 +235,29 @@ std::shared_ptr<KHARMAPackage> Flux::Initialize(
             params.Add("fofc_eh_buffer", eh_buffer);
         }
 
+        bool fofc_pcp = false;
         if (packages->AllPackages().count("B_CT")) {
             // Use consistent B for FOFC (see above)
             // It is mildly inadvisable to disable this
             bool fofc_consistent_face_b =
                 pin->GetOrAddBoolean("fofc", "consistent_face_b", consistent_face_b);
             params.Add("fofc_consistent_face_b", fofc_consistent_face_b);
+
+            fofc_pcp = pin->GetOrAddBoolean("fofc", "pcp", true);
+            params.Add("fofc_pcp", fofc_pcp);
+        } else {
+            // PCP update in FOFC relies on face-centered B w/CT
+            pin->SetBoolean("fofc", "pcp", false);
+            params.Add("fofc_pcp", false);
+            fofc_pcp = false;
+        }
+        if (fofc_pcp) {
+            int fofc_pcp_chi = pin->GetOrAddInteger("fofc", "pcp_chi", 2);
+            params.Add("fofc_pcp_chi", fofc_pcp_chi);
+            Real fofc_pcp_umin = pin->GetOrAddReal("fofc", "pcp_umin", 1e-10);
+            params.Add("fofc_pcp_umin", fofc_pcp_umin);
+            // printf("pcp %d pcp_chi %d pcp_umin %g\n", fofc_pcp, fofc_pcp_chi,
+            // fofc_pcp_umin);
         }
 
         // Flag for whether FOFC was applied, for diagnostics
