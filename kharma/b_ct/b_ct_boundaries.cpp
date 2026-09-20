@@ -46,7 +46,6 @@
 #include "phoebus_utils/unit_conversions.hpp"
 #include "phoebus_utils/variables.hpp"
 
-
 void B_CT::ZeroBoundaryEMF(MeshBlockData<Real>* rc, IndexDomain domain,
     const VariablePack<Real>& emfpack, bool coarse)
 {
@@ -332,7 +331,6 @@ void B_CT::ReconnectBoundaryB3(MeshBlockData<Real>* rc, IndexDomain domain,
     const VarMap m_u(cons_map, true), m_p(prims_map, false);
 
     const auto& G = pmb->coords;
-
 
     const int reconnection_outer_buffer =
         pmb->packages.Get("B_CT")->Param<int>("reconnection_outer_buffer");

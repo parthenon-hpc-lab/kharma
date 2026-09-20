@@ -51,8 +51,9 @@ std::shared_ptr<KHARMAPackage> Floors::Initialize(
 {
     auto pkg = std::make_shared<KHARMAPackage>("Floors");
     Params& params = pkg->AllParams();
-    const bool is_ideal = pin->GetString("eos","type") == singularity::IdealGas::EosType();
-    Real gamma1 = packages->Get("eos")->Param<Real>("gm1")+1.;
+    const bool is_ideal =
+        pin->GetString("eos", "type") == singularity::IdealGas::EosType();
+    Real gamma1 = packages->Get("eos")->Param<Real>("gm1") + 1.;
 
     // Parse all the particular floor values into a nice struct we can pass device-side
     params.Add("prescription", MakePrescription(pin, "floors", gamma1, is_ideal));
@@ -122,11 +123,13 @@ std::shared_ptr<KHARMAPackage> Floors::Initialize(
     // the values will simply be the same if radius-dependent floors are not enabled.
     // Avoids a bunch of if (radius_dependent_floors) else while determining floors.
     if (pin->DoesBlockExist("floors_inner"))
-        params.Add(
-            "prescription_inner", MakePrescriptionInner(pin, MakePrescription(pin,"floors", gamma1, is_ideal), "floors_inner", is_ideal));
+        params.Add("prescription_inner",
+            MakePrescriptionInner(pin, MakePrescription(pin, "floors", gamma1, is_ideal),
+                "floors_inner", is_ideal));
     else
         params.Add("prescription_inner",
-            MakePrescriptionInner(pin, MakePrescription(pin,"floors", gamma1, is_ideal),"floors", is_ideal));
+            MakePrescriptionInner(pin, MakePrescription(pin, "floors", gamma1, is_ideal),
+                "floors", is_ideal));
 
     // All of these are now the same option: disable the *call* only.
     // This lets us assume that the floors package is loaded, which is convenient many

@@ -26,25 +26,27 @@ using namespace parthenon::package::prelude;
 #include "geometry/geometry_utils.hpp"
 #include "phoebus_utils/cell_locations.hpp"
 
-namespace Geometry {
+namespace Geometry
+{
 
-template <typename System>
-void Initialize(ParameterInput *pin, StateDescriptor *geometry) {}
+template<typename System>
+void Initialize(ParameterInput* pin, StateDescriptor* geometry)
+{}
 
-template <typename System>
-System GetCoordinateSystem(MeshBlockData<Real> *rc);
+template<typename System>
+System GetCoordinateSystem(MeshBlockData<Real>* rc);
 
-template <typename System>
-System GetCoordinateSystem(MeshData<Real> *rc);
+template<typename System>
+System GetCoordinateSystem(MeshData<Real>* rc);
 
-template <typename System>
-void SetGeometry(MeshBlockData<Real> *rc);
+template<typename System>
+void SetGeometry(MeshBlockData<Real>* rc);
 
-template <typename System>
-void SetGeometry(MeshData<Real> *rc);
+template<typename System>
+void SetGeometry(MeshData<Real>* rc);
 
-template <typename Transformation>
-Transformation GetTransformation(StateDescriptor *pkg);
+template<typename Transformation>
+Transformation GetTransformation(StateDescriptor* pkg);
 
 } // namespace Geometry
 

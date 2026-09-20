@@ -81,7 +81,7 @@ inline TaskStatus GetFlux(MeshData<Real>* md)
     const auto& pars = packages.Get("Fluxes")->AllParams();
     const auto& mhd_pars = packages.Get("GRMHD")->AllParams();
     const auto& globals = packages.Get("Globals")->AllParams();
-    
+
     const auto& eos_params = packages.Get("eos")->AllParams();
     auto eos = eos_params.Get<Microphysics::EOS::EOS>("d.EOS");
 
@@ -293,10 +293,10 @@ inline TaskStatus GetFlux(MeshData<Real>* md)
                 // Determine cells that would hit the floor
                 Real tmp1, tmp2;
                 int fflag_dir = 0;
-                fflag_dir |= Floors::determine_geo_floors(G, Pl_all(bl), m_p, k, j,
-                    i, floors, floors_inner, tmp1, tmp2, loc);
-                fflag_dir |= Floors::determine_geo_floors(G, Pr_all(bl), m_p, k, j,
-                    i, floors, floors_inner, tmp1, tmp2, loc);
+                fflag_dir |= Floors::determine_geo_floors(
+                    G, Pl_all(bl), m_p, k, j, i, floors, floors_inner, tmp1, tmp2, loc);
+                fflag_dir |= Floors::determine_geo_floors(
+                    G, Pr_all(bl), m_p, k, j, i, floors, floors_inner, tmp1, tmp2, loc);
 
                 // Preserve (but do not respect) existing flags
                 int fflagl = fflag(bl, 0, k, j, i);

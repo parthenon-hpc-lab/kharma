@@ -89,7 +89,8 @@ std::shared_ptr<KHARMAPackage> Initialize(
     } else if (pin->DoesParameterExist("GRMHD", "gamma")) {
         gamma = pin->GetReal("GRMHD", "gamma");
     } else {
-        throw std::runtime_error("GRMHD requires that gamma be specified in <eos> or <GRMHD> block!");
+        throw std::runtime_error(
+            "GRMHD requires that gamma be specified in <eos> or <GRMHD> block!");
     }
     params.Add("gamma", gamma);
 

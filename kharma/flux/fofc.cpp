@@ -58,7 +58,6 @@ TaskStatus Flux::MarkFOFC(MeshData<Real>* guess)
     auto pflag = guess->PackVariables(std::vector<std::string>{"pflag"});
     auto fofcflag = guess->PackVariables(std::vector<std::string>{"fofcflag"});
 
-    
     PackIndexMap cons_map, prims_map;
     std::vector<MetadataFlag> prims_flags = {
         Metadata::GetUserFlag("Primitive"), Metadata::Cell};
@@ -105,8 +104,8 @@ TaskStatus Flux::MarkFOFC(MeshData<Real>* guess)
             // If the solve failed, because we reconstructed a
             // negative or zero internal energy (even after floors!)
             Real rhomin_geom, umin_geom;
-            determine_geo_floors(G, P(bl), m_p, k, j, i, floors, floors_inner,
-                rhomin_geom, umin_geom);
+            determine_geo_floors(
+                G, P(bl), m_p, k, j, i, floors, floors_inner, rhomin_geom, umin_geom);
             const Real umin = umin_geom;
             if (Inverter::failed(pflag(bl, 0, k, j, i)) &&
                 (P(bl, m_p.UU, k, j, i) < umin)) {
@@ -242,8 +241,8 @@ TaskStatus Flux::FOFC(MeshData<Real>* md, MeshData<Real>* guess)
                         dir, Fl_all(b), m_u, loc);
                     // Magnetosonic speeds
                     Real cmaxL, cminL;
-                    Flux::vchar(G, Pl_all(b), m_p, Dtmp, eos, emhd_params, k, j, i,
-                        loc, dir, cmaxL, cminL);
+                    Flux::vchar(G, Pl_all(b), m_p, Dtmp, eos, emhd_params, k, j, i, loc,
+                        dir, cmaxL, cminL);
                     // Record speeds
                     cmax(b, dir - 1, k, j, i) = m::max(0., cmaxL);
                     cmin(b, dir - 1, k, j, i) = m::min(0., cminL);

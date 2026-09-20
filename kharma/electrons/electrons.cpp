@@ -258,7 +258,8 @@ TaskStatus InitElectrons(MeshBlockData<Real>* rc, ParameterInput* pin)
     pmb->par_for("UtoP_electrons", 0, e_P.GetDim(4) - 1, ks, ke, js, je, is, ie,
                  KOKKOS_LAMBDA(const int& p, const int& k, const int& j, const int& i)
         {
-            e_P(p, k, j, i) = Entropy::CalcIdealEntropy(rho(k, j, i), fel0 * u(k, j, i), game);
+            e_P(p, k, j, i) =
+                Entropy::CalcIdealEntropy(rho(k, j, i), fel0 * u(k, j, i), game);
         });
 
     EndFlag();
@@ -326,7 +327,7 @@ TaskStatus ApplyElectronHeating(
     auto pmb = rc->GetBlockPointer();
     const auto& G = pmb->coords;
 
-   const Real gamma1 = pmb->packages.Get("eos")->Param<Real>("gm1")+1.0;
+    const Real gamma1 = pmb->packages.Get("eos")->Param<Real>("gm1") + 1.0;
 
     const Real gamp = pmb->packages.Get("Electrons")->Param<Real>("gamma_p");
     const Real game = pmb->packages.Get("Electrons")->Param<Real>("gamma_e");
@@ -378,19 +379,21 @@ TaskStatus ApplyElectronHeating(
                 enforce_positive_diss ? m::max(diss_fluid_tmp, 0.0) : diss_fluid_tmp;
 
             // Convert dissipation from fluid-entropy units into electron-entropy units
-           const Real diss = (game - 1.) / (gamma1 - 1.) *
+            const Real diss = (game - 1.) / (gamma1 - 1.) *
                               m::pow(P(m_p.RHO, k, j, i), gamma1 - game) * diss_fluid;
             // this is eq27
 
             // We'll be applying floors inline as we heat electrons, so
             // we cache the floors as entropy limits so they'll be cheaper to apply.
             // Note tp_te_min -> kel_max & vice versa
-            const Real kel_max =
-                P(m_p.KTOT, k, j, i) * m::pow(P(m_p.RHO, k, j, i), gamma1 - game) /
-                (tptemin * (gamma1 - 1.) / (gamp - 1.) + (gamma1 - 1.) / (game - 1.)); // 0.001
-            const Real kel_min =
-                P(m_p.KTOT, k, j, i) * m::pow(P(m_p.RHO, k, j, i), gamma1 - game) /
-                (tptemax * (gamma1 - 1.) / (gamp - 1.) + (gamma1 - 1.) / (game - 1.)); // 1000
+            const Real kel_max = P(m_p.KTOT, k, j, i) *
+                                 m::pow(P(m_p.RHO, k, j, i), gamma1 - game) /
+                                 (tptemin * (gamma1 - 1.) / (gamp - 1.) +
+                                     (gamma1 - 1.) / (game - 1.)); // 0.001
+            const Real kel_min = P(m_p.KTOT, k, j, i) *
+                                 m::pow(P(m_p.RHO, k, j, i), gamma1 - game) /
+                                 (tptemax * (gamma1 - 1.) / (gamp - 1.) +
+                                     (gamma1 - 1.) / (game - 1.)); // 1000
             // Note this differs a little from Ressler '15, who ensure u_e/u_g > 0.01
             // rather than use temperatures
 

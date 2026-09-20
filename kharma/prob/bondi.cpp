@@ -39,7 +39,6 @@
 #include "flux.hpp"
 #include "flux_functions.hpp"
 
-
 void AddBondiParameters(ParameterInput* pin, Packages_t& packages)
 {
     const Real mdot = pin->GetOrAddReal("bondi", "mdot", 1.0);

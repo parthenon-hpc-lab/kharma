@@ -65,13 +65,14 @@ std::shared_ptr<KHARMAPackage> Inverter::Initialize(
         params.Add("inverter_type", Type::none);
     }
 
-
-    // An option that exits when someone use onedw with an equation of state that is not ideal gas.
-    // eos_kharma is solely responsible for setting/defaulting "eos"/"type"; we only ever read it here.
+    // An option that exits when someone use onedw with an equation of state that is not
+    // ideal gas. eos_kharma is solely responsible for setting/defaulting "eos"/"type"; we
+    // only ever read it here.
     if (inverter_name == "onedw") {
         const std::string eos_name = pin->GetString("eos", "type");
         if (eos_name != singularity::IdealGas::EosType()) {
-            throw std::invalid_argument("onedw inverter only works with ideal gas equation of state");
+            throw std::invalid_argument(
+                "onedw inverter only works with ideal gas equation of state");
         }
     }
 
@@ -87,24 +88,29 @@ std::shared_ptr<KHARMAPackage> Inverter::Initialize(
     // Floor options
     // Use a custom block for inverter floors to allow customization.  Not sure anyone
     // *wants* that but...
-    const bool is_ideal = pin->GetString("eos","type") == singularity::IdealGas::EosType();
-    Real gamma_floor = packages->Get("eos")->Param<Real>("gm1")+1.;
+    const bool is_ideal =
+        pin->GetString("eos", "type") == singularity::IdealGas::EosType();
+    Real gamma_floor = packages->Get("eos")->Param<Real>("gm1") + 1.;
     if (!pin->DoesBlockExist("inverter_floors")) {
-        params.Add("inverter_prescription", Floors::MakePrescription(pin, "floors", gamma_floor, is_ideal));
+        params.Add("inverter_prescription",
+            Floors::MakePrescription(pin, "floors", gamma_floor, is_ideal));
         if (pin->DoesBlockExist("floors_inner"))
             params.Add("inverter_prescription_inner",
-                Floors::MakePrescriptionInner(
-                    pin, Floors::MakePrescription(pin, "floors", gamma_floor, is_ideal), "floors_inner", is_ideal));
+                Floors::MakePrescriptionInner(pin,
+                    Floors::MakePrescription(pin, "floors", gamma_floor, is_ideal),
+                    "floors_inner", is_ideal));
         else
             params.Add("inverter_prescription_inner",
-                Floors::MakePrescriptionInner(
-                    pin, Floors::MakePrescription(pin, "floors", gamma_floor, is_ideal), "floors", is_ideal));
+                Floors::MakePrescriptionInner(pin,
+                    Floors::MakePrescription(pin, "floors", gamma_floor, is_ideal),
+                    "floors", is_ideal));
     } else {
-        params.Add(
-            "inverter_prescription", Floors::MakePrescription(pin, "inverter_floors", gamma_floor, is_ideal));
+        params.Add("inverter_prescription",
+            Floors::MakePrescription(pin, "inverter_floors", gamma_floor, is_ideal));
         params.Add("inverter_prescription_inner",
             Floors::MakePrescriptionInner(pin,
-                Floors::MakePrescription(pin, "inverter_floors", gamma_floor, is_ideal), "inverter_floors", is_ideal));
+                Floors::MakePrescription(pin, "inverter_floors", gamma_floor, is_ideal),
+                "inverter_floors", is_ideal));
     }
 
     // Fixup options

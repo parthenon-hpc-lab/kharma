@@ -71,8 +71,6 @@
 #include "phoebus_utils/unit_conversions.hpp"
 #include "phoebus_utils/variables.hpp"
 
-
-
 // This isn't a vecloop, also it takes an argument.
 // Left it in since it's useful and all over Phoebus, maybe we'll adopt it
 #define SPACELOOP(i) for (int i = 0; i < 3; i++)
@@ -91,7 +89,8 @@ class KastaunResidual
   public:
     KOKKOS_FUNCTION
     KastaunResidual(const Real& D, const Real& q, const Real& bsq, const Real& bsq_rpsq,
-        const Real& rsq, const Real& rbsq, const Real& v0sq, const Microphysics::EOS::EOS& eos)
+        const Real& rsq, const Real& rbsq, const Real& v0sq,
+        const Microphysics::EOS::EOS& eos)
         : D_(D)
         , q_(q)
         , bsq_(bsq)
@@ -146,7 +145,7 @@ class KastaunResidual
         const Real rhohat = std::max(rhohat_mu(iWhat), 0.);
         const Real ehat = std::max(ehat_mu(mu, qbar, rbarsq, vhatsq, What), 0.);
         const Real Phat = eos_.PressureFromDensityInternalEnergy(rhohat, ehat);
-        //TODO_EOS: ahat general or ideal-only?
+        // TODO_EOS: ahat general or ideal-only?
         const Real ahat = Phat / (rhohat * (1.0 + ehat));
 
         const Real nua = (1.0 + ahat) * (1.0 + ehat) * iWhat;
@@ -183,9 +182,9 @@ class KastaunResidual
  */
 template<>
 KOKKOS_INLINE_FUNCTION int u_to_p<Type::kastaun>(const GRCoordinates& G,
-    const VariablePack<Real>& U, const VarMap& m_u, const Microphysics::EOS::EOS& eos, const int& k,
-    const int& j, const int& i, const VariablePack<Real>& P, const VarMap& m_p,
-    const Loci& loc, const int& max_iterations, const Real& tol)
+    const VariablePack<Real>& U, const VarMap& m_u, const Microphysics::EOS::EOS& eos,
+    const int& k, const int& j, const int& i, const VariablePack<Real>& P,
+    const VarMap& m_p, const Loci& loc, const int& max_iterations, const Real& tol)
 {
     // Shouldn't need this, KHARMA should die on NaN
     // But it's here for debugging

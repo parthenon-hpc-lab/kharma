@@ -49,8 +49,8 @@
     const GRCoordinates &G, const VariablePack<Real>&P, const VarMap &m_p,               \
         const VariableFluxPack<Real>&U, const VarMap &m_u,                               \
         const VariablePack<Real>&cmax, const VariablePack<Real>&cmin,                    \
-        const EMHD::EMHD_parameters &emhd_params, const Microphysics::EOS::EOS &eos, const int &k,         \
-        const int &j, const int &i
+        const EMHD::EMHD_parameters &emhd_params, const Microphysics::EOS::EOS &eos,     \
+        const int &k, const int &j, const int &i
 // Call for passing a particular block's values
 #define REDUCE_FUNCTION_CALL                                                             \
     G, P(b), m_p, U(b), m_u, cmax(b), cmin(b), emhd_params, eos, k, j, i
@@ -149,7 +149,7 @@ KOKKOS_INLINE_FUNCTION Real reduction_var<Var::gas_pressure>(REDUCE_FUNCTION_ARG
 {
     const Real sie = P(m_p.UU, k, j, i) / P(m_p.RHO, k, j, i);
     return eos.PressureFromDensityInternalEnergy(P(m_p.RHO, k, j, i), sie);
-    //return (gam - 1) * P(m_p.UU, k, j, i);
+    // return (gam - 1) * P(m_p.UU, k, j, i);
 }
 template<>
 KOKKOS_INLINE_FUNCTION Real reduction_var<Var::beta>(REDUCE_FUNCTION_ARGS)
@@ -158,8 +158,7 @@ KOKKOS_INLINE_FUNCTION Real reduction_var<Var::beta>(REDUCE_FUNCTION_ARGS)
     GRMHD::calc_4vecs(G, P, m_p, k, j, i, Loci::center, Dtmp);
     const Real sie = P(m_p.UU, k, j, i) / P(m_p.RHO, k, j, i);
     const Real Pg = eos.PressureFromDensityInternalEnergy(P(m_p.RHO, k, j, i), sie);
-    return Pg /
-           (0.5 * (dot(Dtmp.bcon, Dtmp.bcov) + SMALL_NUM));
+    return Pg / (0.5 * (dot(Dtmp.bcon, Dtmp.bcov) + SMALL_NUM));
 }
 
 // Stuff that should be conserved
@@ -429,7 +428,7 @@ KOKKOS_INLINE_FUNCTION Real reduction_var<Var::eht_lum>(REDUCE_FUNCTION_ARGS)
     FourVectors Dtmp;
     GRMHD::calc_4vecs(G, P, m_p, k, j, i, Loci::center, Dtmp);
     Real rho = P(m_p.RHO, k, j, i);
-    //Real Pg = (gam - 1.) * P(m_p.UU, k, j, i);
+    // Real Pg = (gam - 1.) * P(m_p.UU, k, j, i);
     Real sie = P(m_p.UU, k, j, i) / rho;
     Real Pg = eos.PressureFromDensityInternalEnergy(rho, sie);
     Real Bmag = m::sqrt(dot(Dtmp.bcon, Dtmp.bcov));

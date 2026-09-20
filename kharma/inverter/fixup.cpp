@@ -45,7 +45,6 @@
 #include "phoebus_utils/unit_conversions.hpp"
 #include "phoebus_utils/variables.hpp"
 
-
 // Version of "PLOOP" guaranteeing specifically the 5 GRMHD fixup-amenable primitive vars
 #define NPRIM 5
 #define PRIMLOOP for (int p = 0; p < NPRIM; ++p)
@@ -163,8 +162,8 @@ TaskStatus Inverter::FixUtoP(MeshBlockData<Real>* rc)
                 // Make sure all fixed values still abide by floors
                 // TODO Full floors instead of just geo?
                 int fflagl = fflag(0, k, j, i);
-                fflagl |= Floors::apply_geo_floors(
-                    G, P, m_p, k, j, i, floors, floors_inner);
+                fflagl |=
+                    Floors::apply_geo_floors(G, P, m_p, k, j, i, floors, floors_inner);
                 fflag(0, k, j, i) = fflagl;
 
                 // Make sure to keep lockstep
@@ -190,7 +189,7 @@ TaskStatus Inverter::Backstop(MeshBlockData<Real>* rc)
 
     const auto& eos_params = pmb->packages.Get("eos")->AllParams();
     auto eos = eos_params.Get<Microphysics::EOS::EOS>("d.EOS");
-    const Real gamma1 = pmb->packages.Get("eos")->Param<Real>("gm1")+1.0;
+    const Real gamma1 = pmb->packages.Get("eos")->Param<Real>("gm1") + 1.0;
 
     // Use values from floors package if it's enabled, otherwise any we've been asked to
     // apply
@@ -237,10 +236,10 @@ TaskStatus Inverter::Backstop(MeshBlockData<Real>* rc)
             determine_geo_floors(
                 G, P, m_p, k, j, i, floors, floors_inner, rhomin_geom, umin_geom);
 
-            const Real umin =
-                (m_p.KTOT >= 0)
-                    ? P(m_p.KTOT, k, j, i) * m::pow(P(m_p.RHO, k, j, i), gamma1) / (gamma1 - 1.)
-                    : umin_geom;
+            const Real umin = (m_p.KTOT >= 0) ? P(m_p.KTOT, k, j, i) *
+                                                    m::pow(P(m_p.RHO, k, j, i), gamma1) /
+                                                    (gamma1 - 1.)
+                                              : umin_geom;
 
             if (failed(pflag(k, j, i)) && (P(m_p.UU, k, j, i) < umin)) {
                 // const Real rho = P(m_p.RHO, k, j, i);

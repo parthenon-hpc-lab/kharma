@@ -23,29 +23,29 @@
 #include <singularity-eos/eos/eos_variant.hpp>
 #include <singularity-eos/eos/modifiers/eos_unitsystem.hpp>
 
-
 #ifdef SPINER_USE_HDF
 #include <singularity-eos/eos/eos_stellar_collapse.hpp>
 #endif
 
-
-
 using namespace parthenon::package::prelude;
-namespace Microphysics {
+namespace Microphysics
+{
 
 //  using MyEOS=singularity::impl::Variant<IdealGas>;
 
-namespace EOS {
+namespace EOS
+{
 
-using EOS = singularity::Variant<
-    singularity::UnitSystem<singularity::IdealGas>, singularity::IdealGas
+using EOS = singularity::Variant<singularity::UnitSystem<singularity::IdealGas>,
+    singularity::IdealGas
 #ifdef SPINER_USE_HDF
     ,
     singularity::UnitSystem<singularity::StellarCollapse>, singularity::StellarCollapse
 #endif // SPINER_USE_HDF
     >;
 
-std::shared_ptr<KHARMAPackage> Initialize(ParameterInput *pin, std::shared_ptr<Packages_t>& packages);
+std::shared_ptr<KHARMAPackage> Initialize(
+    ParameterInput* pin, std::shared_ptr<Packages_t>& packages);
 } // namespace EOS
 
 } // namespace Microphysics

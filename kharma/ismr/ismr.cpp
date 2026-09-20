@@ -88,7 +88,6 @@ TaskStatus ISMR::DerefinePoles(MeshData<Real>* md)
     // TODO this routine only applies to polar boundaries for now.
     auto pmesh = md->GetMeshPointer();
     const uint nlevels = pmesh->packages.Get("ISMR")->Param<uint>("nlevels");
-    
 
     // Figure out indices
     int ng = Globals::nghost;

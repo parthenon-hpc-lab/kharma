@@ -26,7 +26,7 @@
 #include <utils/error_checking.hpp>
 
 // phoebus includes
-//#include "compile_constants.hpp"
+// #include "compile_constants.hpp"
 #include "geometry/geometry_utils.hpp"
 #include "phoebus_utils/cell_locations.hpp"
 #include "phoebus_utils/linear_algebra.hpp"
@@ -43,12 +43,13 @@
 #include "geometry/mckinney_gammie_ryan.hpp"
 #include "geometry/minkowski.hpp"
 #include "geometry/modified_system.hpp"
-//#include "geometry/monopole.hpp"
+// #include "geometry/monopole.hpp"
 #include "geometry/snake.hpp"
 #include "geometry/spherical_kerr_schild.hpp"
 #include "geometry/spherical_minkowski.hpp"
 
-namespace Geometry {
+namespace Geometry
+{
 
 // Coordinate system choices
 using CoordSysMeshBlock = MinkowskiMeshBlock;

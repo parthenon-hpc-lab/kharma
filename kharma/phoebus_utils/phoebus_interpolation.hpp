@@ -26,7 +26,8 @@
 #include "phoebus_utils/grid_utils.hpp"
 #include "phoebus_utils/robust.hpp"
 
-namespace interpolation {
+namespace interpolation
+{
 
 using namespace parthenon::package::prelude;
 using parthenon::Coordinates_t;
@@ -37,71 +38,82 @@ using weights_t = Spiner::weights_t<Real>;
 /// shift. GetIndicesAndWeights then updates arrays of indices and weights for
 /// calculating the interpolated data. These arrays are of size StencilSize().
 /// Data is forced to zero outside the boundaries.
-class Interpolation {
- public:
-  KOKKOS_FUNCTION
-  Interpolation(const int nSupport, const Real dx, const Real shift)
-      : nSupport_(nSupport), dx_(dx), shift_(shift), ishift_(std::round(shift)) {}
+class Interpolation
+{
+  public:
+    KOKKOS_FUNCTION
+    Interpolation(const int nSupport, const Real dx, const Real shift)
+        : nSupport_(nSupport)
+        , dx_(dx)
+        , shift_(shift)
+        , ishift_(std::round(shift))
+    {}
 
-  KOKKOS_INLINE_FUNCTION
-  virtual void GetIndicesAndWeights(const int i, int *idx, Real *wgt) const {}
-  KOKKOS_INLINE_FUNCTION
-  virtual int StencilSize() const { return 0; }
+    KOKKOS_INLINE_FUNCTION
+    virtual void GetIndicesAndWeights(const int i, int* idx, Real* wgt) const {}
+    KOKKOS_INLINE_FUNCTION
+    virtual int StencilSize() const { return 0; }
 
-  static constexpr int maxStencilSize = 2;
+    static constexpr int maxStencilSize = 2;
 
- protected:
-  const int nSupport_;
-  const Real dx_;
-  Real shift_;
-  int ishift_;
+  protected:
+    const int nSupport_;
+    const Real dx_;
+    Real shift_;
+    int ishift_;
 };
 
-class PiecewiseConstant : public Interpolation {
- public:
-  KOKKOS_FUNCTION
-  PiecewiseConstant(const int nSupport, const Real dx, const Real shift)
-      : Interpolation(nSupport, dx, shift) {}
+class PiecewiseConstant : public Interpolation
+{
+  public:
+    KOKKOS_FUNCTION
+    PiecewiseConstant(const int nSupport, const Real dx, const Real shift)
+        : Interpolation(nSupport, dx, shift)
+    {}
 
-  KOKKOS_INLINE_FUNCTION
-  void GetIndicesAndWeights(const int i, int *idx, Real *wgt) const override {
-    idx[0] = i + ishift_;
-    wgt[0] = 1.;
-    if (idx[0] < 0 || idx[0] >= nSupport_) {
-      idx[0] = 0;
-      wgt[0] = 0.;
+    KOKKOS_INLINE_FUNCTION
+    void GetIndicesAndWeights(const int i, int* idx, Real* wgt) const override
+    {
+        idx[0] = i + ishift_;
+        wgt[0] = 1.;
+        if (idx[0] < 0 || idx[0] >= nSupport_) {
+            idx[0] = 0;
+            wgt[0] = 0.;
+        }
     }
-  }
 
-  KOKKOS_INLINE_FUNCTION
-  int StencilSize() const override { return 1; }
+    KOKKOS_INLINE_FUNCTION
+    int StencilSize() const override { return 1; }
 };
 
-class Linear : public Interpolation {
- public:
-  KOKKOS_FUNCTION
-  Linear(const int nSupport, const Real dx, const Real shift)
-      : Interpolation(nSupport, dx, shift) {
-    PARTHENON_FAIL("Not written yet!");
-  }
-
-  KOKKOS_INLINE_FUNCTION
-  void GetIndicesAndWeights(const int i, int *idx, Real *wgt) const override {
-    idx[0] = std::floor(i + shift_);
-    idx[1] = idx[0] + 1;
-
-    wgt[0] = wgt[1] = 1. - wgt[0];
-
-    for (int nsup = 0; nsup < 2; nsup++) {
-      if (idx[nsup] < 0 || idx[nsup] >= nSupport_) {
-        idx[nsup] = 0;
-        wgt[nsup] = 0.;
-      }
+class Linear : public Interpolation
+{
+  public:
+    KOKKOS_FUNCTION
+    Linear(const int nSupport, const Real dx, const Real shift)
+        : Interpolation(nSupport, dx, shift)
+    {
+        PARTHENON_FAIL("Not written yet!");
     }
-  }
 
-  KOKKOS_INLINE_FUNCTION
-  int StencilSize() const override { return 2; }
+    KOKKOS_INLINE_FUNCTION
+    void GetIndicesAndWeights(const int i, int* idx, Real* wgt) const override
+    {
+        idx[0] = std::floor(i + shift_);
+        idx[1] = idx[0] + 1;
+
+        wgt[0] = wgt[1] = 1. - wgt[0];
+
+        for (int nsup = 0; nsup < 2; nsup++) {
+            if (idx[nsup] < 0 || idx[nsup] >= nSupport_) {
+                idx[nsup] = 0;
+                wgt[nsup] = 0.;
+            }
+        }
+    }
+
+    KOKKOS_INLINE_FUNCTION
+    int StencilSize() const override { return 2; }
 };
 
 // TODO(JMM): Is this interpolation::Do syntax reasonable? An
@@ -109,8 +121,10 @@ class Linear : public Interpolation {
 // static functions. Then it could have an `operator()` which would
 // be maybe nicer?
 // TODO(JMM): Merge this w/ what Ben has done.
-namespace Cent {
-namespace Linear {
+namespace Cent
+{
+namespace Linear
+{
 
 /*
  * Get interpolation weights for linear interpolation
@@ -120,16 +134,17 @@ namespace Linear {
  * PARAM[OUT] - ix - index of points to interpolate
  * PARAM[OUT] - w - weights
  */
-template <int DIR>
-KOKKOS_INLINE_FUNCTION void GetWeights(const Real x, const int nx,
-                                       const Coordinates_t &coords, int &ix,
-                                       weights_t &w) {
-  const Real min = Coordinates::GetXv<DIR>(0, coords);
-  const Real dx = coords.FaceArea(DIR, 0, 0, 0); // TODO(CEP) needs update if we interpolate in embedding coordinates!
-  ix = std::min(std::max(0, static_cast<int>(robust::ratio(x - min, dx))), nx - 2);
-  const Real floor = min + ix * dx;
-  w[1] = robust::ratio(x - floor, dx);
-  w[0] = 1. - w[1];
+template<int DIR>
+KOKKOS_INLINE_FUNCTION void GetWeights(
+    const Real x, const int nx, const Coordinates_t& coords, int& ix, weights_t& w)
+{
+    const Real min = Coordinates::GetXv<DIR>(0, coords);
+    const Real dx = coords.FaceArea(DIR, 0, 0,
+        0); // TODO(CEP) needs update if we interpolate in embedding coordinates!
+    ix = std::min(std::max(0, static_cast<int>(robust::ratio(x - min, dx))), nx - 2);
+    const Real floor = min + ix * dx;
+    w[1] = robust::ratio(x - floor, dx);
+    w[0] = 1. - w[1];
 }
 
 /*
@@ -139,23 +154,25 @@ KOKKOS_INLINE_FUNCTION void GetWeights(const Real x, const int nx,
  * PARAM[IN] - p - Variable or MeshBlockPack
  * PARAM[IN] - v - variable index
  */
-template <typename Pack>
-KOKKOS_INLINE_FUNCTION Real Do3D(int b, const Real X1, const Real X2, const Real X3,
-                                 const Pack &p, int v) {
-  const auto &coords = p.GetCoords(b);
-  int ix[3];
-  weights_t w[3];
-  GetWeights<X1DIR>(X1, p.GetDim(1), coords, ix[0], w[0]);
-  GetWeights<X2DIR>(X2, p.GetDim(2), coords, ix[1], w[1]);
-  GetWeights<X3DIR>(X3, p.GetDim(3), coords, ix[2], w[2]);
-  return (w[2][0] * (w[1][0] * (w[0][0] * p(b, v, ix[2], ix[1], ix[0]) +
-                                w[0][1] * p(b, v, ix[2], ix[1], ix[0] + 1)) +
-                     w[1][1] * (w[0][0] * p(b, v, ix[2], ix[1] + 1, ix[0]) +
-                                w[0][1] * p(b, v, ix[2], ix[1] + 1, ix[0] + 1))) +
-          w[2][1] * (w[1][0] * (w[0][0] * p(b, v, ix[2] + 1, ix[1], ix[0]) +
-                                w[0][1] * p(b, v, ix[2] + 1, ix[1], ix[0] + 1)) +
-                     w[1][1] * (w[0][0] * p(b, v, ix[2] + 1, ix[1] + 1, ix[0]) +
-                                w[0][1] * p(b, v, ix[2] + 1, ix[1] + 1, ix[0] + 1))));
+template<typename Pack>
+KOKKOS_INLINE_FUNCTION Real Do3D(
+    int b, const Real X1, const Real X2, const Real X3, const Pack& p, int v)
+{
+    const auto& coords = p.GetCoords(b);
+    int ix[3];
+    weights_t w[3];
+    GetWeights<X1DIR>(X1, p.GetDim(1), coords, ix[0], w[0]);
+    GetWeights<X2DIR>(X2, p.GetDim(2), coords, ix[1], w[1]);
+    GetWeights<X3DIR>(X3, p.GetDim(3), coords, ix[2], w[2]);
+    return (
+        w[2][0] * (w[1][0] * (w[0][0] * p(b, v, ix[2], ix[1], ix[0]) +
+                                 w[0][1] * p(b, v, ix[2], ix[1], ix[0] + 1)) +
+                      w[1][1] * (w[0][0] * p(b, v, ix[2], ix[1] + 1, ix[0]) +
+                                    w[0][1] * p(b, v, ix[2], ix[1] + 1, ix[0] + 1))) +
+        w[2][1] * (w[1][0] * (w[0][0] * p(b, v, ix[2] + 1, ix[1], ix[0]) +
+                                 w[0][1] * p(b, v, ix[2] + 1, ix[1], ix[0] + 1)) +
+                      w[1][1] * (w[0][0] * p(b, v, ix[2] + 1, ix[1] + 1, ix[0]) +
+                                    w[0][1] * p(b, v, ix[2] + 1, ix[1] + 1, ix[0] + 1))));
 }
 
 /*
@@ -165,17 +182,18 @@ KOKKOS_INLINE_FUNCTION Real Do3D(int b, const Real X1, const Real X2, const Real
  * PARAM[IN] - p - Variable or MeshBlockPack
  * PARAM[IN] - v - variable index
  */
-template <typename Pack>
-KOKKOS_INLINE_FUNCTION Real Do2D(int b, const Real X1, const Real X2, const Pack &p,
-                                 int v) {
-  const auto &coords = p.GetCoords(b);
-  int ix1, ix2;
-  weights_t w1, w2;
-  GetWeights<X1DIR>(X1, p.GetDim(1), coords, ix1, w1);
-  GetWeights<X2DIR>(X2, p.GetDim(2), coords, ix2, w2);
-  return (w2[0] * (w1[0] * p(b, v, 0, ix2, ix1) + w1[1] * p(b, v, 0, ix2, ix1 + 1)) +
-          w2[1] *
-              (w1[0] * p(b, v, 0, ix2 + 1, ix1) + w1[1] * p(b, v, 0, ix2 + 1, ix1 + 1)));
+template<typename Pack>
+KOKKOS_INLINE_FUNCTION Real Do2D(
+    int b, const Real X1, const Real X2, const Pack& p, int v)
+{
+    const auto& coords = p.GetCoords(b);
+    int ix1, ix2;
+    weights_t w1, w2;
+    GetWeights<X1DIR>(X1, p.GetDim(1), coords, ix1, w1);
+    GetWeights<X2DIR>(X2, p.GetDim(2), coords, ix2, w2);
+    return (w2[0] * (w1[0] * p(b, v, 0, ix2, ix1) + w1[1] * p(b, v, 0, ix2, ix1 + 1)) +
+            w2[1] * (w1[0] * p(b, v, 0, ix2 + 1, ix1) +
+                        w1[1] * p(b, v, 0, ix2 + 1, ix1 + 1)));
 }
 
 /*
@@ -185,13 +203,14 @@ KOKKOS_INLINE_FUNCTION Real Do2D(int b, const Real X1, const Real X2, const Pack
  * PARAM[IN] - p - Variable or MeshBlockPack
  * PARAM[IN] - v - variable index
  */
-template <typename Pack>
-KOKKOS_INLINE_FUNCTION Real Do1D(int b, const Real X1, const Pack &p, int v) {
-  const auto &coords = p.GetCoords(b);
-  int ix;
-  weights_t w;
-  GetWeights<X1DIR>(X1, p.GetDim(1), coords, ix, w);
-  return w[0] * p(b, v, 0, 0, ix) + w[1] * p(b, v, 0, 0, ix + 1);
+template<typename Pack>
+KOKKOS_INLINE_FUNCTION Real Do1D(int b, const Real X1, const Pack& p, int v)
+{
+    const auto& coords = p.GetCoords(b);
+    int ix;
+    weights_t w;
+    GetWeights<X1DIR>(X1, p.GetDim(1), coords, ix, w);
+    return w[0] * p(b, v, 0, 0, ix) + w[1] * p(b, v, 0, 0, ix + 1);
 }
 
 /*
@@ -207,16 +226,17 @@ KOKKOS_INLINE_FUNCTION Real Do1D(int b, const Real X1, const Pack &p, int v) {
 // interpolation, which will kill memory locality.  Doing it this
 // way means we can do trilinear vs bilinear which I think is a
 // sufficient win at minimum code bloat.
-template <typename Pack>
-KOKKOS_INLINE_FUNCTION Real Do(int b, const Real X1, const Real X2, const Real X3,
-                               const Pack &p, int v) {
-  if (p.GetDim(3) > 1) {
-    return Do3D(b, X1, X2, X3, p, v);
-  } else if (p.GetDim(2) > 1) {
-    return Do2D(b, X1, X2, p, v);
-  } else { // 1D
-    return Do1D(b, X1, p, v);
-  }
+template<typename Pack>
+KOKKOS_INLINE_FUNCTION Real Do(
+    int b, const Real X1, const Real X2, const Real X3, const Pack& p, int v)
+{
+    if (p.GetDim(3) > 1) {
+        return Do3D(b, X1, X2, X3, p, v);
+    } else if (p.GetDim(2) > 1) {
+        return Do2D(b, X1, X2, p, v);
+    } else { // 1D
+        return Do1D(b, X1, p, v);
+    }
 }
 
 } // namespace Linear

@@ -26,62 +26,72 @@
 
 #include "geometry/boyer_lindquist.hpp"
 
-namespace Geometry {
+namespace Geometry
+{
 
 // Don't need to overwrite SetGeometry
-template <>
-void Initialize<BoyerLindquistMeshBlock>(ParameterInput *pin, StateDescriptor *geometry) {
-  Params &params = geometry->AllParams();
-  Real a = pin->GetOrAddReal("geometry", "a", 0);
-  Real dxfd = pin->GetOrAddReal("geometry", "finite_differences_dx", 1e-8);
-  params.Add("a", a);
-  params.Add("dxfd", dxfd);
+template<>
+void Initialize<BoyerLindquistMeshBlock>(ParameterInput* pin, StateDescriptor* geometry)
+{
+    Params& params = geometry->AllParams();
+    Real a = pin->GetOrAddReal("geometry", "a", 0);
+    Real dxfd = pin->GetOrAddReal("geometry", "finite_differences_dx", 1e-8);
+    params.Add("a", a);
+    params.Add("dxfd", dxfd);
 }
 
-template <>
-void SetGeometry<BoyerLindquistMeshBlock>(MeshBlockData<Real> *rc) {}
+template<>
+void SetGeometry<BoyerLindquistMeshBlock>(MeshBlockData<Real>* rc)
+{}
 
-template <>
-void SetGeometry<BoyerLindquistMesh>(MeshData<Real> *rc) {}
+template<>
+void SetGeometry<BoyerLindquistMesh>(MeshData<Real>* rc)
+{}
 
-template <>
-BoyerLindquistMeshBlock
-GetCoordinateSystem<BoyerLindquistMeshBlock>(MeshBlockData<Real> *rc) {
-  auto &pkg = rc->GetMeshPointer()->packages.Get("geometry");
-  auto indexer = GetIndexer(rc);
-  Real a = pkg->Param<Real>("a");
-  Real dxfd = pkg->Param<Real>("dxfd");
-  return BoyerLindquistMeshBlock(indexer, a, dxfd);
+template<>
+BoyerLindquistMeshBlock GetCoordinateSystem<BoyerLindquistMeshBlock>(
+    MeshBlockData<Real>* rc)
+{
+    auto& pkg = rc->GetMeshPointer()->packages.Get("geometry");
+    auto indexer = GetIndexer(rc);
+    Real a = pkg->Param<Real>("a");
+    Real dxfd = pkg->Param<Real>("dxfd");
+    return BoyerLindquistMeshBlock(indexer, a, dxfd);
 }
-template <>
-BoyerLindquistMesh GetCoordinateSystem<BoyerLindquistMesh>(MeshData<Real> *rc) {
-  auto &pkg = rc->GetMeshPointer()->packages.Get("geometry");
-  auto indexer = GetIndexer(rc);
-  Real a = pkg->Param<Real>("a");
-  Real dxfd = pkg->Param<Real>("dxfd");
-  return BoyerLindquistMesh(indexer, a, dxfd);
+template<>
+BoyerLindquistMesh GetCoordinateSystem<BoyerLindquistMesh>(MeshData<Real>* rc)
+{
+    auto& pkg = rc->GetMeshPointer()->packages.Get("geometry");
+    auto indexer = GetIndexer(rc);
+    Real a = pkg->Param<Real>("a");
+    Real dxfd = pkg->Param<Real>("dxfd");
+    return BoyerLindquistMesh(indexer, a, dxfd);
 }
 
-template <>
-void Initialize<CBoyerLindquistMeshBlock>(ParameterInput *pin,
-                                          StateDescriptor *geometry) {
-  InitializeCachedCoordinateSystem<BoyerLindquistMeshBlock>(pin, geometry);
+template<>
+void Initialize<CBoyerLindquistMeshBlock>(ParameterInput* pin, StateDescriptor* geometry)
+{
+    InitializeCachedCoordinateSystem<BoyerLindquistMeshBlock>(pin, geometry);
 }
-template <>
-CBoyerLindquistMeshBlock
-GetCoordinateSystem<CBoyerLindquistMeshBlock>(MeshBlockData<Real> *rc) {
-  return GetCachedCoordinateSystem<BoyerLindquistMeshBlock>(rc);
+template<>
+CBoyerLindquistMeshBlock GetCoordinateSystem<CBoyerLindquistMeshBlock>(
+    MeshBlockData<Real>* rc)
+{
+    return GetCachedCoordinateSystem<BoyerLindquistMeshBlock>(rc);
 }
-template <>
-CBoyerLindquistMesh GetCoordinateSystem<CBoyerLindquistMesh>(MeshData<Real> *rc) {
-  return GetCachedCoordinateSystem<BoyerLindquistMesh>(rc);
+template<>
+CBoyerLindquistMesh GetCoordinateSystem<CBoyerLindquistMesh>(MeshData<Real>* rc)
+{
+    return GetCachedCoordinateSystem<BoyerLindquistMesh>(rc);
 }
-template <>
-void SetGeometry<CBoyerLindquistMeshBlock>(MeshBlockData<Real> *rc) {
-  SetCachedCoordinateSystem<BoyerLindquistMeshBlock>(rc);
+template<>
+void SetGeometry<CBoyerLindquistMeshBlock>(MeshBlockData<Real>* rc)
+{
+    SetCachedCoordinateSystem<BoyerLindquistMeshBlock>(rc);
 }
-template <>
-void SetGeometry<CBoyerLindquistMesh>(MeshData<Real> *rc) {
-  SetCachedCoordinateSystem<BoyerLindquistMesh>(rc);
+template<>
+void SetGeometry<CBoyerLindquistMesh>(MeshData<Real>* rc)
+{
+    SetCachedCoordinateSystem<BoyerLindquistMesh>(rc);
 }
 } // namespace Geometry

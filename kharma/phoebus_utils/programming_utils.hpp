@@ -17,17 +17,21 @@
 #include <algorithm>
 #include <vector>
 
-namespace programming {
+namespace programming
+{
 
-template <class SPECIAL, template <class...> class TEMPL>
-struct is_specialization_of : public std::false_type {};
+template<class SPECIAL, template<class...> class TEMPL>
+struct is_specialization_of : public std::false_type
+{};
 
-template <template <class...> class TEMPL, class... TPARAMS>
-struct is_specialization_of<TEMPL<TPARAMS...>, TEMPL> : public std::true_type {};
+template<template<class...> class TEMPL, class... TPARAMS>
+struct is_specialization_of<TEMPL<TPARAMS...>, TEMPL> : public std::true_type
+{};
 
-template <typename T>
-bool soft_equiv(const T x, const T y, const T tolerance = static_cast<T>(1.e-10f)) {
-  return (2. * fabs(y - x) < tolerance * (std::fabs(x) + std::fabs(y)));
+template<typename T>
+bool soft_equiv(const T x, const T y, const T tolerance = static_cast<T>(1.e-10f))
+{
+    return (2. * fabs(y - x) < tolerance * (std::fabs(x) + std::fabs(y)));
 }
 
 } // namespace programming

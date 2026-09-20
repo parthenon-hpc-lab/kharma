@@ -151,8 +151,8 @@ KOKKOS_INLINE_FUNCTION void calc_residual(const GRCoordinates& G, const Global& 
     const Global& Pi, const Global& Ui, const Global& Ps, const Global& dudt_explicit,
     const Global& dUi, const VarMap& m_p, const VarMap& m_u,
     const EMHD::EMHD_parameters& emhd_params, const EMHD::EMHD_parameters& emhd_params_s,
-    const int& nfvar, const int& k, const int& j, const int& i, const Microphysics::EOS::EOS& eos,
-    const double& dt, Global& residual)
+    const int& nfvar, const int& k, const int& j, const int& i,
+    const Microphysics::EOS::EOS& eos, const double& dt, Global& residual)
 {
     // These lines calculate res = (U_test - Ui)/dt - dudt_explicit - 0.5*(dU_new(ip) +
     // dUi(ip)) - dU_time(ip) ) Start with conserved vars corresponding to test P, U_test
@@ -174,9 +174,12 @@ KOKKOS_INLINE_FUNCTION void calc_residual(const GRCoordinates& G, const Global& 
 
         // Compute the EMHD parameters, which we'll re-use
         Real tau, chi_e, nu_e;
-        //TODO_EOS: In EMHD, gam is passed here, I'm just gonna use a dumb solution for now in order to compile it, but this should be fixed.
-        Real bulk = eos.BulkModulusFromDensityInternalEnergy(Ps(m_p.RHO, k, j, i), Ps(m_p.UU, k, j, i)/Ps(m_p.RHO, k, j, i));
-        Real pg = eos.PressureFromDensityInternalEnergy(Ps(m_p.RHO, k, j, i), Ps(m_p.UU, k, j, i)/Ps(m_p.RHO, k, j, i));
+        // TODO_EOS: In EMHD, gam is passed here, I'm just gonna use a dumb solution for
+        // now in order to compile it, but this should be fixed.
+        Real bulk = eos.BulkModulusFromDensityInternalEnergy(
+            Ps(m_p.RHO, k, j, i), Ps(m_p.UU, k, j, i) / Ps(m_p.RHO, k, j, i));
+        Real pg = eos.PressureFromDensityInternalEnergy(
+            Ps(m_p.RHO, k, j, i), Ps(m_p.UU, k, j, i) / Ps(m_p.RHO, k, j, i));
         Real gam = bulk / pg;
         EMHD::set_parameters(G, Ps, m_p, emhd_params, eos, k, j, i, tau, chi_e, nu_e);
         GRMHD::calc_4vecs(G, Ps, m_p, k, j, i, Loci::center, Dtmp);
@@ -191,7 +194,8 @@ KOKKOS_INLINE_FUNCTION void calc_residual(const GRCoordinates& G, const Global& 
         // Note we're now getting tau/chi_e/nu_e with emhd_params_s!
         // TODO(CEP) split out time-dependent parts of the params struct
         EMHD::set_parameters(G, Ps, m_p, emhd_params_s, eos, k, j, i, tau, chi_e, nu_e);
-        //TODO_EOS: This function uses a definition of temperature that is only valid for ideal gas case. Should probably be modified to work with general EOS.
+        // TODO_EOS: This function uses a definition of temperature that is only valid for
+        // ideal gas case. Should probably be modified to work with general EOS.
         EMHD::time_derivative_sources(G, P_test, Pi, Ps, m_p, tau, chi_e, nu_e, Dtmp,
             emhd_params_s.higher_order_terms, gam, dt, k, j, i, dUq,
             dUdP); // dU_time
@@ -205,7 +209,8 @@ KOKKOS_INLINE_FUNCTION void calc_residual(const GRCoordinates& G, const Global& 
         if (emhd_params.higher_order_terms) {
             const Real& rho = Ps(m_p.RHO, k, j, i);
             const Real& uu = Ps(m_p.UU, k, j, i);
-            //TODO_EOS: This function uses a definition of temperature that is only valid for ideal gas case. Should probably be modified to work with general EOS.
+            // TODO_EOS: This function uses a definition of temperature that is only valid
+            // for ideal gas case. Should probably be modified to work with general EOS.
             Real Theta = (gam - 1.) * uu / rho;
 
             rq *= (chi_e != 0) ? m::sqrt(rho * chi_e * tau * Theta * Theta) / tau : 1.;
@@ -227,7 +232,8 @@ KOKKOS_INLINE_FUNCTION void calc_jacobian(const GRCoordinates& G, const Global& 
     const VarMap& m_p, const VarMap& m_u, const EMHD::EMHD_parameters& emhd_params_solver,
     const EMHD::EMHD_parameters& emhd_params_sub_step_init, const int& nvar,
     const int& nfvar, const int& k, const int& j, const int& i, const Real& jac_delta,
-    const Microphysics::EOS::EOS& eos, const double& dt, Global& jacobian, Global& residual)
+    const Microphysics::EOS::EOS& eos, const double& dt, Global& jacobian,
+    Global& residual)
 {
     // Calculate residual of P, cache
     calc_residual(G, P_solver, P_full_step_init, U_full_step_init, P_sub_step_init,

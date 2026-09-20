@@ -23,24 +23,25 @@
 
 using namespace parthenon::package::prelude;
 
-namespace Geometry {
+namespace Geometry
+{
 
-std::shared_ptr<StateDescriptor> Initialize(ParameterInput *pin);
+std::shared_ptr<StateDescriptor> Initialize(ParameterInput* pin);
 
 // Set geometry data on grid, if needed.
 // Potentially a very expensive operation. You only want to do this
 // once, but it is deally done per meshblock, right at the beginning of
 // a problem generator.
-void SetGeometryBlock(MeshBlock *pmb, ParameterInput *pin);
+void SetGeometryBlock(MeshBlock* pmb, ParameterInput* pin);
 
 // Same as SetGeometryBlock, but a task for the task list.
 // Supports MeshBlockData or MeshData.
 // Template specializations are in geometry.cpp
-template <typename Data>
-TaskStatus UpdateGeometry(Data *rc);
+template<typename Data>
+TaskStatus UpdateGeometry(Data* rc);
 
-CoordSysMeshBlock GetCoordinateSystem(MeshBlockData<Real> *rc);
-CoordSysMesh GetCoordinateSystem(MeshData<Real> *rc);
+CoordSysMeshBlock GetCoordinateSystem(MeshBlockData<Real>* rc);
+CoordSysMesh GetCoordinateSystem(MeshData<Real>* rc);
 
 } // namespace Geometry
 

@@ -35,10 +35,10 @@
 
 #include "floors.hpp"
 // phoebus includes
+#include "domain.hpp"
 #include "microphysics/eos_kharma/eos_kharma.hpp"
 #include "phoebus_utils/unit_conversions.hpp"
 #include "phoebus_utils/variables.hpp"
-#include "domain.hpp"
 
 namespace Floors
 {
@@ -64,7 +64,6 @@ TaskStatus ApplyFloorsInFrame(MeshData<Real>* md, IndexDomain domain)
         std::vector<std::string>{"Floors.rho_floor", "Floors.u_floor"}, floors_map);
     const int rhofi = floors_map["Floors.rho_floor"].first;
     const int ufi = floors_map["Floors.u_floor"].first;
-
 
     const auto& eos_params = pmb0->packages.Get("eos")->AllParams();
     auto eos = eos_params.Get<Microphysics::EOS::EOS>("d.EOS");

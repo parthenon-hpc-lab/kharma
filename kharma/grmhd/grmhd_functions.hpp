@@ -44,8 +44,6 @@
 #include "kharma_utils.hpp"
 #include "types.hpp"
 
-
-
 /**
  * This namespace is solely for calc_tensor.
  * GRMHD::calc_4vecs intelligently skips the bcon calculation if B field is not present
@@ -270,8 +268,9 @@ KOKKOS_INLINE_FUNCTION void calc_ucon(const GRCoordinates& G, const Global& P,
  * Global GRMHD-only "p_to_u" call: for areas where nonideal terms are *always* 0!
  */
 template<typename Global>
-KOKKOS_INLINE_FUNCTION void p_to_u(const GRCoordinates& G, const Global& P, const VarMap& m_p, const Microphysics::EOS::EOS& eos, const int& k, const int& j, const int& i,
-    const Global& U, const VarMap& m_u, const Loci& loc = Loci::center)
+KOKKOS_INLINE_FUNCTION void p_to_u(const GRCoordinates& G, const Global& P,
+    const VarMap& m_p, const Microphysics::EOS::EOS& eos, const int& k, const int& j,
+    const int& i, const Global& U, const VarMap& m_u, const Loci& loc = Loci::center)
 {
     Real gdet = G.gdet(loc, j, i);
     FourVectors Dtmp;
@@ -279,12 +278,12 @@ KOKKOS_INLINE_FUNCTION void p_to_u(const GRCoordinates& G, const Global& P, cons
     // Particle number flux
     U(m_u.RHO, k, j, i) = P(m_p.RHO, k, j, i) * Dtmp.ucon[0] * gdet;
 
-    Real pg = eos.PressureFromDensityInternalEnergy(P(m_p.RHO, k, j, i), P(m_p.UU, k, j, i) / P(m_p.RHO, k, j, i));
+    Real pg = eos.PressureFromDensityInternalEnergy(
+        P(m_p.RHO, k, j, i), P(m_p.UU, k, j, i) / P(m_p.RHO, k, j, i));
     if (m_u.B1 >= 0) {
         // MHD stress-energy tensor w/ first index up, second index down
         Real mhd[GR_DIM];
-        GRMHD::calc_tensor(P(m_p.RHO, k, j, i), P(m_p.UU, k, j, i),
-            pg, Dtmp, 0, mhd);
+        GRMHD::calc_tensor(P(m_p.RHO, k, j, i), P(m_p.UU, k, j, i), pg, Dtmp, 0, mhd);
         U(m_u.UU, k, j, i) = mhd[0] * gdet + U(m_u.RHO, k, j, i);
         U(m_u.U1, k, j, i) = mhd[1] * gdet;
         U(m_u.U2, k, j, i) = mhd[2] * gdet;
@@ -292,8 +291,7 @@ KOKKOS_INLINE_FUNCTION void p_to_u(const GRCoordinates& G, const Global& P, cons
     } else {
         // HD stress-energy tensor w/ first index up, second index down
         Real hd[GR_DIM];
-        GRHD::calc_tensor(P(m_p.RHO, k, j, i), P(m_p.UU, k, j, i),
-            pg, Dtmp, 0, hd);
+        GRHD::calc_tensor(P(m_p.RHO, k, j, i), P(m_p.UU, k, j, i), pg, Dtmp, 0, hd);
         U(m_u.UU, k, j, i) = hd[0] * gdet + U(m_u.RHO, k, j, i);
         U(m_u.U1, k, j, i) = hd[1] * gdet;
         U(m_u.U2, k, j, i) = hd[2] * gdet;
@@ -306,9 +304,9 @@ KOKKOS_INLINE_FUNCTION void p_to_u(const GRCoordinates& G, const Global& P, cons
  * wind source.
  */
 KOKKOS_INLINE_FUNCTION void p_to_u_mhd(const GRCoordinates& G, const Real& rho,
-    const Real& u, const Real uvec[NVEC], const Real B_P[NVEC], const Microphysics::EOS::EOS& eos,
-    const int& k, const int& j, const int& i, Real& rho_ut, Real T[GR_DIM],
-    const Loci loc = Loci::center)
+    const Real& u, const Real uvec[NVEC], const Real B_P[NVEC],
+    const Microphysics::EOS::EOS& eos, const int& k, const int& j, const int& i,
+    Real& rho_ut, Real T[GR_DIM], const Loci loc = Loci::center)
 {
     Real gdet = G.gdet(loc, j, i);
 
@@ -320,7 +318,7 @@ KOKKOS_INLINE_FUNCTION void p_to_u_mhd(const GRCoordinates& G, const Real& rho,
 
     // MHD stress-energy tensor w/ first index up, second index down
     Real mhd[GR_DIM];
-    Real pg = eos.PressureFromDensityInternalEnergy(rho, u/rho);
+    Real pg = eos.PressureFromDensityInternalEnergy(rho, u / rho);
     calc_tensor(rho, u, pg, Dtmp, 0, mhd);
 
     T[0] = mhd[0] * gdet + rho_ut;

@@ -106,9 +106,8 @@ KOKKOS_FORCEINLINE_FUNCTION Real CalcIdealEntropy(
 KOKKOS_FORCEINLINE_FUNCTION Real CalcIdealEntropyDensity(
     const Real& rho, const Real& u, const Real& gam)
 {
-    return (gam - 1.) * u * m::pow(rho, 1.0-gam);
+    return (gam - 1.) * u * m::pow(rho, 1.0 - gam);
 }
-
 
 /**
  * Set the initial values of Ktot (and Ktot_adv, if enabled) from the problem's initial

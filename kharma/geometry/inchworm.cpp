@@ -29,58 +29,69 @@ using namespace parthenon::package::prelude;
 
 #include "geometry/inchworm.hpp"
 
-namespace Geometry {
+namespace Geometry
+{
 
-template <>
-void Initialize<InchwormMeshBlock>(ParameterInput *pin, StateDescriptor *geometry) {
-  Params &params = geometry->AllParams();
-  Real a = pin->GetOrAddReal("geometry", "a", 0.3);
-  Real k = pin->GetOrAddReal("geometry", "k", M_PI / 2.);
-  params.Add("a", a);
-  params.Add("k", k);
-}
-
-template <>
-void SetGeometry<InchwormMeshBlock>(MeshBlockData<Real> *rc) {}
-
-template <>
-void SetGeometry<InchwormMesh>(MeshData<Real> *rc) {}
-
-template <>
-InchwormMeshBlock GetCoordinateSystem<InchwormMeshBlock>(MeshBlockData<Real> *rc) {
-  auto &pkg = rc->GetMeshPointer()->packages.Get("geometry");
-  auto indexer = GetIndexer(rc);
-  Real a = pkg->Param<Real>("a");
-  Real k = pkg->Param<Real>("k");
-  return InchwormMeshBlock(indexer, a, k);
-}
-template <>
-InchwormMesh GetCoordinateSystem<InchwormMesh>(MeshData<Real> *rc) {
-  auto &pkg = rc->GetMeshPointer()->packages.Get("geometry");
-  auto indexer = GetIndexer(rc);
-  Real a = pkg->Param<Real>("a");
-  Real k = pkg->Param<Real>("k");
-  return InchwormMesh(indexer, a, k);
+template<>
+void Initialize<InchwormMeshBlock>(ParameterInput* pin, StateDescriptor* geometry)
+{
+    Params& params = geometry->AllParams();
+    Real a = pin->GetOrAddReal("geometry", "a", 0.3);
+    Real k = pin->GetOrAddReal("geometry", "k", M_PI / 2.);
+    params.Add("a", a);
+    params.Add("k", k);
 }
 
-template <>
-void Initialize<CInchwormMeshBlock>(ParameterInput *pin, StateDescriptor *geometry) {
-  InitializeCachedCoordinateSystem<InchwormMeshBlock>(pin, geometry);
+template<>
+void SetGeometry<InchwormMeshBlock>(MeshBlockData<Real>* rc)
+{}
+
+template<>
+void SetGeometry<InchwormMesh>(MeshData<Real>* rc)
+{}
+
+template<>
+InchwormMeshBlock GetCoordinateSystem<InchwormMeshBlock>(MeshBlockData<Real>* rc)
+{
+    auto& pkg = rc->GetMeshPointer()->packages.Get("geometry");
+    auto indexer = GetIndexer(rc);
+    Real a = pkg->Param<Real>("a");
+    Real k = pkg->Param<Real>("k");
+    return InchwormMeshBlock(indexer, a, k);
 }
-template <>
-CInchwormMeshBlock GetCoordinateSystem<CInchwormMeshBlock>(MeshBlockData<Real> *rc) {
-  return GetCachedCoordinateSystem<InchwormMeshBlock>(rc);
+template<>
+InchwormMesh GetCoordinateSystem<InchwormMesh>(MeshData<Real>* rc)
+{
+    auto& pkg = rc->GetMeshPointer()->packages.Get("geometry");
+    auto indexer = GetIndexer(rc);
+    Real a = pkg->Param<Real>("a");
+    Real k = pkg->Param<Real>("k");
+    return InchwormMesh(indexer, a, k);
 }
-template <>
-CInchwormMesh GetCoordinateSystem<CInchwormMesh>(MeshData<Real> *rc) {
-  return GetCachedCoordinateSystem<InchwormMesh>(rc);
+
+template<>
+void Initialize<CInchwormMeshBlock>(ParameterInput* pin, StateDescriptor* geometry)
+{
+    InitializeCachedCoordinateSystem<InchwormMeshBlock>(pin, geometry);
 }
-template <>
-void SetGeometry<CInchwormMeshBlock>(MeshBlockData<Real> *rc) {
-  SetCachedCoordinateSystem<InchwormMeshBlock>(rc);
+template<>
+CInchwormMeshBlock GetCoordinateSystem<CInchwormMeshBlock>(MeshBlockData<Real>* rc)
+{
+    return GetCachedCoordinateSystem<InchwormMeshBlock>(rc);
 }
-template <>
-void SetGeometry<CInchwormMesh>(MeshData<Real> *rc) {
-  SetCachedCoordinateSystem<InchwormMesh>(rc);
+template<>
+CInchwormMesh GetCoordinateSystem<CInchwormMesh>(MeshData<Real>* rc)
+{
+    return GetCachedCoordinateSystem<InchwormMesh>(rc);
+}
+template<>
+void SetGeometry<CInchwormMeshBlock>(MeshBlockData<Real>* rc)
+{
+    SetCachedCoordinateSystem<InchwormMeshBlock>(rc);
+}
+template<>
+void SetGeometry<CInchwormMesh>(MeshData<Real>* rc)
+{
+    SetCachedCoordinateSystem<InchwormMesh>(rc);
 }
 } // namespace Geometry

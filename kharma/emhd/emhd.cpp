@@ -326,10 +326,9 @@ TaskStatus AddSource(MeshData<Real>* md, MeshData<Real>* mdudt, IndexDomain doma
     auto pmb0 = mdudt->GetBlockData(0)->GetBlockPointer();
     // Options: Global
     const auto& gpars = pmb0->packages.Get("GRMHD")->AllParams();
-    
+
     const auto& eos_params = pmb0->packages.Get("eos")->AllParams();
     auto eos = eos_params.Get<Microphysics::EOS::EOS>("d.EOS");
-
 
     const int ndim = pmesh->ndim;
     // Options: Local
@@ -376,11 +375,10 @@ TaskStatus AddSource(MeshData<Real>* md, MeshData<Real>* mdudt, IndexDomain doma
                 Temps(b, m_ucov + mu, k, j, i) = ucov[mu];
             // theta
             Real pg = eos.PressureFromDensityInternalEnergy(
-                P(b)(m_p.RHO, k, j, i), P(b)(m_p.UU, k, j, i)/P(b)(m_p.RHO, k, j, i));
+                P(b)(m_p.RHO, k, j, i), P(b)(m_p.UU, k, j, i) / P(b)(m_p.RHO, k, j, i));
 
             // TODO_EOS: should this be P/rho or just the temperature?
-            Temps(b, m_theta, k, j, i) = m::max(
-                pg / P(b)(m_p.RHO, k, j, i), SMALL_NUM);
+            Temps(b, m_theta, k, j, i) = m::max(pg / P(b)(m_p.RHO, k, j, i), SMALL_NUM);
         });
 
     // Calculate & apply source terms

@@ -125,15 +125,14 @@ void ReadKharmaRestartHeader(std::string fname, ParameterInput* pin)
     Real gam, tNow, dt, tf;
 
     auto eos_type = fpinput->GetOrAddString("eos", "type", "IdealGas");
-    if(eos_type == "IdealGas"){
-        if(pin-> DoesParameterExist("GRMHD", "gamma")) {
+    if (eos_type == "IdealGas") {
+        if (pin->DoesParameterExist("GRMHD", "gamma")) {
             gam = fpinput->GetReal("GRMHD", std::string("gamma"));
         } else {
             gam = fpinput->GetReal("eos", std::string("gamma"));
         }
         pin->SetReal("eos", "gm1", gam - 1.0);
     }
-
 
     tNow = restartReader->GetAttr<Real>("Info", "Time");
     dt = restartReader->GetAttr<Real>("Info", "dt");
@@ -563,7 +562,6 @@ TaskStatus ReadKharmaRestart(std::shared_ptr<MeshBlockData<Real>> rc, ParameterI
         }
         gam = pmb->packages.Get("eos")->Param<Real>("gm1") + 1.0;
     }
-
 
     // Deep copy to device
     x1_f_device.DeepCopy(x1_f_host);

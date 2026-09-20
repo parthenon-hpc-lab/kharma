@@ -135,7 +135,7 @@ T Reductions::DomainReduction(MeshData<Real>* md, const GReal startx[3],
 
     const auto& pars = pmesh->packages.Get("GRMHD")->AllParams();
     const auto& emhd_params = EMHD::GetEMHDParameters(pmesh->packages);
-       
+
     const auto& eos_params = pmesh->packages.Get("eos")->AllParams();
     auto eos = eos_params.Get<Microphysics::EOS::EOS>("d.EOS");
 

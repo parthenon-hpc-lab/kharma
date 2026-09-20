@@ -71,19 +71,20 @@ KOKKOS_INLINE_FUNCTION int apply_instability_limits(const GRCoordinates& G,
 {
     int eflag = 0;
 
-    //TODO_EOS: Check if everything is fine here, I'm assuming it's not.
+    // TODO_EOS: Check if everything is fine here, I'm assuming it's not.
     Real rho = P(m_p.RHO, k, j, i);
     Real uu = P(m_p.UU, k, j, i);
     Real qtilde = (m_p.Q >= 0) ? P(m_p.Q, k, j, i) : 0.;
     Real dPtilde = (m_p.DP >= 0) ? P(m_p.DP, k, j, i) : 0.;
 
-    //Real pg = (gam - 1.) * uu;
-    Real pg = eos.PressureFromDensityInternalEnergy(rho, uu/rho);
+    // Real pg = (gam - 1.) * uu;
+    Real pg = eos.PressureFromDensityInternalEnergy(rho, uu / rho);
 
-    //TODO_EOS: check theta here, might be temperature and need to be calculated accordingly.
+    // TODO_EOS: check theta here, might be temperature and need to be calculated
+    // accordingly.
     Real Theta = pg / rho;
     const Real ef = rho + pg + uu; // \rho * h = rho + u + P.
-    const Real bulk = eos.BulkModulusFromDensityInternalEnergy(rho, uu/rho);
+    const Real bulk = eos.BulkModulusFromDensityInternalEnergy(rho, uu / rho);
 
     Real cs = m::sqrt(bulk / ef);
     FourVectors D;
@@ -91,8 +92,8 @@ KOKKOS_INLINE_FUNCTION int apply_instability_limits(const GRCoordinates& G,
     Real bsq = m::max(dot(D.bcon, D.bcov), SMALL_NUM);
 
     Real tau, chi_e, nu_e;
-    //TODO_EOS: This might need to be changed for general eos.
-    //TODO_EOS: for now, I'll calculate gamma
+    // TODO_EOS: This might need to be changed for general eos.
+    // TODO_EOS: for now, I'll calculate gamma
     EMHD::set_parameters(G, P, m_p, emhd_params, eos, k, j, i, tau, chi_e, nu_e);
 
     Real q, dP;
