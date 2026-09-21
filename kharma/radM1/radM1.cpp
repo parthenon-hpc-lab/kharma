@@ -215,13 +215,14 @@ void RadM1::ApplyRadM1Floors(MeshBlockData<Real>* rc, IndexDomain domain)
     pmb->par_for("ApplyRadM1Floors", kb.s, kb.e, jb.s, jb.e, ib.s, ib.e,
         KOKKOS_LAMBDA (const int &k, const int &j, const int &i)
         {
-            if (P(m_p.UU_RAD, k, j, i) < erad_floor) {
-                P(m_p.UU_RAD, k, j, i) = erad_floor;
+            GReal Xembed_fix[GR_DIM];
+            G.coord_embed(k, j, i, Loci::center, Xembed_fix);
+            const GReal r_hor_fix = G.coords.get_horizon();
+            const bool inside_horizon = (r_hor_fix > 0.0) && (Xembed_fix[1] < r_hor_fix);
 
-                // Flooring Erf here without also resetting the associated radiation-frame
-                // velocity leaves a cell that looks "floored" (tiny Erf) but, if it had a
-                // large Lorentz factor before hitting the floor, still reconverts
-                // (BlockPtoU) to a large conserved energy via that gamma^2 factor.
+
+            if (P(m_p.UU_RAD, k, j, i) < erad_floor || inside_horizon) {
+                P(m_p.UU_RAD, k, j, i) = erad_floor;
                 P(m_p.U1_RAD, k, j, i) = 0.0;
                 P(m_p.U2_RAD, k, j, i) = 0.0;
                 P(m_p.U3_RAD, k, j, i) = 0.0;
@@ -524,16 +525,16 @@ void RadM1::AddSourceImplicitly(
         pmb->par_for("RadM1_Implicit_Solver4D", kb.s, kb.e, jb.s, jb.e, ib.s, ib.e,
             KOKKOS_LAMBDA (const int &k, const int &j, const int &i)
             {
-                // Check if it's within the horizon, if it is, just assume no interaction and dU_subinit = 0;
-                // PNM: I've been having some trouble getting it to stay controled within the horizon. 
-                GReal Xembed[GR_DIM];
-                G.coord_embed(k, j, i, Loci::center, Xembed);
-                const GReal r = Xembed[1];
-
-                if (r < G.coords.get_horizon()) {
-                    rimplflag(0, k, j, i) = static_cast<int>(StatusImplicitStep::success);
-                    return;
-                }
+                // // Check if it's within the horizon, if it is, just assume no interaction and dU_subinit = 0;
+                // // PNM: I've been having some trouble getting it to stay controled within the horizon.
+                // GReal Xembed[GR_DIM];
+                // G.coord_embed(k, j, i, Loci::center, Xembed);
+                // const GReal r = Xembed[1];
+                // const GReal r_hor = G.coords.get_horizon();
+                // if (r_hor > 0.0 && r < r_hor) {
+                //     rimplflag(0, k, j, i) = static_cast<int>(StatusImplicitStep::success);
+                //     return;
+                // }
 
 
                 const Real U_entry[8] = {U_init_substep(m_u.UU, k, j, i), U_init_substep(m_u.U1, k, j, i),
@@ -570,35 +571,35 @@ void RadM1::AddSourceImplicitly(
                     return;
                 }
 
-                // rflagl = solve_4d_prad(G, U_init_substep, P_init_substep, m_p, m_u, k, j, i,
-                //     dt, eos, src_rootfind_eps, src_rootfind_tol, src_rootfind_maxiter,
-                //     rad_opac, pflag, rinvflag, U_entry, dS_subinit);
+                rflagl = solve_4d_prad(G, U_init_substep, P_init_substep, m_p, m_u, k, j, i,
+                    dt, eos, src_rootfind_eps, src_rootfind_tol, src_rootfind_maxiter,
+                    rad_opac, pflag, rinvflag, U_entry, dS_subinit);
 
-                // // Prad alters the P_init. So we gotta revert it back.
-                // U_init_substep(m_u.UU, k, j, i) = U_entry[0];
-                // U_init_substep(m_u.U1, k, j, i) = U_entry[1];
-                // U_init_substep(m_u.U2, k, j, i) = U_entry[2];
-                // U_init_substep(m_u.U3, k, j, i) = U_entry[3];
-                // P_init_substep(m_p.RHO, k, j, i) = P_entry[0];
-                // P_init_substep(m_p.UU, k, j, i) = P_entry[1];
-                // P_init_substep(m_p.U1, k, j, i) = P_entry[2];
-                // P_init_substep(m_p.U2, k, j, i) = P_entry[3];
-                // P_init_substep(m_p.U3, k, j, i) = P_entry[4];
+                // Prad alters the P_init. So we gotta revert it back.
+                U_init_substep(m_u.UU, k, j, i) = U_entry[0];
+                U_init_substep(m_u.U1, k, j, i) = U_entry[1];
+                U_init_substep(m_u.U2, k, j, i) = U_entry[2];
+                U_init_substep(m_u.U3, k, j, i) = U_entry[3];
+                P_init_substep(m_p.RHO, k, j, i) = P_entry[0];
+                P_init_substep(m_p.UU, k, j, i) = P_entry[1];
+                P_init_substep(m_p.U1, k, j, i) = P_entry[2];
+                P_init_substep(m_p.U2, k, j, i) = P_entry[3];
+                P_init_substep(m_p.U3, k, j, i) = P_entry[4];
 
-                // if (rflagl == static_cast<int>(StatusImplicitStep::success)) {
-                //     dU_substep(m_u.UU, k, j, i) -= dS_subinit[0];
-                //     dU_substep(m_u.U1, k, j, i) -= dS_subinit[1];
-                //     dU_substep(m_u.U2, k, j, i) -= dS_subinit[2];
-                //     dU_substep(m_u.U3, k, j, i) -= dS_subinit[3];
-                //     dU_substep(m_u.UU_RAD, k, j, i) += dS_subinit[0];
-                //     dU_substep(m_u.U1_RAD, k, j, i) += dS_subinit[1];
-                //     dU_substep(m_u.U2_RAD, k, j, i) += dS_subinit[2];
-                //     dU_substep(m_u.U3_RAD, k, j, i) += dS_subinit[3];
+                if (rflagl == static_cast<int>(StatusImplicitStep::success)) {
+                    dU_substep(m_u.UU, k, j, i) -= dS_subinit[0];
+                    dU_substep(m_u.U1, k, j, i) -= dS_subinit[1];
+                    dU_substep(m_u.U2, k, j, i) -= dS_subinit[2];
+                    dU_substep(m_u.U3, k, j, i) -= dS_subinit[3];
+                    dU_substep(m_u.UU_RAD, k, j, i) += dS_subinit[0];
+                    dU_substep(m_u.U1_RAD, k, j, i) += dS_subinit[1];
+                    dU_substep(m_u.U2_RAD, k, j, i) += dS_subinit[2];
+                    dU_substep(m_u.U3_RAD, k, j, i) += dS_subinit[3];
 
-                //     rimplflag(0, k, j, i) =
-                //         static_cast<int>(StatusImplicitStep::pradfallback_success);
-                //     return;
-                // }
+                    rimplflag(0, k, j, i) =
+                        static_cast<int>(StatusImplicitStep::pradfallback_success);
+                    return;
+                }
 
 
                 // auto status_1d = solve_radiation_1d(G, P_init_substep, m_p, m_u, eos, rad_opac, k, j, i, dt, src_rootfind_tol,

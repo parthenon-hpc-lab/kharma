@@ -45,96 +45,21 @@
 namespace RadM1
 {
 
-KOKKOS_INLINE_FUNCTION void ApplyColdClosureFix(const GRCoordinates& G,
-    const Real R_t_cov_orig[GR_DIM], const double gammarel2_fixed, const int& j,
-    const int& i, Real& new_R_t_t, Real& Erf)
+KOKKOS_INLINE_FUNCTION Real compute_y_max(const Real GAMMAMAX)
 {
-
-    Real gcon_tt = G.gcon(Loci::center, j, i, 0, 0);
-
-    // Time-Space cross term: g^{ti} R_i
-    Real dot_t_i = G.gcon(Loci::center, j, i, 0, 1) * R_t_cov_orig[1] +
-                   G.gcon(Loci::center, j, i, 0, 2) * R_t_cov_orig[2] +
-                   G.gcon(Loci::center, j, i, 0, 3) * R_t_cov_orig[3];
-
-    // Purely Spatial term: g^{ij} R_i R_j
-    Real dot_spatial =
-        G.gcon(Loci::center, j, i, 1, 1) * (R_t_cov_orig[1] * R_t_cov_orig[1]) +
-        2.0 * G.gcon(Loci::center, j, i, 1, 2) * (R_t_cov_orig[1] * R_t_cov_orig[2]) +
-        G.gcon(Loci::center, j, i, 2, 2) * (R_t_cov_orig[2] * R_t_cov_orig[2]) +
-        2.0 * G.gcon(Loci::center, j, i, 1, 3) * (R_t_cov_orig[1] * R_t_cov_orig[3]) +
-        2.0 * G.gcon(Loci::center, j, i, 2, 3) * (R_t_cov_orig[2] * R_t_cov_orig[3]) +
-        G.gcon(Loci::center, j, i, 3, 3) * (R_t_cov_orig[3] * R_t_cov_orig[3]);
-
-    Real utsq = -gammarel2_fixed * gcon_tt;
-
-    Real radical_inside = (dot_t_i * dot_t_i - gcon_tt * dot_spatial) * utsq *
-                          (gcon_tt + utsq) * m::pow(gcon_tt + 4.0 * utsq, 2);
-
-    Real radical = m::sqrt(m::max(0.0, radical_inside));
-
-    new_R_t_t = 0.25 * (-4.0 * dot_t_i * utsq * (gcon_tt + utsq) + radical) /
-                (gcon_tt * utsq * (gcon_tt + utsq));
-
-    Erf = 0.75 * radical / (utsq * (gcon_tt + utsq) * (gcon_tt + 4.0 * utsq));
-}
-
-KOKKOS_INLINE_FUNCTION double calculate_gamma_rel2(
-    const GRCoordinates& G, const Real R_t_cov[GR_DIM], const int& j, const int& i)
-{
-    Real gcon_tt = G.gcon(Loci::center, j, i, 0, 0);
-    Real R_t_t = R_t_cov[0];
-
-    // Time-Space cross term: g^{ti} R^t_i
-    Real dot_t_i = G.gcon(Loci::center, j, i, 0, 1) * R_t_cov[1] +
-                   G.gcon(Loci::center, j, i, 0, 2) * R_t_cov[2] +
-                   G.gcon(Loci::center, j, i, 0, 3) * R_t_cov[3];
-
-    // Purely Spatial term: g^{ij} R^t_i R^t_j
-    Real dot_spatial =
-        G.gcon(Loci::center, j, i, 1, 1) * (R_t_cov[1] * R_t_cov[1]) +
-        2.0 * G.gcon(Loci::center, j, i, 1, 2) * (R_t_cov[1] * R_t_cov[2]) +
-        G.gcon(Loci::center, j, i, 2, 2) * (R_t_cov[2] * R_t_cov[2]) +
-        2.0 * G.gcon(Loci::center, j, i, 1, 3) * (R_t_cov[1] * R_t_cov[3]) +
-        2.0 * G.gcon(Loci::center, j, i, 2, 3) * (R_t_cov[2] * R_t_cov[3]) +
-        G.gcon(Loci::center, j, i, 3, 3) * (R_t_cov[3] * R_t_cov[3]);
-
-    Real invariant_scalar =
-        gcon_tt * (R_t_t * R_t_t) + 2.0 * R_t_t * dot_t_i + dot_spatial;
-
-    // Calculate Roots for (u^t_R)^2
-    Real radical_inside = 4.0 * (gcon_tt * gcon_tt) * (R_t_t * R_t_t) +
-                          (dot_t_i * dot_t_i) +
-                          gcon_tt * (8.0 * R_t_t * dot_t_i + 3.0 * dot_spatial);
-    Real radical = m::sqrt(m::max(0.0, radical_inside));
-
-    Real num_b = -2.0 * (gcon_tt * gcon_tt) * (R_t_t * R_t_t) -
-                 gcon_tt * (4.0 * R_t_t * dot_t_i + dot_spatial) +
-                 gcon_tt * R_t_t * radical + dot_t_i * (-dot_t_i + radical);
-
-    Real num_a = 2.0 * (gcon_tt * gcon_tt) * (R_t_t * R_t_t) +
-                 dot_t_i * (dot_t_i + radical) +
-                 gcon_tt * (4.0 * R_t_t * dot_t_i + dot_spatial + R_t_t * radical);
-    Real gamma2a = -0.25 * num_a / invariant_scalar;
-
-    Real gamma2b = 0.25 * num_b / invariant_scalar;
-
-    Real gamma2 = gamma2a;
-    if (gamma2a < (1.0 - 1e-10) || !m::isfinite(gamma2a)) {
-        gamma2 = gamma2b;
+    const Real target = GAMMAMAX * GAMMAMAX;
+    Real y_old = 0.9998;
+    Real E_old = target - (2.0 - y_old + m::sqrt(4.0 - 3.0 * y_old)) / (4.0 - 4.0 * y_old);
+    for (int n = 0; n < 40; ++n) {
+        Real dEdy = (0.375 * y_old - 0.25 * m::sqrt(4.0 - 3.0 * y_old) - 0.625) /
+                    (m::sqrt(4.0 - 3.0 * y_old) * (1.0 - y_old) * (1.0 - y_old));
+        Real y_new = m::min(y_old - E_old / dEdy, 0.99999999999999);
+        Real E_new = target - (2.0 - y_new + m::sqrt(4.0 - 3.0 * y_new)) / (4.0 - 4.0 * y_new);
+        y_old = y_new;
+        if (m::abs(E_new) / target <= 1.e-9) break;
+        E_old = E_new;
     }
-
-    Real alpha_sq = -1.0 / gcon_tt;
-    Real gammarel2 = gamma2 * alpha_sq;
-
-    // Hard floor for physical bounds (Lorentz factor squared MUST be >= 1.0)
-    // TODO: FLOOR! CHANGE THIS
-    Real GAMMA_SMALL_LIMIT = (1.0 - 1e-10);
-    if (gammarel2 < 1.0 && gammarel2 > GAMMA_SMALL_LIMIT) {
-        gammarel2 = 1.0;
-    }
-
-    return gammarel2;
+    return y_old;
 }
 
 KOKKOS_INLINE_FUNCTION StatusRadiationInversion u_to_p_rad(const GRCoordinates& G,
@@ -143,174 +68,109 @@ KOKKOS_INLINE_FUNCTION StatusRadiationInversion u_to_p_rad(const GRCoordinates& 
 {
     Real gdet = G.gdet(Loci::center, j, i);
 
-    // Exact-zero radiation field: for testing cases. We don't wanna go down this entire
-    // path, otherwise, it will break due to division by 0. Sometimes we might want to run
-    // with radM1 on, but no source term just to check if something is broken, it's nice
-    // to have the possibility to do so.
     if (U_rad[0] == 0.0 && U_rad[1] == 0.0 && U_rad[2] == 0.0 && U_rad[3] == 0.0) {
         P_rad[0] = 0.0;
         P_rad[1] = 0.0;
         P_rad[2] = 0.0;
         P_rad[3] = 0.0;
-        // Trivial exact-zero case: treat as "normal" (not cold closure).
         if (used_normal_out != nullptr) *used_normal_out = true;
         return StatusRadiationInversion::success;
     }
 
-    // Recover R^t_mu from conserved state
-    Real R_t_cov[4] = {
-        U_rad[0] / gdet, U_rad[1] / gdet, U_rad[2] / gdet, U_rad[3] / gdet};
+    Real gcon_tt = G.gcon(Loci::center, j, i, 0, 0);
+    Real alpha = m::sqrt(-1.0 / gcon_tt);
 
-    // Check if any of the components are not finite
-    if (!m::isfinite(R_t_cov[0]) || !m::isfinite(R_t_cov[1]) ||
-        !m::isfinite(R_t_cov[2]) || !m::isfinite(R_t_cov[3])) {
+    Real Ucov_zamo[4];
+    for (int mu = 0; mu < 4; ++mu) Ucov_zamo[mu] = alpha * U_rad[mu] / gdet;
+
+    if (!m::isfinite(Ucov_zamo[0]) || !m::isfinite(Ucov_zamo[1]) || !m::isfinite(Ucov_zamo[2]) ||
+        !m::isfinite(Ucov_zamo[3])) {
         P_rad[0] = 1.e-30; P_rad[1] = 0.0; P_rad[2] = 0.0; P_rad[3] = 0.0;
         if (used_normal_out != nullptr) *used_normal_out = false;
         return StatusRadiationInversion::division_nonfinite;
     }
-    // Raise index to get R^{t\mu}
-    Real R_t_con[4];
-    G.raise(R_t_cov, R_t_con, k, j, i, Loci::center);
 
-    // Calculate gamma^2 for the radiation frame
-    Real gammarel2 = calculate_gamma_rel2(G, R_t_cov, j, i);
+    Real Ucon_zamo[4];
+    G.raise(Ucov_zamo, Ucon_zamo, k, j, i, Loci::center);
 
-    // Pre-calculate alpha bounds and rest-frame energy E_rf
-    Real alpha_sq = -1.0 / G.gcon(Loci::center, j, i, 0, 0);
-    Real alpha = m::sqrt(alpha_sq);
-    Real E_rf = (3.0 * R_t_con[0] * alpha_sq) / (4.0 * gammarel2 - 1.0);
+    Real eta_cov0 = -alpha;
+    Real eta_con[4];
+    for (int mu = 0; mu < 4; ++mu) eta_con[mu] = G.gcon(Loci::center, j, i, 0, mu) * eta_cov0;
 
-    // Limits
-    const Real min_erad = 1.e-30;
-    const Real GAMMAMAX = 100.0;
-    const Real GAMMA_TOL = 1.0 - 1e-10; // matches koral's GAMMASMALLLIMIT
-    int flag1 = (gammarel2 >= 1.0);
-    int flag2 = (E_rf > min_erad);
-    int flag3 = (gammarel2 <= (GAMMAMAX * GAMMAMAX) / (GAMMA_TOL * GAMMA_TOL));
+    Real U_dot_eta = Ucon_zamo[0] * eta_cov0;
 
-    int nonfailure = flag1 && flag2 && flag3;
+    Real Utilde_con[4] = {0.0, 0.0, 0.0, 0.0};
+    for (int mu = 1; mu < 4; ++mu) Utilde_con[mu] = Ucon_zamo[mu] + eta_con[mu] * U_dot_eta;
 
-    // Our primitives is saving uvec_rad as the eulerian frame velocity.
-    // $\tilde{u}^i = \gamma v^i$
-    Real uvec_radframe_con[4] = {0};
+    Real U_sq = 0.0;
+    for (int mu = 0; mu < 4; ++mu) U_sq += Ucov_zamo[mu] * Ucon_zamo[mu];
+    Real Utilde_sq = U_sq + U_dot_eta * U_dot_eta;
 
-    // Evaluate valid primitives or apply cold closure fix
-    bool used_normal = false;
-    int flag4 = 1;
-    if (nonfailure) {
-        for (int mu = 0; mu < 4; ++mu) {
-            uvec_radframe_con[mu] =
-                alpha *
-                (R_t_con[mu] + 1. / 3. * E_rf * G.gcon(Loci::center, j, i, 0, mu) *
-                                   (4.0 * gammarel2 - 1.0)) /
-                (4. / 3. * E_rf * m::sqrt(gammarel2));
-        }
-
-        // After calculating uvec_radframe_con, we can still have trouble with gamma >
-        // gammamax, so let's recheck
-        Real qsq = G.gcov(Loci::center, j, i, 1, 1) * uvec_radframe_con[1] *
-                       uvec_radframe_con[1] +
-                   G.gcov(Loci::center, j, i, 2, 2) * uvec_radframe_con[2] *
-                       uvec_radframe_con[2] +
-                   G.gcov(Loci::center, j, i, 3, 3) * uvec_radframe_con[3] *
-                       uvec_radframe_con[3] +
-                   2.0 * G.gcov(Loci::center, j, i, 1, 2) * uvec_radframe_con[1] *
-                       uvec_radframe_con[2] +
-                   2.0 * G.gcov(Loci::center, j, i, 1, 3) * uvec_radframe_con[1] *
-                       uvec_radframe_con[3] +
-                   2.0 * G.gcov(Loci::center, j, i, 2, 3) * uvec_radframe_con[2] *
-                       uvec_radframe_con[3];
-        Real gammarel2_out = 1.0 + qsq;
-
-        // self consistent is comparing the gammarel2 we obtained with the gmmarel2_out
-        // They should match I think, but we are checking here 1e-6 is hard coded, we
-        // should get rid of this
-        // TODO (PNM): Maybe get rid of this?
-        const bool self_consistent =
-            m::abs(gammarel2_out - gammarel2) <= 1.e-6 * (gammarel2_out + gammarel2);
-
-        flag4 = gammarel2_out <= (GAMMAMAX * GAMMAMAX) / (GAMMA_TOL * GAMMA_TOL);
-        used_normal = std::isfinite(E_rf) && std::isfinite(uvec_radframe_con[1]) &&
-                      std::isfinite(uvec_radframe_con[2]) &&
-                      std::isfinite(uvec_radframe_con[3]) && flag4 && self_consistent;
+    if (Utilde_sq < 0.0) {
+        Utilde_sq = 0.0;
+        Utilde_con[1] = 0.0; Utilde_con[2] = 0.0; Utilde_con[3] = 0.0;
     }
 
-    // Report which case the inversion took in order to calculate the jacobian.
+    const Real GAMMAMAX = 50.0;
+    const Real y_max = compute_y_max(GAMMAMAX);
+
+    Real y = Utilde_sq / (U_dot_eta * U_dot_eta + 1.e-150);
+    Real gamma_rad_sq = (2.0 - y + m::sqrt(m::max(0.0, 4.0 - 3.0 * y))) / (4.0 - 4.0 * y);
+
+    Real p_rad = -U_dot_eta / (4.0 * gamma_rad_sq - 1.0);
+    Real Erf = p_rad * 3.0;
+
+    Real uvec_radframe_con[4] = {0.0, 0.0, 0.0, 0.0};
+    for (int mu = 1; mu < 4; ++mu)
+        uvec_radframe_con[mu] = m::sqrt(gamma_rad_sq) * Utilde_con[mu] / (4.0 * p_rad * gamma_rad_sq);
+
+    bool failed = (y > y_max) || (y < 0.0) || !m::isfinite(U_dot_eta) || (U_dot_eta > 0.0) ||
+                  !m::isfinite(uvec_radframe_con[1]) || !m::isfinite(uvec_radframe_con[2]) ||
+                  !m::isfinite(uvec_radframe_con[3]);
+
+    bool used_normal = !failed;
     if (used_normal_out != nullptr) *used_normal_out = used_normal;
 
-    if (!used_normal) {
-        // Attempt Cold Closure
-        // gammarel2_slow should definitely not be this, should be way smaller
-        // TODO (PNM): See if this is necessary
-        Real gammarel2_slow = m::pow(1.0 + 1.0e-4, 2.0);
-        Real gammarel2_fast = GAMMAMAX * GAMMAMAX;
+    if (failed) {
+        Real Uabs = 0.5 * (m::abs(U_dot_eta) + m::sqrt(m::abs(Utilde_sq)) + 1.e-150);
+        for (int mu = 1; mu < 4; ++mu) uvec_radframe_con[mu] = GAMMAMAX * Utilde_con[mu] / Uabs;
 
-        Real R_t_t_slow, Erf_slow;
-        ApplyColdClosureFix(G, R_t_cov, gammarel2_slow, j, i, R_t_t_slow, Erf_slow);
+        Real qsq = G.gcov(Loci::center, j, i, 1, 1) * uvec_radframe_con[1] * uvec_radframe_con[1] +
+                   G.gcov(Loci::center, j, i, 2, 2) * uvec_radframe_con[2] * uvec_radframe_con[2] +
+                   G.gcov(Loci::center, j, i, 3, 3) * uvec_radframe_con[3] * uvec_radframe_con[3] +
+                   2.0 * G.gcov(Loci::center, j, i, 1, 2) * uvec_radframe_con[1] * uvec_radframe_con[2] +
+                   2.0 * G.gcov(Loci::center, j, i, 1, 3) * uvec_radframe_con[1] * uvec_radframe_con[3] +
+                   2.0 * G.gcov(Loci::center, j, i, 2, 3) * uvec_radframe_con[2] * uvec_radframe_con[3];
+        if (qsq < 0.0 || m::abs(qsq) < 1.e-10) qsq = 1.e-10;
+        Real gamma_rad_sq_fb = 1.0 + qsq;
 
-        Real R_t_t_fast, Erf_fast;
-        ApplyColdClosureFix(G, R_t_cov, gammarel2_fast, j, i, R_t_t_fast, Erf_fast);
+        Real f = m::sqrt((GAMMAMAX * GAMMAMAX - 1.0) / (gamma_rad_sq_fb - 1.0));
+        uvec_radframe_con[1] *= f;
+        uvec_radframe_con[2] *= f;
+        uvec_radframe_con[3] *= f;
 
-        Real R_t_t_new, gammarel2_new;
-
-        if (m::abs(R_t_t_slow - R_t_cov[0]) > m::abs(R_t_t_fast - R_t_cov[0])) {
-            R_t_t_new = R_t_t_fast;
-            E_rf = Erf_fast;
-            gammarel2_new = gammarel2_fast;
-        } else {
-            R_t_t_new = R_t_t_slow;
-            E_rf = Erf_slow;
-            gammarel2_new = gammarel2_slow;
-        }
-
-        // If even the closure fix yields a non-positive energy, this step is a failure.
-        if (E_rf <= 0.0) {
-            P_rad[0] = min_erad;
-            P_rad[1] = 0.0;
-            P_rad[2] = 0.0;
-            P_rad[3] = 0.0;
-            if (!flag1) {
-                return StatusRadiationInversion::gammarel2_low;
-            } else if (!flag2) {
-                return StatusRadiationInversion::urad_below_floor;
-            } else if (!flag3 || !flag4) {
-                return StatusRadiationInversion::gammarel2_high;
-            } else {
-                return StatusRadiationInversion::division_nonfinite;
-            }
-        }
-
-        Real R_t_cov_new[4] = {R_t_t_new, R_t_cov[1], R_t_cov[2], R_t_cov[3]};
-        Real R_t_con_new[4];
-        G.raise(R_t_cov_new, R_t_con_new, k, j, i, Loci::center);
-
-        for (int mu = 0; mu < 4; ++mu) {
-            uvec_radframe_con[mu] =
-                alpha *
-                (R_t_con_new[mu] + 1. / 3. * E_rf * G.gcon(Loci::center, j, i, 0, mu) *
-                                       (4.0 * gammarel2_new - 1.0)) /
-                (4. / 3. * E_rf * m::sqrt(gammarel2_new));
-        }
-
-        // The cold-closure fallback also divides by E_rf, so check it too.
-        if (!std::isfinite(E_rf) || !std::isfinite(uvec_radframe_con[1]) ||
-            !std::isfinite(uvec_radframe_con[2]) ||
-            !std::isfinite(uvec_radframe_con[3])) {
-            P_rad[0] = min_erad;
-            P_rad[1] = 0.0;
-            P_rad[2] = 0.0;
-            P_rad[3] = 0.0;
-            return StatusRadiationInversion::cold_closure_nonfinite;
-        }
+        Real U_dot_eta_tp2 = -(1.e-30 + m::sqrt(m::abs(Utilde_sq) / y_max));
+        Real gamma_rad_sq_tp2 = (2.0 - y_max + m::sqrt(4.0 - 3.0 * y_max)) / (4.0 - 4.0 * y_max);
+        Real p_rad_tp2 = -U_dot_eta_tp2 / (4.0 * gamma_rad_sq_tp2 - 1.0);
+        Erf = p_rad_tp2 * 3.0;
+        for (int mu = 1; mu < 4; ++mu)
+            uvec_radframe_con[mu] = m::sqrt(gamma_rad_sq_tp2) * Utilde_con[mu] / (4.0 * p_rad_tp2 * gamma_rad_sq_tp2);
     }
 
-    P_rad[0] = E_rf;
+    if (!m::isfinite(Erf)) Erf = 1.e-30;
+    if (!m::isfinite(uvec_radframe_con[1])) uvec_radframe_con[1] = 0.0;
+    if (!m::isfinite(uvec_radframe_con[2])) uvec_radframe_con[2] = 0.0;
+    if (!m::isfinite(uvec_radframe_con[3])) uvec_radframe_con[3] = 0.0;
+
+    P_rad[0] = Erf;
     P_rad[1] = uvec_radframe_con[1];
     P_rad[2] = uvec_radframe_con[2];
     P_rad[3] = uvec_radframe_con[3];
 
-    return StatusRadiationInversion::success;
+    return used_normal ? StatusRadiationInversion::success
+                        : StatusRadiationInversion::gammarel2_high;
 }
+
 
 KOKKOS_INLINE_FUNCTION void compute_covariant_fourforce(const GRCoordinates& G,
     const Real P_mhd[4], const Real P_rad[4], const Real rho,
@@ -961,13 +821,6 @@ KOKKOS_INLINE_FUNCTION int solve_4d_pmhd(const GRCoordinates& G, const VariableP
             Real R_t_cov_guess[4] = {U_rad_guess[0] / gdet, U_rad_guess[1] / gdet,
                 U_rad_guess[2] / gdet, U_rad_guess[3] / gdet};
 
-            Real gamma_sq_guess = calculate_gamma_rel2(G, R_t_cov_guess, j, i);
-
-            if (gamma_sq_guess > gamma_max_sq || gamma_sq_guess < 1.0) {
-                // If velocity exploded, aggressively damp the step (e.g., cut it in
-                // half)
-                scaling_factor = m::max(scaling_factor, 0.5);
-            }
 
             // Verify the scaling factor is sane
             if (!(scaling_factor > 0.0 && scaling_factor <= 1.0)) {

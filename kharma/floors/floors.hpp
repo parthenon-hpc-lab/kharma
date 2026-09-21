@@ -144,6 +144,8 @@ class Prescription
     Real ktot_max;
     // Limit fluid Lorentz factor
     Real gamma_max;
+    // floor radiation energy density
+    Real urad_floor;
     // Floor options (frame was MOVED to templating)
     bool use_r_char, temp_adjust_u, adjust_k;
     // Add density to respect the gamma ceiling?
@@ -157,6 +159,8 @@ inline Prescription MakePrescription(
 {
     Prescription p;
     // Floor parameters
+
+    p.urad_floor = pin->GetOrAddReal(block, "urad_floor", 1.e-20);
 
     p.gamma_floor = gamma_floor;
     if (pin->GetBoolean("coordinates", "spherical")) {
