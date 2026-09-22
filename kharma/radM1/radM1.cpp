@@ -551,6 +551,7 @@ void RadM1::AddSourceImplicitly(
                 Real dS_subinit[4] = {0., 0., 0., 0.};
                 int rflagl;
 
+
                 rflagl = solve_4d_pmhd(G, P_init_substep, m_p, m_u, k, j, i,
                     dt, eos, src_rootfind_eps, src_rootfind_tol, src_rootfind_maxiter,
                     rad_opac, pflag, rinvflag, U_entry, dS_subinit);

@@ -89,7 +89,7 @@ u_rad_floor = 1e-20
 on = true
 scale_free = false
 geom_mass_msun = 10
-fluid_density_cgs = 1e-9
+fluid_density_cgs = 1e-2
 
 <opac>
 # type here sets if you wanna handle the opacities yourself or give it to singularity opac
