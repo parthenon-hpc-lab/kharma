@@ -525,16 +525,19 @@ void RadM1::AddSourceImplicitly(
         pmb->par_for("RadM1_Implicit_Solver4D", kb.s, kb.e, jb.s, jb.e, ib.s, ib.e,
             KOKKOS_LAMBDA (const int &k, const int &j, const int &i)
             {
-                // // Check if it's within the horizon, if it is, just assume no interaction and dU_subinit = 0;
-                // // PNM: I've been having some trouble getting it to stay controled within the horizon.
-                // GReal Xembed[GR_DIM];
-                // G.coord_embed(k, j, i, Loci::center, Xembed);
-                // const GReal r = Xembed[1];
-                // const GReal r_hor = G.coords.get_horizon();
-                // if (r_hor > 0.0 && r < r_hor) {
-                //     rimplflag(0, k, j, i) = static_cast<int>(StatusImplicitStep::success);
-                //     return;
-                // }
+                // Check if it's within the horizon, if it is, just assume no interaction and dU_subinit = 0;
+                // PNM: I've been having some trouble getting it to stay controled within the horizon.
+                
+                GReal Xembed[GR_DIM];
+                G.coord_embed(k, j, i, Loci::center, Xembed);
+                const GReal r = Xembed[1];
+                const GReal r_hor = G.coords.get_horizon();
+                // If there is no horizon, r_hor = 0.0. For some of the tests, we don't have a horizon, and infact, we have negative values
+                // so we don't want this check.
+                if (r_hor > 0.0 && r < r_hor) {
+                    rimplflag(0, k, j, i) = static_cast<int>(StatusImplicitStep::success);
+                    return;
+                }
 
 
                 const Real U_entry[8] = {U_init_substep(m_u.UU, k, j, i), U_init_substep(m_u.U1, k, j, i),
@@ -548,7 +551,7 @@ void RadM1::AddSourceImplicitly(
                     P_init_substep(m_p.U1_RAD, k, j, i), P_init_substep(m_p.U2_RAD, k, j, i),
                     P_init_substep(m_p.U3_RAD, k, j, i)};
 
-                Real dS_subinit[4] = {0., 0., 0., 0.};
+                Real dS_subinit[5] = {0., 0., 0., 0., 0.};
                 int rflagl;
 
 
@@ -568,6 +571,7 @@ void RadM1::AddSourceImplicitly(
                     dU_substep(m_u.U1_RAD, k, j, i) += dS_subinit[1];
                     dU_substep(m_u.U2_RAD, k, j, i) += dS_subinit[2];
                     dU_substep(m_u.U3_RAD, k, j, i) += dS_subinit[3];
+                    if (m_u.KTOT >= 0) dU_substep(m_u.KTOT, k, j, i) += dS_subinit[4];
                     rimplflag(0, k, j, i) = rflagl;
                     return;
                 }
@@ -596,6 +600,7 @@ void RadM1::AddSourceImplicitly(
                     dU_substep(m_u.U1_RAD, k, j, i) += dS_subinit[1];
                     dU_substep(m_u.U2_RAD, k, j, i) += dS_subinit[2];
                     dU_substep(m_u.U3_RAD, k, j, i) += dS_subinit[3];
+                    if (m_u.KTOT >= 0) dU_substep(m_u.KTOT, k, j, i) += dS_subinit[4];
 
                     rimplflag(0, k, j, i) =
                         static_cast<int>(StatusImplicitStep::pradfallback_success);
@@ -603,23 +608,23 @@ void RadM1::AddSourceImplicitly(
                 }
 
 
-                // auto status_1d = solve_radiation_1d(G, P_init_substep, m_p, m_u, eos, rad_opac, k, j, i, dt, src_rootfind_tol,
-                //     src_rootfind_maxiter, pflag, rinvflag, U_entry, dS_subinit);
+                auto status_1d = solve_radiation_1d(G, P_init_substep, m_p, m_u, eos, rad_opac, k, j, i, dt, src_rootfind_tol,
+                    src_rootfind_maxiter, pflag, rinvflag, U_entry, dS_subinit);
 
-                // if (status_1d == StatusImplicitStep::success) {
-                //     dU_substep(m_u.UU, k, j, i) -= dS_subinit[0];
-                //     dU_substep(m_u.U1, k, j, i) -= dS_subinit[1];
-                //     dU_substep(m_u.U2, k, j, i) -= dS_subinit[2];
-                //     dU_substep(m_u.U3, k, j, i) -= dS_subinit[3];
-                //     dU_substep(m_u.UU_RAD, k, j, i) += dS_subinit[0];
-                //     dU_substep(m_u.U1_RAD, k, j, i) += dS_subinit[1];
-                //     dU_substep(m_u.U2_RAD, k, j, i) += dS_subinit[2];
-                //     dU_substep(m_u.U3_RAD, k, j, i) += dS_subinit[3];
+                if (status_1d == StatusImplicitStep::success) {
+                    dU_substep(m_u.UU, k, j, i) -= dS_subinit[0];
+                    dU_substep(m_u.U1, k, j, i) -= dS_subinit[1];
+                    dU_substep(m_u.U2, k, j, i) -= dS_subinit[2];
+                    dU_substep(m_u.U3, k, j, i) -= dS_subinit[3];
+                    dU_substep(m_u.UU_RAD, k, j, i) += dS_subinit[0];
+                    dU_substep(m_u.U1_RAD, k, j, i) += dS_subinit[1];
+                    dU_substep(m_u.U2_RAD, k, j, i) += dS_subinit[2];
+                    dU_substep(m_u.U3_RAD, k, j, i) += dS_subinit[3];
                     
-                //     rimplflag(0, k, j, i) =
-                //         static_cast<int>(StatusImplicitStep::onedfallback_success);
-                //     return;
-                // }
+                    rimplflag(0, k, j, i) =
+                        static_cast<int>(StatusImplicitStep::onedfallback_success);
+                    return;
+                }
 
                 rimplflag(0, k, j, i) =
                     static_cast<int>(StatusImplicitStep::onedfallback_failure);

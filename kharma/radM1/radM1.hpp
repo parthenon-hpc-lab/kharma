@@ -69,23 +69,14 @@ enum class StatusImplicitStep {
 
 static const std::map<int, std::string> status_names_implicit = {
     {(int)StatusImplicitStep::mhdsolve,
-        "RadM1 MHD Solve Failure"}, // flag that means that the MHD inversion failed (but
-                                    // rad solve worked)
+        "RadM1 MHD Solve Failure"}, 
     {(int)StatusImplicitStep::radsolve,
-        "RadM1 Radiation Solve Failure"}, // flag that means that the radiation solve
-                                          // failed (but mhd solve worked)
+        "RadM1 Radiation Solve Failure"},
     {(int)StatusImplicitStep::failure, "RadM1 Step Failure"},
     {(int)StatusImplicitStep::onedfallback_success,
-        "RadM1 4D Solver Fell Back to 1D and succeeded"}, // flag that means the 4D Newton
-                                                          // solve didn't converge/failed
-                                                          // and the 1D fallback solver
-                                                          // was used instead and it
-                                                          // succeeded
+        "RadM1 4D Solver Fell Back to 1D and succeeded"}, 
     {(int)StatusImplicitStep::onedfallback_failure,
-        "RadM1 4D Solver Fell Back to 1D and Failed"}, // flag that means the 4D Newton
-                                                       // solve didn't converge/failed and
-                                                       // the 1D fallback solver was used
-                                                       // instead and it also failed
+        "RadM1 4D Solver Fell Back to 1D and Failed"}, 
     {(int)StatusImplicitStep::pradfallback_success,
         "RadM1 4D Solver Fell Back to P_rad iteration and succeeded"},
     {(int)StatusImplicitStep::mhdfinalsolve,

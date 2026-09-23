@@ -89,7 +89,7 @@ u_rad_floor = 1e-20
 on = true
 scale_free = false
 geom_mass_msun = 10
-fluid_density_cgs = 1e-2
+fluid_density_cgs = 1e-7
 
 <opac>
 # type here sets if you wanna handle the opacities yourself or give it to singularity opac
@@ -102,9 +102,6 @@ s_opac_kind = thomson
 verbose = 1
 extra_checks = 2
 flag_verbose = 2
-
-<entropy>
-init_to_default = false
 
 <parthenon/output0>
 file_type = hdf5

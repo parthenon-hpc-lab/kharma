@@ -157,7 +157,7 @@ KOKKOS_INLINE_FUNCTION StatusRadiationInversion u_to_p_rad(const GRCoordinates& 
             uvec_radframe_con[mu] = m::sqrt(gamma_rad_sq_tp2) * Utilde_con[mu] / (4.0 * p_rad_tp2 * gamma_rad_sq_tp2);
     }
 
-    if (!m::isfinite(Erf)) Erf = 1.e-30;
+    if (!m::isfinite(Erf)) Erf = 1.e-300;
     if (!m::isfinite(uvec_radframe_con[1])) uvec_radframe_con[1] = 0.0;
     if (!m::isfinite(uvec_radframe_con[2])) uvec_radframe_con[2] = 0.0;
     if (!m::isfinite(uvec_radframe_con[3])) uvec_radframe_con[3] = 0.0;
@@ -219,7 +219,6 @@ KOKKOS_INLINE_FUNCTION void compute_covariant_fourforce(const GRCoordinates& G,
     Real kappa_tot = kappa_a + kappa_sc;
 
     Real coupling_term = kappa_a * (JBB - E_hat);
-
     dS[0] = coupling_term * ucov_mhd[0] - kappa_tot * F_hat_cov[0];
     dS[1] = coupling_term * ucov_mhd[1] - kappa_tot * F_hat_cov[1];
     dS[2] = coupling_term * ucov_mhd[2] - kappa_tot * F_hat_cov[2];
@@ -442,7 +441,7 @@ KOKKOS_INLINE_FUNCTION int solve_4d_pmhd(const GRCoordinates& G, const VariableP
     const Microphysics::EOS::EOS& eos, const double src_rootfind_eps,
     const double src_rootfind_tol, const int src_rootfind_maxiter,
     const RadOpac& rad_opac, const VariablePack<Real> pflag,
-    const VariablePack<Real> rinvflag, const Real U_entry[8], Real dS_final[4])
+    const VariablePack<Real> rinvflag, const Real U_entry[8], Real dS_final[5])
 {
     const Real rho_init = P_init(m_p.RHO, k, j, i);
 
@@ -486,10 +485,7 @@ KOKKOS_INLINE_FUNCTION int solve_4d_pmhd(const GRCoordinates& G, const VariableP
         U_rad_guess[mu] = U_rad_0[mu];
     Real gdet = G.gdet(Loci::center, j, i);
 
-    // Convert the newly guessed U_rad to P_rad
-    // This will determine which closure branch the inversion took, so the Jacobian FD
-    // loop below can detect when a perturbed sample has crossed onto a
-    // different (maybe discontinuous) branch relative to the guess itself.
+    
     bool used_normal_guess = true;
     u_to_p_rad(G, U_rad_guess, P_rad_guess, k, j, i, &used_normal_guess);
     compute_covariant_fourforce(
@@ -788,8 +784,8 @@ KOKKOS_INLINE_FUNCTION int solve_4d_pmhd(const GRCoordinates& G, const VariableP
 
         auto status =
             u_to_p_rad(G, U_rad_guess, P_rad_guess, k, j, i, &used_normal_guess);
-        compute_covariant_fourforce(
-            G, P_mhd_guess, P_rad_guess, rho_iter_next, eos, rad_opac, k, j, i, dS_guess);
+        compute_covariant_fourforce(G, P_mhd_guess, P_rad_guess, rho_iter_next, eos,
+            rad_opac, k, j, i, dS_guess);
 
         for (int n = 0; n < 4; n++) dS_guess[n] = gdet * dS_guess[n];
 
@@ -907,7 +903,18 @@ KOKKOS_INLINE_FUNCTION int solve_4d_pmhd(const GRCoordinates& G, const VariableP
     dS_final[0] = dS_guess[0];
     dS_final[1] = dS_guess[1];
     dS_final[2] = dS_guess[2];
-    dS_final[3] = dS_guess[3];   
+    dS_final[3] = dS_guess[3];
+
+    {
+        Real uvec_final[NVEC] = {P_mhd_guess[1], P_mhd_guess[2], P_mhd_guess[3]};
+        Real ucon_final[4];
+        GRMHD::calc_ucon(G, uvec_final, k, j, i, Loci::center, ucon_final);
+        Real Tg_final =
+            eos.TemperatureFromDensityInternalEnergy(rho_init, P_mhd_guess[0] / rho_init);
+        Real Gdotu = dS_guess[0] * ucon_final[0] + dS_guess[1] * ucon_final[1] +
+                     dS_guess[2] * ucon_final[2] + dS_guess[3] * ucon_final[3];
+        dS_final[4] = Gdotu / Tg_final;
+    }
 
     return static_cast<int>(StatusImplicitStep::success);
 }
@@ -917,7 +924,7 @@ KOKKOS_INLINE_FUNCTION int solve_4d_prad(const GRCoordinates& G, const VariableP
     const Microphysics::EOS::EOS& eos, const double src_rootfind_eps,
     const double src_rootfind_tol, const int src_rootfind_maxiter,
     const RadOpac& rad_opac, const VariablePack<Real> pflag,
-    const VariablePack<Real> rinvflag, const Real U_entry[8], Real dS_final[4])
+    const VariablePack<Real> rinvflag, const Real U_entry[8], Real dS_final[5])
 {
     const Real rho_init = P_init(m_p.RHO, k, j, i);
 
@@ -1361,7 +1368,17 @@ KOKKOS_INLINE_FUNCTION int solve_4d_prad(const GRCoordinates& G, const VariableP
     dS_final[2] = dS_guess[2];
     dS_final[3] = dS_guess[3];
 
-   
+    {
+        Real uvec_final[NVEC] = {P_mhd_guess[1], P_mhd_guess[2], P_mhd_guess[3]};
+        Real ucon_final[4];
+        GRMHD::calc_ucon(G, uvec_final, k, j, i, Loci::center, ucon_final);
+        Real Tg_final =
+            eos.TemperatureFromDensityInternalEnergy(rho_init, P_mhd_guess[0] / rho_init);
+        Real Gdotu = dS_guess[0] * ucon_final[0] + dS_guess[1] * ucon_final[1] +
+                     dS_guess[2] * ucon_final[2] + dS_guess[3] * ucon_final[3];
+        dS_final[4] = Gdotu / Tg_final;
+    }
+
     return static_cast<int>(StatusImplicitStep::success);
 }
 
