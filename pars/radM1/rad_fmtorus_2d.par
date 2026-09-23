@@ -24,7 +24,7 @@ hslope = 0.3
 correct_connections = true
 
 <parthenon/time>
-tlim = 900.0
+tlim = 3000.0
 nlim = -1
 
 <torus>
@@ -52,7 +52,7 @@ gamma = 1.666667
 type = llf
 # WENO5 Adaptive Order "At Home" --
 # WENO5Z with fallback to linear recon in difficult regions
-reconstruction = weno5
+reconstruction = ppm
 
 <driver>
 type = imex
@@ -72,6 +72,7 @@ u_min_geom   = 1e-8
 <fofc>
 on = false
 
+
 <radM1>
 on = true
 mu = 0.6
@@ -82,12 +83,13 @@ src_rootfind_eps = 1e-8
 src_rootfind_tol = 1e-8
 #Max number of iterations the solver can take.
 src_rootfind_maxiter = 10
+u_rad_floor = 1e-20
 
 <units>
 on = true
 scale_free = false
 geom_mass_msun = 10
-fluid_density_cgs = 1e-2
+fluid_density_cgs = 1e-7
 
 <opac>
 # type here sets if you wanna handle the opacities yourself or give it to singularity opac
@@ -103,13 +105,13 @@ flag_verbose = 2
 
 <parthenon/output0>
 file_type = hdf5
-dt = 5.0
+dt = 1.0
 single_precision_output = true
 variables = prims, divB, jcon, fflag, pflag, rimplflag, rinvflag, fofcflag
 
 <parthenon/output1>
 file_type = rst
-dt = 2.0
+dt = 1.0
 
 <parthenon/output2>
 file_type = hst

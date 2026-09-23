@@ -272,6 +272,10 @@ TaskCollection KHARMADriver::MakeImExTaskCollection(BlockList_t& blocks, int sta
                 Metadata::Independent, Metadata::WithFluxes, Metadata::Cell},
             0);
 
+        if (use_radm1) {
+            blocks[0]->packages.Get("RadM1")->UpdateParam(
+                "current_stage_dt", integrator->beta[stage - 1] * integrator->dt);
+        }
         // Add any source terms: geometric \Gamma * T, wind, damping, etc etc
         auto t_sources = tl.AddTask(t_flux_div, Packages::AddSource,
             md_sub_step_init.get(), md_flux_src.get(), IndexDomain::interior);
@@ -361,12 +365,6 @@ TaskCollection KHARMADriver::MakeImExTaskCollection(BlockList_t& blocks, int sta
             t_implicit = tl.AddTask(t_implicit_step, WeightedSumDataFace<MetadataFlag>,
                 std::vector<MetadataFlag>({Metadata::Face}), md_solver.get(),
                 md_solver.get(), 1.0, 0.0, md_sub_step_final.get());
-        } else if (use_radm1) {
-            // Out of the package modification for RADM1.
-            t_implicit = t_explicit;
-
-            t_implicit = tl.AddTask(t_explicit, RadM1::Step, md_sub_step_init.get(),
-                md_sub_step_final.get(), integrator->beta[stage - 1] * integrator->dt);
         }
 
         // Apply all floors & limits (GRMHD,EMHD,etc), but do *not* immediately correct

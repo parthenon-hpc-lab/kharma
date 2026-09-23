@@ -57,36 +57,28 @@ namespace RadM1
 // This enum should grow to cover any potential flags
 enum class StatusImplicitStep {
     success = 0,
+    pradfallback_success,
+    onedfallback_success,
     mhdsolve,
+    mhdfinalsolve,
     radsolve,
     bothsolve,
     failure,
-    onedfallback_success,
-    onedfallback_failure,
-    pradfallback_success
+    onedfallback_failure
 };
 
 static const std::map<int, std::string> status_names_implicit = {
-    {(int)StatusImplicitStep::mhdsolve,
-        "RadM1 MHD Solve Failure"}, // flag that means that the MHD inversion failed (but
-                                    // rad solve worked)
-    {(int)StatusImplicitStep::radsolve,
-        "RadM1 Radiation Solve Failure"}, // flag that means that the radiation solve
-                                          // failed (but mhd solve worked)
+    {(int)StatusImplicitStep::mhdsolve, "RadM1 MHD Solve Failure"},
+    {(int)StatusImplicitStep::radsolve, "RadM1 Radiation Solve Failure"},
     {(int)StatusImplicitStep::failure, "RadM1 Step Failure"},
     {(int)StatusImplicitStep::onedfallback_success,
-        "RadM1 4D Solver Fell Back to 1D and succeeded"}, // flag that means the 4D Newton
-                                                          // solve didn't converge/failed
-                                                          // and the 1D fallback solver
-                                                          // was used instead and it
-                                                          // succeeded
+        "RadM1 4D Solver Fell Back to 1D and succeeded"},
     {(int)StatusImplicitStep::onedfallback_failure,
-        "RadM1 4D Solver Fell Back to 1D and Failed"}, // flag that means the 4D Newton
-                                                       // solve didn't converge/failed and
-                                                       // the 1D fallback solver was used
-                                                       // instead and it also failed
+        "RadM1 4D Solver Fell Back to 1D and Failed"},
     {(int)StatusImplicitStep::pradfallback_success,
-        "RadM1 4D Solver Fell Back to P_rad iteration and succeeded"}};
+        "RadM1 4D Solver Fell Back to P_rad iteration and succeeded"},
+    {(int)StatusImplicitStep::mhdfinalsolve,
+        "PMHD solver converged but UtoP failed. Sending it to fixup."}};
 
 enum class StatusRadiationInversion {
     success = 0,
@@ -122,7 +114,8 @@ std::shared_ptr<KHARMAPackage> Initialize(
  * Perform the implicit solve for radiation and plasma coupled. For now, only 4D
  * implemented.
  */
-TaskStatus Step(MeshData<Real>* md_sub_init, MeshData<Real>* md_sub_final, const Real dt);
+void AddSourceImplicitly(
+    MeshData<Real>* md_sub_init, MeshData<Real>* md_flux_src, IndexDomain domain);
 
 /**
  * Convert from conserved to primitive variables for the radiation field.

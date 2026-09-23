@@ -45,119 +45,23 @@
 namespace RadM1
 {
 
-KOKKOS_INLINE_FUNCTION void update_ktot_from_gas(const GRCoordinates& G,
-    const VariablePack<Real> P_new, const VariablePack<Real> U_new, const VarMap m_p,
-    const VarMap m_u, const Microphysics::EOS::EOS& eos, const int k, const int j,
-    const int i)
+KOKKOS_INLINE_FUNCTION Real compute_y_max(const Real GAMMAMAX)
 {
-    if (m_p.KTOT < 0) return;
-
-    Real sie = P_new(m_p.UU, k, j, i) / P_new(m_p.RHO, k, j, i);
-    Real gamma1 = eos.BulkModulusFromDensityInternalEnergy(P_new(m_p.RHO, k, j, i), sie) /
-                  eos.PressureFromDensityInternalEnergy(P_new(m_p.RHO, k, j, i), sie);
-
-    P_new(m_p.KTOT, k, j, i) =
-        Entropy::CalcEntropy(P_new(m_p.RHO, k, j, i), P_new(m_p.UU, k, j, i), gamma1);
-
-    Real uvec_f[3] = {
-        P_new(m_p.U1, k, j, i), P_new(m_p.U2, k, j, i), P_new(m_p.U3, k, j, i)};
-    Real ucon_f[4];
-    GRMHD::calc_ucon(G, uvec_f, k, j, i, Loci::center, ucon_f);
-
-    U_new(m_u.KTOT, k, j, i) = G.gdet(Loci::center, j, i) * P_new(m_p.RHO, k, j, i) *
-                               ucon_f[0] * P_new(m_p.KTOT, k, j, i);
-}
-
-KOKKOS_INLINE_FUNCTION void ApplyColdClosureFix(const GRCoordinates& G,
-    const Real R_t_cov_orig[GR_DIM], const double gammarel2_fixed, const int& j,
-    const int& i, Real& new_R_t_t, Real& Erf)
-{
-
-    Real gcon_tt = G.gcon(Loci::center, j, i, 0, 0);
-
-    // Time-Space cross term: g^{ti} R_i
-    Real dot_t_i = G.gcon(Loci::center, j, i, 0, 1) * R_t_cov_orig[1] +
-                   G.gcon(Loci::center, j, i, 0, 2) * R_t_cov_orig[2] +
-                   G.gcon(Loci::center, j, i, 0, 3) * R_t_cov_orig[3];
-
-    // Purely Spatial term: g^{ij} R_i R_j
-    Real dot_spatial =
-        G.gcon(Loci::center, j, i, 1, 1) * (R_t_cov_orig[1] * R_t_cov_orig[1]) +
-        2.0 * G.gcon(Loci::center, j, i, 1, 2) * (R_t_cov_orig[1] * R_t_cov_orig[2]) +
-        G.gcon(Loci::center, j, i, 2, 2) * (R_t_cov_orig[2] * R_t_cov_orig[2]) +
-        2.0 * G.gcon(Loci::center, j, i, 1, 3) * (R_t_cov_orig[1] * R_t_cov_orig[3]) +
-        2.0 * G.gcon(Loci::center, j, i, 2, 3) * (R_t_cov_orig[2] * R_t_cov_orig[3]) +
-        G.gcon(Loci::center, j, i, 3, 3) * (R_t_cov_orig[3] * R_t_cov_orig[3]);
-
-    Real utsq = -gammarel2_fixed * gcon_tt;
-
-    Real radical_inside = (dot_t_i * dot_t_i - gcon_tt * dot_spatial) * utsq *
-                          (gcon_tt + utsq) * m::pow(gcon_tt + 4.0 * utsq, 2);
-
-    Real radical = m::sqrt(m::max(0.0, radical_inside));
-
-    new_R_t_t = 0.25 * (-4.0 * dot_t_i * utsq * (gcon_tt + utsq) + radical) /
-                (gcon_tt * utsq * (gcon_tt + utsq));
-
-    Erf = 0.75 * radical / (utsq * (gcon_tt + utsq) * (gcon_tt + 4.0 * utsq));
-}
-
-KOKKOS_INLINE_FUNCTION double calculate_gamma_rel2(
-    const GRCoordinates& G, const Real R_t_cov[GR_DIM], const int& j, const int& i)
-{
-    Real gcon_tt = G.gcon(Loci::center, j, i, 0, 0);
-    Real R_t_t = R_t_cov[0];
-
-    // Time-Space cross term: g^{ti} R^t_i
-    Real dot_t_i = G.gcon(Loci::center, j, i, 0, 1) * R_t_cov[1] +
-                   G.gcon(Loci::center, j, i, 0, 2) * R_t_cov[2] +
-                   G.gcon(Loci::center, j, i, 0, 3) * R_t_cov[3];
-
-    // Purely Spatial term: g^{ij} R^t_i R^t_j
-    Real dot_spatial =
-        G.gcon(Loci::center, j, i, 1, 1) * (R_t_cov[1] * R_t_cov[1]) +
-        2.0 * G.gcon(Loci::center, j, i, 1, 2) * (R_t_cov[1] * R_t_cov[2]) +
-        G.gcon(Loci::center, j, i, 2, 2) * (R_t_cov[2] * R_t_cov[2]) +
-        2.0 * G.gcon(Loci::center, j, i, 1, 3) * (R_t_cov[1] * R_t_cov[3]) +
-        2.0 * G.gcon(Loci::center, j, i, 2, 3) * (R_t_cov[2] * R_t_cov[3]) +
-        G.gcon(Loci::center, j, i, 3, 3) * (R_t_cov[3] * R_t_cov[3]);
-
-    Real invariant_scalar =
-        gcon_tt * (R_t_t * R_t_t) + 2.0 * R_t_t * dot_t_i + dot_spatial;
-
-    // Calculate Roots for (u^t_R)^2
-    Real radical_inside = 4.0 * (gcon_tt * gcon_tt) * (R_t_t * R_t_t) +
-                          (dot_t_i * dot_t_i) +
-                          gcon_tt * (8.0 * R_t_t * dot_t_i + 3.0 * dot_spatial);
-    Real radical = m::sqrt(m::max(0.0, radical_inside));
-
-    Real num_b = -2.0 * (gcon_tt * gcon_tt) * (R_t_t * R_t_t) -
-                 gcon_tt * (4.0 * R_t_t * dot_t_i + dot_spatial) +
-                 gcon_tt * R_t_t * radical + dot_t_i * (-dot_t_i + radical);
-
-    Real num_a = 2.0 * (gcon_tt * gcon_tt) * (R_t_t * R_t_t) +
-                 dot_t_i * (dot_t_i + radical) +
-                 gcon_tt * (4.0 * R_t_t * dot_t_i + dot_spatial + R_t_t * radical);
-    Real gamma2a = -0.25 * num_a / invariant_scalar;
-
-    Real gamma2b = 0.25 * num_b / invariant_scalar;
-
-    Real gamma2 = gamma2a;
-    if (gamma2a < (1.0 - 1e-10) || m::isnan(gamma2a) || m::isinf(gamma2a)) {
-        gamma2 = gamma2b;
+    const Real target = GAMMAMAX * GAMMAMAX;
+    Real y_old = 0.9998;
+    Real E_old =
+        target - (2.0 - y_old + m::sqrt(4.0 - 3.0 * y_old)) / (4.0 - 4.0 * y_old);
+    for (int n = 0; n < 40; ++n) {
+        Real dEdy = (0.375 * y_old - 0.25 * m::sqrt(4.0 - 3.0 * y_old) - 0.625) /
+                    (m::sqrt(4.0 - 3.0 * y_old) * (1.0 - y_old) * (1.0 - y_old));
+        Real y_new = m::min(y_old - E_old / dEdy, 0.99999999999999);
+        Real E_new =
+            target - (2.0 - y_new + m::sqrt(4.0 - 3.0 * y_new)) / (4.0 - 4.0 * y_new);
+        y_old = y_new;
+        if (m::abs(E_new) / target <= 1.e-9) break;
+        E_old = E_new;
     }
-
-    Real alpha_sq = -1.0 / gcon_tt;
-    Real gammarel2 = gamma2 * alpha_sq;
-
-    // Hard floor for physical bounds (Lorentz factor squared MUST be >= 1.0)
-    // TODO: FLOOR! CHANGE THIS
-    Real GAMMA_SMALL_LIMIT = (1.0 - 1e-10);
-    if (gammarel2 < 1.0 && gammarel2 > GAMMA_SMALL_LIMIT) {
-        gammarel2 = 1.0;
-    }
-
-    return gammarel2;
+    return y_old;
 }
 
 KOKKOS_INLINE_FUNCTION StatusRadiationInversion u_to_p_rad(const GRCoordinates& G,
@@ -166,64 +70,83 @@ KOKKOS_INLINE_FUNCTION StatusRadiationInversion u_to_p_rad(const GRCoordinates& 
 {
     Real gdet = G.gdet(Loci::center, j, i);
 
-    // Exact-zero radiation field: for testing cases. We don't wanna go down this entire
-    // path, otherwise, it will break due to division by 0. Sometimes we might want to run
-    // with radM1 on, but no source term just to check if something is broken, it's nice
-    // to have the possibility to do so.
     if (U_rad[0] == 0.0 && U_rad[1] == 0.0 && U_rad[2] == 0.0 && U_rad[3] == 0.0) {
         P_rad[0] = 0.0;
         P_rad[1] = 0.0;
         P_rad[2] = 0.0;
         P_rad[3] = 0.0;
-        // Trivial exact-zero case: treat as "normal" (not cold closure).
         if (used_normal_out != nullptr) *used_normal_out = true;
         return StatusRadiationInversion::success;
     }
 
-    // Recover R^t_mu from conserved state
-    Real R_t_cov[4] = {
-        U_rad[0] / gdet, U_rad[1] / gdet, U_rad[2] / gdet, U_rad[3] / gdet};
+    Real gcon_tt = G.gcon(Loci::center, j, i, 0, 0);
+    Real alpha = m::sqrt(-1.0 / gcon_tt);
 
-    // Raise index to get R^{t\mu}
-    Real R_t_con[4];
-    G.raise(R_t_cov, R_t_con, k, j, i, Loci::center);
+    Real Ucov_zamo[4];
+    for (int mu = 0; mu < 4; ++mu) Ucov_zamo[mu] = alpha * U_rad[mu] / gdet;
 
-    // Calculate gamma^2 for the radiation frame
-    Real gammarel2 = calculate_gamma_rel2(G, R_t_cov, j, i);
+    if (!m::isfinite(Ucov_zamo[0]) || !m::isfinite(Ucov_zamo[1]) ||
+        !m::isfinite(Ucov_zamo[2]) || !m::isfinite(Ucov_zamo[3])) {
+        P_rad[0] = 1.e-30;
+        P_rad[1] = 0.0;
+        P_rad[2] = 0.0;
+        P_rad[3] = 0.0;
+        if (used_normal_out != nullptr) *used_normal_out = false;
+        return StatusRadiationInversion::division_nonfinite;
+    }
 
-    // Pre-calculate alpha bounds and rest-frame energy E_rf
-    Real alpha_sq = -1.0 / G.gcon(Loci::center, j, i, 0, 0);
-    Real alpha = m::sqrt(alpha_sq);
-    Real E_rf = (3.0 * R_t_con[0] * alpha_sq) / (4.0 * gammarel2 - 1.0);
+    Real Ucon_zamo[4];
+    G.raise(Ucov_zamo, Ucon_zamo, k, j, i, Loci::center);
 
-    // Limits
-    const Real min_erad = 1.e-30;
-    const Real GAMMAMAX = 100.0;
-    const Real GAMMA_TOL = 1.0 - 1e-10; // matches koral's GAMMASMALLLIMIT
-    int flag1 = (gammarel2 >= 1.0);
-    int flag2 = (E_rf > min_erad);
-    int flag3 = (gammarel2 <= (GAMMAMAX * GAMMAMAX) / (GAMMA_TOL * GAMMA_TOL));
+    Real eta_cov0 = -alpha;
+    Real eta_con[4];
+    for (int mu = 0; mu < 4; ++mu)
+        eta_con[mu] = G.gcon(Loci::center, j, i, 0, mu) * eta_cov0;
 
-    int nonfailure = flag1 && flag2 && flag3;
+    Real U_dot_eta = Ucon_zamo[0] * eta_cov0;
 
-    // Our primitives is saving uvec_rad as the eulerian frame velocity.
-    // $\tilde{u}^i = \gamma v^i$
-    Real uvec_radframe_con[4] = {0};
+    Real Utilde_con[4] = {0.0, 0.0, 0.0, 0.0};
+    for (int mu = 1; mu < 4; ++mu)
+        Utilde_con[mu] = Ucon_zamo[mu] + eta_con[mu] * U_dot_eta;
 
-    // Evaluate valid primitives or apply cold closure fix
-    bool used_normal = false;
-    int flag4 = 1;
-    if (nonfailure) {
-        for (int mu = 0; mu < 4; ++mu) {
-            uvec_radframe_con[mu] =
-                alpha *
-                (R_t_con[mu] + 1. / 3. * E_rf * G.gcon(Loci::center, j, i, 0, mu) *
-                                   (4.0 * gammarel2 - 1.0)) /
-                (4. / 3. * E_rf * m::sqrt(gammarel2));
-        }
+    Real U_sq = 0.0;
+    for (int mu = 0; mu < 4; ++mu) U_sq += Ucov_zamo[mu] * Ucon_zamo[mu];
+    Real Utilde_sq = U_sq + U_dot_eta * U_dot_eta;
 
-        // After calculating uvec_radframe_con, we can still have trouble with gamma >
-        // gammamax, so let's recheck
+    if (Utilde_sq < 0.0) {
+        Utilde_sq = 0.0;
+        Utilde_con[1] = 0.0;
+        Utilde_con[2] = 0.0;
+        Utilde_con[3] = 0.0;
+    }
+
+    const Real GAMMAMAX = 50.0;
+    const Real y_max = compute_y_max(GAMMAMAX);
+
+    Real y = Utilde_sq / (U_dot_eta * U_dot_eta + 1.e-150);
+    Real gamma_rad_sq = (2.0 - y + m::sqrt(m::max(0.0, 4.0 - 3.0 * y))) / (4.0 - 4.0 * y);
+
+    Real p_rad = -U_dot_eta / (4.0 * gamma_rad_sq - 1.0);
+    Real Erf = p_rad * 3.0;
+
+    Real uvec_radframe_con[4] = {0.0, 0.0, 0.0, 0.0};
+    for (int mu = 1; mu < 4; ++mu)
+        uvec_radframe_con[mu] =
+            m::sqrt(gamma_rad_sq) * Utilde_con[mu] / (4.0 * p_rad * gamma_rad_sq);
+
+    bool failed = (y > y_max) || (y < 0.0) || !m::isfinite(U_dot_eta) ||
+                  (U_dot_eta > 0.0) || !m::isfinite(uvec_radframe_con[1]) ||
+                  !m::isfinite(uvec_radframe_con[2]) ||
+                  !m::isfinite(uvec_radframe_con[3]);
+
+    bool used_normal = !failed;
+    if (used_normal_out != nullptr) *used_normal_out = used_normal;
+
+    if (failed) {
+        Real Uabs = 0.5 * (m::abs(U_dot_eta) + m::sqrt(m::abs(Utilde_sq)) + 1.e-150);
+        for (int mu = 1; mu < 4; ++mu)
+            uvec_radframe_con[mu] = GAMMAMAX * Utilde_con[mu] / Uabs;
+
         Real qsq = G.gcov(Loci::center, j, i, 1, 1) * uvec_radframe_con[1] *
                        uvec_radframe_con[1] +
                    G.gcov(Loci::center, j, i, 2, 2) * uvec_radframe_con[2] *
@@ -236,96 +159,36 @@ KOKKOS_INLINE_FUNCTION StatusRadiationInversion u_to_p_rad(const GRCoordinates& 
                        uvec_radframe_con[3] +
                    2.0 * G.gcov(Loci::center, j, i, 2, 3) * uvec_radframe_con[2] *
                        uvec_radframe_con[3];
-        Real gammarel2_out = 1.0 + qsq;
+        if (qsq < 0.0 || m::abs(qsq) < 1.e-10) qsq = 1.e-10;
+        Real gamma_rad_sq_fb = 1.0 + qsq;
 
-        // self consistent is comparing the gammarel2 we obtained with the gmmarel2_out
-        // They should match I think, but we are checking here 1e-6 is hard coded, we
-        // should get rid of this
-        // TODO (PNM): Maybe get rid of this?
-        const bool self_consistent =
-            m::abs(gammarel2_out - gammarel2) <= 1.e-6 * (gammarel2_out + gammarel2);
+        Real f = m::sqrt((GAMMAMAX * GAMMAMAX - 1.0) / (gamma_rad_sq_fb - 1.0));
+        uvec_radframe_con[1] *= f;
+        uvec_radframe_con[2] *= f;
+        uvec_radframe_con[3] *= f;
 
-        flag4 = gammarel2_out <= (GAMMAMAX * GAMMAMAX) / (GAMMA_TOL * GAMMA_TOL);
-        used_normal = std::isfinite(E_rf) && std::isfinite(uvec_radframe_con[1]) &&
-                      std::isfinite(uvec_radframe_con[2]) &&
-                      std::isfinite(uvec_radframe_con[3]) && flag4 && self_consistent;
+        Real U_dot_eta_tp2 = -(1.e-30 + m::sqrt(m::abs(Utilde_sq) / y_max));
+        Real gamma_rad_sq_tp2 =
+            (2.0 - y_max + m::sqrt(4.0 - 3.0 * y_max)) / (4.0 - 4.0 * y_max);
+        Real p_rad_tp2 = -U_dot_eta_tp2 / (4.0 * gamma_rad_sq_tp2 - 1.0);
+        Erf = p_rad_tp2 * 3.0;
+        for (int mu = 1; mu < 4; ++mu)
+            uvec_radframe_con[mu] = m::sqrt(gamma_rad_sq_tp2) * Utilde_con[mu] /
+                                    (4.0 * p_rad_tp2 * gamma_rad_sq_tp2);
     }
 
-    // Report which case the inversion took in order to calculate the jacobian.
-    if (used_normal_out != nullptr) *used_normal_out = used_normal;
+    if (!m::isfinite(Erf)) Erf = 1.e-300;
+    if (!m::isfinite(uvec_radframe_con[1])) uvec_radframe_con[1] = 0.0;
+    if (!m::isfinite(uvec_radframe_con[2])) uvec_radframe_con[2] = 0.0;
+    if (!m::isfinite(uvec_radframe_con[3])) uvec_radframe_con[3] = 0.0;
 
-    if (!used_normal) {
-        // Attempt Cold Closure
-        // gammarel2_slow should definitely not be this, should be way smaller
-        // TODO (PNM): See if this is necessary
-        Real gammarel2_slow = m::pow(1.0 + 1.0e-4, 2.0);
-        Real gammarel2_fast = GAMMAMAX * GAMMAMAX;
-
-        Real R_t_t_slow, Erf_slow;
-        ApplyColdClosureFix(G, R_t_cov, gammarel2_slow, j, i, R_t_t_slow, Erf_slow);
-
-        Real R_t_t_fast, Erf_fast;
-        ApplyColdClosureFix(G, R_t_cov, gammarel2_fast, j, i, R_t_t_fast, Erf_fast);
-
-        Real R_t_t_new, gammarel2_new;
-
-        if (m::abs(R_t_t_slow - R_t_cov[0]) > m::abs(R_t_t_fast - R_t_cov[0])) {
-            R_t_t_new = R_t_t_fast;
-            E_rf = Erf_fast;
-            gammarel2_new = gammarel2_fast;
-        } else {
-            R_t_t_new = R_t_t_slow;
-            E_rf = Erf_slow;
-            gammarel2_new = gammarel2_slow;
-        }
-
-        // If even the closure fix yields a non-positive energy, this step is a failure.
-        if (E_rf <= 0.0) {
-            P_rad[0] = min_erad;
-            P_rad[1] = 0.0;
-            P_rad[2] = 0.0;
-            P_rad[3] = 0.0;
-            if (!flag1) {
-                return StatusRadiationInversion::gammarel2_low;
-            } else if (!flag2) {
-                return StatusRadiationInversion::urad_below_floor;
-            } else if (!flag3 || !flag4) {
-                return StatusRadiationInversion::gammarel2_high;
-            } else {
-                return StatusRadiationInversion::division_nonfinite;
-            }
-        }
-
-        Real R_t_cov_new[4] = {R_t_t_new, R_t_cov[1], R_t_cov[2], R_t_cov[3]};
-        Real R_t_con_new[4];
-        G.raise(R_t_cov_new, R_t_con_new, k, j, i, Loci::center);
-
-        for (int mu = 0; mu < 4; ++mu) {
-            uvec_radframe_con[mu] =
-                alpha *
-                (R_t_con_new[mu] + 1. / 3. * E_rf * G.gcon(Loci::center, j, i, 0, mu) *
-                                       (4.0 * gammarel2_new - 1.0)) /
-                (4. / 3. * E_rf * m::sqrt(gammarel2_new));
-        }
-
-        // The cold-closure fallback also divides by E_rf, so check it too.
-        if (!std::isfinite(E_rf) || !std::isfinite(uvec_radframe_con[1]) ||
-            !std::isfinite(uvec_radframe_con[2]) ||
-            !std::isfinite(uvec_radframe_con[3])) {
-            P_rad[0] = min_erad;
-            P_rad[1] = 0.0;
-            P_rad[2] = 0.0;
-            P_rad[3] = 0.0;
-            return StatusRadiationInversion::cold_closure_nonfinite;
-        }
-    }
-
-    P_rad[0] = E_rf;
+    P_rad[0] = Erf;
     P_rad[1] = uvec_radframe_con[1];
     P_rad[2] = uvec_radframe_con[2];
     P_rad[3] = uvec_radframe_con[3];
 
-    return StatusRadiationInversion::success;
+    return used_normal ? StatusRadiationInversion::success
+                       : StatusRadiationInversion::gammarel2_high;
 }
 
 KOKKOS_INLINE_FUNCTION void compute_covariant_fourforce(const GRCoordinates& G,
@@ -375,7 +238,6 @@ KOKKOS_INLINE_FUNCTION void compute_covariant_fourforce(const GRCoordinates& G,
     Real kappa_tot = kappa_a + kappa_sc;
 
     Real coupling_term = kappa_a * (JBB - E_hat);
-
     dS[0] = coupling_term * ucov_mhd[0] - kappa_tot * F_hat_cov[0];
     dS[1] = coupling_term * ucov_mhd[1] - kappa_tot * F_hat_cov[1];
     dS[2] = coupling_term * ucov_mhd[2] - kappa_tot * F_hat_cov[2];
@@ -417,57 +279,12 @@ KOKKOS_INLINE_FUNCTION Real calculate_energy_residual(const GRCoordinates& G,
     return resid / scale;
 }
 
-KOKKOS_INLINE_FUNCTION StatusImplicitStep assume_no_interaction(const GRCoordinates& G,
-    const VariablePack<Real> U_init, const VariablePack<Real> P_init, const VarMap m_p,
-    const VarMap m_u, const VariablePack<Real> U_new, const VariablePack<Real> P_new,
-    const Microphysics::EOS::EOS& eos, const RadOpac& rad_opac, const int k, const int j,
-    const int i, const Real dt, const double tol, const int maxiter,
-    const VariablePack<Real> pflag, const VariablePack<Real> rinvflag,
-    const Real U_entry[8])
-{
-    U_new(m_u.UU, k, j, i) = U_entry[0];
-    U_new(m_u.U1, k, j, i) = U_entry[1];
-    U_new(m_u.U2, k, j, i) = U_entry[2];
-    U_new(m_u.U3, k, j, i) = U_entry[3];
-    U_new(m_u.UU_RAD, k, j, i) = U_entry[4];
-    U_new(m_u.U1_RAD, k, j, i) = U_entry[5];
-    U_new(m_u.U2_RAD, k, j, i) = U_entry[6];
-    U_new(m_u.U3_RAD, k, j, i) = U_entry[7];
-
-    auto mhd_inverter_status = Inverter::u_to_p<Inverter::Type::kastaun>(
-        G, U_new, m_u, eos, k, j, i, P_new, m_p, Loci::center, 25, 1e-12);
-
-    pflag(0, k, j, i) = static_cast<int>(mhd_inverter_status);
-    rinvflag(0, k, j, i) = static_cast<int>(StatusRadiationInversion::success);
-
-    if (mhd_inverter_status != static_cast<int>(Inverter::Status::success))
-        return StatusImplicitStep::mhdsolve;
-
-    Real U_rad_final[4] = {U_new(m_u.UU_RAD, k, j, i), U_new(m_u.U1_RAD, k, j, i),
-        U_new(m_u.U2_RAD, k, j, i), U_new(m_u.U3_RAD, k, j, i)};
-    Real P_rad_final[4];
-
-    auto rad_status = u_to_p_rad(G, U_rad_final, P_rad_final, k, j, i);
-    rinvflag(0, k, j, i) = static_cast<int>(rad_status);
-    if (rad_status != StatusRadiationInversion::success) {
-        return StatusImplicitStep::radsolve;
-    } else {
-        P_new(m_p.UU_RAD, k, j, i) = P_rad_final[0];
-        P_new(m_p.U1_RAD, k, j, i) = P_rad_final[1];
-        P_new(m_p.U2_RAD, k, j, i) = P_rad_final[2];
-        P_new(m_p.U3_RAD, k, j, i) = P_rad_final[3];
-    }
-
-    return StatusImplicitStep::success;
-}
-
 KOKKOS_INLINE_FUNCTION StatusImplicitStep solve_radiation_1d(const GRCoordinates& G,
-    const VariablePack<Real> U_init, const VariablePack<Real> P_init, const VarMap m_p,
-    const VarMap m_u, const VariablePack<Real> U_new, const VariablePack<Real> P_new,
+    const VariablePack<Real> P_init, const VarMap m_p, const VarMap m_u,
     const Microphysics::EOS::EOS& eos, const RadOpac& rad_opac, const int k, const int j,
     const int i, const Real dt, const double tol, const int maxiter,
     const VariablePack<Real> pflag, const VariablePack<Real> rinvflag,
-    const Real U_entry[8])
+    const Real U_entry[8], Real dS_final[4])
 {
 
     const Real gdet = G.gdet(Loci::center, j, i);
@@ -479,10 +296,8 @@ KOKKOS_INLINE_FUNCTION StatusImplicitStep solve_radiation_1d(const GRCoordinates
         B_P[1] = P_init(m_p.B2, k, j, i);
         B_P[2] = P_init(m_p.B3, k, j, i);
     }
-    const Real U_mhd_0[4] = {U_init(m_u.UU, k, j, i), U_init(m_u.U1, k, j, i),
-        U_init(m_u.U2, k, j, i), U_init(m_u.U3, k, j, i)};
-    const Real U_rad_0[4] = {U_init(m_u.UU_RAD, k, j, i), U_init(m_u.U1_RAD, k, j, i),
-        U_init(m_u.U2_RAD, k, j, i), U_init(m_u.U3_RAD, k, j, i)};
+    const Real U_mhd_0[4] = {U_entry[0], U_entry[1], U_entry[2], U_entry[3]};
+    const Real U_rad_0[4] = {U_entry[4], U_entry[5], U_entry[6], U_entry[7]};
     const Real rho_init = P_init(m_p.RHO, k, j, i);
     const Real u_init = P_init(m_p.UU, k, j, i);
 
@@ -594,39 +409,10 @@ KOKKOS_INLINE_FUNCTION StatusImplicitStep solve_radiation_1d(const GRCoordinates
         dcov_rad[n] = U_rad_trial[n] - U_rad_0[n];
     }
 
-    U_new(m_u.UU_RAD, k, j, i) = U_entry[4] + dcov_rad[0];
-    U_new(m_u.U1_RAD, k, j, i) = U_entry[5] + dcov_rad[1];
-    U_new(m_u.U2_RAD, k, j, i) = U_entry[6] + dcov_rad[2];
-    U_new(m_u.U3_RAD, k, j, i) = U_entry[7] + dcov_rad[3];
-
-    U_new(m_u.UU, k, j, i) = U_entry[0] - dcov_rad[0];
-    U_new(m_u.U1, k, j, i) = U_entry[1] - dcov_rad[1];
-    U_new(m_u.U2, k, j, i) = U_entry[2] - dcov_rad[2];
-    U_new(m_u.U3, k, j, i) = U_entry[3] - dcov_rad[3];
-
-    auto mhd_inverter_status = Inverter::u_to_p<Inverter::Type::kastaun>(
-        G, U_new, m_u, eos, k, j, i, P_new, m_p, Loci::center, 25, 1e-12);
-
-    pflag(0, k, j, i) = static_cast<int>(mhd_inverter_status);
-    rinvflag(0, k, j, i) = static_cast<int>(StatusRadiationInversion::success);
-
-    if (mhd_inverter_status != static_cast<int>(Inverter::Status::success))
-        return StatusImplicitStep::mhdsolve;
-
-    Real U_rad_final[4] = {U_new(m_u.UU_RAD, k, j, i), U_new(m_u.U1_RAD, k, j, i),
-        U_new(m_u.U2_RAD, k, j, i), U_new(m_u.U3_RAD, k, j, i)};
-    Real P_rad_final[4];
-
-    auto rad_status = u_to_p_rad(G, U_rad_final, P_rad_final, k, j, i);
-    rinvflag(0, k, j, i) = static_cast<int>(rad_status);
-    if (rad_status != StatusRadiationInversion::success) {
-        return StatusImplicitStep::radsolve;
-    } else {
-        P_new(m_p.UU_RAD, k, j, i) = P_rad_final[0];
-        P_new(m_p.U1_RAD, k, j, i) = P_rad_final[1];
-        P_new(m_p.U2_RAD, k, j, i) = P_rad_final[2];
-        P_new(m_p.U3_RAD, k, j, i) = P_rad_final[3];
-    }
+    dS_final[0] = dS_trial[0];
+    dS_final[1] = dS_trial[1];
+    dS_final[2] = dS_trial[2];
+    dS_final[3] = dS_trial[3];
 
     return StatusImplicitStep::success;
 }
@@ -668,13 +454,12 @@ KOKKOS_INLINE_FUNCTION Real calculate_error(const Real resid[4],
 }
 
 KOKKOS_INLINE_FUNCTION int solve_4d_pmhd(const GRCoordinates& G,
-    const VariablePack<Real> U_init, const VariablePack<Real> P_init,
-    VariablePack<Real> P_new, VariablePack<Real> U_new, const VarMap m_p,
-    const VarMap m_u, const int k, const int j, const int i, const Real dt,
-    const Microphysics::EOS::EOS& eos, const double src_rootfind_eps,
-    const double src_rootfind_tol, const int src_rootfind_maxiter,
-    const RadOpac& rad_opac, const VariablePack<Real> pflag,
-    const VariablePack<Real> rinvflag, const Real U_entry[8])
+    const VariablePack<Real> P_init, const VarMap m_p, const VarMap m_u, const int k,
+    const int j, const int i, const Real dt, const Microphysics::EOS::EOS& eos,
+    const double src_rootfind_eps, const double src_rootfind_tol,
+    const int src_rootfind_maxiter, const RadOpac& rad_opac,
+    const VariablePack<Real> pflag, const VariablePack<Real> rinvflag,
+    const Real U_entry[8], Real dS_final[5])
 {
     const Real rho_init = P_init(m_p.RHO, k, j, i);
 
@@ -687,8 +472,7 @@ KOKKOS_INLINE_FUNCTION int solve_4d_pmhd(const GRCoordinates& G,
     Real P_mhd_guess[4] = {P_init(m_p.UU, k, j, i), P_init(m_p.U1, k, j, i),
         P_init(m_p.U2, k, j, i), P_init(m_p.U3, k, j, i)};
 
-    Real U_rad_0[4] = {U_init(m_u.UU_RAD, k, j, i), U_init(m_u.U1_RAD, k, j, i),
-        U_init(m_u.U2_RAD, k, j, i), U_init(m_u.U3_RAD, k, j, i)};
+    Real U_rad_0[4] = {U_entry[4], U_entry[5], U_entry[6], U_entry[7]};
 
     Real resid[4];
 
@@ -703,10 +487,10 @@ KOKKOS_INLINE_FUNCTION int solve_4d_pmhd(const GRCoordinates& G,
     Real dS_guess[4];
     Real dcov_rad[4] = {0., 0., 0., 0.};
 
-    U_mhd_0[0] = U_init(m_u.UU, k, j, i);
-    U_mhd_0[1] = U_init(m_u.U1, k, j, i);
-    U_mhd_0[2] = U_init(m_u.U2, k, j, i);
-    U_mhd_0[3] = U_init(m_u.U3, k, j, i);
+    U_mhd_0[0] = U_entry[0];
+    U_mhd_0[1] = U_entry[1];
+    U_mhd_0[2] = U_entry[2];
+    U_mhd_0[3] = U_entry[3];
 
     // Iteration 0
     U_mhd_guess[0] = U_mhd_0[0];
@@ -719,10 +503,6 @@ KOKKOS_INLINE_FUNCTION int solve_4d_pmhd(const GRCoordinates& G,
         U_rad_guess[mu] = U_rad_0[mu];
     Real gdet = G.gdet(Loci::center, j, i);
 
-    // Convert the newly guessed U_rad to P_rad
-    // This will determine which closure branch the inversion took, so the Jacobian FD
-    // loop below can detect when a perturbed sample has crossed onto a
-    // different (maybe discontinuous) branch relative to the guess itself.
     bool used_normal_guess = true;
     u_to_p_rad(G, U_rad_guess, P_rad_guess, k, j, i, &used_normal_guess);
     compute_covariant_fourforce(
@@ -1054,14 +834,6 @@ KOKKOS_INLINE_FUNCTION int solve_4d_pmhd(const GRCoordinates& G,
             Real R_t_cov_guess[4] = {U_rad_guess[0] / gdet, U_rad_guess[1] / gdet,
                 U_rad_guess[2] / gdet, U_rad_guess[3] / gdet};
 
-            Real gamma_sq_guess = calculate_gamma_rel2(G, R_t_cov_guess, j, i);
-
-            if (gamma_sq_guess > gamma_max_sq || gamma_sq_guess < 1.0) {
-                // If velocity exploded, aggressively damp the step (e.g., cut it in
-                // half)
-                scaling_factor = m::max(scaling_factor, 0.5);
-            }
-
             // Verify the scaling factor is sane
             if (!(scaling_factor > 0.0 && scaling_factor <= 1.0)) {
                 bad_guess = true;
@@ -1116,7 +888,7 @@ KOKKOS_INLINE_FUNCTION int solve_4d_pmhd(const GRCoordinates& G,
         for (int n = 0; n < 4; n++) {
             resid[n] = U_mhd_guess[n] - U_mhd_0[n] + dt * dS_guess[n];
 
-            if (std::isnan(resid[n])) {
+            if (!m::isfinite(resid[n])) {
                 bad_guess = true;
                 break;
             }
@@ -1137,68 +909,39 @@ KOKKOS_INLINE_FUNCTION int solve_4d_pmhd(const GRCoordinates& G,
         niter++;
     } while (err > src_rootfind_tol && niter < src_rootfind_maxiter);
 
-    // isnan is no-ops for GPU code and for fast-math cpu code (default intel compiler).
-    // Careful, these isnans might not trigger.
     if (niter == src_rootfind_maxiter || err > src_rootfind_tol ||
-        m::isnan(U_rad_guess[0]) || m::isnan(U_rad_guess[1]) ||
-        m::isnan(U_rad_guess[2]) || m::isnan(U_rad_guess[3]) || bad_guess) {
+        !m::isfinite(U_rad_guess[0]) || !m::isfinite(U_rad_guess[1]) ||
+        !m::isfinite(U_rad_guess[2]) || !m::isfinite(U_rad_guess[3]) || bad_guess) {
 
         return static_cast<int>(StatusImplicitStep::failure);
-
-    } else {
-        dcov_rad[0] = U_rad_guess[0] - U_rad_0[0];
-        dcov_rad[1] = U_rad_guess[1] - U_rad_0[1];
-        dcov_rad[2] = U_rad_guess[2] - U_rad_0[2];
-        dcov_rad[3] = U_rad_guess[3] - U_rad_0[3];
     }
 
-    U_new(m_u.UU_RAD, k, j, i) = U_entry[4] + dcov_rad[0];
-    U_new(m_u.U1_RAD, k, j, i) = U_entry[5] + dcov_rad[1];
-    U_new(m_u.U2_RAD, k, j, i) = U_entry[6] + dcov_rad[2];
-    U_new(m_u.U3_RAD, k, j, i) = U_entry[7] + dcov_rad[3];
-    U_new(m_u.UU, k, j, i) = U_entry[0] - dcov_rad[0];
-    U_new(m_u.U1, k, j, i) = U_entry[1] - dcov_rad[1];
-    U_new(m_u.U2, k, j, i) = U_entry[2] - dcov_rad[2];
-    U_new(m_u.U3, k, j, i) = U_entry[3] - dcov_rad[3];
+    dS_final[0] = dS_guess[0];
+    dS_final[1] = dS_guess[1];
+    dS_final[2] = dS_guess[2];
+    dS_final[3] = dS_guess[3];
 
-    auto mhd_inverter_status = Inverter::u_to_p<Inverter::Type::kastaun>(
-        G, U_new, m_u, eos, k, j, i, P_new, m_p, Loci::center, 25, 1e-12);
-
-    // Refresh pflag each step so a stale failure doesn't linger.
-    pflag(0, k, j, i) = static_cast<int>(Inverter::Status::success);
-    rinvflag(0, k, j, i) = static_cast<int>(StatusRadiationInversion::success);
-
-    if (mhd_inverter_status != static_cast<int>(Inverter::Status::success)) {
-
-        return static_cast<int>(StatusImplicitStep::mhdsolve);
-    }
-    // Now since the u2p for MHD was successful, do it for radiation:
-    Real U_rad_final[4] = {U_new(m_u.UU_RAD, k, j, i), U_new(m_u.U1_RAD, k, j, i),
-        U_new(m_u.U2_RAD, k, j, i), U_new(m_u.U3_RAD, k, j, i)};
-    Real P_rad_final[4];
-
-    auto rad_status = u_to_p_rad(G, U_rad_final, P_rad_final, k, j, i);
-    rinvflag(0, k, j, i) = static_cast<int>(rad_status);
-    if (rad_status != StatusRadiationInversion::success) {
-        return static_cast<int>(StatusImplicitStep::radsolve);
-    } else {
-        P_new(m_p.UU_RAD, k, j, i) = P_rad_final[0];
-        P_new(m_p.U1_RAD, k, j, i) = P_rad_final[1];
-        P_new(m_p.U2_RAD, k, j, i) = P_rad_final[2];
-        P_new(m_p.U3_RAD, k, j, i) = P_rad_final[3];
+    {
+        Real uvec_final[NVEC] = {P_mhd_guess[1], P_mhd_guess[2], P_mhd_guess[3]};
+        Real ucon_final[4];
+        GRMHD::calc_ucon(G, uvec_final, k, j, i, Loci::center, ucon_final);
+        Real Tg_final =
+            eos.TemperatureFromDensityInternalEnergy(rho_init, P_mhd_guess[0] / rho_init);
+        Real Gdotu = dS_guess[0] * ucon_final[0] + dS_guess[1] * ucon_final[1] +
+                     dS_guess[2] * ucon_final[2] + dS_guess[3] * ucon_final[3];
+        dS_final[4] = Gdotu / Tg_final;
     }
 
     return static_cast<int>(StatusImplicitStep::success);
 }
 
 KOKKOS_INLINE_FUNCTION int solve_4d_prad(const GRCoordinates& G,
-    const VariablePack<Real> U_init, const VariablePack<Real> P_init,
-    VariablePack<Real> P_new, VariablePack<Real> U_new, const VarMap m_p,
+    const VariablePack<Real> U_init, const VariablePack<Real> P_init, const VarMap m_p,
     const VarMap m_u, const int k, const int j, const int i, const Real dt,
     const Microphysics::EOS::EOS& eos, const double src_rootfind_eps,
     const double src_rootfind_tol, const int src_rootfind_maxiter,
     const RadOpac& rad_opac, const VariablePack<Real> pflag,
-    const VariablePack<Real> rinvflag, const Real U_entry[8])
+    const VariablePack<Real> rinvflag, const Real U_entry[8], Real dS_final[5])
 {
     const Real rho_init = P_init(m_p.RHO, k, j, i);
 
@@ -1211,13 +954,11 @@ KOKKOS_INLINE_FUNCTION int solve_4d_prad(const GRCoordinates& G,
     Real P_mhd_guess[4] = {P_init(m_p.UU, k, j, i), P_init(m_p.U1, k, j, i),
         P_init(m_p.U2, k, j, i), P_init(m_p.U3, k, j, i)};
 
-    Real U_rad_0[4] = {U_init(m_u.UU_RAD, k, j, i), U_init(m_u.U1_RAD, k, j, i),
-        U_init(m_u.U2_RAD, k, j, i), U_init(m_u.U3_RAD, k, j, i)};
+    Real U_rad_0[4] = {U_entry[4], U_entry[5], U_entry[6], U_entry[7]};
 
     Real resid[4];
 
-    Real U_mhd_0[4] = {U_init(m_u.UU, k, j, i), U_init(m_u.U1, k, j, i),
-        U_init(m_u.U2, k, j, i), U_init(m_u.U3, k, j, i)};
+    Real U_mhd_0[4] = {U_entry[0], U_entry[1], U_entry[2], U_entry[3]};
 
     Real U_mhd_guess[4];
     Real U_rad_guess[4];
@@ -1303,6 +1044,7 @@ KOKKOS_INLINE_FUNCTION int solve_4d_prad(const GRCoordinates& G,
 
             // Evaluate minus perturbation
             RadM1::calc_tensor(G, P_rad_m, 0, j, i, U_rad_m);
+            for (int n = 0; n < 4; n++) U_rad_m[n] *= gdet;
 
             // set U_mhd from U_rad
             for (int n = 0; n < 4; n++) {
@@ -1310,17 +1052,17 @@ KOKKOS_INLINE_FUNCTION int solve_4d_prad(const GRCoordinates& G,
             }
 
             // Invert to get fluid primitives
-            U_new(m_u.UU, k, j, i) = U_mhd_m[0];
-            U_new(m_u.U1, k, j, i) = U_mhd_m[1];
-            U_new(m_u.U2, k, j, i) = U_mhd_m[2];
-            U_new(m_u.U3, k, j, i) = U_mhd_m[3];
+            U_init(m_u.UU, k, j, i) = U_mhd_m[0];
+            U_init(m_u.U1, k, j, i) = U_mhd_m[1];
+            U_init(m_u.U2, k, j, i) = U_mhd_m[2];
+            U_init(m_u.U3, k, j, i) = U_mhd_m[3];
             auto mhd_inverter_status = Inverter::u_to_p<Inverter::Type::kastaun>(
-                G, U_new, m_u, eos, k, j, i, P_new, m_p, Loci::center, 25, 1e-12);
+                G, U_init, m_u, eos, k, j, i, P_init, m_p, Loci::center, 25, 1e-12);
 
-            P_mhd_m[0] = P_new(m_p.UU, k, j, i);
-            P_mhd_m[1] = P_new(m_p.U1, k, j, i);
-            P_mhd_m[2] = P_new(m_p.U2, k, j, i);
-            P_mhd_m[3] = P_new(m_p.U3, k, j, i);
+            P_mhd_m[0] = P_init(m_p.UU, k, j, i);
+            P_mhd_m[1] = P_init(m_p.U1, k, j, i);
+            P_mhd_m[2] = P_init(m_p.U2, k, j, i);
+            P_mhd_m[3] = P_init(m_p.U3, k, j, i);
 
             if (mhd_inverter_status != static_cast<int>(Inverter::Status::success)) {
                 bad_guess_m = true;
@@ -1331,7 +1073,7 @@ KOKKOS_INLINE_FUNCTION int solve_4d_prad(const GRCoordinates& G,
             // figure out if, during the next m's, the other side (plus/minus) will also
             // go bad, trigerring a bad_guess_m == true && bad_guess_p == true
             if (!bad_guess_m && !bad_guess_p) {
-                Real rho_m = P_new(m_p.RHO, k, j, i);
+                Real rho_m = P_init(m_p.RHO, k, j, i);
                 compute_covariant_fourforce(
                     G, P_mhd_m, P_rad_m, rho_m, eos, rad_opac, k, j, i, dS_m);
                 for (int n = 0; n < 4; n++) dS_m[n] = gdet * dS_m[n];
@@ -1339,23 +1081,24 @@ KOKKOS_INLINE_FUNCTION int solve_4d_prad(const GRCoordinates& G,
 
             // Evaluate plus perturbation
             RadM1::calc_tensor(G, P_rad_p, 0, j, i, U_rad_p);
+            for (int n = 0; n < 4; n++) U_rad_p[n] *= gdet;
             // set U_mhd from U_rad
             for (int n = 0; n < 4; n++) {
                 U_mhd_p[n] = U_mhd_0[n] - (U_rad_p[n] - U_rad_0[n]);
             }
 
             // Invert to get fluid primitives
-            U_new(m_u.UU, k, j, i) = U_mhd_p[0];
-            U_new(m_u.U1, k, j, i) = U_mhd_p[1];
-            U_new(m_u.U2, k, j, i) = U_mhd_p[2];
-            U_new(m_u.U3, k, j, i) = U_mhd_p[3];
+            U_init(m_u.UU, k, j, i) = U_mhd_p[0];
+            U_init(m_u.U1, k, j, i) = U_mhd_p[1];
+            U_init(m_u.U2, k, j, i) = U_mhd_p[2];
+            U_init(m_u.U3, k, j, i) = U_mhd_p[3];
             auto mhd_inverter_status_p = Inverter::u_to_p<Inverter::Type::kastaun>(
-                G, U_new, m_u, eos, k, j, i, P_new, m_p, Loci::center, 25, 1e-12);
+                G, U_init, m_u, eos, k, j, i, P_init, m_p, Loci::center, 25, 1e-12);
 
-            P_mhd_p[0] = P_new(m_p.UU, k, j, i);
-            P_mhd_p[1] = P_new(m_p.U1, k, j, i);
-            P_mhd_p[2] = P_new(m_p.U2, k, j, i);
-            P_mhd_p[3] = P_new(m_p.U3, k, j, i);
+            P_mhd_p[0] = P_init(m_p.UU, k, j, i);
+            P_mhd_p[1] = P_init(m_p.U1, k, j, i);
+            P_mhd_p[2] = P_init(m_p.U2, k, j, i);
+            P_mhd_p[3] = P_init(m_p.U3, k, j, i);
 
             if (mhd_inverter_status_p != static_cast<int>(Inverter::Status::success)) {
                 bad_guess_p = true;
@@ -1366,7 +1109,7 @@ KOKKOS_INLINE_FUNCTION int solve_4d_prad(const GRCoordinates& G,
             // figure out if, during the next m's, the other side (plus/minus) will also
             // go bad, trigerring a bad_guess_m == true && bad_guess_p == true
             if (!bad_guess_m && !bad_guess_p) {
-                Real rho_p = P_new(m_p.RHO, k, j, i);
+                Real rho_p = P_init(m_p.RHO, k, j, i);
                 compute_covariant_fourforce(
                     G, P_mhd_p, P_rad_p, rho_p, eos, rad_opac, k, j, i, dS_p);
                 for (int n = 0; n < 4; n++) dS_p[n] = gdet * dS_p[n];
@@ -1397,25 +1140,26 @@ KOKKOS_INLINE_FUNCTION int solve_4d_prad(const GRCoordinates& G,
                     src_rootfind_eps * m::abs(P_rad_p[m]));
 
                 RadM1::calc_tensor(G, P_rad_p, 0, j, i, U_rad_p);
+                for (int n = 0; n < 4; n++) U_rad_p[n] *= gdet;
 
                 for (int n = 0; n < 4; n++) {
                     U_mhd_p[n] = U_mhd_0[n] - (U_rad_p[n] - U_rad_0[n]);
                 }
 
                 // invert
-                U_new(m_u.UU, k, j, i) = U_mhd_p[0];
-                U_new(m_u.U1, k, j, i) = U_mhd_p[1];
-                U_new(m_u.U2, k, j, i) = U_mhd_p[2];
-                U_new(m_u.U3, k, j, i) = U_mhd_p[3];
+                U_init(m_u.UU, k, j, i) = U_mhd_p[0];
+                U_init(m_u.U1, k, j, i) = U_mhd_p[1];
+                U_init(m_u.U2, k, j, i) = U_mhd_p[2];
+                U_init(m_u.U3, k, j, i) = U_mhd_p[3];
                 auto mhd_inverter_status = Inverter::u_to_p<Inverter::Type::kastaun>(
-                    G, U_new, m_u, eos, k, j, i, P_new, m_p, Loci::center, 25, 1e-12);
+                    G, U_init, m_u, eos, k, j, i, P_init, m_p, Loci::center, 25, 1e-12);
 
-                P_mhd_p[0] = P_new(m_p.UU, k, j, i);
-                P_mhd_p[1] = P_new(m_p.U1, k, j, i);
-                P_mhd_p[2] = P_new(m_p.U2, k, j, i);
-                P_mhd_p[3] = P_new(m_p.U3, k, j, i);
+                P_mhd_p[0] = P_init(m_p.UU, k, j, i);
+                P_mhd_p[1] = P_init(m_p.U1, k, j, i);
+                P_mhd_p[2] = P_init(m_p.U2, k, j, i);
+                P_mhd_p[3] = P_init(m_p.U3, k, j, i);
 
-                Real rho_p = P_new(m_p.RHO, k, j, i);
+                Real rho_p = P_init(m_p.RHO, k, j, i);
 
                 compute_covariant_fourforce(
                     G, P_mhd_p, P_rad_p, rho_p, eos, rad_opac, k, j, i, dS_p);
@@ -1445,22 +1189,23 @@ KOKKOS_INLINE_FUNCTION int solve_4d_prad(const GRCoordinates& G,
                     src_rootfind_eps * m::abs(P_rad_m[m]));
 
                 RadM1::calc_tensor(G, P_rad_m, 0, j, i, U_rad_m);
+                for (int n = 0; n < 4; n++) U_rad_m[n] *= gdet;
 
                 for (int n = 0; n < 4; n++) {
                     U_mhd_m[n] = U_mhd_0[n] - (U_rad_m[n] - U_rad_0[n]);
                 }
 
-                U_new(m_u.UU, k, j, i) = U_mhd_m[0];
-                U_new(m_u.U1, k, j, i) = U_mhd_m[1];
-                U_new(m_u.U2, k, j, i) = U_mhd_m[2];
-                U_new(m_u.U3, k, j, i) = U_mhd_m[3];
+                U_init(m_u.UU, k, j, i) = U_mhd_m[0];
+                U_init(m_u.U1, k, j, i) = U_mhd_m[1];
+                U_init(m_u.U2, k, j, i) = U_mhd_m[2];
+                U_init(m_u.U3, k, j, i) = U_mhd_m[3];
                 auto mhd_inverter_status = Inverter::u_to_p<Inverter::Type::kastaun>(
-                    G, U_new, m_u, eos, k, j, i, P_new, m_p, Loci::center, 25, 1e-12);
-                P_mhd_m[0] = P_new(m_p.UU, k, j, i);
-                P_mhd_m[1] = P_new(m_p.U1, k, j, i);
-                P_mhd_m[2] = P_new(m_p.U2, k, j, i);
-                P_mhd_m[3] = P_new(m_p.U3, k, j, i);
-                Real rho_m = P_new(m_p.RHO, k, j, i);
+                    G, U_init, m_u, eos, k, j, i, P_init, m_p, Loci::center, 25, 1e-12);
+                P_mhd_m[0] = P_init(m_p.UU, k, j, i);
+                P_mhd_m[1] = P_init(m_p.U1, k, j, i);
+                P_mhd_m[2] = P_init(m_p.U2, k, j, i);
+                P_mhd_m[3] = P_init(m_p.U3, k, j, i);
+                Real rho_m = P_init(m_p.RHO, k, j, i);
 
                 compute_covariant_fourforce(
                     G, P_mhd_m, P_rad_m, rho_m, eos, rad_opac, k, j, i, dS_m);
@@ -1500,24 +1245,25 @@ KOKKOS_INLINE_FUNCTION int solve_4d_prad(const GRCoordinates& G,
         }
 
         RadM1::calc_tensor(G, P_rad_guess, 0, j, i, U_rad_guess);
+        for (int n = 0; n < 4; n++) U_rad_guess[n] *= gdet;
 
         for (int n = 0; n < 4; n++) {
             U_mhd_guess[n] = U_mhd_0[n] - (U_rad_guess[n] - U_rad_0[n]);
         }
 
-        U_new(m_u.UU, k, j, i) = U_mhd_guess[0];
-        U_new(m_u.U1, k, j, i) = U_mhd_guess[1];
-        U_new(m_u.U2, k, j, i) = U_mhd_guess[2];
-        U_new(m_u.U3, k, j, i) = U_mhd_guess[3];
+        U_init(m_u.UU, k, j, i) = U_mhd_guess[0];
+        U_init(m_u.U1, k, j, i) = U_mhd_guess[1];
+        U_init(m_u.U2, k, j, i) = U_mhd_guess[2];
+        U_init(m_u.U3, k, j, i) = U_mhd_guess[3];
 
         auto mhd_inverter_status = Inverter::u_to_p<Inverter::Type::kastaun>(
-            G, U_new, m_u, eos, k, j, i, P_new, m_p, Loci::center, 25, 1e-12);
+            G, U_init, m_u, eos, k, j, i, P_init, m_p, Loci::center, 25, 1e-12);
 
-        P_mhd_guess[0] = P_new(m_p.UU, k, j, i);
-        P_mhd_guess[1] = P_new(m_p.U1, k, j, i);
-        P_mhd_guess[2] = P_new(m_p.U2, k, j, i);
-        P_mhd_guess[3] = P_new(m_p.U3, k, j, i);
-        rho_iter_next = P_new(m_p.RHO, k, j, i);
+        P_mhd_guess[0] = P_init(m_p.UU, k, j, i);
+        P_mhd_guess[1] = P_init(m_p.U1, k, j, i);
+        P_mhd_guess[2] = P_init(m_p.U2, k, j, i);
+        P_mhd_guess[3] = P_init(m_p.U3, k, j, i);
+        rho_iter_next = P_init(m_p.RHO, k, j, i);
 
         compute_covariant_fourforce(
             G, P_mhd_guess, P_rad_guess, rho_iter_next, eos, rad_opac, k, j, i, dS_guess);
@@ -1569,25 +1315,25 @@ KOKKOS_INLINE_FUNCTION int solve_4d_prad(const GRCoordinates& G,
             }
 
             RadM1::calc_tensor(G, P_rad_guess, 0, j, i, U_rad_guess);
+            for (int n = 0; n < 4; n++) U_rad_guess[n] *= gdet;
 
             for (int n = 0; n < 4; n++) {
                 U_mhd_guess[n] = U_mhd_0[n] - (U_rad_guess[n] - U_rad_0[n]);
             }
 
             // Invert the MHD state
-
-            U_new(m_u.UU, k, j, i) = U_mhd_guess[0];
-            U_new(m_u.U1, k, j, i) = U_mhd_guess[1];
-            U_new(m_u.U2, k, j, i) = U_mhd_guess[2];
-            U_new(m_u.U3, k, j, i) = U_mhd_guess[3];
+            U_init(m_u.UU, k, j, i) = U_mhd_guess[0];
+            U_init(m_u.U1, k, j, i) = U_mhd_guess[1];
+            U_init(m_u.U2, k, j, i) = U_mhd_guess[2];
+            U_init(m_u.U3, k, j, i) = U_mhd_guess[3];
             auto mhd_inverter_status = Inverter::u_to_p<Inverter::Type::kastaun>(
-                G, U_new, m_u, eos, k, j, i, P_new, m_p, Loci::center, 25, 1e-12);
+                G, U_init, m_u, eos, k, j, i, P_init, m_p, Loci::center, 25, 1e-12);
 
-            P_mhd_guess[0] = P_new(m_p.UU, k, j, i);
-            P_mhd_guess[1] = P_new(m_p.U1, k, j, i);
-            P_mhd_guess[2] = P_new(m_p.U2, k, j, i);
-            P_mhd_guess[3] = P_new(m_p.U3, k, j, i);
-            rho_iter_next = P_new(m_p.RHO, k, j, i);
+            P_mhd_guess[0] = P_init(m_p.UU, k, j, i);
+            P_mhd_guess[1] = P_init(m_p.U1, k, j, i);
+            P_mhd_guess[2] = P_init(m_p.U2, k, j, i);
+            P_mhd_guess[3] = P_init(m_p.U3, k, j, i);
+            rho_iter_next = P_init(m_p.RHO, k, j, i);
 
             compute_covariant_fourforce(G, P_mhd_guess, P_rad_guess, rho_iter_next, eos,
                 rad_opac, k, j, i, dS_guess);
@@ -1606,7 +1352,7 @@ KOKKOS_INLINE_FUNCTION int solve_4d_prad(const GRCoordinates& G,
         for (int n = 0; n < 4; n++) {
             resid[n] = U_rad_guess[n] - U_rad_0[n] - dt * dS_guess[n];
 
-            if (std::isnan(resid[n])) {
+            if (!m::isfinite(resid[n])) {
                 bad_guess = true;
                 break;
             }
@@ -1627,55 +1373,29 @@ KOKKOS_INLINE_FUNCTION int solve_4d_prad(const GRCoordinates& G,
         niter++;
     } while (err > src_rootfind_tol && niter < src_rootfind_maxiter);
 
-    // isnan is no-ops for GPU code and for fast-math cpu code (default intel compiler).
-    // Careful, these isnans might not trigger.
     if (niter == src_rootfind_maxiter || err > src_rootfind_tol ||
-        m::isnan(U_mhd_guess[0]) || m::isnan(U_mhd_guess[1]) ||
-        m::isnan(U_mhd_guess[2]) || m::isnan(U_mhd_guess[3]) || bad_guess) {
+        !m::isfinite(U_mhd_guess[0]) || !m::isfinite(U_mhd_guess[1]) ||
+        !m::isfinite(U_mhd_guess[2]) || !m::isfinite(U_mhd_guess[3]) || bad_guess) {
 
         return static_cast<int>(StatusImplicitStep::failure);
-    } else {
-        dcov_rad[0] = U_rad_guess[0] - U_rad_0[0];
-        dcov_rad[1] = U_rad_guess[1] - U_rad_0[1];
-        dcov_rad[2] = U_rad_guess[2] - U_rad_0[2];
-        dcov_rad[3] = U_rad_guess[3] - U_rad_0[3];
     }
 
-    U_new(m_u.UU_RAD, k, j, i) = U_entry[4] + dcov_rad[0];
-    U_new(m_u.U1_RAD, k, j, i) = U_entry[5] + dcov_rad[1];
-    U_new(m_u.U2_RAD, k, j, i) = U_entry[6] + dcov_rad[2];
-    U_new(m_u.U3_RAD, k, j, i) = U_entry[7] + dcov_rad[3];
-    U_new(m_u.UU, k, j, i) = U_entry[0] - dcov_rad[0];
-    U_new(m_u.U1, k, j, i) = U_entry[1] - dcov_rad[1];
-    U_new(m_u.U2, k, j, i) = U_entry[2] - dcov_rad[2];
-    U_new(m_u.U3, k, j, i) = U_entry[3] - dcov_rad[3];
+    dS_final[0] = dS_guess[0];
+    dS_final[1] = dS_guess[1];
+    dS_final[2] = dS_guess[2];
+    dS_final[3] = dS_guess[3];
 
-    auto mhd_inverter_status = Inverter::u_to_p<Inverter::Type::kastaun>(
-        G, U_new, m_u, eos, k, j, i, P_new, m_p, Loci::center, 25, 1e-12);
-
-    // Refresh pflag each step so a stale failure doesn't linger.
-    pflag(0, k, j, i) = static_cast<int>(Inverter::Status::success);
-    rinvflag(0, k, j, i) = static_cast<int>(StatusRadiationInversion::success);
-
-    if (mhd_inverter_status != static_cast<int>(Inverter::Status::success)) {
-        return static_cast<int>(StatusImplicitStep::mhdsolve);
+    {
+        Real uvec_final[NVEC] = {P_mhd_guess[1], P_mhd_guess[2], P_mhd_guess[3]};
+        Real ucon_final[4];
+        GRMHD::calc_ucon(G, uvec_final, k, j, i, Loci::center, ucon_final);
+        Real Tg_final =
+            eos.TemperatureFromDensityInternalEnergy(rho_init, P_mhd_guess[0] / rho_init);
+        Real Gdotu = dS_guess[0] * ucon_final[0] + dS_guess[1] * ucon_final[1] +
+                     dS_guess[2] * ucon_final[2] + dS_guess[3] * ucon_final[3];
+        dS_final[4] = Gdotu / Tg_final;
     }
 
-    // Now since the u2p for MHD was successful, do it for radiation:
-    Real U_rad_final[4] = {U_new(m_u.UU_RAD, k, j, i), U_new(m_u.U1_RAD, k, j, i),
-        U_new(m_u.U2_RAD, k, j, i), U_new(m_u.U3_RAD, k, j, i)};
-    Real P_rad_final[4];
-
-    auto rad_status = u_to_p_rad(G, U_rad_final, P_rad_final, k, j, i);
-    rinvflag(0, k, j, i) = static_cast<int>(rad_status);
-    if (rad_status != StatusRadiationInversion::success) {
-        return static_cast<int>(StatusImplicitStep::radsolve);
-    } else {
-        P_new(m_p.UU_RAD, k, j, i) = P_rad_final[0];
-        P_new(m_p.U1_RAD, k, j, i) = P_rad_final[1];
-        P_new(m_p.U2_RAD, k, j, i) = P_rad_final[2];
-        P_new(m_p.U3_RAD, k, j, i) = P_rad_final[3];
-    }
     return static_cast<int>(StatusImplicitStep::success);
 }
 
