@@ -71,8 +71,10 @@ KOKKOS_INLINE_FUNCTION void apply_ceilings(const GRCoordinates& G,
 
     // Compute max values for ceilings
     Real gamma = GRMHD::lorentz_calc(G, P, m_p, k, j, i, loc);
+    Real lambda[2];
+    lambda[0] = (m_p.YE >= 0) ? P(m_p.YE, k, j, i) : 0.0;
     Real ktot = eos.EntropyFromDensityInternalEnergy(
-        P(m_p.RHO, k, j, i), P(m_p.UU, k, j, i) / P(m_p.RHO, k, j, i));
+        P(m_p.RHO, k, j, i), P(m_p.UU, k, j, i) / P(m_p.RHO, k, j, i), lambda);
     Real u_over_rho = P(m_p.UU, k, j, i) / P(m_p.RHO, k, j, i);
 
     // 1. Limit gamma with respect to normal observer
@@ -180,9 +182,10 @@ KOKKOS_INLINE_FUNCTION int determine_floors(const GRCoordinates& G,
     // Then ceilings, need to record these for FOFC. See real implementation for details
     if (GRMHD::lorentz_calc(G, P, m_p, k, j, i, Loci::center) > myfloors.gamma_max)
         fflag |= FFlag::GAMMA;
-
+    Real lambda[2];
+    lambda[0] = (m_p.YE >= 0) ? P(m_p.YE, k, j, i) : 0.0;
     Real ktot = eos.EntropyFromDensityInternalEnergy(
-        P(m_p.RHO, k, j, i), P(m_p.UU, k, j, i) / P(m_p.RHO, k, j, i));
+        P(m_p.RHO, k, j, i), P(m_p.UU, k, j, i) / P(m_p.RHO, k, j, i), lambda);
     if (ktot > myfloors.ktot_max) fflag |= FFlag::KTOT;
 
     if (myfloors.temp_adjust_u &&
@@ -233,8 +236,9 @@ KOKKOS_INLINE_FUNCTION int apply_floors<InjectionFrame::drift>(FLOOR_ONE_ARGS)
     // Fluid quantities (four velocities have been computed above)
     const Real rho = P(m_p.RHO, k, j, i);
     const Real uu = P(m_p.UU, k, j, i);
-
-    const Real pg = eos.PressureFromDensityInternalEnergy(rho, uu / rho);
+    Real lambda[2];
+    lambda[0] = (m_p.YE >= 0) ? P(m_p.YE, k, j, i) : 0.0;
+    const Real pg = eos.PressureFromDensityInternalEnergy(rho, uu / rho, lambda);
     const Real w_old = m::max(rho + uu + pg, SMALL_NUM);
 
     // Normal observer magnetic field
@@ -279,8 +283,10 @@ KOKKOS_INLINE_FUNCTION int apply_floors<InjectionFrame::drift>(FLOOR_ONE_ARGS)
     // Update rho, uu and compute new enthalpy
     P(m_p.RHO, k, j, i) = m::max(rho, rhoflr_max);
     P(m_p.UU, k, j, i) = m::max(uu, uflr_max);
+    Real lambda[2];
+    lambda[0] = (m_p.YE >= 0) ? P(m_p.YE, k, j, i) : 0.0;
     const Real pg_new = eos.PressureFromDensityInternalEnergy(
-        P(m_p.RHO, k, j, i), P(m_p.UU, k, j, i) / P(m_p.RHO, k, j, i));
+        P(m_p.RHO, k, j, i), P(m_p.UU, k, j, i) / P(m_p.RHO, k, j, i), lambda);
     const Real w_new = P(m_p.RHO, k, j, i) + P(m_p.UU, k, j, i) + pg_new;
 
     // New parallel velocity (refer R17 Eqn B14)

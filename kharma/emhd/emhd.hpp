@@ -153,7 +153,7 @@ inline EMHD_parameters GetEMHDParameters(Packages_t& packages)
 
 KOKKOS_INLINE_FUNCTION void set_parameters(const GRCoordinates& G, const Real& rho,
     const Real& u, const Real& qtilde, const Real& dPtilde, const Real& bsq,
-    const EMHD_parameters& emhd_params, const Microphysics::EOS::EOS& eos, const int& j,
+    const EMHD_parameters& emhd_params, const Microphysics::EOS::EOS& eos, const Real lambda[2], const int& j,
     const int& i, Real& tau, Real& chi_e, Real& nu_e)
 {}
 
@@ -180,7 +180,7 @@ KOKKOS_INLINE_FUNCTION void convert_prims_to_q_dP(const Real& q_tilde,
  */
 KOKKOS_INLINE_FUNCTION void set_parameters(const GRCoordinates& G, const Real& rho,
     const Real& u, const Real& qtilde, const Real& dPtilde, const Real& bsq,
-    const EMHD_parameters& emhd_params, const Microphysics::EOS::EOS& eos, const int& j,
+    const EMHD_parameters& emhd_params, const Microphysics::EOS::EOS& eos, const Real lambda[2], const int& j,
     const int& i, Real& tau, Real& chi_e, Real& nu_e)
 {
     // Formerly chi_e was only set if conduction was present, nu_e only if viscosity
@@ -194,9 +194,9 @@ KOKKOS_INLINE_FUNCTION void set_parameters(const GRCoordinates& G, const Real& r
     } else if (emhd_params.type == ClosureType::soundspeed) {
         // Set tau=const, chi/nu prop. to sound speed squared
         const Real sie = u / rho; // specific internal energy
-        const Real pg = eos.PressureFromDensityInternalEnergy(rho, sie);
+        const Real pg = eos.PressureFromDensityInternalEnergy(rho, sie,lambda);
         const Real ef = rho + u + pg; // \rho * h = rho + u + P.
-        const Real cs2 = eos.BulkModulusFromDensityInternalEnergy(rho, sie) / ef;
+        const Real cs2 = eos.BulkModulusFromDensityInternalEnergy(rho, sie, lambda) / ef;
         tau = emhd_params.tau;
         chi_e = emhd_params.conduction_alpha * cs2 * tau;
         nu_e = emhd_params.viscosity_alpha * cs2 * tau;
@@ -216,15 +216,15 @@ KOKKOS_INLINE_FUNCTION void set_parameters(const GRCoordinates& G, const Real& r
         const Real tau_dyn = m::sqrt(r * r * r);
         tau = tau_dyn;
         const Real sie = u / rho; // specific internal energy
-        const Real pg = eos.PressureFromDensityInternalEnergy(rho, sie);
+        const Real pg = eos.PressureFromDensityInternalEnergy(rho, sie, lambda);
         const Real Theta = pg / rho;
         // Compute local sound speed, ensure it is defined and >0
         // Passing NaN disables an upper bound (TODO should we have one?)
         const Real ef = rho + u + pg; // \rho * h = rho + u + P.
         const Real cs2 = clip(
-            eos.BulkModulusFromDensityInternalEnergy(rho, sie) / ef, SMALL_NUM, 0. / 0.);
+            eos.BulkModulusFromDensityInternalEnergy(rho, sie, lambda) / ef, SMALL_NUM, 0. / 0.);
 
-        constexpr Real lambda = 0.01;
+        constexpr Real lambda_smooth = 0.01;
 
         // Correction due to heat conduction
         {
@@ -234,7 +234,7 @@ KOKKOS_INLINE_FUNCTION void set_parameters(const GRCoordinates& G, const Real& r
                                : qtilde;
             const Real q_max = emhd_params.conduction_alpha * rho * cs2 * m::sqrt(cs2);
             const Real q_ratio = m::abs(q) / q_max;
-            const Real inv_exp_g = m::exp(-(q_ratio - 1.) / lambda);
+            const Real inv_exp_g = m::exp(-(q_ratio - 1.) / lambda_smooth);
             const Real f_fmin = inv_exp_g / (inv_exp_g + 1.) + 1.e-5;
 
             tau = m::min(tau, f_fmin * tau_dyn);
@@ -253,7 +253,7 @@ KOKKOS_INLINE_FUNCTION void set_parameters(const GRCoordinates& G, const Real& r
                                     : m::max(-bsq, -2.99 * pg / 1.07);
 
             const Real dP_ratio = m::abs(dP) / (m::abs(dP_max) + SMALL_NUM);
-            const Real inv_exp_g = m::exp((1. - dP_ratio) / lambda);
+            const Real inv_exp_g = m::exp((1. - dP_ratio) / lambda_smooth);
             const Real f_fmin = inv_exp_g / (inv_exp_g + 1.) + 1.e-5;
 
             tau = m::min(tau, f_fmin * tau_dyn);
@@ -276,8 +276,9 @@ KOKKOS_INLINE_FUNCTION void set_parameters(const GRCoordinates& G,
     double bsq = m::max(dot(Dtmp.bcon, Dtmp.bcov), SMALL_NUM);
     Real qtilde = (m_p.Q >= 0) ? P(m_p.Q, k, j, i) : 0.;
     Real dPtilde = (m_p.DP >= 0) ? P(m_p.DP, k, j, i) : 0.;
+    Real lambda[2] = {(m_p.YE >= 0) ? P(m_p.YE, k, j, i) : 0.0, 0.0};
     set_parameters(G, P(m_p.RHO, k, j, i), P(m_p.UU, k, j, i), qtilde, dPtilde, bsq,
-        emhd_params, eos, j, i, tau, chi_e, nu_e);
+        emhd_params, eos, lambda, j, i, tau, chi_e, nu_e);
 }
 
 /**

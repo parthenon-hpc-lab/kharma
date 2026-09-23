@@ -148,7 +148,8 @@ template<>
 KOKKOS_INLINE_FUNCTION Real reduction_var<Var::gas_pressure>(REDUCE_FUNCTION_ARGS)
 {
     const Real sie = P(m_p.UU, k, j, i) / P(m_p.RHO, k, j, i);
-    return eos.PressureFromDensityInternalEnergy(P(m_p.RHO, k, j, i), sie);
+    Real lambda[2] = {(m_p.YE >= 0) ? P(m_p.YE, k, j, i) : 0.0, 0.0};
+    return eos.PressureFromDensityInternalEnergy(P(m_p.RHO, k, j, i), sie, lambda);
     // return (gam - 1) * P(m_p.UU, k, j, i);
 }
 template<>
@@ -157,7 +158,8 @@ KOKKOS_INLINE_FUNCTION Real reduction_var<Var::beta>(REDUCE_FUNCTION_ARGS)
     FourVectors Dtmp;
     GRMHD::calc_4vecs(G, P, m_p, k, j, i, Loci::center, Dtmp);
     const Real sie = P(m_p.UU, k, j, i) / P(m_p.RHO, k, j, i);
-    const Real Pg = eos.PressureFromDensityInternalEnergy(P(m_p.RHO, k, j, i), sie);
+    Real lambda[2] = {(m_p.YE >= 0) ? P(m_p.YE, k, j, i) : 0.0, 0.0};
+    const Real Pg = eos.PressureFromDensityInternalEnergy(P(m_p.RHO, k, j, i), sie, lambda);
     return Pg / (0.5 * (dot(Dtmp.bcon, Dtmp.bcov) + SMALL_NUM));
 }
 
@@ -430,7 +432,8 @@ KOKKOS_INLINE_FUNCTION Real reduction_var<Var::eht_lum>(REDUCE_FUNCTION_ARGS)
     Real rho = P(m_p.RHO, k, j, i);
     // Real Pg = (gam - 1.) * P(m_p.UU, k, j, i);
     Real sie = P(m_p.UU, k, j, i) / rho;
-    Real Pg = eos.PressureFromDensityInternalEnergy(rho, sie);
+    Real lambda[2] = {(m_p.YE >= 0) ? P(m_p.YE, k, j, i) : 0.0, 0.0};
+    Real Pg = eos.PressureFromDensityInternalEnergy(rho, sie, lambda);
     Real Bmag = m::sqrt(dot(Dtmp.bcon, Dtmp.bcov));
     Real j_eht =
         rho * rho * rho / Pg / Pg * m::exp(-0.2 * m::cbrt(rho * rho / (Bmag * Pg * Pg)));

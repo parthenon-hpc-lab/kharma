@@ -1,6 +1,7 @@
 #pragma once
 
 #include "decs.hpp"
+#include "microphysics/eos_kharma/eos_kharma.hpp"
 
 using namespace parthenon;
 
@@ -14,18 +15,25 @@ TaskStatus InitializeShockTube(
     std::shared_ptr<MeshBlockData<Real>>& rc, ParameterInput* pin)
 {
     auto pmb = rc->GetBlockPointer();
+    auto eos = pmb->packages.Get("eos")->Param<Microphysics::EOS::EOS>("d.EOS");
+
     GridScalar rho = rc->Get("prims.rho").data;
     GridScalar u = rc->Get("prims.u").data;
     GridVector uvec = rc->Get("prims.uvec").data;
-
+    const bool use_ye = rc->Contains("prims.Ye");
+    GridScalar Ye;
+    if (use_ye) {
+        Ye = rc->Get("prims.Ye").data;
+    }
     const auto& G = pmb->coords;
 
-    const Real gam = pmb->packages.Get("eos")->Param<Real>("gm1") + 1.0;
     // TODO some particular default shock
     const Real rhoL = pin->GetOrAddReal("shock", "rhoL", 0.0);
     const Real rhoR = pin->GetOrAddReal("shock", "rhoR", 0.0);
     const Real PL = pin->GetOrAddReal("shock", "PL", 0.0);
     const Real PR = pin->GetOrAddReal("shock", "PR", 0.0);
+    const Real YeL = pin->GetOrAddReal("shock", "YeL", 0.0);
+    const Real YeR = pin->GetOrAddReal("shock", "YeR", 0.0);
     const Real u1L = pin->GetOrAddReal("shock", "u1L", 0.0);
     const Real u1R = pin->GetOrAddReal("shock", "u1R", 0.0);
     const Real u2L = pin->GetOrAddReal("shock", "u2L", 0.0);
@@ -66,7 +74,12 @@ TaskStatus InitializeShockTube(
 
             const bool lhs = X[1] < center;
             rho(k, j, i) = (lhs) ? rhoL : rhoR;
-            u(k, j, i) = ((lhs) ? PL : PR) / (gam - 1.);
+            const Real Ye_val = use_ye ? ((lhs) ? YeL : YeR) : 0.0;
+            if (use_ye) Ye(k,j,i) = Ye_val;
+            const Real Pval = (lhs) ? PL : PR;
+            Real lambda[2] = {Ye_val, 0.0};
+            const Real sie = eos.InternalEnergyFromDensityPressure(rho(k, j, i), Pval, lambda);
+            u(k, j, i) = sie * rho(k, j, i);
             uvec(0, k, j, i) = (lhs) ? u1L : u1R;
             uvec(1, k, j, i) = (lhs) ? u2L : u2R;
             uvec(2, k, j, i) = (lhs) ? u3L : u3R;

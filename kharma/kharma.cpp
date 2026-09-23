@@ -50,6 +50,7 @@
 #include "current.hpp"
 #include "electrons.hpp"
 #include "entropy.hpp"
+#include "ye.hpp"
 #include "floors.hpp"
 #include "flux.hpp"
 #include "grmhd.hpp"
@@ -394,9 +395,18 @@ Packages_t KHARMA::ProcessPackages(std::unique_ptr<ParameterInput>& pin)
     // Driver package is the foundation
     auto t_driver = tl.AddTask(
         t_none, KHARMA::AddPackage, packages, KHARMADriver::Initialize, pin.get());
+    
     // Enable eos package
     auto t_eos = tl.AddTask(
         t_driver, KHARMA::AddPackage, packages, Microphysics::EOS::Initialize, pin.get());
+    // Ye/composition tracking, needed by tabulated EOS (stellarcollapse)    
+    bool ye_on = pin->GetOrAddBoolean("fluid", "Ye", false);
+    auto t_ye = t_eos;
+    if (ye_on) {
+        t_ye = tl.AddTask(
+            t_eos, KHARMA::AddPackage, packages, Ye::Initialize, pin.get());
+    }
+
     // GRMHD needs globals to mark packages
     auto t_grmhd = tl.AddTask(
         t_globals | t_eos, KHARMA::AddPackage, packages, GRMHD::Initialize, pin.get());

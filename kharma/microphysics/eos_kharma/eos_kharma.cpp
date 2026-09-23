@@ -124,10 +124,6 @@ std::shared_ptr<KHARMAPackage> Initialize(
         Metadata m = Metadata({Metadata::Cell, Metadata::Intensive, Metadata::Derived,
             Metadata::OneCopy, Metadata::Requires});
 
-        // TODO: prob fix this later when we start using nuclear eos
-        // pkg->AddField(fluid_prim::ye::name(), m);
-        // pkg->AddField(fluid_prim::temperature::name(), m);
-
         const std::string filename = pin->GetString(block_name, "filename");
         const bool use_sp5 = pin->GetOrAddBoolean(block_name, "use_sp5", true);
         const bool filter_bmod = pin->GetOrAddBoolean(block_name, "filter_bmod", true);

@@ -87,6 +87,7 @@ static constexpr int FIXUP_U_RANGE = ipow(2, 22);
 // Direct last-ditch fixups
 static constexpr int FIXUP_RHO_DIRECT = ipow(2, 23);
 static constexpr int FIXUP_U_DIRECT = ipow(2, 24);
+static constexpr int YE = ipow(2, 25);
 // Lowest flag value. Needed for combining floor and other return flags
 static constexpr int MINIMUM = GEOM_RHO;
 
@@ -100,6 +101,7 @@ static const std::map<int, std::string> flag_names = {
     {B_RHO, "B_RHO: Ceiling on plasma sigma"}, {B_U, "B_U: Ceiling on plasma beta"},
     {GAMMA, "GAMMA: Direct limit on Lorentz factor"}, {TEMP, "TEMP: Temperature ceiling"},
     {KTOT, "KTOT: Entropy ceiling"},
+    {YE, "YE: Electron fraction bounds"},
     {GEOM_RHO_FLUX,
         "GEOM_RHO_FLUX: Geometric rho floor at face or reconstruction fallback"},
     {GEOM_U_FLUX, "GEOM_U_FLUX: Geometric u floor at face or reconstruction fallback"},

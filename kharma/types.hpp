@@ -137,6 +137,8 @@ class VarMap
     // Use int8. 127 values ought to be enough for anybody, right?
     // Basic primitive variables
     int8_t RHO, UU, U1, U2, U3, B1, B2, B3, Bf1, Bf2, Bf3;
+    // Ye/composition tracking
+    int8_t YE;
     // Tracker variables
     int8_t RHO_ADDED, UU_ADDED, PASSIVE;
     // Total/idealized (advected, no-dissipation) fluid entropy tracking
@@ -160,6 +162,8 @@ class VarMap
             B1 = name_map["cons.B"].first;
             Bf1 = name_map["cons.fB"].first;
             PSI = name_map["cons.psi_cd"].first;
+            //Ye/composition tracking
+            YE = name_map["cons.Ye"].first;
             // Floors
             RHO_ADDED = name_map["cons.rho_added"].first;
             UU_ADDED = name_map["cons.u_added"].first;
@@ -190,6 +194,8 @@ class VarMap
             B1 = name_map["prims.B"].first;
             Bf1 = name_map["prims.fB"].first;
             PSI = name_map["prims.psi_cd"].first;
+            //Ye/composition tracking
+            YE = name_map["prims.Ye"].first;
             // Floors (TODO cons only?)
             RHO_ADDED = name_map["prims.rho_added"].first;
             UU_ADDED = name_map["prims.u_added"].first;

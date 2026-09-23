@@ -278,8 +278,10 @@ KOKKOS_INLINE_FUNCTION void p_to_u(const GRCoordinates& G, const Global& P,
     // Particle number flux
     U(m_u.RHO, k, j, i) = P(m_p.RHO, k, j, i) * Dtmp.ucon[0] * gdet;
 
+    Real lambda[2];
+    lambda[0] = (m_p.YE >= 0) ? P(m_p.YE, k, j, i) : 0.0;
     Real pg = eos.PressureFromDensityInternalEnergy(
-        P(m_p.RHO, k, j, i), P(m_p.UU, k, j, i) / P(m_p.RHO, k, j, i));
+        P(m_p.RHO, k, j, i), P(m_p.UU, k, j, i) / P(m_p.RHO, k, j, i), lambda);
     if (m_u.B1 >= 0) {
         // MHD stress-energy tensor w/ first index up, second index down
         Real mhd[GR_DIM];
@@ -318,7 +320,9 @@ KOKKOS_INLINE_FUNCTION void p_to_u_mhd(const GRCoordinates& G, const Real& rho,
 
     // MHD stress-energy tensor w/ first index up, second index down
     Real mhd[GR_DIM];
-    Real pg = eos.PressureFromDensityInternalEnergy(rho, u / rho);
+    Real lambda[2];
+    lambda[0] = (m_p.YE >= 0) ? P(m_p.YE, k, j, i) : 0.0;
+    Real pg = eos.PressureFromDensityInternalEnergy(rho, u / rho, lambda);
     calc_tensor(rho, u, pg, Dtmp, 0, mhd);
 
     T[0] = mhd[0] * gdet + rho_ut;
