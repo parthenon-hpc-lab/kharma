@@ -49,12 +49,14 @@ KOKKOS_INLINE_FUNCTION Real compute_y_max(const Real GAMMAMAX)
 {
     const Real target = GAMMAMAX * GAMMAMAX;
     Real y_old = 0.9998;
-    Real E_old = target - (2.0 - y_old + m::sqrt(4.0 - 3.0 * y_old)) / (4.0 - 4.0 * y_old);
+    Real E_old =
+        target - (2.0 - y_old + m::sqrt(4.0 - 3.0 * y_old)) / (4.0 - 4.0 * y_old);
     for (int n = 0; n < 40; ++n) {
         Real dEdy = (0.375 * y_old - 0.25 * m::sqrt(4.0 - 3.0 * y_old) - 0.625) /
                     (m::sqrt(4.0 - 3.0 * y_old) * (1.0 - y_old) * (1.0 - y_old));
         Real y_new = m::min(y_old - E_old / dEdy, 0.99999999999999);
-        Real E_new = target - (2.0 - y_new + m::sqrt(4.0 - 3.0 * y_new)) / (4.0 - 4.0 * y_new);
+        Real E_new =
+            target - (2.0 - y_new + m::sqrt(4.0 - 3.0 * y_new)) / (4.0 - 4.0 * y_new);
         y_old = y_new;
         if (m::abs(E_new) / target <= 1.e-9) break;
         E_old = E_new;
@@ -83,9 +85,12 @@ KOKKOS_INLINE_FUNCTION StatusRadiationInversion u_to_p_rad(const GRCoordinates& 
     Real Ucov_zamo[4];
     for (int mu = 0; mu < 4; ++mu) Ucov_zamo[mu] = alpha * U_rad[mu] / gdet;
 
-    if (!m::isfinite(Ucov_zamo[0]) || !m::isfinite(Ucov_zamo[1]) || !m::isfinite(Ucov_zamo[2]) ||
-        !m::isfinite(Ucov_zamo[3])) {
-        P_rad[0] = 1.e-30; P_rad[1] = 0.0; P_rad[2] = 0.0; P_rad[3] = 0.0;
+    if (!m::isfinite(Ucov_zamo[0]) || !m::isfinite(Ucov_zamo[1]) ||
+        !m::isfinite(Ucov_zamo[2]) || !m::isfinite(Ucov_zamo[3])) {
+        P_rad[0] = 1.e-30;
+        P_rad[1] = 0.0;
+        P_rad[2] = 0.0;
+        P_rad[3] = 0.0;
         if (used_normal_out != nullptr) *used_normal_out = false;
         return StatusRadiationInversion::division_nonfinite;
     }
@@ -95,12 +100,14 @@ KOKKOS_INLINE_FUNCTION StatusRadiationInversion u_to_p_rad(const GRCoordinates& 
 
     Real eta_cov0 = -alpha;
     Real eta_con[4];
-    for (int mu = 0; mu < 4; ++mu) eta_con[mu] = G.gcon(Loci::center, j, i, 0, mu) * eta_cov0;
+    for (int mu = 0; mu < 4; ++mu)
+        eta_con[mu] = G.gcon(Loci::center, j, i, 0, mu) * eta_cov0;
 
     Real U_dot_eta = Ucon_zamo[0] * eta_cov0;
 
     Real Utilde_con[4] = {0.0, 0.0, 0.0, 0.0};
-    for (int mu = 1; mu < 4; ++mu) Utilde_con[mu] = Ucon_zamo[mu] + eta_con[mu] * U_dot_eta;
+    for (int mu = 1; mu < 4; ++mu)
+        Utilde_con[mu] = Ucon_zamo[mu] + eta_con[mu] * U_dot_eta;
 
     Real U_sq = 0.0;
     for (int mu = 0; mu < 4; ++mu) U_sq += Ucov_zamo[mu] * Ucon_zamo[mu];
@@ -108,7 +115,9 @@ KOKKOS_INLINE_FUNCTION StatusRadiationInversion u_to_p_rad(const GRCoordinates& 
 
     if (Utilde_sq < 0.0) {
         Utilde_sq = 0.0;
-        Utilde_con[1] = 0.0; Utilde_con[2] = 0.0; Utilde_con[3] = 0.0;
+        Utilde_con[1] = 0.0;
+        Utilde_con[2] = 0.0;
+        Utilde_con[3] = 0.0;
     }
 
     const Real GAMMAMAX = 50.0;
@@ -122,10 +131,12 @@ KOKKOS_INLINE_FUNCTION StatusRadiationInversion u_to_p_rad(const GRCoordinates& 
 
     Real uvec_radframe_con[4] = {0.0, 0.0, 0.0, 0.0};
     for (int mu = 1; mu < 4; ++mu)
-        uvec_radframe_con[mu] = m::sqrt(gamma_rad_sq) * Utilde_con[mu] / (4.0 * p_rad * gamma_rad_sq);
+        uvec_radframe_con[mu] =
+            m::sqrt(gamma_rad_sq) * Utilde_con[mu] / (4.0 * p_rad * gamma_rad_sq);
 
-    bool failed = (y > y_max) || (y < 0.0) || !m::isfinite(U_dot_eta) || (U_dot_eta > 0.0) ||
-                  !m::isfinite(uvec_radframe_con[1]) || !m::isfinite(uvec_radframe_con[2]) ||
+    bool failed = (y > y_max) || (y < 0.0) || !m::isfinite(U_dot_eta) ||
+                  (U_dot_eta > 0.0) || !m::isfinite(uvec_radframe_con[1]) ||
+                  !m::isfinite(uvec_radframe_con[2]) ||
                   !m::isfinite(uvec_radframe_con[3]);
 
     bool used_normal = !failed;
@@ -133,14 +144,21 @@ KOKKOS_INLINE_FUNCTION StatusRadiationInversion u_to_p_rad(const GRCoordinates& 
 
     if (failed) {
         Real Uabs = 0.5 * (m::abs(U_dot_eta) + m::sqrt(m::abs(Utilde_sq)) + 1.e-150);
-        for (int mu = 1; mu < 4; ++mu) uvec_radframe_con[mu] = GAMMAMAX * Utilde_con[mu] / Uabs;
+        for (int mu = 1; mu < 4; ++mu)
+            uvec_radframe_con[mu] = GAMMAMAX * Utilde_con[mu] / Uabs;
 
-        Real qsq = G.gcov(Loci::center, j, i, 1, 1) * uvec_radframe_con[1] * uvec_radframe_con[1] +
-                   G.gcov(Loci::center, j, i, 2, 2) * uvec_radframe_con[2] * uvec_radframe_con[2] +
-                   G.gcov(Loci::center, j, i, 3, 3) * uvec_radframe_con[3] * uvec_radframe_con[3] +
-                   2.0 * G.gcov(Loci::center, j, i, 1, 2) * uvec_radframe_con[1] * uvec_radframe_con[2] +
-                   2.0 * G.gcov(Loci::center, j, i, 1, 3) * uvec_radframe_con[1] * uvec_radframe_con[3] +
-                   2.0 * G.gcov(Loci::center, j, i, 2, 3) * uvec_radframe_con[2] * uvec_radframe_con[3];
+        Real qsq = G.gcov(Loci::center, j, i, 1, 1) * uvec_radframe_con[1] *
+                       uvec_radframe_con[1] +
+                   G.gcov(Loci::center, j, i, 2, 2) * uvec_radframe_con[2] *
+                       uvec_radframe_con[2] +
+                   G.gcov(Loci::center, j, i, 3, 3) * uvec_radframe_con[3] *
+                       uvec_radframe_con[3] +
+                   2.0 * G.gcov(Loci::center, j, i, 1, 2) * uvec_radframe_con[1] *
+                       uvec_radframe_con[2] +
+                   2.0 * G.gcov(Loci::center, j, i, 1, 3) * uvec_radframe_con[1] *
+                       uvec_radframe_con[3] +
+                   2.0 * G.gcov(Loci::center, j, i, 2, 3) * uvec_radframe_con[2] *
+                       uvec_radframe_con[3];
         if (qsq < 0.0 || m::abs(qsq) < 1.e-10) qsq = 1.e-10;
         Real gamma_rad_sq_fb = 1.0 + qsq;
 
@@ -150,11 +168,13 @@ KOKKOS_INLINE_FUNCTION StatusRadiationInversion u_to_p_rad(const GRCoordinates& 
         uvec_radframe_con[3] *= f;
 
         Real U_dot_eta_tp2 = -(1.e-30 + m::sqrt(m::abs(Utilde_sq) / y_max));
-        Real gamma_rad_sq_tp2 = (2.0 - y_max + m::sqrt(4.0 - 3.0 * y_max)) / (4.0 - 4.0 * y_max);
+        Real gamma_rad_sq_tp2 =
+            (2.0 - y_max + m::sqrt(4.0 - 3.0 * y_max)) / (4.0 - 4.0 * y_max);
         Real p_rad_tp2 = -U_dot_eta_tp2 / (4.0 * gamma_rad_sq_tp2 - 1.0);
         Erf = p_rad_tp2 * 3.0;
         for (int mu = 1; mu < 4; ++mu)
-            uvec_radframe_con[mu] = m::sqrt(gamma_rad_sq_tp2) * Utilde_con[mu] / (4.0 * p_rad_tp2 * gamma_rad_sq_tp2);
+            uvec_radframe_con[mu] = m::sqrt(gamma_rad_sq_tp2) * Utilde_con[mu] /
+                                    (4.0 * p_rad_tp2 * gamma_rad_sq_tp2);
     }
 
     if (!m::isfinite(Erf)) Erf = 1.e-300;
@@ -168,9 +188,8 @@ KOKKOS_INLINE_FUNCTION StatusRadiationInversion u_to_p_rad(const GRCoordinates& 
     P_rad[3] = uvec_radframe_con[3];
 
     return used_normal ? StatusRadiationInversion::success
-                        : StatusRadiationInversion::gammarel2_high;
+                       : StatusRadiationInversion::gammarel2_high;
 }
-
 
 KOKKOS_INLINE_FUNCTION void compute_covariant_fourforce(const GRCoordinates& G,
     const Real P_mhd[4], const Real P_rad[4], const Real rho,
@@ -260,10 +279,8 @@ KOKKOS_INLINE_FUNCTION Real calculate_energy_residual(const GRCoordinates& G,
     return resid / scale;
 }
 
-
 KOKKOS_INLINE_FUNCTION StatusImplicitStep solve_radiation_1d(const GRCoordinates& G,
-    const VariablePack<Real> P_init, const VarMap m_p,
-    const VarMap m_u,
+    const VariablePack<Real> P_init, const VarMap m_p, const VarMap m_u,
     const Microphysics::EOS::EOS& eos, const RadOpac& rad_opac, const int k, const int j,
     const int i, const Real dt, const double tol, const int maxiter,
     const VariablePack<Real> pflag, const VariablePack<Real> rinvflag,
@@ -436,12 +453,13 @@ KOKKOS_INLINE_FUNCTION Real calculate_error(const Real resid[4],
     return err_max;
 }
 
-KOKKOS_INLINE_FUNCTION int solve_4d_pmhd(const GRCoordinates& G, const VariablePack<Real> P_init,const VarMap m_p,
-    const VarMap m_u, const int k, const int j, const int i, const Real dt,
-    const Microphysics::EOS::EOS& eos, const double src_rootfind_eps,
-    const double src_rootfind_tol, const int src_rootfind_maxiter,
-    const RadOpac& rad_opac, const VariablePack<Real> pflag,
-    const VariablePack<Real> rinvflag, const Real U_entry[8], Real dS_final[5])
+KOKKOS_INLINE_FUNCTION int solve_4d_pmhd(const GRCoordinates& G,
+    const VariablePack<Real> P_init, const VarMap m_p, const VarMap m_u, const int k,
+    const int j, const int i, const Real dt, const Microphysics::EOS::EOS& eos,
+    const double src_rootfind_eps, const double src_rootfind_tol,
+    const int src_rootfind_maxiter, const RadOpac& rad_opac,
+    const VariablePack<Real> pflag, const VariablePack<Real> rinvflag,
+    const Real U_entry[8], Real dS_final[5])
 {
     const Real rho_init = P_init(m_p.RHO, k, j, i);
 
@@ -485,7 +503,6 @@ KOKKOS_INLINE_FUNCTION int solve_4d_pmhd(const GRCoordinates& G, const VariableP
         U_rad_guess[mu] = U_rad_0[mu];
     Real gdet = G.gdet(Loci::center, j, i);
 
-    
     bool used_normal_guess = true;
     u_to_p_rad(G, U_rad_guess, P_rad_guess, k, j, i, &used_normal_guess);
     compute_covariant_fourforce(
@@ -784,8 +801,8 @@ KOKKOS_INLINE_FUNCTION int solve_4d_pmhd(const GRCoordinates& G, const VariableP
 
         auto status =
             u_to_p_rad(G, U_rad_guess, P_rad_guess, k, j, i, &used_normal_guess);
-        compute_covariant_fourforce(G, P_mhd_guess, P_rad_guess, rho_iter_next, eos,
-            rad_opac, k, j, i, dS_guess);
+        compute_covariant_fourforce(
+            G, P_mhd_guess, P_rad_guess, rho_iter_next, eos, rad_opac, k, j, i, dS_guess);
 
         for (int n = 0; n < 4; n++) dS_guess[n] = gdet * dS_guess[n];
 
@@ -816,7 +833,6 @@ KOKKOS_INLINE_FUNCTION int solve_4d_pmhd(const GRCoordinates& G, const VariableP
             // superluminal
             Real R_t_cov_guess[4] = {U_rad_guess[0] / gdet, U_rad_guess[1] / gdet,
                 U_rad_guess[2] / gdet, U_rad_guess[3] / gdet};
-
 
             // Verify the scaling factor is sane
             if (!(scaling_factor > 0.0 && scaling_factor <= 1.0)) {
@@ -919,7 +935,8 @@ KOKKOS_INLINE_FUNCTION int solve_4d_pmhd(const GRCoordinates& G, const VariableP
     return static_cast<int>(StatusImplicitStep::success);
 }
 
-KOKKOS_INLINE_FUNCTION int solve_4d_prad(const GRCoordinates& G, const VariablePack<Real> U_init, const VariablePack<Real> P_init, const VarMap m_p,
+KOKKOS_INLINE_FUNCTION int solve_4d_prad(const GRCoordinates& G,
+    const VariablePack<Real> U_init, const VariablePack<Real> P_init, const VarMap m_p,
     const VarMap m_u, const int k, const int j, const int i, const Real dt,
     const Microphysics::EOS::EOS& eos, const double src_rootfind_eps,
     const double src_rootfind_tol, const int src_rootfind_maxiter,
@@ -1362,7 +1379,7 @@ KOKKOS_INLINE_FUNCTION int solve_4d_prad(const GRCoordinates& G, const VariableP
 
         return static_cast<int>(StatusImplicitStep::failure);
     }
-    
+
     dS_final[0] = dS_guess[0];
     dS_final[1] = dS_guess[1];
     dS_final[2] = dS_guess[2];
@@ -1382,7 +1399,4 @@ KOKKOS_INLINE_FUNCTION int solve_4d_prad(const GRCoordinates& G, const VariableP
     return static_cast<int>(StatusImplicitStep::success);
 }
 
-
-
 } // namespace RadM1
-

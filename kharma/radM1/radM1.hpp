@@ -68,15 +68,13 @@ enum class StatusImplicitStep {
 };
 
 static const std::map<int, std::string> status_names_implicit = {
-    {(int)StatusImplicitStep::mhdsolve,
-        "RadM1 MHD Solve Failure"}, 
-    {(int)StatusImplicitStep::radsolve,
-        "RadM1 Radiation Solve Failure"},
+    {(int)StatusImplicitStep::mhdsolve, "RadM1 MHD Solve Failure"},
+    {(int)StatusImplicitStep::radsolve, "RadM1 Radiation Solve Failure"},
     {(int)StatusImplicitStep::failure, "RadM1 Step Failure"},
     {(int)StatusImplicitStep::onedfallback_success,
-        "RadM1 4D Solver Fell Back to 1D and succeeded"}, 
+        "RadM1 4D Solver Fell Back to 1D and succeeded"},
     {(int)StatusImplicitStep::onedfallback_failure,
-        "RadM1 4D Solver Fell Back to 1D and Failed"}, 
+        "RadM1 4D Solver Fell Back to 1D and Failed"},
     {(int)StatusImplicitStep::pradfallback_success,
         "RadM1 4D Solver Fell Back to P_rad iteration and succeeded"},
     {(int)StatusImplicitStep::mhdfinalsolve,
@@ -116,7 +114,8 @@ std::shared_ptr<KHARMAPackage> Initialize(
  * Perform the implicit solve for radiation and plasma coupled. For now, only 4D
  * implemented.
  */
-void AddSourceImplicitly(MeshData<Real>* md_sub_init, MeshData<Real>* md_flux_src, IndexDomain domain);
+void AddSourceImplicitly(
+    MeshData<Real>* md_sub_init, MeshData<Real>* md_flux_src, IndexDomain domain);
 
 /**
  * Convert from conserved to primitive variables for the radiation field.

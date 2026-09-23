@@ -220,7 +220,6 @@ void RadM1::ApplyRadM1Floors(MeshBlockData<Real>* rc, IndexDomain domain)
             const GReal r_hor_fix = G.coords.get_horizon();
             const bool inside_horizon = (r_hor_fix > 0.0) && (Xembed_fix[1] < r_hor_fix);
 
-
             if (P(m_p.UU_RAD, k, j, i) < erad_floor || inside_horizon) {
                 P(m_p.UU_RAD, k, j, i) = erad_floor;
                 P(m_p.U1_RAD, k, j, i) = 0.0;
@@ -372,15 +371,17 @@ TaskStatus RadM1::BlockUtoP(MeshBlockData<Real>* rc, IndexDomain domain, bool co
 //         const VarMap m_p(prims_map, false);
 //         const VarMap m_u(cons_map, true);
 
-//         auto rimplflag = pmb_data->PackVariables(std::vector<std::string>{"rimplflag"});
-//         auto pflag = pmb_data->PackVariables(std::vector<std::string>{"pflag"});
+//         auto rimplflag =
+//         pmb_data->PackVariables(std::vector<std::string>{"rimplflag"}); auto pflag =
+//         pmb_data->PackVariables(std::vector<std::string>{"pflag"});
 
 //         auto rinvflag = pmb_data->PackVariables(std::vector<std::string>{"rinvflag"});
 
 //         auto pmb_init_data = md_sub_init->GetBlockData(b);
 
 //         auto P_init =
-//             pmb_init_data->PackVariables({Metadata::GetUserFlag("Primitive")}, prims_map);
+//             pmb_init_data->PackVariables({Metadata::GetUserFlag("Primitive")},
+//             prims_map);
 //         auto U_init = pmb_init_data->PackVariables(
 //             {Metadata::WithFluxes, Metadata::Cell}, cons_map);
 
@@ -394,31 +395,37 @@ TaskStatus RadM1::BlockUtoP(MeshBlockData<Real>* rc, IndexDomain domain, bool co
 //         pmb->par_for("RadM1_Implicit_Solver4D", kb.s, kb.e, jb.s, jb.e, ib.s, ib.e,
 //             KOKKOS_LAMBDA (const int &k, const int &j, const int &i)
 //             {
-//                 const Real U_entry[8] = {U_new(m_u.UU, k, j, i), U_new(m_u.U1, k, j, i),
+//                 const Real U_entry[8] = {U_new(m_u.UU, k, j, i), U_new(m_u.U1, k, j,
+//                 i),
 //                     U_new(m_u.U2, k, j, i), U_new(m_u.U3, k, j, i),
 //                     U_new(m_u.UU_RAD, k, j, i), U_new(m_u.U1_RAD, k, j, i),
 //                     U_new(m_u.U2_RAD, k, j, i), U_new(m_u.U3_RAD, k, j, i)};
 
-//                 const Real P_entry[9] = {P_new(m_p.RHO, k, j, i), P_new(m_p.UU, k, j, i),
+//                 const Real P_entry[9] = {P_new(m_p.RHO, k, j, i), P_new(m_p.UU, k, j,
+//                 i),
 //                     P_new(m_p.U1, k, j, i), P_new(m_p.U2, k, j, i),
 //                     P_new(m_p.U3, k, j, i), P_new(m_p.UU_RAD, k, j, i),
 //                     P_new(m_p.U1_RAD, k, j, i), P_new(m_p.U2_RAD, k, j, i),
 //                     P_new(m_p.U3_RAD, k, j, i)};
 //                 int rflagl;
 
-//                 rflagl = solve_4d_pmhd(G, U_init, P_init, P_new, U_new, m_p, m_u, k, j, i,
+//                 rflagl = solve_4d_pmhd(G, U_init, P_init, P_new, U_new, m_p, m_u, k, j,
+//                 i,
 //                     dt, eos, src_rootfind_eps, src_rootfind_tol, src_rootfind_maxiter,
 //                     rad_opac, pflag, rinvflag, U_entry);
 
-//                 // If the solver converged, but the final U_to_p for the fluid failed, we
-//                 // should not be dealing with this, just accept this as it worked and send
+//                 // If the solver converged, but the final U_to_p for the fluid failed,
+//                 we
+//                 // should not be dealing with this, just accept this as it worked and
+//                 send
 //                 // straight to fixup.
 //                 if (rflagl == static_cast<int>(StatusImplicitStep::success)) {
 //                     rimplflag(0, k, j, i) = rflagl;
 //                     return;
 //                 }
 
-//                 rflagl = solve_4d_prad(G, U_init, P_init, P_new, U_new, m_p, m_u, k, j, i,
+//                 rflagl = solve_4d_prad(G, U_init, P_init, P_new, U_new, m_p, m_u, k, j,
+//                 i,
 //                     dt, eos, src_rootfind_eps, src_rootfind_tol, src_rootfind_maxiter,
 //                     rad_opac, pflag, rinvflag, U_entry);
 
@@ -430,8 +437,10 @@ TaskStatus RadM1::BlockUtoP(MeshBlockData<Real>* rc, IndexDomain domain, bool co
 
 //                 // Because of how Prad needs to do multiple kaustaun and kaustaun will
 //                 // write to P_new, we need to reset P_new to the original values before
-//                 // calling the 1D fallback. We don't need to do the same for pmhd because
-//                 // we roll it back inside the function in case it fails (since it's only 1
+//                 // calling the 1D fallback. We don't need to do the same for pmhd
+//                 because
+//                 // we roll it back inside the function in case it fails (since it's
+//                 only 1
 //                 // u_to_p call for the plasma).
 //                 P_new(m_p.RHO, k, j, i) = P_entry[0];
 //                 P_new(m_p.UU, k, j, i) = P_entry[1];
@@ -457,15 +466,13 @@ TaskStatus RadM1::BlockUtoP(MeshBlockData<Real>* rc, IndexDomain domain, bool co
 //                     static_cast<int>(StatusImplicitStep::onedfallback_failure);
 
 //                 assume_no_interaction(G, U_init, P_init, m_p, m_u, U_new, P_new, eos,
-//                     rad_opac, k, j, i, dt, src_rootfind_tol, src_rootfind_maxiter, pflag,
-//                     rinvflag, U_entry);
+//                     rad_opac, k, j, i, dt, src_rootfind_tol, src_rootfind_maxiter,
+//                     pflag, rinvflag, U_entry);
 //             });
 //     }
 
 //     return TaskStatus::complete;
 // }
-
-
 
 void RadM1::AddSourceImplicitly(
     MeshData<Real>* md_sub_init, MeshData<Real>* md_flux_src, IndexDomain domain)
@@ -525,39 +532,43 @@ void RadM1::AddSourceImplicitly(
         pmb->par_for("RadM1_Implicit_Solver4D", kb.s, kb.e, jb.s, jb.e, ib.s, ib.e,
             KOKKOS_LAMBDA (const int &k, const int &j, const int &i)
             {
-                // Check if it's within the horizon, if it is, just assume no interaction and dU_subinit = 0;
-                // PNM: I've been having some trouble getting it to stay controled within the horizon.
-                
+                // Check if it's within the horizon, if it is, just assume no interaction
+                // and dU_subinit = 0; PNM: I've been having some trouble getting it to
+                // stay controled within the horizon.
+
                 GReal Xembed[GR_DIM];
                 G.coord_embed(k, j, i, Loci::center, Xembed);
                 const GReal r = Xembed[1];
                 const GReal r_hor = G.coords.get_horizon();
-                // If there is no horizon, r_hor = 0.0. For some of the tests, we don't have a horizon, and infact, we have negative values
-                // so we don't want this check.
+                // If there is no horizon, r_hor = 0.0. For some of the tests, we don't
+                // have a horizon, and infact, we have negative values so we don't want
+                // this check.
                 if (r_hor > 0.0 && r < r_hor) {
                     rimplflag(0, k, j, i) = static_cast<int>(StatusImplicitStep::success);
                     return;
                 }
 
+                const Real U_entry[8] = {U_init_substep(m_u.UU, k, j, i),
+                    U_init_substep(m_u.U1, k, j, i), U_init_substep(m_u.U2, k, j, i),
+                    U_init_substep(m_u.U3, k, j, i), U_init_substep(m_u.UU_RAD, k, j, i),
+                    U_init_substep(m_u.U1_RAD, k, j, i),
+                    U_init_substep(m_u.U2_RAD, k, j, i),
+                    U_init_substep(m_u.U3_RAD, k, j, i)};
 
-                const Real U_entry[8] = {U_init_substep(m_u.UU, k, j, i), U_init_substep(m_u.U1, k, j, i),
-                    U_init_substep(m_u.U2, k, j, i), U_init_substep(m_u.U3, k, j, i),
-                    U_init_substep(m_u.UU_RAD, k, j, i), U_init_substep(m_u.U1_RAD, k, j, i),
-                    U_init_substep(m_u.U2_RAD, k, j, i), U_init_substep(m_u.U3_RAD, k, j, i)};
-
-                const Real P_entry[9] = {P_init_substep(m_p.RHO, k, j, i), P_init_substep(m_p.UU, k, j, i),
-                    P_init_substep(m_p.U1, k, j, i), P_init_substep(m_p.U2, k, j, i),
-                    P_init_substep(m_p.U3, k, j, i), P_init_substep(m_p.UU_RAD, k, j, i),
-                    P_init_substep(m_p.U1_RAD, k, j, i), P_init_substep(m_p.U2_RAD, k, j, i),
+                const Real P_entry[9] = {P_init_substep(m_p.RHO, k, j, i),
+                    P_init_substep(m_p.UU, k, j, i), P_init_substep(m_p.U1, k, j, i),
+                    P_init_substep(m_p.U2, k, j, i), P_init_substep(m_p.U3, k, j, i),
+                    P_init_substep(m_p.UU_RAD, k, j, i),
+                    P_init_substep(m_p.U1_RAD, k, j, i),
+                    P_init_substep(m_p.U2_RAD, k, j, i),
                     P_init_substep(m_p.U3_RAD, k, j, i)};
 
                 Real dS_subinit[5] = {0., 0., 0., 0., 0.};
                 int rflagl;
 
-
-                rflagl = solve_4d_pmhd(G, P_init_substep, m_p, m_u, k, j, i,
-                    dt, eos, src_rootfind_eps, src_rootfind_tol, src_rootfind_maxiter,
-                    rad_opac, pflag, rinvflag, U_entry, dS_subinit);
+                rflagl = solve_4d_pmhd(G, P_init_substep, m_p, m_u, k, j, i, dt, eos,
+                    src_rootfind_eps, src_rootfind_tol, src_rootfind_maxiter, rad_opac,
+                    pflag, rinvflag, U_entry, dS_subinit);
 
                 // If the solver converged, but the final U_to_p for the fluid failed, we
                 // should not be dealing with this, just accept this as it worked and send
@@ -576,8 +587,8 @@ void RadM1::AddSourceImplicitly(
                     return;
                 }
 
-                rflagl = solve_4d_prad(G, U_init_substep, P_init_substep, m_p, m_u, k, j, i,
-                    dt, eos, src_rootfind_eps, src_rootfind_tol, src_rootfind_maxiter,
+                rflagl = solve_4d_prad(G, U_init_substep, P_init_substep, m_p, m_u, k, j,
+                    i, dt, eos, src_rootfind_eps, src_rootfind_tol, src_rootfind_maxiter,
                     rad_opac, pflag, rinvflag, U_entry, dS_subinit);
 
                 // Prad alters the P_init. So we gotta revert it back.
@@ -607,9 +618,9 @@ void RadM1::AddSourceImplicitly(
                     return;
                 }
 
-
-                auto status_1d = solve_radiation_1d(G, P_init_substep, m_p, m_u, eos, rad_opac, k, j, i, dt, src_rootfind_tol,
-                    src_rootfind_maxiter, pflag, rinvflag, U_entry, dS_subinit);
+                auto status_1d = solve_radiation_1d(G, P_init_substep, m_p, m_u, eos,
+                    rad_opac, k, j, i, dt, src_rootfind_tol, src_rootfind_maxiter, pflag,
+                    rinvflag, U_entry, dS_subinit);
 
                 if (status_1d == StatusImplicitStep::success) {
                     dU_substep(m_u.UU, k, j, i) -= dS_subinit[0];
@@ -620,7 +631,7 @@ void RadM1::AddSourceImplicitly(
                     dU_substep(m_u.U1_RAD, k, j, i) += dS_subinit[1];
                     dU_substep(m_u.U2_RAD, k, j, i) += dS_subinit[2];
                     dU_substep(m_u.U3_RAD, k, j, i) += dS_subinit[3];
-                    
+
                     rimplflag(0, k, j, i) =
                         static_cast<int>(StatusImplicitStep::onedfallback_success);
                     return;
@@ -628,10 +639,8 @@ void RadM1::AddSourceImplicitly(
 
                 rimplflag(0, k, j, i) =
                     static_cast<int>(StatusImplicitStep::onedfallback_failure);
-                
             });
     }
-
 }
 
 TaskStatus RadM1::PostStepDiagnostics(const SimTime& tm, MeshData<Real>* md)

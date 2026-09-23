@@ -105,7 +105,6 @@ std::shared_ptr<KHARMAPackage> Initialize(
         params.Add("d.opacity", opacity_device);
     }
 
-
     {
         auto opacity_host =
             params.Get<singularity::photons::Opacity>("h.opacity_baseunits");
@@ -177,8 +176,6 @@ std::shared_ptr<KHARMAPackage> Initialize(
         params.Add("h.s_opacity", opacity_host);
         params.Add("d.s_opacity", opacity_device);
     }
-
-   
 
     // Declaring mean opacities..
     {
