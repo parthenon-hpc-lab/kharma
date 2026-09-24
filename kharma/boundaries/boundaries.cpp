@@ -356,10 +356,13 @@ std::shared_ptr<KHARMAPackage> KBoundaries::Initialize(
                         break;
                 }
                 if (pin->GetString("coordinates", "transform") == "fmks" ||
-                    pin->GetString("coordinates", "transform") == "funky")
-                    throw std::runtime_error(
-                        "Transmitting polar boundary conditions require coordinates "
-                        "symmetric about theta=0!");
+                    pin->GetString("coordinates", "transform") == "funky") {
+                    // TODO colors?
+                    std::cerr << "WARNING: Transmitting polar boundary conditions "
+                                 "require coordinates "
+                                 "symmetric about theta=0! Proceed at your own risk!"
+                              << std::endl;
+                }
                 // TODO also check for wedge simulations x3<2pi
             } else if (btype == "outflow") {
                 switch (bface) {
