@@ -356,10 +356,13 @@ std::shared_ptr<KHARMAPackage> KBoundaries::Initialize(
                         break;
                 }
                 if (pin->GetString("coordinates", "transform") == "fmks" ||
-                    pin->GetString("coordinates", "transform") == "funky")
-                    throw std::runtime_error(
-                        "Transmitting polar boundary conditions require coordinates "
-                        "symmetric about theta=0!");
+                    pin->GetString("coordinates", "transform") == "funky") {
+                    // TODO colors?
+                    std::cerr << "WARNING: Transmitting polar boundary conditions "
+                                 "require coordinates "
+                                 "symmetric about theta=0! Proceed at your own risk!"
+                              << std::endl;
+                }
                 // TODO also check for wedge simulations x3<2pi
             } else if (btype == "outflow") {
                 switch (bface) {
@@ -505,15 +508,15 @@ void KBoundaries::ApplyBoundary(
 
     // Averaging ops on *physical* cells must be done before computing boundaries
     // We should do a PreBoundaries callback...
-    if (pmb->packages.AllPackages().count("B_CT")) {
-        auto bfpack = rc->PackVariables(
-            {Metadata::Face, Metadata::FillGhost, Metadata::GetUserFlag("B_CT")});
-        if (params.Get<bool>("reconnect_B3_" + bname) && bfpack.GetDim(4) > 0) {
-            Flag("ReconnectFaceB_" + bname);
-            B_CT::ReconnectBoundaryB3(rc.get(), domain, bfpack, coarse);
-            EndFlag();
-        }
-    }
+    // if (pmb->packages.AllPackages().count("B_CT")) {
+    //     auto bfpack = rc->PackVariables(
+    //         {Metadata::Face, Metadata::FillGhost, Metadata::GetUserFlag("B_CT")});
+    //     if (params.Get<bool>("reconnect_B3_" + bname) && bfpack.GetDim(4) > 0) {
+    //         Flag("ReconnectFaceB_" + bname);
+    //         B_CT::ReconnectBoundaryB3(rc.get(), domain, bfpack, coarse);
+    //         EndFlag();
+    //     }
+    // }
     if (pmb->packages.AllPackages().count("GRMHD")) {
         if (params.Get<bool>("cancel_U3_" + bname) && full_grmhd_boundary) {
             GRMHD::CancelBoundaryU3(rc.get(), domain, coarse);
@@ -524,9 +527,11 @@ void KBoundaries::ApplyBoundary(
     }
 
     // Always call through to the registered boundary function
-    Flag("Apply " + bname + " boundary: " + btype_name);
-    pkg->KBoundaries[bface](rc, coarse);
-    EndFlag();
+    if (pkg->KBoundaries[bface] != nullptr) {
+        Flag("Apply " + bname + " boundary: " + btype_name);
+        pkg->KBoundaries[bface](rc, coarse);
+        EndFlag();
+    }
 
     // Then a bunch of common boundary "touchups"
     // Nothing below is designed, nor necessary, for coarse buffers

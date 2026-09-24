@@ -386,8 +386,12 @@ class NullTransform
 {
   public:
     static constexpr char name[] = "NullTransform";
-    static constexpr GReal startx[3] = {-1, -1, -1};
-    static constexpr GReal stopx[3] = {-1, -1, -1};
+    static constexpr GReal startx1 = -1;
+    static constexpr GReal startx2 = -1;
+    static constexpr GReal startx3 = -1;
+    static constexpr GReal stopx1 = -1;
+    static constexpr GReal stopx2 = -1;
+    static constexpr GReal stopx3 = -1;
     // Coordinate transformations
     // Any coordinate value protections (th < 0, th > pi, phi > 2pi) should be in the base
     // system
@@ -423,8 +427,13 @@ class SphNullTransform
 {
   public:
     static constexpr char name[] = "SphNullTransform";
-    static constexpr GReal startx[3] = {-1, 0., 0.};
-    static constexpr GReal stopx[3] = {-1, M_PI, 2 * M_PI};
+    static constexpr GReal startx1 = -1;
+    static constexpr GReal startx2 = 0.;
+    static constexpr GReal startx3 = 0.;
+    static constexpr GReal stopx1 = -1;
+    static constexpr GReal stopx2 = M_PI;
+    static constexpr GReal stopx3 = M_2_PI;
+
     // Coordinate transformations
     // Any coordinate value protections (th < 0, th > pi, phi > 2pi) should be in the base
     // system
@@ -463,8 +472,12 @@ class ExponentialTransform
 {
   public:
     static constexpr char name[] = "ExponentialTransform";
-    static constexpr GReal startx[3] = {-1, 0., 0.};
-    static constexpr GReal stopx[3] = {-1, M_PI, 2 * M_PI};
+    static constexpr GReal startx1 = -1;
+    static constexpr GReal startx2 = 0.;
+    static constexpr GReal startx3 = 0.;
+    static constexpr GReal stopx1 = -1;
+    static constexpr GReal stopx2 = M_PI;
+    static constexpr GReal stopx3 = M_2_PI;
 
     // Coordinate transformations
     KOKKOS_INLINE_FUNCTION void coord_to_embed(
@@ -523,8 +536,12 @@ class SuperExponentialTransform
 {
   public:
     static constexpr char name[] = "SuperExponentialTransform";
-    static constexpr GReal startx[3] = {-1, 0., 0.};
-    static constexpr GReal stopx[3] = {-1, M_PI, 2 * M_PI};
+    static constexpr GReal startx1 = -1;
+    static constexpr GReal startx2 = 0.;
+    static constexpr GReal startx3 = 0.;
+    static constexpr GReal stopx1 = -1;
+    static constexpr GReal stopx2 = M_PI;
+    static constexpr GReal stopx3 = M_2_PI;
 
     const GReal xe1br, xn1br;
     const double npow2, cpow2;
@@ -605,8 +622,12 @@ class ModifyTransform
 {
   public:
     static constexpr char name[] = "ModifyTransform";
-    static constexpr GReal startx[3] = {-1, 0., 0.};
-    static constexpr GReal stopx[3] = {-1, 1., 2 * M_PI};
+    static constexpr GReal startx1 = -1;
+    static constexpr GReal startx2 = 0.;
+    static constexpr GReal startx3 = 0.;
+    static constexpr GReal stopx1 = -1;
+    static constexpr GReal stopx2 = 1.;
+    static constexpr GReal stopx3 = M_2_PI;
 
     const GReal hslope;
 
@@ -676,10 +697,14 @@ class FunkyTransform
 {
   public:
     static constexpr char name[] = "FunkyTransform";
-    static constexpr GReal startx[3] = {-1, 0., 0.};
-    static constexpr GReal stopx[3] = {-1, 1., 2 * M_PI};
+    static constexpr GReal startx1 = -1;
+    static constexpr GReal startx2 = 0.;
+    static constexpr GReal startx3 = 0.;
+    static constexpr GReal stopx1 = -1;
+    static constexpr GReal stopx2 = 1.;
+    static constexpr GReal stopx3 = M_2_PI;
 
-    const GReal startx1;
+    const GReal startx1_grid;
     const GReal hslope, poly_xt, poly_alpha, mks_smooth;
     // Must be *defined* afterward to use constructor below
     const GReal poly_norm;
@@ -687,7 +712,7 @@ class FunkyTransform
     // Constructor
     KOKKOS_FUNCTION FunkyTransform(GReal startx1_in, GReal hslope_in, GReal mks_smooth_in,
         GReal poly_xt_in, GReal poly_alpha_in)
-        : startx1(startx1_in)
+        : startx1_grid(startx1_in)
         , hslope(hslope_in)
         , mks_smooth(mks_smooth_in)
         , poly_xt(poly_xt_in)
@@ -736,7 +761,7 @@ class FunkyTransform
         gzero2(dxdX);
         dxdX[0][0] = 1.;
         dxdX[1][1] = m::exp(Xnative[1]);
-        dxdX[2][1] = -exp(mks_smooth * (startx1 - Xnative[1])) * mks_smooth *
+        dxdX[2][1] = -exp(mks_smooth * (startx1_grid - Xnative[1])) * mks_smooth *
                      (M_PI / 2. - M_PI * Xnative[2] +
                          poly_norm * (2. * Xnative[2] - 1.) *
                              (1 + (m::pow((-1. + 2 * Xnative[2]) / poly_xt, poly_alpha)) /
@@ -744,7 +769,7 @@ class FunkyTransform
                          1. / 2. * (1. - hslope) * m::sin(2. * M_PI * Xnative[2]));
         dxdX[2][2] =
             M_PI + (1. - hslope) * M_PI * m::cos(2. * M_PI * Xnative[2]) +
-            m::exp(mks_smooth * (startx1 - Xnative[1])) *
+            m::exp(mks_smooth * (startx1_grid - Xnative[1])) *
                 (-M_PI +
                     2. * poly_norm *
                         (1. + m::pow((2. * Xnative[2] - 1.) / poly_xt, poly_alpha) /
@@ -777,8 +802,12 @@ class WidepoleTransform
 {
   public:
     static constexpr char name[] = "WidepoleTransform";
-    static constexpr GReal startx[3] = {-1, 0., 0.};
-    static constexpr GReal stopx[3] = {-1, 1., 2 * M_PI};
+    static constexpr GReal startx1 = -1;
+    static constexpr GReal startx2 = 0.;
+    static constexpr GReal startx3 = 0.;
+    static constexpr GReal stopx1 = -1;
+    static constexpr GReal stopx2 = 1.;
+    static constexpr GReal stopx3 = M_2_PI;
 
     const GReal lin_frac, n2, n3;
     GReal smoothness;
