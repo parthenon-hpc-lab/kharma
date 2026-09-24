@@ -333,7 +333,7 @@ TaskStatus Flux::BlockPtoU(MeshBlockData<Real>* rc, IndexDomain domain, bool coa
     const EMHD::EMHD_parameters& emhd_params = EMHD::GetEMHDParameters(pmb->packages);
 
     // Make sure we don't step on face CT: unnecessary so far, might fix ordering mistakes
-    if (pmb->packages.AllPackages().count("B_CT")) B_CT::BlockUtoP(rc, domain, coarse);
+    // if (pmb->packages.AllPackages().count("B_CT")) B_CT::BlockUtoP(rc, domain, coarse);
 
     // Pack variables
     PackIndexMap prims_map, cons_map;
@@ -398,8 +398,8 @@ TaskStatus Flux::BlockPtoU_Send(MeshBlockData<Real>* rc, IndexDomain domain, boo
     if (P.GetDim(4) == 0) return TaskStatus::complete;
 
     // Make sure we always update center conserved B from the faces, not the prims
-    if (pmb->packages.AllPackages().count("B_CT"))
-        B_CT::BlockUtoP(rc, IndexDomain::interior, coarse);
+    // if (pmb->packages.AllPackages().count("B_CT"))
+    //     B_CT::BlockUtoP(rc, IndexDomain::interior, coarse);
 
     // Indices
     auto bounds = coarse ? pmb->c_cellbounds : pmb->cellbounds;
@@ -550,12 +550,11 @@ TaskStatus Flux::PostStepDiagnostics(const SimTime& tm, MeshData<Real>* md)
     // This verbosity check is only here to save time, Check&Print hits will
     // stay silent by itself and just return values
     if (use_fofc && flag_verbose > 0) {
-        std::map<int, std::string> fofc_label = {{1, "Flux-corrected"}};
         Reductions::StartFlagReduce(
-            md, "fofcflag", fofc_label, IndexDomain::interior, false, 10);
+            md, "fofcflag", fofc_names, IndexDomain::interior, false, 10);
         // Debugging/diagnostic info about floor and inversion flags
         Reductions::CheckFlagReduceAndPrintHits(
-            md, "fofcflag", fofc_label, IndexDomain::interior, false, 10);
+            md, "fofcflag", fofc_names, IndexDomain::interior, false, 10);
     }
 
     // Check for a soundspeed (ctop) of 0 or NaN

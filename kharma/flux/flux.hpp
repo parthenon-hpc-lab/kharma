@@ -74,7 +74,7 @@ TaskStatus FOFC(MeshData<Real>* md, MeshData<Real>* guess);
  *
  * Mechanism from Balsara et al. 2025, "PCP Higher-Order Methods..."
  */
-TaskStatus FOFC_PCP(MeshData<Real>* md, MeshData<Real>* guess);
+TaskStatus FOFC_PCP(MeshData<Real>* md, MeshData<Real>* guess, const Real dt);
 
 /**
  * Calculate the geometric source term present in the covariant derivative of the
