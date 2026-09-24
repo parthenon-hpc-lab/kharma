@@ -80,26 +80,28 @@ static const std::map<int, std::string> status_names_implicit = {
     {(int)StatusImplicitStep::mhdfinalsolve,
         "PMHD solver converged but UtoP failed. Sending it to fixup."}};
 
+enum class RadLimiterType { BASIC, TYPE2 };
+
 enum class StatusRadiationInversion {
     success = 0,
-    urad_below_floor,
-    gammarel2_low,
-    gammarel2_high,
-    division_nonfinite,
-    cold_closure_nonfinite
+    urad_negative,
+    negative_gamma,
+    maximum_gamma,
+    type2,
+    not_finite,
 };
 
 static const std::map<int, std::string> status_names_inversion = {
-    {(int)StatusRadiationInversion::urad_below_floor,
+    {(int)StatusRadiationInversion::urad_negative,
         "RadM1 Radiation Inversion Failure: Negative Radiation Energy"},
-    {(int)StatusRadiationInversion::gammarel2_low,
-        "RadM1 Radiation Inversion Failure: Low Lorentz Factor"},
-    {(int)StatusRadiationInversion::gammarel2_high,
-        "RadM1 Radiation Inversion Failure: High Lorentz Factor"},
-    {(int)StatusRadiationInversion::division_nonfinite,
-        "RadM1 Radiation Inversion Failure: Non-finite Division"},
-    {(int)StatusRadiationInversion::cold_closure_nonfinite,
-        "RadM1 Radiation Inversion Failure: Non-finite Result from Cold Closure"}
+    {(int)StatusRadiationInversion::negative_gamma,
+        "RadM1 Radiation Inversion Failure: Negative Lorentz Factor"},
+    {(int)StatusRadiationInversion::maximum_gamma,
+        "RadM1 Radiation Inversion Failure: Maximum Lorentz Factor"},
+    {(int)StatusRadiationInversion::type2,
+        "RadM1 Radiation Inversion Failure: Type2 Fallback"},
+    {(int)StatusRadiationInversion::not_finite,
+        "RadM1 Radiation Inversion Failure: Conserved Variables Not Finite"}
 
 };
 

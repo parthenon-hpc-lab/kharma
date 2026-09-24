@@ -215,10 +215,11 @@ void RadM1::ApplyRadM1Floors(MeshBlockData<Real>* rc, IndexDomain domain)
     pmb->par_for("ApplyRadM1Floors", kb.s, kb.e, jb.s, jb.e, ib.s, ib.e,
         KOKKOS_LAMBDA (const int &k, const int &j, const int &i)
         {
-            GReal Xembed_fix[GR_DIM];
-            G.coord_embed(k, j, i, Loci::center, Xembed_fix);
-            const GReal r_hor_fix = G.coords.get_horizon();
-            const bool inside_horizon = (r_hor_fix > 0.0) && (Xembed_fix[1] < r_hor_fix);
+            // GReal Xembed_fix[GR_DIM];
+            // G.coord_embed(k, j, i, Loci::center, Xembed_fix);
+            // const GReal r_hor_fix = G.coords.get_horizon();
+            // const bool inside_horizon = (r_hor_fix > 0.0) && (Xembed_fix[1] < r_hor_fix);
+            const bool inside_horizon = false;
 
             if (P(m_p.UU_RAD, k, j, i) < erad_floor || inside_horizon) {
                 P(m_p.UU_RAD, k, j, i) = erad_floor;
@@ -323,7 +324,7 @@ TaskStatus RadM1::BlockUtoP(MeshBlockData<Real>* rc, IndexDomain domain, bool co
             Real Prad[4];
             Real Urad[4] = {U(m_u.UU_RAD, k, j, i), U(m_u.U1_RAD, k, j, i),
                 U(m_u.U2_RAD, k, j, i), U(m_u.U3_RAD, k, j, i)};
-            RadM1::u_to_p_rad(G, Urad, Prad, k, j, i);
+            RadM1::u_to_p_rad(G, Urad, Prad, k, j, i, nullptr, RadLimiterType::BASIC);
 
             P(m_p.UU_RAD, k, j, i) = Prad[0];
             P(m_p.U1_RAD, k, j, i) = Prad[1];
@@ -536,17 +537,17 @@ void RadM1::AddSourceImplicitly(
                 // and dU_subinit = 0; PNM: I've been having some trouble getting it to
                 // stay controled within the horizon.
 
-                GReal Xembed[GR_DIM];
-                G.coord_embed(k, j, i, Loci::center, Xembed);
-                const GReal r = Xembed[1];
-                const GReal r_hor = G.coords.get_horizon();
-                // If there is no horizon, r_hor = 0.0. For some of the tests, we don't
-                // have a horizon, and infact, we have negative values so we don't want
-                // this check.
-                if (r_hor > 0.0 && r < r_hor) {
-                    rimplflag(0, k, j, i) = static_cast<int>(StatusImplicitStep::success);
-                    return;
-                }
+                // GReal Xembed[GR_DIM];
+                // G.coord_embed(k, j, i, Loci::center, Xembed);
+                // const GReal r = Xembed[1];
+                // const GReal r_hor = G.coords.get_horizon();
+                // // If there is no horizon, r_hor = 0.0. For some of the tests, we don't
+                // // have a horizon, and infact, we have negative values so we don't want
+                // // this check.
+                // if (r_hor > 0.0 && r < r_hor) {
+                //     rimplflag(0, k, j, i) = static_cast<int>(StatusImplicitStep::success);
+                //     return;
+                // }
 
                 const Real U_entry[8] = {U_init_substep(m_u.UU, k, j, i),
                     U_init_substep(m_u.U1, k, j, i), U_init_substep(m_u.U2, k, j, i),

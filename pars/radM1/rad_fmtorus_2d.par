@@ -83,13 +83,13 @@ src_rootfind_eps = 1e-8
 src_rootfind_tol = 1e-8
 #Max number of iterations the solver can take.
 src_rootfind_maxiter = 10
-u_rad_floor = 1e-20
+u_rad_floor = 1e-300
 
 <units>
 on = true
 scale_free = false
 geom_mass_msun = 10
-fluid_density_cgs = 1e-7
+fluid_density_cgs = 1e-2
 
 <opac>
 # type here sets if you wanna handle the opacities yourself or give it to singularity opac
