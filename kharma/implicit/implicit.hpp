@@ -176,7 +176,8 @@ KOKKOS_INLINE_FUNCTION void calc_residual(const GRCoordinates& G, const Global& 
         Real tau, chi_e, nu_e;
         // TODO_EOS: In EMHD, gam is passed here, I'm just gonna use a dumb solution for
         // now in order to compile it, but this should be fixed.
-        Real lambda[2] = {(m_p.YE >= 0) ? Ps(m_p.YE, k, j, i) : 0.0, 0.0};
+        Real lambda[2];
+        fill_eos_lambda(Ps, m_p, k, j, i, lambda);
         Real bulk = eos.BulkModulusFromDensityInternalEnergy(
             Ps(m_p.RHO, k, j, i), Ps(m_p.UU, k, j, i) / Ps(m_p.RHO, k, j, i), lambda);
         Real pg = eos.PressureFromDensityInternalEnergy(

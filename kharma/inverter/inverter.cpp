@@ -213,8 +213,14 @@ inline void BlockPerformInversion(
     auto pmb = rc->GetBlockPointer();
 
     PackIndexMap prims_map, cons_map;
-    auto U = GRMHD::PackMHDCons(rc, cons_map);
-    auto P = GRMHD::PackMHDPrims(rc, prims_map);
+    // TODO (JWM): We need to decide whether to use the GRMHD::PackMHDCons/Prims functions
+    //auto U = GRMHD::PackMHDCons(rc, cons_map);
+    //auto P = GRMHD::PackMHDPrims(rc, prims_map);
+    auto U = rc->PackVariables(
+        std::vector<MetadataFlag>{Metadata::Conserved, Metadata::Cell}, cons_map);
+    auto P = rc->PackVariables(
+        std::vector<MetadataFlag>{Metadata::GetUserFlag("Primitive"), Metadata::Cell}, prims_map);
+
     const VarMap m_u(cons_map, true), m_p(prims_map, false);
 
     // auto fflag = rc->PackVariables(std::vector<std::string>{"fflag"});

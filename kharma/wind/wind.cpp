@@ -123,8 +123,9 @@ TaskStatus Wind::AddSource(MeshData<Real>* md, MeshData<Real>* mdudt, IndexDomai
             // Add plasma to the T^t_a component of the stress-energy tensor
             // Notice that U already contains a factor of sqrt{-g}
             Real rho_ut, T[GR_DIM];
+            Real lambda[2] = {0.0, 0.0};
             GRMHD::p_to_u_mhd(
-                G, drhopdt, drhopdt * Tp * 3., uvec, B_P, eos, k, j, i, rho_ut, T);
+                G, drhopdt, drhopdt * Tp * 3., uvec, B_P, eos, lambda, k, j, i, rho_ut, T);
 
             dUdt(b, m_u.RHO, k, j, i) += rho_ut;
             dUdt(b, m_u.UU, k, j, i) += T[0];

@@ -139,6 +139,7 @@ class VarMap
     int8_t RHO, UU, U1, U2, U3, B1, B2, B3, Bf1, Bf2, Bf3;
     // Ye/composition tracking
     int8_t YE;
+    int8_t TEMP, LT_GUESS;
     // Tracker variables
     int8_t RHO_ADDED, UU_ADDED, PASSIVE;
     // Total/idealized (advected, no-dissipation) fluid entropy tracking
@@ -164,6 +165,9 @@ class VarMap
             PSI = name_map["cons.psi_cd"].first;
             //Ye/composition tracking
             YE = name_map["cons.Ye"].first;
+            // Temperature is primitive-only
+            TEMP = -1;
+            LT_GUESS = -1;
             // Floors
             RHO_ADDED = name_map["cons.rho_added"].first;
             UU_ADDED = name_map["cons.u_added"].first;
@@ -196,6 +200,9 @@ class VarMap
             PSI = name_map["prims.psi_cd"].first;
             //Ye/composition tracking
             YE = name_map["prims.Ye"].first;
+            // Temperature fields
+            TEMP = name_map["prims.Temperature"].first;
+            LT_GUESS = name_map["prims.lT_guess"].first;
             // Floors (TODO cons only?)
             RHO_ADDED = name_map["prims.rho_added"].first;
             UU_ADDED = name_map["prims.u_added"].first;
@@ -253,6 +260,19 @@ class VarMap
         printf("EMHD q: %d dP: %d\n", Q, DP);
     }
 };
+
+/**
+ * Fill the EOS "lambda" array for zone k,j,i: lambda[0] = Ye, lambda[1] = cached log(T)
+ * guess. Missing fields (e.g. IdealGas runs) give 0, which every EOS tolerates.
+ */
+template<typename Global>
+KOKKOS_FORCEINLINE_FUNCTION void fill_eos_lambda(const Global& P, const VarMap& m_p,
+    const int& k, const int& j, const int& i, Real lambda[2])
+{
+    lambda[0] = (m_p.YE >= 0) ? P(m_p.YE, k, j, i) : 0.0;
+    lambda[1] = (m_p.LT_GUESS >= 0) ? P(m_p.LT_GUESS, k, j, i) : 0.0;
+}
+
 
 // Reasonable maximum number of fluid primitive or conserved variables being evolved
 // e.g. 8 for GRMHD, 10 for EMHD, and additional vars for e-/passives

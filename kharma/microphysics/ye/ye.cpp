@@ -69,6 +69,7 @@ std::shared_ptr<KHARMAPackage> Initialize(
 
     pkg->BlockUtoP = Ye::BlockUtoP;
     pkg->BoundaryUtoP = Ye::BlockUtoP;
+    pkg->BlockApplyFloors = Ye::ApplyFloors;
 
     return pkg;
 }

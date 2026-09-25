@@ -51,6 +51,7 @@
 #include "electrons.hpp"
 #include "entropy.hpp"
 #include "ye.hpp"
+#include "temperature.hpp"
 #include "floors.hpp"
 #include "flux.hpp"
 #include "grmhd.hpp"
@@ -405,6 +406,13 @@ Packages_t KHARMA::ProcessPackages(std::unique_ptr<ParameterInput>& pin)
     if (ye_on) {
         t_ye = tl.AddTask(
             t_eos, KHARMA::AddPackage, packages, Ye::Initialize, pin.get());
+    }
+    // Cached temperature / EOS root-find guess. Only useful with a tabulated EOS,
+    // so it's tied to the same flag as Ye
+    auto t_temperature = t_eos;
+    if (ye_on) {
+        t_temperature = tl.AddTask(
+            t_eos, KHARMA::AddPackage, packages, Temperature::Initialize, pin.get());
     }
 
     // GRMHD needs globals to mark packages

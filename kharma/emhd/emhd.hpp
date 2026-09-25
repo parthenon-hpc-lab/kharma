@@ -153,7 +153,7 @@ inline EMHD_parameters GetEMHDParameters(Packages_t& packages)
 
 KOKKOS_INLINE_FUNCTION void set_parameters(const GRCoordinates& G, const Real& rho,
     const Real& u, const Real& qtilde, const Real& dPtilde, const Real& bsq,
-    const EMHD_parameters& emhd_params, const Microphysics::EOS::EOS& eos, const Real lambda[2], const int& j,
+    const EMHD_parameters& emhd_params, const Microphysics::EOS::EOS& eos, Real lambda[2], const int& j,
     const int& i, Real& tau, Real& chi_e, Real& nu_e)
 {}
 
@@ -180,7 +180,7 @@ KOKKOS_INLINE_FUNCTION void convert_prims_to_q_dP(const Real& q_tilde,
  */
 KOKKOS_INLINE_FUNCTION void set_parameters(const GRCoordinates& G, const Real& rho,
     const Real& u, const Real& qtilde, const Real& dPtilde, const Real& bsq,
-    const EMHD_parameters& emhd_params, const Microphysics::EOS::EOS& eos, const Real lambda[2], const int& j,
+    const EMHD_parameters& emhd_params, const Microphysics::EOS::EOS& eos, Real lambda[2], const int& j,
     const int& i, Real& tau, Real& chi_e, Real& nu_e)
 {
     // Formerly chi_e was only set if conduction was present, nu_e only if viscosity
@@ -276,7 +276,8 @@ KOKKOS_INLINE_FUNCTION void set_parameters(const GRCoordinates& G,
     double bsq = m::max(dot(Dtmp.bcon, Dtmp.bcov), SMALL_NUM);
     Real qtilde = (m_p.Q >= 0) ? P(m_p.Q, k, j, i) : 0.;
     Real dPtilde = (m_p.DP >= 0) ? P(m_p.DP, k, j, i) : 0.;
-    Real lambda[2] = {(m_p.YE >= 0) ? P(m_p.YE, k, j, i) : 0.0, 0.0};
+    Real lambda[2];
+    fill_eos_lambda(P,m_p,k,j,i,lambda);
     set_parameters(G, P(m_p.RHO, k, j, i), P(m_p.UU, k, j, i), qtilde, dPtilde, bsq,
         emhd_params, eos, lambda, j, i, tau, chi_e, nu_e);
 }

@@ -276,7 +276,7 @@ KOKKOS_INLINE_FUNCTION int u_to_p<Type::kastaun>(const GRCoordinates& G,
     // residual object. Caches most arguments/floors so calls are single-argument
     Real lambda[2];
     lambda[0] = Ye;
-    lambda[1] = 0.0;
+    lambda[1] = (m_p.LT_GUESS >= 0) ? P(m_p.LT_GUESS, k, j, i) : 0.0;
     KastaunResidual res(D, q, bsq, bsq_rpsq, rsq, rbsq, v0sq, eos, lambda);
 
     // SOLVE

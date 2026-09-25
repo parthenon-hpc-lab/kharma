@@ -35,6 +35,7 @@
 
 #include "flux.hpp"
 #include "inverter.hpp"
+#include "temperature.hpp"
 
 TaskCollection KHARMADriver::MakeSimpleTaskCollection(BlockList_t& blocks, int stage)
 {
@@ -131,9 +132,15 @@ TaskCollection KHARMADriver::MakeSimpleTaskCollection(BlockList_t& blocks, int s
     auto t_set_bc = tl.AddTask(t_bounds,
         parthenon::ApplyBoundaryConditionsOnCoarseOrFineMD, md_sub_step_final, false);
 
+    auto t_temperature = t_set_bc;
+    if (pkgs.count("Temperature")) {
+        t_temperature = tl.AddTask(
+            t_set_bc, Temperature::MeshUpdateTemperature, md_sub_step_final.get());
+    }
+
     // Make sure *all* conserved vars are synchronized at step end
     auto t_ptou = tl.AddTask(
-        t_set_bc, Flux::MeshPtoU, md_sub_step_final.get(), IndexDomain::entire, false);
+        t_temperature, Flux::MeshPtoU, md_sub_step_final.get(), IndexDomain::entire, false);
     // Estimate next time step based on ctop
     if (stage == integrator->nstages) {
         auto t_new_dt = tl.AddTask(

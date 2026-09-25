@@ -41,6 +41,8 @@
 #include "b_flux_ct.hpp"
 #include "electrons.hpp"
 #include "entropy.hpp"
+#include "temperature.hpp"
+#include "temperature.hpp"
 #include "grmhd.hpp"
 #include "inverter.hpp"
 #include "ismr.hpp"
@@ -112,6 +114,7 @@ TaskCollection KHARMADriver::MakeDefaultTaskCollection(BlockList_t& blocks, int 
     const bool use_b_ct = pkgs.count("B_CT");
     const bool use_electrons = pkgs.count("Electrons");
     const bool use_entropy = pkgs.count("Entropy");
+    const bool use_temperature = pkgs.count("Temperature");
     // Whether anything needs the Strang-split primitive-source half-steps at all
     const bool use_prim_source = Packages::AnyPrimSource(pmesh);
     const bool use_fofc = flux_pkg.Get<bool>("use_fofc");
@@ -363,6 +366,13 @@ TaskCollection KHARMADriver::MakeDefaultTaskCollection(BlockList_t& blocks, int 
         auto t_set_bc = tl.AddTask(
             t_fix_p, parthenon::ApplyBoundaryConditionsOnCoarseOrFineMD, md_sync, false);
 
+        // Recompute cached temperature from the final floored, fixed-up, boundary-filled
+        // primitives. Its lT_guess seeds the next substep's EOS root-finds.
+        auto t_temperature = t_set_bc;
+        if (use_temperature) {
+            t_temperature = tl.AddTask(
+                t_set_bc, Temperature::MeshUpdateTemperature, md_sub_step_final.get());
+        }
         // Add primitive-variable source terms:
         // In order to calculate dissipation, we must know the entropy at the beginning
         // and end of the substep, and this must be calculated from the fluid primitive
@@ -377,9 +387,9 @@ TaskCollection KHARMADriver::MakeDefaultTaskCollection(BlockList_t& blocks, int 
         // the remaining dt/2.  Only after the last stage, so that the pair straddles the
         // whole transport step symmetrically, That symmetry is what cancels the
         // leading splitting error and keeps the composition 2nd order.
-        auto t_prim_source = t_set_bc;
+        auto t_prim_source = t_temperature;
         if (stage == integrator->nstages) {
-            t_prim_source = tl.AddTask(t_set_bc, Packages::MeshApplyPrimSource,
+            t_prim_source = tl.AddTask(t_temperature, Packages::MeshApplyPrimSource,
                 md_sub_step_final.get(), tm.time + 0.5 * integrator->dt,
                 0.5 * integrator->dt);
         }

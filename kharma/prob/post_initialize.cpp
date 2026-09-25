@@ -44,6 +44,7 @@
 #include "electrons.hpp"
 #include "emhd.hpp"
 #include "entropy.hpp"
+#include "temperature.hpp"
 #include "floors.hpp"
 #include "flux.hpp"
 #include "gr_coordinates.hpp"
@@ -213,4 +214,10 @@ void KHARMA::PostInitialize(ParameterInput* pin, Mesh* pmesh, bool is_restart)
     KBoundaries::FreezeDirichlet(md);
     // This is the first sync if there is no B field
     KHARMADriver::SyncAllBounds(md);
+
+    // Seed the cached temperature (and its EOS guess) from the final initial state,
+    // on fresh starts and restarts alike
+    if (pkgs.count("Temperature")) {
+        Temperature::MeshUpdateTemperature(md.get());
+    }
 }

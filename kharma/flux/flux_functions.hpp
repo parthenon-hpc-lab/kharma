@@ -63,7 +63,7 @@ KOKKOS_FORCEINLINE_FUNCTION void calc_tensor(const Global& P, const VarMap& m_p,
     // calc pressure
     Real sie = P(m_p.UU, k, j, i) / P(m_p.RHO, k, j, i); // specific internal energy
     Real lambda[2];
-    lambda[0] = (m_p.YE >= 0) ? P(m_p.YE, k, j, i) : 0.0;
+    fill_eos_lambda(P, m_p, k, j, i, lambda);
     Real pg = eos.PressureFromDensityInternalEnergy(P(m_p.RHO, k, j, i), sie, lambda);
     if ((m_p.Q >= 0 || m_p.DP >= 0) && emhd_params.feedback) {
         // Apply higher-order terms conversion if necessary
@@ -321,7 +321,7 @@ KOKKOS_FORCEINLINE_FUNCTION void vchar(const GRCoordinates& G, const Global& P,
     // https://lanl.github.io/singularity-eos/main/src/modifiers.html
     const Real sie = P(m.UU, k, j, i) / P(m.RHO, k, j, i);
     Real lambda[2];
-    lambda[0] = (m.YE >= 0) ? P(m.YE, k, j, i) : 0.0;
+    fill_eos_lambda(P, m, k, j, i, lambda);
     const Real pg = eos.PressureFromDensityInternalEnergy(P(m.RHO, k, j, i), sie,lambda);
     const Real bulk = eos.BulkModulusFromDensityInternalEnergy(P(m.RHO, k, j, i), sie,lambda);
     const Real ef = P(m.RHO, k, j, i) + pg + P(m.UU, k, j, i);

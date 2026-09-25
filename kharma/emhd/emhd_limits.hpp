@@ -76,7 +76,8 @@ KOKKOS_INLINE_FUNCTION int apply_instability_limits(const GRCoordinates& G,
     Real uu = P(m_p.UU, k, j, i);
     Real qtilde = (m_p.Q >= 0) ? P(m_p.Q, k, j, i) : 0.;
     Real dPtilde = (m_p.DP >= 0) ? P(m_p.DP, k, j, i) : 0.;
-    Real lambda[2] = {(m_p.YE >= 0) ? P(m_p.YE, k, j, i) : 0.0, 0.0};
+    Real lambda[2];
+    fill_eos_lambda(P, m_p, k, j, i, lambda);
 
     // Real pg = (gam - 1.) * uu;
     Real pg = eos.PressureFromDensityInternalEnergy(rho, uu / rho, lambda);
