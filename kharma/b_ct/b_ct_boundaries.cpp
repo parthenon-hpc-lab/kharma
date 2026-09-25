@@ -422,16 +422,18 @@ void B_CT::ReconnectBoundaryB3(MeshBlockData<Real>* rc, IndexDomain domain,
             //             2;
             //         U(m_u.B3, k, jf, i) =
             //             P(m_p.B3, k, jf, i) * G.gdet(Loci::center, jf, i);
-//                     // Recover primitive GRMHD variables from our modified U
-//                     Inverter::u_to_p<Inverter::Type::kastaun>(
-//                         G, U, m_u, eos, k, jf, i, P, m_p, Loci::center, 25, 1e-14);
-//                     // Floor them
-//                     // TODO THIS IS IN FLUID FRAME
-//                     int fflag = Floors::apply_geo_floors(
-//                         G, P, m_p, k, jf, i, floors, Loci::center);
-//                     // Recalculate U on anything we floored
-//                     if (fflag)
-//                         GRMHD::p_to_u(G, P, m_p, eos, k, jf, i, U, m_u, Loci::center);
-//                 });
+            //                     // Recover primitive GRMHD variables from our modified
+            //                     U Inverter::u_to_p<Inverter::Type::kastaun>(
+            //                         G, U, m_u, eos, k, jf, i, P, m_p, Loci::center, 25,
+            //                         1e-14);
+            //                     // Floor them
+            //                     // TODO THIS IS IN FLUID FRAME
+            //                     int fflag = Floors::apply_geo_floors(
+            //                         G, P, m_p, k, jf, i, floors, Loci::center);
+            //                     // Recalculate U on anything we floored
+            //                     if (fflag)
+            //                         GRMHD::p_to_u(G, P, m_p, eos, k, jf, i, U, m_u,
+            //                         Loci::center);
+            //                 });
         });
 }

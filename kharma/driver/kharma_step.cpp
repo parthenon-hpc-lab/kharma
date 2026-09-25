@@ -352,13 +352,15 @@ TaskCollection KHARMADriver::MakeDefaultTaskCollection(BlockList_t& blocks, int 
         }
 
         auto t_derefine = t_reconnect;
-        if (pkgs.count("ISMR") && pkgs.at("ISMR")->Param<uint>("nlevels") > 0) {
-            auto t_derefine_b = t_reconnect;
-            if (pkgs.count("B_CT"))
-                t_derefine_b =
-                    tl.AddTask(t_reconnect, B_CT::DerefinePoles, md_sub_step_final.get());
-            t_derefine =
-                tl.AddTask(t_derefine_b, ISMR::DerefinePoles, md_sub_step_final.get());
+        if (pkgs.count("ISMR")) {
+            if (pkgs.at("ISMR")->Param<uint>("nlevels") > 0) {
+                auto t_derefine_b = t_reconnect;
+                if (pkgs.count("B_CT"))
+                    t_derefine_b = tl.AddTask(
+                        t_reconnect, B_CT::DerefinePoles, md_sub_step_final.get());
+                t_derefine = tl.AddTask(
+                    t_derefine_b, ISMR::DerefinePoles, md_sub_step_final.get());
+            }
         }
 
         // This call fills the fluid primitive values in all physical zones, that is,
