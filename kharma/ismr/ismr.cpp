@@ -82,7 +82,7 @@ std::shared_ptr<KHARMAPackage> ISMR::Initialize(
     return pkg;
 }
 
-TaskStatus ISMR::DerefinePoles(MeshData<Real>* md)
+TaskStatus ISMR::DerefinePoles(MeshData<Real>* md, std::vector<MetadataFlag> flags)
 {
     Flag("ISMR_DerefinePoles");
     // TODO this routine only applies to polar boundaries for now.
@@ -94,13 +94,9 @@ TaskStatus ISMR::DerefinePoles(MeshData<Real>* md)
     for (int iblock = 0; iblock < md->NumBlocks(); iblock++) {
         auto& rc = md->GetBlockData(iblock);
         auto pmb = rc->GetBlockPointer();
-        PackIndexMap cons_map, cons_map_utop;
-        auto vars =
-            rc->PackVariables(std::vector<MetadataFlag>{Metadata::WithFluxes}, cons_map);
+        auto vars = rc->PackVariables(flags);
         auto vars_avg = rc->PackVariables(std::vector<std::string>{"ismr.vars_avg"});
-        auto vars_utop = rc->PackVariables(
-            std::vector<MetadataFlag>{Metadata::Conserved, Metadata::Cell},
-            cons_map_utop);
+
         const int nvar = vars.GetDim(4);
         for (int i = 0; i < BOUNDARY_NFACES; i++) {
             BoundaryFace bface = (BoundaryFace)i;
