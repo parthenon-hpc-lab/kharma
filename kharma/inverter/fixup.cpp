@@ -189,7 +189,8 @@ TaskStatus Inverter::Backstop(MeshBlockData<Real>* rc)
 
     const auto& eos_params = pmb->packages.Get("eos")->AllParams();
     auto eos = eos_params.Get<Microphysics::EOS::EOS>("d.EOS");
-    const Real gamma1 = pmb->packages.Get("eos")->Param<Real>("gm1") + 1.0;
+    const bool is_ideal = pmb->packages.Get("eos")->Param<std::string>("type") == "IdealGas";
+    const Real gamma1 = is_ideal ? pmb->packages.Get("eos")->Param<Real>("gm1") + 1.0 : 5. / 3.;
 
     // Use values from floors package if it's enabled, otherwise any we've been asked to
     // apply
@@ -236,7 +237,7 @@ TaskStatus Inverter::Backstop(MeshBlockData<Real>* rc)
             determine_geo_floors(
                 G, P, m_p, k, j, i, floors, floors_inner, rhomin_geom, umin_geom);
 
-            const Real umin = (m_p.KTOT >= 0) ? P(m_p.KTOT, k, j, i) *
+            const Real umin = (is_ideal && m_p.KTOT >= 0) ? P(m_p.KTOT, k, j, i) *
                                                     m::pow(P(m_p.RHO, k, j, i), gamma1) /
                                                     (gamma1 - 1.)
                                               : umin_geom;

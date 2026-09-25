@@ -90,7 +90,7 @@ std::shared_ptr<KHARMAPackage> Inverter::Initialize(
     // *wants* that but...
     const bool is_ideal =
         pin->GetString("eos", "type") == singularity::IdealGas::EosType();
-    Real gamma_floor = packages->Get("eos")->Param<Real>("gm1") + 1.;
+    Real gamma_floor = is_ideal ? packages->Get("eos")->Param<Real>("gm1") + 1. : 5. / 3.;
     if (!pin->DoesBlockExist("inverter_floors")) {
         params.Add("inverter_prescription",
             Floors::MakePrescription(pin, "floors", gamma_floor, is_ideal));

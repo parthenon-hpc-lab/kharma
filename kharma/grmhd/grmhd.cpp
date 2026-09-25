@@ -83,16 +83,21 @@ std::shared_ptr<KHARMAPackage> Initialize(
     // Only ideal EOS are supported, though modifying gamma based on
     // local temperatures would be straightforward.
     // Prefer <eos>/gamma; fall back to <GRMHD>/gamma for backward compatibility.
-    double gamma;
-    if (pin->DoesParameterExist("eos", "gamma")) {
-        gamma = pin->GetReal("eos", "gamma");
-    } else if (pin->DoesParameterExist("GRMHD", "gamma")) {
-        gamma = pin->GetReal("GRMHD", "gamma");
-    } else {
-        throw std::runtime_error(
-            "GRMHD requires that gamma be specified in <eos> or <GRMHD> block!");
-    }
-    params.Add("gamma", gamma);
+    // The following code breaks for stellarcollapse.
+    // Upon further inspection, it seems that we don't need this at all,
+    // and we can just use the equivalent code in eos_kharma.cpp.
+    // Commenting it out for now -- in case it is needed for an external
+    // package such as pyharm.
+    //double gamma;
+    //if (pin->DoesParameterExist("eos", "gamma")) {
+    //    gamma = pin->GetReal("eos", "gamma");
+    //} else if (pin->DoesParameterExist("GRMHD", "gamma")) {
+    //    gamma = pin->GetReal("GRMHD", "gamma");
+    //} else {
+    //    throw std::runtime_error(
+    //        "GRMHD requires that gamma be specified in <eos> or <GRMHD> block!");
+    //}
+    //params.Add("gamma", gamma);
 
     // Proportion of courant condition for timesteps
     double cfl = pin->GetOrAddReal("GRMHD", "cfl", 0.9);

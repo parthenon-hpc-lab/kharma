@@ -241,7 +241,8 @@ std::shared_ptr<KHARMAPackage> Flux::Initialize(
 
         const bool is_ideal =
             pin->GetString("eos", "type") == singularity::IdealGas::EosType();
-        Real gamma_floor = packages->Get("eos")->Param<Real>("gm1") + 1.;
+        // For non-ideal EOS, gamma_floor only sets the geometric floor's density scaling
+        Real gamma_floor = is_ideal ? packages->Get("eos")->Param<Real>("gm1") + 1. : 5. / 3.;
         if (!pin->DoesBlockExist("fofc_floors")) {
             params.Add("fofc_prescription",
                 Floors::MakePrescription(pin, "floors", gamma_floor, is_ideal));

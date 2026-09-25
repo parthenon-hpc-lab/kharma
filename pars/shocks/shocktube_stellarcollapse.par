@@ -14,7 +14,7 @@
 #  the paper's stated 1e11 g/cm^3. This file targets the paper's number directly.)
 
 <parthenon/job>
-problem_id = shock_sfho
+problem_id = shock
 
 <parthenon/mesh>
 nx1         = 512

@@ -151,8 +151,9 @@ TaskStatus InitializeEMHDShock(
                         // Set EMHD parameters
                         Real tau, chi_e, nu_e;
                         // Zeros are q, dP, and bsq, only needed for torus closure
+                        Real lambda[2] = {0.0, 0.0};
                         EMHD::set_parameters(G, rho_temp, u_temp, 0., 0., 0., emhd_params,
-                            eos, j, i, tau, chi_e, nu_e);
+                            eos, lambda, j, i, tau, chi_e, nu_e);
 
                         // Update q and dP (which now are q_tilde and dP_tilde)
                         Real q_tilde = q_host(k, j, i);

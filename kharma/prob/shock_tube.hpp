@@ -16,6 +16,10 @@ TaskStatus InitializeShockTube(
 {
     auto pmb = rc->GetBlockPointer();
     auto eos = pmb->packages.Get("eos")->Param<Microphysics::EOS::EOS>("d.EOS");
+    const auto& eos_pars = pmb->packages.Get("eos")->AllParams();
+    const bool is_ideal = eos_pars.Get<std::string>("type") == "IdealGas";
+    const Real T_min = eos_pars.Get<Real>("T_min");
+    const Real T_max = eos_pars.Get<Real>("T_max");
 
     GridScalar rho = rc->Get("prims.rho").data;
     GridScalar u = rc->Get("prims.u").data;
@@ -78,7 +82,7 @@ TaskStatus InitializeShockTube(
             if (use_ye) Ye(k,j,i) = Ye_val;
             const Real Pval = (lhs) ? PL : PR;
             Real lambda[2] = {Ye_val, 0.0};
-            const Real sie = eos.InternalEnergyFromDensityPressure(rho(k, j, i), Pval, lambda);
+            Real sie = Microphysics::EOS::SieFromDensityPressure(eos, is_ideal, rho(k, j, i), Pval, lambda, T_min, T_max);
             u(k, j, i) = sie * rho(k, j, i);
             uvec(0, k, j, i) = (lhs) ? u1L : u1R;
             uvec(1, k, j, i) = (lhs) ? u2L : u2R;

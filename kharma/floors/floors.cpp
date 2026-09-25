@@ -53,7 +53,7 @@ std::shared_ptr<KHARMAPackage> Floors::Initialize(
     Params& params = pkg->AllParams();
     const bool is_ideal =
         pin->GetString("eos", "type") == singularity::IdealGas::EosType();
-    Real gamma1 = packages->Get("eos")->Param<Real>("gm1") + 1.;
+    Real gamma1 = is_ideal ? packages->Get("eos")->Param<Real>("gm1") + 1. : 5. / 3.;
 
     // Parse all the particular floor values into a nice struct we can pass device-side
     params.Add("prescription", MakePrescription(pin, "floors", gamma1, is_ideal));

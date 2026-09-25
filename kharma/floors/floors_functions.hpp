@@ -283,7 +283,6 @@ KOKKOS_INLINE_FUNCTION int apply_floors<InjectionFrame::drift>(FLOOR_ONE_ARGS)
     // Update rho, uu and compute new enthalpy
     P(m_p.RHO, k, j, i) = m::max(rho, rhoflr_max);
     P(m_p.UU, k, j, i) = m::max(uu, uflr_max);
-    Real lambda[2];
     fill_eos_lambda(P, m_p, k, j, i, lambda);
     const Real pg_new = eos.PressureFromDensityInternalEnergy(
         P(m_p.RHO, k, j, i), P(m_p.UU, k, j, i) / P(m_p.RHO, k, j, i), lambda);

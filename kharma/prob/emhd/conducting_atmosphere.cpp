@@ -211,8 +211,9 @@ TaskStatus InitializeAtmosphere(
                     // are now q_tilde and dP_tilde
                     Real tau, chi_e, nu_e;
                     // Zeros are q, dP, and bsq, only needed for torus closure
+                    Real lambda[2] = {0.0, 0.0};
                     EMHD::set_parameters(G, rho_temp, u_temp, 0., 0., 0., emhd_params,
-                        eos, j, i, tau, chi_e, nu_e);
+                        eos, lambda, j, i, tau, chi_e, nu_e);
                     const Real Theta = (gam - 1.) * u_temp / rho_temp;
                     if (use_conduction)
                         q_host(k, j, i) *=

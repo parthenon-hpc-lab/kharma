@@ -500,11 +500,15 @@ Packages_t KHARMA::ProcessPackages(std::unique_ptr<ParameterInput>& pin)
     // Entropy tracking (Ktot, & optionally idealized/advected Ktot_adv) is independent of
     // any package that might use it, but Electrons relies on it to get the fluid's
     // current & purely-advected entropy, so it's forced on whenever Electrons is.
-    bool entropy_on = pin->GetOrAddBoolean("entropy", "on", !simple_driver);
+    const bool is_ideal = pin->GetOrAddString("eos", "type", "IdealGas") == "IdealGas";
+    bool entropy_on = pin->GetOrAddBoolean("entropy", "on", !simple_driver && is_ideal);
     if (pin->GetOrAddBoolean("electrons", "on", false)) {
+        PARTHENON_REQUIRE(is_ideal, "Electron heating requires the IdealGas EOS!");
         entropy_on = true;
         pin->SetBoolean("entropy", "on", true);
     }
+    PARTHENON_REQUIRE(!entropy_on || is_ideal, "Entropy tracking requires the IdealGas EOS!");
+
     auto t_entropy = t_grmhd;
     if (entropy_on) {
         t_entropy = tl.AddTask(

@@ -46,6 +46,39 @@ using EOS = singularity::Variant<singularity::UnitSystem<singularity::IdealGas>,
 
 std::shared_ptr<KHARMAPackage> Initialize(
     ParameterInput* pin, std::shared_ptr<Packages_t>& packages);
+
+/**
+ * Specific internal energy from (rho, P, lambda), for any EOS in the variant.
+ *
+ * singularity-eos's generic InternalEnergyFromDensityPressure can't be used for tabulated,
+ * composition-dependent EOSs: it computes its root-finding bracket without passing lambda
+ * (eos_base.hpp), which aborts for StellarCollapse. So for non-ideal EOSs we bisect in
+ * log(T) over the table's temperature range instead, since at fixed rho and Ye, P is
+ * non-decreasing in T. IdealGas uses its exact closed form.
+ *
+ * T_min/T_max: the "eos" package's "T_min"/"T_max" params (code units). Unused for IdealGas.
+ * A target P outside [P(T_min), P(T_max)] silently returns the table-edge value.
+ */
+KOKKOS_INLINE_FUNCTION Real SieFromDensityPressure(const EOS& eos, const bool is_ideal,
+    const Real rho, const Real P, Real lambda[2], const Real T_min, const Real T_max)
+{
+    if (is_ideal) {
+        Real sie = 0.0;
+        eos.InternalEnergyFromDensityPressure(rho, P, sie, lambda);
+        return sie;
+    }
+    Real lT_lo = m::log(T_min), lT_hi = m::log(T_max);
+    for (int iter = 0; iter < 64; ++iter) {
+        const Real lT_mid = 0.5 * (lT_lo + lT_hi);
+        if (eos.PressureFromDensityTemperature(rho, m::exp(lT_mid), lambda) < P)
+            lT_lo = lT_mid;
+        else
+            lT_hi = lT_mid;
+    }
+    return eos.InternalEnergyFromDensityTemperature(
+        rho, m::exp(0.5 * (lT_lo + lT_hi)), lambda);
+}
+
 } // namespace EOS
 
 } // namespace Microphysics
