@@ -334,7 +334,7 @@ void FixFlux(MeshData<Real>* md)
     }
     if (params.Get<bool>("fix_flux_outer_x2")) {
         if (params.Get<bool>("use_old_flux_fix")) {
-            ZeroBoundaryFlux(md, IndexDomain::inner_x2, false);
+            ZeroBoundaryFlux(md, IndexDomain::outer_x2, false);
         } else {
             Bflux0(md, IndexDomain::outer_x2, false);
         }
