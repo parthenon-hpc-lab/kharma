@@ -432,7 +432,7 @@ class SphNullTransform
     static constexpr GReal startx3 = 0.;
     static constexpr GReal stopx1 = -1;
     static constexpr GReal stopx2 = M_PI;
-    static constexpr GReal stopx3 = M_2_PI;
+    static constexpr GReal stopx3 = 2. * M_PI;
 
     // Coordinate transformations
     // Any coordinate value protections (th < 0, th > pi, phi > 2pi) should be in the base
@@ -477,7 +477,7 @@ class ExponentialTransform
     static constexpr GReal startx3 = 0.;
     static constexpr GReal stopx1 = -1;
     static constexpr GReal stopx2 = M_PI;
-    static constexpr GReal stopx3 = M_2_PI;
+    static constexpr GReal stopx3 = 2. * M_PI;
 
     // Coordinate transformations
     KOKKOS_INLINE_FUNCTION void coord_to_embed(
@@ -541,7 +541,7 @@ class SuperExponentialTransform
     static constexpr GReal startx3 = 0.;
     static constexpr GReal stopx1 = -1;
     static constexpr GReal stopx2 = M_PI;
-    static constexpr GReal stopx3 = M_2_PI;
+    static constexpr GReal stopx3 = 2. * M_PI;
 
     const GReal xe1br, xn1br;
     const double npow2, cpow2;
@@ -627,7 +627,7 @@ class ModifyTransform
     static constexpr GReal startx3 = 0.;
     static constexpr GReal stopx1 = -1;
     static constexpr GReal stopx2 = 1.;
-    static constexpr GReal stopx3 = M_2_PI;
+    static constexpr GReal stopx3 = 2. * M_PI;
 
     const GReal hslope;
 
@@ -702,7 +702,7 @@ class FunkyTransform
     static constexpr GReal startx3 = 0.;
     static constexpr GReal stopx1 = -1;
     static constexpr GReal stopx2 = 1.;
-    static constexpr GReal stopx3 = M_2_PI;
+    static constexpr GReal stopx3 = 2. * M_PI;
 
     const GReal startx1_grid;
     const GReal hslope, poly_xt, poly_alpha, mks_smooth;
@@ -717,8 +717,8 @@ class FunkyTransform
         , mks_smooth(mks_smooth_in)
         , poly_xt(poly_xt_in)
         , poly_alpha(poly_alpha_in)
-        , poly_norm(0.5 * M_PI * 1. /
-                    (1. + 1. / (poly_alpha + 1.) * 1. / m::pow(poly_xt, poly_alpha)))
+        , poly_norm(
+              M_PI_2 / (1. + 1. / (poly_alpha + 1.) * 1. / m::pow(poly_xt, poly_alpha)))
     {}
 
     // Coordinate transformations
@@ -733,12 +733,13 @@ class FunkyTransform
         const GReal y = 2 * Xnative[2] - 1.;
         const GReal thJ =
             poly_norm * y * (1. + m::pow(y / poly_xt, poly_alpha) / (poly_alpha + 1.)) +
-            0.5 * M_PI;
+            M_PI_2;
 #if LEGACY_TH
-        const GReal th = thG + m::exp(mks_smooth * (startx1 - Xnative[1])) * (thJ - thG);
+        const GReal th =
+            thG + m::exp(mks_smooth * (startx1_grid - Xnative[1])) * (thJ - thG);
         Xembed[2] = excise(excise(th, 0.0, SMALL_NUM), M_PI, SMALL_NUM);
 #else
-        Xembed[2] = thG + m::exp(mks_smooth * (startx1 - Xnative[1])) * (thJ - thG);
+        Xembed[2] = thG + m::exp(mks_smooth * (startx1_grid - Xnative[1])) * (thJ - thG);
 #endif
         Xembed[3] = Xnative[3];
     }
@@ -762,7 +763,7 @@ class FunkyTransform
         dxdX[0][0] = 1.;
         dxdX[1][1] = m::exp(Xnative[1]);
         dxdX[2][1] = -exp(mks_smooth * (startx1_grid - Xnative[1])) * mks_smooth *
-                     (M_PI / 2. - M_PI * Xnative[2] +
+                     (M_PI_2 - M_PI * Xnative[2] +
                          poly_norm * (2. * Xnative[2] - 1.) *
                              (1 + (m::pow((-1. + 2 * Xnative[2]) / poly_xt, poly_alpha)) /
                                       (1 + poly_alpha)) -
@@ -807,7 +808,7 @@ class WidepoleTransform
     static constexpr GReal startx3 = 0.;
     static constexpr GReal stopx1 = -1;
     static constexpr GReal stopx2 = 1.;
-    static constexpr GReal stopx3 = M_2_PI;
+    static constexpr GReal stopx3 = 2. * M_PI;
 
     const GReal lin_frac, n2, n3;
     GReal smoothness;
@@ -827,14 +828,14 @@ class WidepoleTransform
             if (lin_frac == 1)
                 temp = 1.;
             else
-                temp = lin_frac / (1. - lin_frac) * (1. / M_PI - 1. / n3_temp) * n3_temp /
-                       n2;
+                temp =
+                    lin_frac / (1. - lin_frac) * (M_1_PI - 1. / n3_temp) * n3_temp / n2;
             if (abs(temp) < 1)
                 smoothness = 1. / (n2 * log((1. + temp) / (1. - temp)));
             else {
                 printf("WARNING: It is harder to have del phi ~ del th. Try using "
                        "lin_frac < %g \n",
-                    1. / ((1. / M_PI - 1. / n3_temp) * n3_temp / n2 + 1.));
+                    1. / ((M_1_PI - 1. / n3_temp) * n3_temp / n2 + 1.));
                 smoothness = 0.8 / n2;
             }
             smoothness = 0.02; // m::max(0.01, smoothness); // fix it for now for test
@@ -848,13 +849,12 @@ class WidepoleTransform
         Xembed[0] = Xnative[0];
         Xembed[1] = exp(Xnative[1]);
         GReal th;
-        // th = M_PI / 2. * (1. + 2. * lin_frac * (Xnative[2] - 0.5) + (1. - lin_frac) *
+        // th = M_PI_2 * (1. + 2. * lin_frac * (Xnative[2] - 0.5) + (1. - lin_frac) *
         // exp((Xnative[2] - 1.) / smoothness) - (1. - lin_frac) * exp(-Xnative[2] /
         // smoothness));
-        th = M_PI / 2. *
-             (1. + 2. * lin_frac * (Xnative[2] - 0.5) +
-                 (1. - lin_frac) * (tanh((Xnative[2] - 1.) / smoothness) + 1.) -
-                 (1. - lin_frac) * (tanh(-Xnative[2] / smoothness) + 1.));
+        th = M_PI_2 * (1. + 2. * lin_frac * (Xnative[2] - 0.5) +
+                          (1. - lin_frac) * (tanh((Xnative[2] - 1.) / smoothness) + 1.) -
+                          (1. - lin_frac) * (tanh(-Xnative[2] / smoothness) + 1.));
         Xembed[2] = excise(excise(th, 0.0, SMALL_NUM), M_PI, SMALL_NUM);
         Xembed[3] = Xnative[3];
     }
@@ -877,11 +877,11 @@ class WidepoleTransform
         gzero2(dxdX);
         dxdX[0][0] = 1.;
         dxdX[1][1] = exp(Xnative[1]);
-        // dxdX[2][2] = M_PI / 2. * (2. * lin_frac + (1. - lin_frac) / smoothness *
+        // dxdX[2][2] = M_PI_2 * (2. * lin_frac + (1. - lin_frac) / smoothness *
         // exp((Xnative[2] - 1.) / smoothness) + (1. - lin_frac) / smoothness *
         // exp(-Xnative[2] / smoothness));
         dxdX[2][2] =
-            M_PI / 2. *
+            M_PI_2 *
             (2. * lin_frac +
                 (1. - lin_frac) /
                     (smoothness * m::pow(cosh((Xnative[2] - 1.) / smoothness), 2.)) +

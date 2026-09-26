@@ -62,7 +62,7 @@
     Xc[1] = Xa[1];                                                                       \
     Xc[3] = Xa[3];                                                                       \
                                                                                          \
-    if (Xembed[2] < M_PI / 2.) {                                                         \
+    if (Xembed[2] < M_PI_2) {                                                            \
         Xa[2] = 0.;                                                                      \
         Xb[2] = 0.5 + 1.e-14;                                                            \
     } else {                                                                             \

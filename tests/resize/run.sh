@@ -21,7 +21,7 @@ test_resize () {
     # Tolerance is generous to make test short, while testing solver is at least approaching correct vals
     # Real simulation resizes should use tighter tolerance than this
     $KHARMADIR/run.sh -d . -i $KHARMADIR/pars/restarts/resize_restart.par $2 resize_restart/fname=torus.out0.final.h5 \
-                    b_cleanup/tolerance=1e-10 b_cleanup/no_clean_below=0 parthenon/time/nlim=1 \
+                    b_cleanup/tolerance=1e-11 b_cleanup/no_clean_below=0 parthenon/time/nlim=1 \
                     parthenon/output0/single_precision_output=false >log_resize_${1}_2.txt 2>&1
 
     # Check divB on the re-meshed output.  Tolerate some divB as we set the tolerance loosely above for speed
@@ -39,7 +39,7 @@ test_resize_smr () {
     # Tolerance is generous to make test short, while testing solver is at least approaching correct vals
     # Real simulation resizes should use tighter abs_tolerance than this
     $KHARMADIR/run.sh -d . -i $KHARMADIR/pars/restarts/resize_restart_smr.par $2 resize_restart/fname=torus.out0.final.h5 \
-                    b_cleanup/tolerance=1e-10 b_cleanup/no_clean_below=0 parthenon/time/nlim=1 \
+                    b_cleanup/tolerance=1e-11 b_cleanup/no_clean_below=0 parthenon/time/nlim=1 \
                     parthenon/output0/single_precision_output=false >log_resize_${1}_2.txt 2>&1
 
     # Check divB on the re-meshed output.  Tolerate some divB as we set the tolerance loosel>
