@@ -735,10 +735,11 @@ class FunkyTransform
             poly_norm * y * (1. + m::pow(y / poly_xt, poly_alpha) / (poly_alpha + 1.)) +
             0.5 * M_PI;
 #if LEGACY_TH
-        const GReal th = thG + m::exp(mks_smooth * (startx1 - Xnative[1])) * (thJ - thG);
+        const GReal th =
+            thG + m::exp(mks_smooth * (startx1_grid - Xnative[1])) * (thJ - thG);
         Xembed[2] = excise(excise(th, 0.0, SMALL_NUM), M_PI, SMALL_NUM);
 #else
-        Xembed[2] = thG + m::exp(mks_smooth * (startx1 - Xnative[1])) * (thJ - thG);
+        Xembed[2] = thG + m::exp(mks_smooth * (startx1_grid - Xnative[1])) * (thJ - thG);
 #endif
         Xembed[3] = Xnative[3];
     }
