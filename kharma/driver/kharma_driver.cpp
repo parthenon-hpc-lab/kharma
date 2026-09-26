@@ -234,9 +234,9 @@ TaskID KHARMADriver::AddFluxCalculations(
 
     // Pre-calculate B field cell-center values
     auto t_start_fluxes = t_start;
-    if (md->GetMeshPointer()->packages.AllPackages().count("B_CT"))
-        t_start_fluxes =
-            tl.AddTask(t_start, B_CT::MeshUtoP, md, IndexDomain::entire, false);
+    // if (md->GetMeshPointer()->packages.AllPackages().count("B_CT"))
+    //     t_start_fluxes =
+    //         tl.AddTask(t_start, B_CT::MeshUtoP, md, IndexDomain::entire, false);
 
     // Calculate fluxes in each direction using given reconstruction
     // Must be spelled out so as to generate each templated version of GetFlux<> to be
@@ -345,49 +345,77 @@ TaskID KHARMADriver::AddFOFC(TaskID& t_start, TaskList& tl, MeshData<Real>* md,
     MeshData<Real>* md_full_step_init, MeshData<Real>* md_sub_step_init,
     MeshData<Real>* guess_src, MeshData<Real>* guess, int stage)
 {
-    Flag("FOFC");
+    Flag("AddFOFC");
     // Pull reconstruction option to simplify use. TODO shorten?
     auto pmb0 = md->GetBlockData(0)->GetBlockPointer();
     auto& pkgs = pmb0->packages.AllPackages();
 
     const Floors::Prescription floors =
         pmb0->packages.Get("Floors")->Param<Floors::Prescription>("prescription");
+    // START FAKE STEP
+
+    // FixFlux for a fake update
+    auto t_fix_guess = tl.AddTask(t_start, Packages::FixFlux, md);
+    // // TODO try a flux-CT step *even if we're using Face-CT* to avoid synchronization
+    // auto t_fix_flux_ct = tl.AddTask(t_fix_guess, B_FluxCT::FixFluxTask, md);
+    // Calculate and sync EMF from first-order fluxes
+    std::shared_ptr<MeshData<Real>> md_shr{md, [](MeshData<Real>*)
+        {
+        } /*No-Op Deleter*/};
+    auto& md_emf_only = pmesh->mesh_data.AddShallow("EMF", md_shr,
+        std::vector<std::string>{"B_CT.emf"}); // TODO this gets weird if we partition
+    auto t_start_recv_emf = tl.AddTask(t_start,
+        parthenon::StartReceiveBoundBufs<parthenon::BoundaryType::any>, md_emf_only);
+    auto t_emf_local = tl.AddTask(t_fix_guess | t_start_recv_emf, B_CT::CalculateEMF, md);
+    auto t_emf = KHARMADriver::AddBoundarySync(t_emf_local, tl, md_emf_only);
+    // Flux corrections
+    auto t_load_send_flux =
+        tl.AddTask(t_emf, parthenon::LoadAndSendFluxCorrections, md_shr);
+    auto t_recv_flux =
+        tl.AddTask(t_load_send_flux, parthenon::ReceiveFluxCorrections, md_shr);
+    auto t_guess_bounds = tl.AddTask(t_recv_flux, parthenon::SetFluxCorrections, md_shr);
+    // Start the next flux correction
+    auto t_start_recv_flux =
+        tl.AddTask(t_guess_bounds, parthenon::StartReceiveFluxCorrections, md_shr);
 
     // Populate guess source term with divergence of the existing fluxes
-    // NOTE this does not include source terms!  Though, could call them here tbh
-    auto t_guess_divergence = tl.AddTask(t_start, FluxDivergence, md, guess_src,
-        std::vector<MetadataFlag>{Metadata::WithFluxes, Metadata::Cell}, 3);
+    auto t_guess_divergence = tl.AddTask(t_guess_bounds, FluxDivergence, md, guess_src,
+        std::vector<MetadataFlag>{
+            Metadata::Independent, Metadata::Cell, Metadata::WithFluxes},
+        3);
     // Add geometric source term to more accurately predict floor hits.
     // Could add everything here with Packages::AddSource but would be slower
     // also would need to deal with B_CT::AddSource == flux update, which we don't
     // want/need
-    auto t_guess_sources = t_guess_divergence;
-    if (pmb0->packages.Get("Fluxes")->Param<bool>("fofc_use_source_term")) {
-        t_guess_sources = tl.AddTask(t_guess_divergence, Flux::AddGeoSourceTask, md,
-            guess_src, IndexDomain::entire);
-    }
+    auto t_guess_sources = tl.AddTask(
+        t_guess_divergence, Packages::AddSource, md, guess_src, IndexDomain::entire);
+
     // Update the guess state with the guess source term, and our existing state
-    // Note this includes updating cell-centered B with the fluxes -- we don't care if
-    // this version has div
     auto t_guess_update = KHARMADriver::AddStateUpdate(t_guess_sources, tl,
         md_full_step_init, md_sub_step_init, guess_src, guess,
-        {Metadata::WithFluxes, Metadata::Cell}, false, stage);
-    // Recover primitive variables of the guess (carefully, since code-wide functions
-    // respect B at faces!)
+        std::vector<MetadataFlag>{Metadata::Independent}, true, stage);
+
+    // END FAKE STEP: RESULT IN 'GUESS'
+
+    // Recover primitive variables of the guess From faces
     auto t_guess_Bp =
-        tl.AddTask(t_guess_update, B_FluxCT::MeshUtoP, guess, IndexDomain::entire, false);
+        tl.AddTask(t_guess_update, B_CT::MeshUtoP, guess, IndexDomain::entire, false);
     auto t_guess_prims =
         tl.AddTask(t_guess_Bp, Inverter::MeshUtoP, guess, IndexDomain::entire, false);
     // Check and mark floors
     auto t_mark_floors = tl.AddTask(
         t_guess_prims, Floors::DetermineGRMHDFloors, guess, IndexDomain::entire, floors);
-    // Determine which cells are FOFC in our block
-    auto t_mark_fofc = tl.AddTask(t_mark_floors, Flux::MarkFOFC, guess);
+    // Determine which cells are FOFC in our block, put that in a new flag
+    auto t_mark_fofc = tl.AddTask(t_guess_prims, Flux::MarkFOFC, guess);
+    // And clear the flags, this step was fake
+    auto t_clear_floors = tl.AddTask(
+        t_mark_fofc, KHARMADriver::Scale, std::vector<std::string>{"fflag"}, md, 0.);
+    auto t_clear_flags = tl.AddTask(
+        t_mark_fofc, KHARMADriver::Scale, std::vector<std::string>{"pflag"}, md, 0.);
     // Sync the FOFC flag with neighbors
     // TODO this shouldn't be necessary, eliminate ASAP
-    std::shared_ptr<MeshData<Real>> md_shr{md, [](MeshData<Real>*)
-        {
-        } /*No-Op Deleter*/};
+    // std::shared_ptr<MeshData<Real>> md_shr{md, [](MeshData<Real> *) {}/*No-Op
+    // Deleter*/};
     auto& md_fofc =
         pmesh->mesh_data.AddShallow("FOFC", md_shr, std::vector<std::string>{"fofcflag"});
     auto t_sync_fofc = KHARMADriver::AddBoundarySync(t_mark_fofc, tl, md_fofc);
@@ -396,6 +424,93 @@ TaskID KHARMADriver::AddFOFC(TaskID& t_start, TaskList& tl, MeshData<Real>* md,
 
     EndFlag();
     return t_fofc;
+}
+
+TaskID KHARMADriver::AddFOFC_PCP(TaskID& t_start, TaskList& tl, MeshData<Real>* md,
+    MeshData<Real>* md_full_step_init, MeshData<Real>* md_sub_step_init,
+    MeshData<Real>* guess_src, MeshData<Real>* guess, int stage,
+    std::vector<std::string> sync_vars)
+{
+    Flag("AddFOFC_PCP");
+    TaskID t_none(0);
+
+    // An ADDITIONAL fake update, but without finishing out CT. Must be over all zones for
+    // stealing from neighbors FixFlux on the first-order-fied fluxes
+    auto t_fix_guess = tl.AddTask(t_start, Packages::FixFlux, md);
+
+    // Calculate and sync EMF from first-order fluxes
+    std::shared_ptr<MeshData<Real>> md_shr{md, [](MeshData<Real>*)
+        {
+        } /*No-Op Deleter*/};
+    auto& md_emf_only = pmesh->mesh_data.AddShallow("EMF", md_shr,
+        std::vector<std::string>{"B_CT.emf"}); // TODO this gets weird if we partition
+    auto t_start_recv_emf = tl.AddTask(t_none,
+        parthenon::StartReceiveBoundBufs<parthenon::BoundaryType::any>, md_emf_only);
+    auto t_emf_local = tl.AddTask(t_fix_guess | t_start_recv_emf, B_CT::CalculateEMF, md);
+    auto t_emf = KHARMADriver::AddBoundarySync(t_emf_local, tl, md_emf_only);
+
+    // Flux corrections (TODO(CEP) needed?)
+    auto t_load_send_flux =
+        tl.AddTask(t_emf, parthenon::LoadAndSendFluxCorrections, md_shr);
+    auto t_recv_flux =
+        tl.AddTask(t_load_send_flux, parthenon::ReceiveFluxCorrections, md_shr);
+    auto t_guess_bounds = tl.AddTask(t_recv_flux, parthenon::SetFluxCorrections, md_shr);
+    // Start the next flux correction
+    auto t_start_recv_flux =
+        tl.AddTask(t_guess_bounds, parthenon::StartReceiveFluxCorrections, md_shr);
+
+    // Apply the fluxes to calculate a change in cell-centered values "guess_src"
+    // We grab everything which is conserved here, to include cell-centered B which we
+    // want to evolve independently of face B
+    auto t_guess_div = tl.AddTask(t_guess_bounds, FluxDivergence, md, guess_src,
+        std::vector<MetadataFlag>{
+            Metadata::Independent, Metadata::Cell, Metadata::WithFluxes},
+        0);
+
+    // Add any source terms: geometric \Gamma * T, wind, damping, etc etc
+    // Also where CT sets the change in face fields
+    auto t_guess_sources = tl.AddTask(
+        t_guess_div, Packages::AddSource, md, guess_src, IndexDomain::interior);
+
+    // Update the guess state with the guess source term, and our existing state
+    // Note this includes updating cell-centered B with the fluxes directly -- we want the
+    // version *without* CT with a divergence
+    auto t_guess_update = KHARMADriver::AddStateUpdate(t_guess_sources, tl,
+        md_full_step_init, md_sub_step_init, guess_src, guess,
+        std::vector<MetadataFlag>{
+            Metadata::GetUserFlag("Explicit"), Metadata::Independent},
+        true, stage);
+
+    // Sync, now we have conserved "tilde" state in zones and neighbors
+    std::shared_ptr<MeshData<Real>> guess_shr{guess, [](MeshData<Real>*)
+        {
+        } /*No-Op Deleter*/};
+    auto& guess_sync = pmesh->mesh_data.AddShallow(
+        "gsync" + integrator->stage_name[stage] + std::to_string(0), guess_shr,
+        sync_vars);
+    auto t_start_recv_bound = tl.AddTask(t_none,
+        parthenon::StartReceiveBoundBufs<parthenon::BoundaryType::any>, guess_sync);
+    auto t_guess_sync = KHARMADriver::AddBoundarySync(
+        t_guess_update | t_start_recv_bound, tl, guess_sync);
+
+    // Get primitive "tilde" state. B_CT::UtoP averages zone faces, but we want centers
+    // only so we use FluxCT By Balsara this ought to be guaranteed, since the fully
+    // first-order update is PCP before CT
+    auto t_guess_Bp =
+        tl.AddTask(t_guess_sync, B_FluxCT::MeshUtoP, guess, IndexDomain::entire, false);
+    auto t_guess_prims =
+        tl.AddTask(t_guess_Bp, Inverter::MeshUtoP, guess, IndexDomain::entire, false);
+    // -> this gives Ptilde which we must KEEP to the next inverter call
+    // And clear any inverter flags, this step was fake
+    auto t_clear_flags = tl.AddTask(
+        t_guess_prims, KHARMADriver::Scale, std::vector<std::string>{"pflag"}, md, 0.);
+
+    // Revise the first order corrections according to new Bf^2 - Bc^2
+    auto t_fofc_pcp = tl.AddTask(t_guess_prims, Flux::FOFC_PCP, md, guess,
+        integrator->beta[stage - 1] * integrator->dt);
+
+    EndFlag();
+    return t_fofc_pcp;
 }
 
 TaskID KHARMADriver::AddStateUpdate(TaskID& t_start, TaskList& tl,
@@ -441,12 +556,12 @@ TaskID KHARMADriver::AddStateUpdate(TaskID& t_start, TaskList& tl,
 
     // If we're explicitly evolving, UtoP needs a guess
     // TODO why is this necessary still?  Is it necessary on every AddStateUpdate?
-    if (!pkgs.at("GRMHD")->Param<bool>("implicit")) {
-        t_copy_prims = tl.AddTask(t_start, Copy<MeshData<Real>>,
-            std::vector<MetadataFlag>(
-                {Metadata::GetUserFlag("MHD"), Metadata::GetUserFlag("Primitive")}),
-            md_sub_step_init, md_update);
-    }
+    // if (!pkgs.at("GRMHD")->Param<bool>("implicit")) {
+    //     t_copy_prims = tl.AddTask(t_start, Copy<MeshData<Real>>,
+    //         std::vector<MetadataFlag>(
+    //             {Metadata::GetUserFlag("MHD"), Metadata::GetUserFlag("Primitive")}),
+    //         md_sub_step_init, md_update);
+    // }
 
     return t_copy_prims | t_update_c | t_update_f;
 }

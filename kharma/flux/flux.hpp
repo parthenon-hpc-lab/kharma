@@ -45,6 +45,12 @@
 
 namespace Flux
 {
+enum class Correction { none = 0, first_order, pcp };
+
+static const std::map<int, std::string> fofc_names = {
+    {(int)Correction::first_order, "First-order"},
+    {(int)Correction::pcp, "Constraint-preserving"},
+};
 
 std::shared_ptr<KHARMAPackage> Initialize(
     ParameterInput* pin, std::shared_ptr<Packages_t>& packages);
@@ -53,7 +59,7 @@ TaskStatus CheckCtop(MeshData<Real>* md);
 
 TaskStatus PostStepDiagnostics(const SimTime& tm, MeshData<Real>* md);
 
-TaskStatus MarkFOFC(MeshData<Real>* md);
+TaskStatus MarkFOFC(MeshData<Real>* guess);
 
 /**
  * Given a "guess" in which the fflag reflects zones which would fail with current fluxes,
@@ -62,9 +68,21 @@ TaskStatus MarkFOFC(MeshData<Real>* md);
 TaskStatus FOFC(MeshData<Real>* md, MeshData<Real>* guess);
 
 /**
- * Add the geometric source term present in the covariant derivative of the stress-energy
- * tensor, S_nu = sqrt(-g) T^kap_lam Gamma^lam_nu_kap This is defined in Flux:: rather
- * than GRMHD:: because the stress-energy tensor may contain (E)GR(R)(M)HD terms.
+ * Make first-order fluxes physical constraint preserving (PCP).
+ * Borrows total energy from nearby zones, and if this is insufficient
+ * adds a bit during primitive variable inversion.
+ *
+ * Mechanism from Balsara et al. 2025, "PCP Higher-Order Methods..."
+ */
+TaskStatus FOFC_PCP(MeshData<Real>* md, MeshData<Real>* guess, const Real dt);
+
+/**
+ * Calculate the geometric source term present in the covariant derivative of the
+ * stress-energy tensor, S_nu = sqrt(-g) T^kap_lam Gamma^lam_nu_kap, from `md`, and apply
+ * it to the source `mdudt`
+ *
+ * This is defined in Flux:: rather than GRMHD:: because the stress-energy tensor may
+ * contain (E)GR(R)(M)HD terms.
  */
 void AddGeoSource(MeshData<Real>* md, MeshData<Real>* mdudt, IndexDomain domain);
 // Version returning TaskStatus, for calling alone in FOFC "update"

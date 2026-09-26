@@ -59,6 +59,7 @@
 #include <amr_criteria/refinement_package.hpp>
 #include <interface/update.hpp>
 #include <parthenon/parthenon.hpp>
+#include <stdexcept>
 
 using FC = Metadata::FlagCollection;
 
@@ -114,13 +115,21 @@ TaskCollection KHARMADriver::MakeDefaultTaskCollection(BlockList_t& blocks, int 
     auto& flux_pkg = pkgs.at("Fluxes")->AllParams();
     const bool use_b_cleanup = pkgs.count("B_Cleanup");
     const bool use_b_ct = pkgs.count("B_CT");
+    const bool use_ismr = pkgs.count("ISMR");
     const bool use_electrons = pkgs.count("Electrons");
     const bool use_entropy = pkgs.count("Entropy");
     // Whether anything needs the Strang-split primitive-source half-steps at all
     const bool use_prim_source = Packages::AnyPrimSource(pmesh);
     const bool use_fofc = flux_pkg.Get<bool>("use_fofc");
+    const bool use_fofc_pcp = (use_fofc) ? flux_pkg.Get<bool>("fofc_pcp") : false;
     const bool use_jcon = pkgs.count("Current");
     const bool track_additions = pkgs.at("Floors")->Param<bool>("track_additions");
+    bool reconnect_b3 = false;
+    if (use_b_ct) {
+        reconnect_b3 = pkgs.at("Boundaries")->Param<bool>("reconnect_B3_inner_x2");
+        if (reconnect_b3 && !pkgs.at("Boundaries")->Param<bool>("reconnect_B3_outer_x2"))
+            throw std::runtime_error("Must enable reconnection for both boundaries!");
+    }
 
     // Allocate/copy the things we need
     // TODO these can now be reduced by including the var lists/flags which actually need
@@ -261,6 +270,11 @@ TaskCollection KHARMADriver::MakeDefaultTaskCollection(BlockList_t& blocks, int 
             t_fluxes = KHARMADriver::AddFOFC(t_flux_calc, tl, md_sub_step_init.get(),
                 md_full_step_init.get(), md_sub_step_init.get(), guess_src.get(),
                 guess.get(), stage);
+            if (use_fofc_pcp) {
+                t_fluxes = KHARMADriver::AddFOFC_PCP(t_fluxes, tl, md_sub_step_init.get(),
+                    md_full_step_init.get(), md_sub_step_init.get(), guess_src.get(),
+                    guess.get(), stage, sync_vars);
+            }
         }
 
         // Any package modifications to the fluxes.  e.g.:
@@ -278,8 +292,11 @@ TaskCollection KHARMADriver::MakeDefaultTaskCollection(BlockList_t& blocks, int 
                 auto& md_emf_only = pmesh->mesh_data.AddShallow("EMF", md_sub_step_init,
                     std::vector<std::string>{
                         "B_CT.emf"}); // TODO this gets weird if we partition
-                auto t_emf_local =
-                    tl.AddTask(t_flux_bounds, B_CT::CalculateEMF, md_sub_step_init.get());
+                auto t_start_recv_emf = tl.AddTask(t_none,
+                    parthenon::StartReceiveBoundBufs<parthenon::BoundaryType::any>,
+                    md_emf_only);
+                auto t_emf_local = tl.AddTask(t_flux_bounds | t_start_recv_emf,
+                    B_CT::CalculateEMF, md_sub_step_init.get());
                 t_emf = KHARMADriver::AddBoundarySync(t_emf_local, tl, md_emf_only);
             }
             auto t_load_send_flux = tl.AddTask(
@@ -334,11 +351,33 @@ TaskCollection KHARMADriver::MakeDefaultTaskCollection(BlockList_t& blocks, int 
         auto& md_sync = pmesh->mesh_data.AddShallow(
             "sync" + integrator->stage_name[stage] + std::to_string(i), md_sub_step_final,
             sync_vars);
+        // auto &md_guess = (use_fofc) ? pmesh->mesh_data.GetOrAdd("fofc_guess", i) :
+        // md_sub_step_final;
 
         // At this point, we've sync'd all internal boundaries using the conserved
         // variables. The physical boundaries (pole, inner/outer) are trickier,
         // since they must be applied to the primitive variables rho,u,u1,u2,u3
         // but should apply to conserved forms of everything else.
+
+        // Reconnect then derefine, the "local" operations on U
+        auto t_reconnect = t_none;
+        if (use_b_ct && reconnect_b3) {
+            t_reconnect =
+                tl.AddTask(t_none, B_CT::ReconnectB3Task, md_sub_step_final.get());
+        }
+
+        auto t_derefine = t_reconnect;
+        if (use_ismr) {
+            if (pkgs.at("ISMR")->Param<uint>("nlevels") > 0) {
+                auto t_derefine_b = t_reconnect;
+                if (use_b_ct)
+                    t_derefine_b = tl.AddTask(
+                        t_reconnect, B_CT::DerefinePoles, md_sub_step_final.get());
+                t_derefine =
+                    tl.AddTask(t_derefine_b, ISMR::DerefinePoles, md_sub_step_final.get(),
+                        std::vector<MetadataFlag>{Metadata::WithFluxes});
+            }
+        }
 
         // This call fills the fluid primitive values in all physical zones, that is,
         // including MPI boundaries but not the physical boundaries (which haven't been
@@ -352,8 +391,9 @@ TaskCollection KHARMADriver::MakeDefaultTaskCollection(BlockList_t& blocks, int 
         auto t_floors = tl.AddTask(t_utop, Packages::MeshApplyFloors,
             md_sub_step_final.get(), IndexDomain::entire);
 
-        // Then, fix any inversions which failed. Fixups average the adjacent zones, so we
-        // want to work from post-floor data. Floors are re-applied after fixups.
+        // Then, fix any inversions which failed. Fixups may average the adjacent zones,
+        // so we want to work from post-floor data. Floors are re-applied after fixups.
+        // TODO(CEP) take guess (prims w/B evolved w/o constraints) if using PCP
         auto t_fix_p =
             tl.AddTask(t_floors, Inverter::MeshFixUtoP, md_sub_step_final.get());
 
@@ -408,25 +448,18 @@ TaskCollection KHARMADriver::MakeDefaultTaskCollection(BlockList_t& blocks, int 
                 t_heat_electrons, Entropy::MeshUpdateEntropy, md_sub_step_final.get());
         }
 
+        auto t_derefinep = t_entropy;
+        if (use_ismr) {
+            t_derefinep =
+                tl.AddTask(t_entropy, ISMR::DerefinePoles, md_sub_step_final.get(),
+                    std::vector<MetadataFlag>{Metadata::GetUserFlag("Primitive")});
+        }
+
         // Make sure *all* conserved vars are synchronized at step end
-        auto t_ptou = tl.AddTask(t_entropy, Flux::MeshPtoU, md_sub_step_final.get(),
+        auto t_ptou = tl.AddTask(t_derefinep, Flux::MeshPtoU, md_sub_step_final.get(),
             IndexDomain::entire, false);
 
         auto t_step_done = t_ptou;
-        if (pkgs.count("ISMR")) {
-            if (pkgs.at("ISMR")->Param<uint>("nlevels") > 0) {
-                auto t_derefine_b = t_ptou;
-                if (pkgs.count("B_CT"))
-                    t_derefine_b =
-                        tl.AddTask(t_ptou, B_CT::DerefinePoles, md_sub_step_final.get());
-                auto t_derefine_f = tl.AddTask(
-                    t_derefine_b, ISMR::DerefinePoles, md_sub_step_final.get());
-                auto t_floors_2 = tl.AddTask(t_derefine_f, Packages::MeshApplyFloors,
-                    md_sub_step_final.get(), IndexDomain::entire);
-                t_step_done = tl.AddTask(
-                    t_floors_2, Inverter::MeshFixUtoP, md_sub_step_final.get());
-            }
-        }
 
         if (track_additions) {
             auto t_track_additions = tl.AddTask(t_ptou, Floors::TrackAdditions,

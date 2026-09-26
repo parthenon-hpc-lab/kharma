@@ -812,8 +812,8 @@ void CancelBoundaryT3(MeshBlockData<Real>* rc, IndexDomain domain, bool coarse)
 void UpdateAveragedCtop(MeshData<Real>* md)
 {
     auto pmesh = md->GetMeshPointer();
-    if (pmesh->packages.AllPackages().count("B_CT"))
-        B_CT::MeshUtoP(md, IndexDomain::interior);
+    // if (pmesh->packages.AllPackages().count("B_CT"))
+    //     B_CT::MeshUtoP(md, IndexDomain::interior);
     auto& params = pmesh->packages.Get<KHARMAPackage>("Boundaries")->AllParams();
     const auto& eos_params = pmesh->packages.Get("eos")->AllParams();
     auto eos = eos_params.Get<Microphysics::EOS::EOS>("d.EOS");

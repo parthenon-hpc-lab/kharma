@@ -195,7 +195,7 @@ TaskStatus InitializeFMTorus(
             const GReal r = Xembed[1];
             // Regardless of native coordinate shenanigans,
             // set th=pi/2 since the midplane is densest in the solution
-            const GReal rho = fm_torus_rho(a, rin, rmax, gam, kappa, r, M_PI / 2.);
+            const GReal rho = fm_torus_rho(a, rin, rmax, gam, kappa, r, M_PI_2);
             // TODO umax for printing/recording?
 
             // Record max

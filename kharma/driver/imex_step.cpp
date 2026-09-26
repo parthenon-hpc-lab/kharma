@@ -60,6 +60,10 @@
 
 using FC = Metadata::FlagCollection;
 
+// TODO(CEP) ImEx is behind:
+// 1. No reordered/new polar/ISMR consolidation
+// 2. No fixups based on PCP guess
+
 TaskCollection KHARMADriver::MakeImExTaskCollection(BlockList_t& blocks, int stage)
 {
     // Reminder that this list is created BEFORE any of the list contents are run!
@@ -446,14 +450,14 @@ TaskCollection KHARMADriver::MakeImExTaskCollection(BlockList_t& blocks, int sta
             IndexDomain::entire, false);
 
         auto t_step_done = t_ptou;
-        if (pkgs.count("ISMR")) {
-            auto t_derefine_b = t_ptou;
-            if (pkgs.count("B_CT"))
-                t_derefine_b =
-                    tl.AddTask(t_ptou, B_CT::DerefinePoles, md_sub_step_final.get());
-            t_step_done =
-                tl.AddTask(t_derefine_b, ISMR::DerefinePoles, md_sub_step_final.get());
-        }
+        // if (pkgs.count("ISMR")) {
+        //     auto t_derefine_b = t_ptou;
+        //     if (pkgs.count("B_CT"))
+        //         t_derefine_b =
+        //             tl.AddTask(t_ptou, B_CT::DerefinePoles, md_sub_step_final.get());
+        //     t_step_done =
+        //         tl.AddTask(t_derefine_b, ISMR::DerefinePoles, md_sub_step_final.get());
+        // }
 
         // Estimate next time step based on ctop
         if (stage == integrator->nstages) {
