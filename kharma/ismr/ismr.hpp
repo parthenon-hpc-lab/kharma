@@ -67,6 +67,6 @@ std::shared_ptr<KHARMAPackage> Initialize(
 /**
  * Derefinement operation for fluid/cell-centered variables
  */
-TaskStatus DerefinePoles(MeshData<Real>* md);
+TaskStatus DerefinePoles(MeshData<Real>* md, std::vector<MetadataFlag> flags);
 
 }
