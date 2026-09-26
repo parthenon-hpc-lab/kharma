@@ -31,7 +31,7 @@ KOKKOS_INLINE_FUNCTION Real lnh_calc(
     Real AA = m::pow(r2 + a2, 2) - DD * a2 * sth * sth;
     Real SS = r2 + a2 * cth * cth;
 
-    Real thin = M_PI / 2.;
+    Real thin = M_PI_2;
     Real sthin = m::sin(thin);
     Real cthin = m::cos(thin);
 
