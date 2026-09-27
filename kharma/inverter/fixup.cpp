@@ -71,7 +71,6 @@ TaskStatus Inverter::FixUtoP(MeshBlockData<Real>* rc)
     GridScalar pflag = rc->Get("pflag").data;
 
     const auto& pars = pmb->packages.Get("GRMHD")->AllParams();
-    // const Real gam = pars.Get<Real>("gamma");
 
     const auto& eos_params = pmb->packages.Get("eos")->AllParams();
     auto eos = eos_params.Get<Microphysics::EOS::EOS>("d.EOS");

@@ -57,12 +57,10 @@ namespace Interpolation
 KOKKOS_INLINE_FUNCTION void Xtoijk(const GReal X[GR_DIM], const GReal startx[GR_DIM],
     const GReal dx[GR_DIM], int& i, int& j, int& k, GReal del[GR_DIM])
 {
-    // Normal operation
-    // get provisional zone index. see note above function for details. note we
-    // shift to zone centers because that's where variables are most exact.
-    i = (int)((X[1] - startx[1]) / dx[1] - 0.5 + 1000) - 1000;
-    j = (int)((X[2] - startx[2]) / dx[2] - 0.5 + 1000) - 1000;
-    k = (int)((X[3] - startx[3]) / dx[3] - 0.5 + 1000) - 1000;
+    // Index of closest zone on the left
+    i = (int)floor((X[1] - startx[1]) / dx[1] - 0.5);
+    j = (int)floor((X[2] - startx[2]) / dx[2] - 0.5);
+    k = (int)floor((X[3] - startx[3]) / dx[3] - 0.5);
 
     // Distance from closest zone center on the left
     // i.e., portion of left zone to use vs right when interpolating
@@ -80,9 +78,9 @@ KOKKOS_INLINE_FUNCTION void Xtoijk_nearest(const GReal X[GR_DIM],
 {
     // Get the index of the zone this point falls into.
     // i.e., are we >= the left corner?
-    i = (int)((X[1] - startx[1]) / dx[1] + 1000) - 1000;
-    j = (int)((X[2] - startx[2]) / dx[2] + 1000) - 1000;
-    k = (int)((X[3] - startx[3]) / dx[3] + 1000) - 1000;
+    i = (int)floor((X[1] - startx[1]) / dx[1]);
+    j = (int)floor((X[2] - startx[2]) / dx[2]);
+    k = (int)floor((X[3] - startx[3]) / dx[3]);
 }
 
 // For using the ipole routines in a recognizable form on a 1D array

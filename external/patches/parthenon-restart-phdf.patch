@@ -1,0 +1,14 @@
+diff --git a/src/parthenon_manager.cpp b/src/parthenon_manager.cpp
+index 1df620c17..c9c5ab83d 100644
+--- a/src/parthenon_manager.cpp
++++ b/src/parthenon_manager.cpp
+@@ -110,7 +110,8 @@ ParthenonStatus ParthenonManager::ParthenonInitEnv(int argc, char *argv[]) {
+   // If restart, then ParameterInput in the restart file takes precedence.
+   if (arg.is_restart) {
+     // Read input from restart file
+-    if (fs::path(arg.restart_filename).extension() == ".rhdf") {
++    if (fs::path(arg.restart_filename).extension() == ".rhdf" ||
++        fs::path(arg.restart_filename).extension() == ".phdf") {
+ #ifdef ENABLE_HDF5
+       restartReader = std::make_unique<RestartReaderHDF5>(arg.restart_filename);
+ #else // HDF5 disabled

@@ -39,19 +39,18 @@ else
     echo Regrid test success
 fi
 
-# TODO(CEP) restore when solvers are back
 # Finally, test that we can sanely resize the dump, too
 # This won't output .phdf files, only restarts (.rhdf)
-#$KHARMADIR/run.sh -d . -i ./resize_orszag_tang.par >log_resize.txt 2>&1
+$KHARMADIR/run.sh -d . -i ./resize_orszag_tang.par inverter/kill_on_pflags_pct=101 >log_resize.txt 2>&1
 
 # Check the final .rhdf file for sanity (i.e., divB small)
-#check_code=0
-#pyharm-check-basics resize_restart.out1.final.rhdf || check_code=$?
-#if [[ $check_code != 0 ]]; then
-#    echo Resize test FAIL: $check_code
-#    exit_code=1
-#else
-#    echo Resize test success
-#fi
+check_code=0
+pyharm-check-basics resize_restart.out1.final.rhdf || check_code=$?
+if [[ $check_code != 0 ]]; then
+    echo Resize test FAIL: $check_code
+    exit_code=1
+else
+    echo Resize test success
+fi
 
 exit $exit_code

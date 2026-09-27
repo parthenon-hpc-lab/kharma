@@ -52,7 +52,6 @@ type = llf
 reconstruction = weno5
 
 <b_field>
-# TODO properly support resizing face_ct restart files
 solver = flux_ct
 
 <driver>
