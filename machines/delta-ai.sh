@@ -1,7 +1,13 @@
 
 # Config for NCSA DeltaAI (RH9), ACCESS GPU resource
 
-if [[ $HOST =~ gh-login[0-9]+\.delta\.ncsa\.illinois\.edu ]]
+# Define the regex pattern (using a variable is cleaner and safer)
+# 1. gh-login pattern
+# 2. | (OR)
+# 3. gh followed by 3 digits pattern
+node_pattern="gh-login[0-9]+\.delta\.ncsa\.illinois\.edu|gh[0-9]{3}\.hsn\.cm\.delta\.internal\.ncsa\.edu"
+
+if [[ $HOST =~ $node_pattern ]]
 then
   echo "Building on DeltaAI."
   HOST_ARCH=ARMV9_GRACE
