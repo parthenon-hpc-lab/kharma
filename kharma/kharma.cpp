@@ -492,16 +492,11 @@ Packages_t KHARMA::ProcessPackages(std::unique_ptr<ParameterInput>& pin)
         }
     }
 
-    // Sometimes things we otherwise want by default aren't compatible with the simple
-    // driver This lets us silently disable them if we need.
-    bool simple_driver = pin->DoesParameterExist("driver", "type") &&
-                         pin->GetString("driver", "type") == "simple";
-
     // Optional standalone packages
     // Entropy tracking (Ktot, & optionally idealized/advected Ktot_adv) is independent of
     // any package that might use it, but Electrons relies on it to get the fluid's
     // current & purely-advected entropy, so it's forced on whenever Electrons is.
-    bool entropy_on = pin->GetOrAddBoolean("entropy", "on", !simple_driver);
+    bool entropy_on = pin->GetOrAddBoolean("entropy", "on", false);
     if (pin->GetOrAddBoolean("electrons", "on", false)) {
         entropy_on = true;
         pin->SetBoolean("entropy", "on", true);

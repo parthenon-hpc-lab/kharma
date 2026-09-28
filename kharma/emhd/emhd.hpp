@@ -75,12 +75,23 @@ class EMHD_parameters
     Real kappa;
     Real eta;
 
+    // Width of the Fermi-Dirac-like rolloff used to limit tau in the "torus" closure
+    Real lambda;
+
+    // Limit dP by the ion cyclotron instability threshold as well as the
+    // mirror/firehose thresholds, and the exponent in that threshold
+    bool ion_cyclotron_limit;
+    Real ion_cyclotron_alpha;
+
     void print() const
     {
         printf("EMHD Parameters:\n");
         printf("higher order: %d feedback: %d \n", higher_order_terms, feedback);
         printf("kappa: %g eta: %g tau: %g conduction_a: %g viscosity_a: %g \n", kappa,
             eta, tau, conduction_alpha, viscosity_alpha);
+        printf("lambda: %g \n", lambda);
+        printf("ion cyclotron limit: %d alpha: %g \n", ion_cyclotron_limit,
+            ion_cyclotron_alpha);
         // TODO closuretype
     }
 };
@@ -223,7 +234,7 @@ KOKKOS_INLINE_FUNCTION void set_parameters(const GRCoordinates& G, const Real& r
         const Real cs2 = clip(
             eos.BulkModulusFromDensityInternalEnergy(rho, sie) / ef, SMALL_NUM, 0. / 0.);
 
-        constexpr Real lambda = 0.01;
+        const Real lambda = emhd_params.lambda;
 
         // Correction due to heat conduction
         {
@@ -245,11 +256,21 @@ KOKKOS_INLINE_FUNCTION void set_parameters(const GRCoordinates& G, const Real& r
                 (emhd_params.higher_order_terms)
                     ? dPtilde * sqrt(rho * emhd_params.viscosity_alpha * cs2 * Theta)
                     : dPtilde;
-            const Real dP_comp_ratio = m::max(pg - 2. / 3. * dP, SMALL_NUM) /
-                                       m::max(pg + 1. / 3. * dP, SMALL_NUM);
-            const Real dP_max = (dP > 0.)
-                                    ? m::min(0.5 * bsq * dP_comp_ratio, 1.49 * pg / 1.07)
-                                    : m::max(-bsq, -2.99 * pg / 1.07);
+            const Real p_par = m::max(pg - 2. / 3. * dP, SMALL_NUM);
+            const Real dP_comp_ratio = p_par / m::max(pg + 1. / 3. * dP, SMALL_NUM);
+            // Mirror (dP > 0) and firehose (dP < 0) instability thresholds
+            Real dP_max = (dP > 0.)
+                              ? m::min(0.5 * bsq * dP_comp_ratio, 1.49 * pg / 1.07)
+                              : m::max(-bsq, -2.99 * pg / 1.07);
+            // Ion cyclotron instability threshold,
+            // dP < 0.35 * p_par^(1-alpha) * (bsq/2)^alpha.
+            // Like the mirror instability, this only limits positive dP
+            if (emhd_params.ion_cyclotron_limit && dP > 0.) {
+                const Real dP_max_ic =
+                    0.35 * m::pow(p_par, 1. - emhd_params.ion_cyclotron_alpha) *
+                    m::pow(0.5 * bsq, emhd_params.ion_cyclotron_alpha);
+                dP_max = m::min(dP_max, dP_max_ic);
+            }
 
             const Real dP_ratio = m::abs(dP) / (m::abs(dP_max) + SMALL_NUM);
             const Real inv_exp_g = m::exp((1. - dP_ratio) / lambda);

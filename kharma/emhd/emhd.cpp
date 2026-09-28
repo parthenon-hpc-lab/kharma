@@ -94,6 +94,21 @@ std::shared_ptr<KHARMAPackage> Initialize(
     Real eta = pin->GetOrAddReal("emhd", "eta", 1.0);
     params.Add("eta", eta);
 
+    // Width of the Fermi-Dirac-like rolloff used when limiting tau by the
+    // instability thresholds in the "torus" closure. Smaller values approach
+    // a hard cutoff at the threshold.
+    Real lambda = pin->GetOrAddReal("emhd", "lambda", 0.01);
+    params.Add("lambda", lambda);
+
+    // Limit dP by the ion cyclotron instability threshold,
+    // dP < 0.35 * p_par^(1-alpha) * (bsq/2)^alpha, in addition to the
+    // mirror and firehose thresholds. Only used by the "torus" closure.
+    bool ion_cyclotron_limit =
+        pin->GetOrAddBoolean("emhd", "ion_cyclotron_limit", false);
+    params.Add("ion_cyclotron_limit", ion_cyclotron_limit);
+    Real ion_cyclotron_alpha = pin->GetOrAddReal("emhd", "ion_cyclotron_alpha", 0.45);
+    params.Add("ion_cyclotron_alpha", ion_cyclotron_alpha);
+
     EMHD_parameters emhd_params;
     emhd_params.higher_order_terms = higher_order_terms;
     emhd_params.feedback = feedback;
@@ -111,6 +126,9 @@ std::shared_ptr<KHARMAPackage> Initialize(
     emhd_params.viscosity_alpha = viscosity_alpha;
     emhd_params.kappa = kappa;
     emhd_params.eta = eta;
+    emhd_params.lambda = lambda;
+    emhd_params.ion_cyclotron_limit = ion_cyclotron_limit;
+    emhd_params.ion_cyclotron_alpha = ion_cyclotron_alpha;
     params.Add("emhd_params", emhd_params);
 
     // Slope reconstruction on faces. Always linear: default to MC unless we're using VL

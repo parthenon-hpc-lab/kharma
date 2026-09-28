@@ -162,6 +162,8 @@ if [[ -z "$CXX_NATIVE" ]]; then
 fi
 
 # Set flags, incl. correct OpenMP flag for our compiler
+# Empty default: Cray wrappers (CC) intentionally don't get one
+OMP_FLAG=""
 if [[ $CXX_NATIVE == *"icpx" ]]; then
   # Avoid icpx's astonishing DEFAULT -ffast-math
   export CXXFLAGS="-fno-fast-math $CXXFLAGS"
