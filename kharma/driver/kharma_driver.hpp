@@ -67,7 +67,7 @@ class KHARMADriver : public MultiStageDriver
 
     // Eliminate Parthenon's print statements when starting up the driver, we have a bunch
     // of our own
-    // void PreExecute() override { timer_main.reset(); }
+    void PreExecute() override;
 
     // Also override the timestep calculation, so we can start moving options etc out of
     // GRMHD package

@@ -209,6 +209,15 @@ std::shared_ptr<KHARMAPackage> Flux::Initialize(
         default_fofc = pin->GetBoolean("flux", "fofc");
     }
     bool use_fofc = pin->GetOrAddBoolean("fofc", "on", default_fofc);
+
+    // Warn and disable if we don't have B_CT, FOFC NEEDS it now
+    if (use_fofc && !packages->AllPackages().count("B_CT")) {
+        std::cerr << "WARNING: First-order flux corrections require face-centered fields!"
+                  << std::endl;
+        std::cerr << "WARNING: Force-disabling FOFC!" << std::endl;
+        use_fofc = false;
+        pin->SetBoolean("fofc", "on", use_fofc);
+    }
     params.Add("use_fofc", use_fofc);
 
     if (use_fofc) {

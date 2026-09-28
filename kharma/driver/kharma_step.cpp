@@ -74,6 +74,7 @@ TaskCollection KHARMADriver::MakeTaskCollection(BlockList_t& blocks, int stage)
     // safe. "c" is the integrator's time offset per stage: stage "s" takes the state at
     // c[s-1] and produces the one used as input to stage "s+1", with the last stage
     // landing on the full step.
+    // TODO(CEP) figure out moving this to PreStepWork, it needs the integrator
     auto& globals = blocks[0]->packages.Get("Globals")->AllParams();
     const Real substep_end_frac =
         (stage < integrator->nstages) ? integrator->c[stage] : 1.0;

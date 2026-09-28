@@ -387,7 +387,6 @@ TaskStatus Flux::FOFC_PCP(MeshData<Real>* md, MeshData<Real>* guess, const Real 
                 const Real B_cP[NVEC] = {P_all(bl, m_p.B1, k, j, i),
                     P_all(bl, m_p.B2, k, j, i), P_all(bl, m_p.B3, k, j, i)};
 
-                //
                 // TODO Surely we can save on this with algebra
                 FourVectors Dtmp;
                 Real T[GR_DIM];

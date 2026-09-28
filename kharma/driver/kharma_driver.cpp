@@ -39,6 +39,7 @@
 #include "flux.hpp"
 #include "get_flux.hpp"
 #include "inverter.hpp"
+#include "ismr.hpp"
 
 std::shared_ptr<KHARMAPackage> KHARMADriver::Initialize(
     ParameterInput* pin, std::shared_ptr<Packages_t>& packages)
@@ -135,6 +136,28 @@ std::shared_ptr<KHARMAPackage> KHARMADriver::Initialize(
     }
 
     return pkg;
+}
+
+void KHARMADriver::PreExecute()
+{
+    std::string check_orphans = pinput->GetOrAddString("parthenon/job", "check_orphans",
+        "initially", std::vector<std::string>{"always", "initially", "never"},
+        "Print a warning if any parameters are in the input deck but not used in the "
+        "code. "
+        "By default this check is performed for new runs, but can also be enabled for "
+        "restarts or completely disabled.");
+    // Output a text file of all parameters at this point
+    // Optionally also dump to console
+    DumpInputParameters();
+
+    if (Globals::my_rank == 0) {
+        if ((check_orphans == "always") ||
+            (!Globals::is_restart && (check_orphans == "initially"))) {
+            pinput->CheckOrphans();
+        }
+    }
+
+    timer_main.reset();
 }
 
 void KHARMADriver::AddFullSyncRegion(
@@ -349,6 +372,14 @@ TaskID KHARMADriver::AddFOFC(TaskID& t_start, TaskList& tl, MeshData<Real>* md,
     // Pull reconstruction option to simplify use. TODO shorten?
     auto pmb0 = md->GetBlockData(0)->GetBlockPointer();
     auto& pkgs = pmb0->packages.AllPackages();
+    const bool use_b_ct = pkgs.count("B_CT");
+    const bool use_ismr = pkgs.count("ISMR");
+    bool reconnect_b3 = false;
+    if (use_b_ct) {
+        reconnect_b3 = pkgs.at("Boundaries")->Param<bool>("reconnect_B3_inner_x2");
+        if (reconnect_b3 && !pkgs.at("Boundaries")->Param<bool>("reconnect_B3_outer_x2"))
+            throw std::runtime_error("Must enable reconnection for both boundaries!");
+    }
 
     const Floors::Prescription floors =
         pmb0->packages.Get("Floors")->Param<Floors::Prescription>("prescription");
@@ -395,11 +426,28 @@ TaskID KHARMADriver::AddFOFC(TaskID& t_start, TaskList& tl, MeshData<Real>* md,
         md_full_step_init, md_sub_step_init, guess_src, guess,
         std::vector<MetadataFlag>{Metadata::Independent}, true, stage);
 
+    // Reconnect then derefine, the "local" operations on U
+    auto t_reconnect = t_guess_update;
+    if (use_b_ct && reconnect_b3) {
+        t_reconnect = tl.AddTask(t_guess_update, B_CT::ReconnectB3Task, guess);
+    }
+
+    auto t_derefine = t_reconnect;
+    if (use_ismr) {
+        if (pkgs.at("ISMR")->Param<uint>("nlevels") > 0) {
+            auto t_derefine_b = t_reconnect;
+            if (use_b_ct)
+                t_derefine_b = tl.AddTask(t_reconnect, B_CT::DerefinePoles, guess);
+            t_derefine = tl.AddTask(t_derefine_b, ISMR::DerefinePoles, guess,
+                std::vector<MetadataFlag>{Metadata::WithFluxes});
+        }
+    }
+
     // END FAKE STEP: RESULT IN 'GUESS'
 
     // Recover primitive variables of the guess From faces
     auto t_guess_Bp =
-        tl.AddTask(t_guess_update, B_CT::MeshUtoP, guess, IndexDomain::entire, false);
+        tl.AddTask(t_derefine, B_CT::MeshUtoP, guess, IndexDomain::entire, false);
     auto t_guess_prims =
         tl.AddTask(t_guess_Bp, Inverter::MeshUtoP, guess, IndexDomain::entire, false);
     // Check and mark floors
@@ -432,7 +480,16 @@ TaskID KHARMADriver::AddFOFC_PCP(TaskID& t_start, TaskList& tl, MeshData<Real>* 
     std::vector<std::string> sync_vars)
 {
     Flag("AddFOFC_PCP");
-    TaskID t_none(0);
+    auto pmb0 = md->GetBlockData(0)->GetBlockPointer();
+    auto& pkgs = pmb0->packages.AllPackages();
+    const bool use_b_ct = pkgs.count("B_CT");
+    const bool use_ismr = pkgs.count("ISMR");
+    bool reconnect_b3 = false;
+    if (use_b_ct) {
+        reconnect_b3 = pkgs.at("Boundaries")->Param<bool>("reconnect_B3_inner_x2");
+        if (reconnect_b3 && !pkgs.at("Boundaries")->Param<bool>("reconnect_B3_outer_x2"))
+            throw std::runtime_error("Must enable reconnection for both boundaries!");
+    }
 
     // An ADDITIONAL fake update, but without finishing out CT. Must be over all zones for
     // stealing from neighbors FixFlux on the first-order-fied fluxes
@@ -444,7 +501,7 @@ TaskID KHARMADriver::AddFOFC_PCP(TaskID& t_start, TaskList& tl, MeshData<Real>* 
         } /*No-Op Deleter*/};
     auto& md_emf_only = pmesh->mesh_data.AddShallow("EMF", md_shr,
         std::vector<std::string>{"B_CT.emf"}); // TODO this gets weird if we partition
-    auto t_start_recv_emf = tl.AddTask(t_none,
+    auto t_start_recv_emf = tl.AddTask(t_start,
         parthenon::StartReceiveBoundBufs<parthenon::BoundaryType::any>, md_emf_only);
     auto t_emf_local = tl.AddTask(t_fix_guess | t_start_recv_emf, B_CT::CalculateEMF, md);
     auto t_emf = KHARMADriver::AddBoundarySync(t_emf_local, tl, md_emf_only);
@@ -481,6 +538,24 @@ TaskID KHARMADriver::AddFOFC_PCP(TaskID& t_start, TaskList& tl, MeshData<Real>* 
             Metadata::GetUserFlag("Explicit"), Metadata::Independent},
         true, stage);
 
+    // TODO(CEP) Probably these should just be in AddStateUpdate
+    // Reconnect then derefine, the "local" operations on U
+    auto t_reconnect = t_guess_update;
+    if (use_b_ct && reconnect_b3) {
+        t_reconnect = tl.AddTask(t_guess_update, B_CT::ReconnectB3Task, guess);
+    }
+
+    auto t_derefine = t_reconnect;
+    if (use_ismr) {
+        if (pkgs.at("ISMR")->Param<uint>("nlevels") > 0) {
+            auto t_derefine_b = t_reconnect;
+            if (use_b_ct)
+                t_derefine_b = tl.AddTask(t_reconnect, B_CT::DerefinePoles, guess);
+            t_derefine = tl.AddTask(t_derefine_b, ISMR::DerefinePoles, guess,
+                std::vector<MetadataFlag>{Metadata::WithFluxes});
+        }
+    }
+
     // Sync, now we have conserved "tilde" state in zones and neighbors
     std::shared_ptr<MeshData<Real>> guess_shr{guess, [](MeshData<Real>*)
         {
@@ -488,10 +563,10 @@ TaskID KHARMADriver::AddFOFC_PCP(TaskID& t_start, TaskList& tl, MeshData<Real>* 
     auto& guess_sync = pmesh->mesh_data.AddShallow(
         "gsync" + integrator->stage_name[stage] + std::to_string(0), guess_shr,
         sync_vars);
-    auto t_start_recv_bound = tl.AddTask(t_none,
+    auto t_start_recv_bound = tl.AddTask(t_start,
         parthenon::StartReceiveBoundBufs<parthenon::BoundaryType::any>, guess_sync);
-    auto t_guess_sync = KHARMADriver::AddBoundarySync(
-        t_guess_update | t_start_recv_bound, tl, guess_sync);
+    auto t_guess_sync =
+        KHARMADriver::AddBoundarySync(t_derefine | t_start_recv_bound, tl, guess_sync);
 
     // Get primitive "tilde" state. B_CT::UtoP averages zone faces, but we want centers
     // only so we use FluxCT By Balsara this ought to be guaranteed, since the fully
