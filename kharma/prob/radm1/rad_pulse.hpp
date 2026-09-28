@@ -41,9 +41,9 @@ TaskStatus InitializeRadiationPulse(
             Real r2 = X[1] * X[1] + X[2] * X[2] + X[3] * X[3];
             Real T_a = 1.e6;
             Real w = 5.0;
-            Real T_rad = T_a * (1.0 + 100.0 * m::exp(-r2 / (w * w)));
+            Real Trad = T_a * (1.0 + 100.0 * m::exp(-r2 / (w * w)));
             Real a_rad = 8.77e-12;
-            u_rad(k, j, i) = a_rad * m::pow(T_rad, 4);
+            u_rad(k, j, i) = a_rad * m::pow(Trad, 4);
             uvec_rad(0, k, j, i) = 0.;
             uvec_rad(1, k, j, i) = 0.;
             uvec_rad(2, k, j, i) = 0.;

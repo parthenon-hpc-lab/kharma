@@ -162,13 +162,20 @@ std::shared_ptr<KHARMAPackage> RadM1::Initialize(
     Real const_sigma = pin->GetOrAddReal("opac", "sigma_rad", 0.0);
     Real const_kappa_a = pin->GetOrAddReal("opac", "kappa_a", 0.0);
     Real const_kappa_sc = pin->GetOrAddReal("opac", "kappa_sc", 0.0);
+    
 
     // Add everything to the package parameters
     pkg->AllParams().Add("opacity_type", opacity_type);
-
+    pkg->AllParams().Add("mean_molecular_weight", pin->GetOrAddReal("radM1", "mu", 1.0));
     pkg->AllParams().Add("const_sigma", const_sigma, true);
     pkg->AllParams().Add("const_kappa_a", const_kappa_a, true);
     pkg->AllParams().Add("const_kappa_sc", const_kappa_sc, true);
+
+
+    std::string regime_str = pin->GetOrAddString("opac", "regime", "AGN");
+    RadOpac::FitType regime = RadOpac::FitType::AGN;
+    if (regime_str == "XRB") regime = RadOpac::FitType::XRB;
+    pkg->AllParams().Add("regime", regime);
 
     // TODO (PNM): Currently attached to the floors package. Make this a separate option
     // only for radiation package.
@@ -355,6 +362,8 @@ void RadM1::AddSourceImplicitly(
         rad_opac.const_sigma = params.Get<Real>("const_sigma");
         rad_opac.const_kappa_a = params.Get<Real>("const_kappa_a");
         rad_opac.const_kappa_sc = params.Get<Real>("const_kappa_sc");
+        rad_opac.mean_molecular_weight = params.Get<Real>("mean_molecular_weight");
+        rad_opac.regime = params.Get<RadOpac::FitType>("regime");
         rad_opac.units_cgs =
             pmb->packages.Get("Units")->AllParams().Get<Units::UnitConversions>(
                 "unit_conv");

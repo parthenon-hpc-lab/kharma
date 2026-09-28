@@ -145,14 +145,14 @@ enum class OpacityType : int {
 };
 #include "microphysics/opac_kharma/rad_opacities.hpp"
 
-KOKKOS_INLINE_FUNCTION Real calc_kabs(Real rho, Real T, const RadOpac& rad_opac)
+KOKKOS_INLINE_FUNCTION Real calc_kabs(Real rho, Real T, Real Trad, Real bsq, const RadOpac& rad_opac)
 {
-    return rad_opac.kappa_a(rho, T);
+    return rad_opac.kappa_a(rho, T, bsq, Trad);
 }
 
-KOKKOS_INLINE_FUNCTION Real calc_kscattering(Real rho, Real T, const RadOpac& rad_opac)
+KOKKOS_INLINE_FUNCTION Real calc_kscattering(Real rho, Real T, Real bsq, const RadOpac& rad_opac)
 {
-    return rad_opac.kappa_sc(rho, T);
+    return rad_opac.kappa_sc(rho, T, bsq);
 }
 
 // Global Lorentz Factor for Radiation

@@ -29,7 +29,7 @@ void AddBondiRadParameters(ParameterInput* pin, Packages_t& packages)
     const Real T_out_K = pin->GetOrAddReal("bondi_rad", "T_out", 1.e6);
     const Real fp = pin->GetOrAddReal("bondi_rad", "fp", 1.2e-4);
 
-    const Real mu = pin->GetOrAddReal("radM1", "mu", 1.0);
+    const Real mu = pin->GetReal("radM1", "mean_molecular_weight");
 
     const Real T_out = T_out_K * pc::kb / (mu * pc::mp * pc::c * pc::c);
 

@@ -242,7 +242,7 @@ KOKKOS_INLINE_FUNCTION StatusRadiationInversion u_to_p_rad(const GRCoordinates& 
 }
 
 KOKKOS_INLINE_FUNCTION void compute_covariant_fourforce(const GRCoordinates& G,
-    const Real P_mhd[4], const Real P_rad[4], const Real rho,
+    const Real P_mhd[4], const Real P_rad[4], const Real rho, const Real B_P[NVEC],
     const Microphysics::EOS::EOS& eos, const RadOpac& rad_opac, const int k, const int j,
     const int i, Real dS[4])
 {
@@ -279,15 +279,26 @@ KOKKOS_INLINE_FUNCTION void compute_covariant_fourforce(const GRCoordinates& G,
     }
 
     Real Tg = eos.TemperatureFromDensityInternalEnergy(rho, P_mhd[0] / rho);
-    // Real Tg = (5./3. - 1) * P_mhd[0] / rho; // TODO: This is a hack, we need to get the
-    // temperature from the EOS
-    Real kappa_a = RadM1::calc_kabs(rho, Tg, rad_opac);
-    Real kappa_sc = RadM1::calc_kscattering(rho, Tg, rad_opac);
-    Real JBB = rad_opac.JBB(Tg);
+    Real bcon[4] = {0., 0., 0., 0.};
+    Real bcov[4] = {0., 0., 0., 0.};
+    VLOOP
+        bcon[0] += B_P[v] * ucov_mhd[v + 1];
+    VLOOP
+        bcon[v + 1] = (B_P[v] + bcon[0] * ucon_mhd[v + 1]) / ucon_mhd[0];
 
-    Real kappa_tot = kappa_a + kappa_sc;
+    G.lower(bcon, bcov, k, j, i, Loci::center);
+    Real bsq = dot(bcov, bcon);
+    Real Trad = rad_opac.Trad(E_hat, rho, bsq);
 
-    Real coupling_term = kappa_a * (JBB - E_hat);
+    Real kappa_abs_rad  = RadM1::calc_kabs(rho, Tg, Trad, bsq, rad_opac);  // phi uses Trad
+    Real kappa_emit_gas = RadM1::calc_kabs(rho, Tg, Tg,   bsq, rad_opac);  // phi uses Tg (Kirchhoff)
+    Real kappa_sc = RadM1::calc_kscattering(rho, Tg, bsq, rad_opac);
+    Real JBB_val = rad_opac.JBB(Tg, rho, bsq);
+
+
+    Real kappa_tot = kappa_abs_rad + kappa_sc;
+
+    Real coupling_term = kappa_emit_gas * JBB_val - kappa_abs_rad * E_hat;
     dS[0] = coupling_term * ucov_mhd[0] - kappa_tot * F_hat_cov[0];
     dS[1] = coupling_term * ucov_mhd[1] - kappa_tot * F_hat_cov[1];
     dS[2] = coupling_term * ucov_mhd[2] - kappa_tot * F_hat_cov[2];
@@ -320,7 +331,7 @@ KOKKOS_INLINE_FUNCTION Real calculate_energy_residual(const GRCoordinates& G,
 
     Real P_mhd_trial[4] = {u_trial, uvec_frozen[0], uvec_frozen[1], uvec_frozen[2]};
     compute_covariant_fourforce(
-        G, P_mhd_trial, P_rad_trial_out, rho_new, eos, rad_opac, k, j, i, dS_trial_out);
+        G, P_mhd_trial, P_rad_trial_out, rho_new, B_P, eos, rad_opac, k, j, i, dS_trial_out);
     for (int n = 0; n < 4; n++) dS_trial_out[n] = gdet * dS_trial_out[n];
 
     Real resid = (U_mhd_trial_out[0] - U_mhd_0[0]) + dt * dS_trial_out[0];
@@ -556,7 +567,7 @@ KOKKOS_INLINE_FUNCTION int solve_4d_pmhd(const GRCoordinates& G,
     bool used_normal_guess = true;
     u_to_p_rad(G, U_rad_guess, P_rad_guess, k, j, i, &used_normal_guess);
     compute_covariant_fourforce(
-        G, P_mhd_guess, P_rad_guess, rho_init, eos, rad_opac, k, j, i, dS_guess);
+        G, P_mhd_guess, P_rad_guess, rho_init, B_P, eos, rad_opac, k, j, i, dS_guess);
 
     for (int n = 0; n < 4; n++) dS_guess[n] = gdet * dS_guess[n];
 
@@ -654,7 +665,7 @@ KOKKOS_INLINE_FUNCTION int solve_4d_pmhd(const GRCoordinates& G,
             // go bad, trigerring a bad_guess_m == true && bad_guess_p == true
             if (!bad_guess_m && !bad_guess_p) {
                 compute_covariant_fourforce(
-                    G, P_mhd_m, P_rad_m, rho_m, eos, rad_opac, k, j, i, dS_m);
+                    G, P_mhd_m, P_rad_m, rho_m, B_P, eos, rad_opac, k, j, i, dS_m);
                 for (int n = 0; n < 4; n++) dS_m[n] = gdet * dS_m[n];
             }
             // Evaluate plus perturbation
@@ -690,7 +701,7 @@ KOKKOS_INLINE_FUNCTION int solve_4d_pmhd(const GRCoordinates& G,
             // go bad, trigerring a bad_guess_m == true && bad_guess_p == true
             if (!bad_guess_m && !bad_guess_p) {
                 compute_covariant_fourforce(
-                    G, P_mhd_p, P_rad_p, rho_p, eos, rad_opac, k, j, i, dS_p);
+                    G, P_mhd_p, P_rad_p, rho_p, B_P, eos, rad_opac, k, j, i, dS_p);
                 for (int n = 0; n < 4; n++) dS_p[n] = gdet * dS_p[n];
 
                 // Populate Jacobian
@@ -741,7 +752,7 @@ KOKKOS_INLINE_FUNCTION int solve_4d_pmhd(const GRCoordinates& G,
                 bool used_normal_p;
                 auto status_p = u_to_p_rad(G, U_rad_p, P_rad_p, k, j, i, &used_normal_p);
                 compute_covariant_fourforce(
-                    G, P_mhd_p, P_rad_p, rho_p, eos, rad_opac, k, j, i, dS_p);
+                    G, P_mhd_p, P_rad_p, rho_p, B_P, eos, rad_opac, k, j, i, dS_p);
                 for (int n = 0; n < 4; n++) dS_p[n] = gdet * dS_p[n];
 
                 if (used_normal_p != used_normal_guess) {
@@ -789,7 +800,7 @@ KOKKOS_INLINE_FUNCTION int solve_4d_pmhd(const GRCoordinates& G,
                 bool used_normal_m;
                 auto status_m = u_to_p_rad(G, U_rad_m, P_rad_m, k, j, i, &used_normal_m);
                 compute_covariant_fourforce(
-                    G, P_mhd_m, P_rad_m, rho_m, eos, rad_opac, k, j, i, dS_m);
+                    G, P_mhd_m, P_rad_m, rho_m, B_P, eos, rad_opac, k, j, i, dS_m);
                 for (int n = 0; n < 4; n++) dS_m[n] = gdet * dS_m[n];
 
                 // See the mirror-image comment in the bad_guess_m branch above.
@@ -855,7 +866,7 @@ KOKKOS_INLINE_FUNCTION int solve_4d_pmhd(const GRCoordinates& G,
 
             auto status =
                 u_to_p_rad(G, U_rad_guess, P_rad_guess, k, j, i, &used_normal_guess);
-            compute_covariant_fourforce(G, P_mhd_guess, P_rad_guess, rho_iter_next, eos,
+            compute_covariant_fourforce(G, P_mhd_guess, P_rad_guess, rho_iter_next, B_P, eos,
                 rad_opac, k, j, i, dS_guess);
 
             for (int n = 0; n < 4; n++) dS_guess[n] = gdet * dS_guess[n];
@@ -986,7 +997,7 @@ KOKKOS_INLINE_FUNCTION int solve_4d_prad(const GRCoordinates& G,
     bool used_normal_guess = true;
     u_to_p_rad(G, U_rad_guess, P_rad_guess, k, j, i, &used_normal_guess);
     compute_covariant_fourforce(
-        G, P_mhd_guess, P_rad_guess, rho_init, eos, rad_opac, k, j, i, dS_guess);
+        G, P_mhd_guess, P_rad_guess, rho_init, B_P, eos, rad_opac, k, j, i, dS_guess);
 
     for (int n = 0; n < 4; n++) dS_guess[n] = gdet * dS_guess[n];
 
@@ -1085,7 +1096,7 @@ KOKKOS_INLINE_FUNCTION int solve_4d_prad(const GRCoordinates& G,
             if (!bad_guess_m && !bad_guess_p) {
                 Real rho_m = P_init(m_p.RHO, k, j, i);
                 compute_covariant_fourforce(
-                    G, P_mhd_m, P_rad_m, rho_m, eos, rad_opac, k, j, i, dS_m);
+                    G, P_mhd_m, P_rad_m, rho_m, B_P, eos, rad_opac, k, j, i, dS_m);
                 for (int n = 0; n < 4; n++) dS_m[n] = gdet * dS_m[n];
             }
 
@@ -1121,7 +1132,7 @@ KOKKOS_INLINE_FUNCTION int solve_4d_prad(const GRCoordinates& G,
             if (!bad_guess_m && !bad_guess_p) {
                 Real rho_p = P_init(m_p.RHO, k, j, i);
                 compute_covariant_fourforce(
-                    G, P_mhd_p, P_rad_p, rho_p, eos, rad_opac, k, j, i, dS_p);
+                    G, P_mhd_p, P_rad_p, rho_p, B_P, eos, rad_opac, k, j, i, dS_p);
                 for (int n = 0; n < 4; n++) dS_p[n] = gdet * dS_p[n];
 
                 // Populate Jacobian
@@ -1170,9 +1181,14 @@ KOKKOS_INLINE_FUNCTION int solve_4d_prad(const GRCoordinates& G,
                 P_mhd_p[3] = P_init(m_p.U3, k, j, i);
 
                 Real rho_p = P_init(m_p.RHO, k, j, i);
-
+                Real B_P[NVEC] = {0.};
+                if (m_p.B1 >= 0) {
+                    B_P[V1] = P_init(m_p.B1, k, j, i);
+                    B_P[V2] = P_init(m_p.B2, k, j, i);
+                    B_P[V3] = P_init(m_p.B3, k, j, i);
+                }
                 compute_covariant_fourforce(
-                    G, P_mhd_p, P_rad_p, rho_p, eos, rad_opac, k, j, i, dS_p);
+                    G, P_mhd_p, P_rad_p, rho_p, B_P, eos, rad_opac, k, j, i, dS_p);
                 for (int n = 0; n < 4; n++) dS_p[n] = gdet * dS_p[n];
 
                 PARTHENON_REQUIRE(
@@ -1216,9 +1232,15 @@ KOKKOS_INLINE_FUNCTION int solve_4d_prad(const GRCoordinates& G,
                 P_mhd_m[2] = P_init(m_p.U2, k, j, i);
                 P_mhd_m[3] = P_init(m_p.U3, k, j, i);
                 Real rho_m = P_init(m_p.RHO, k, j, i);
+                Real B_P[NVEC] = {0.};
+                if (m_p.B1 >= 0) {
+                    B_P[V1] = P_init(m_p.B1, k, j, i);
+                    B_P[V2] = P_init(m_p.B2, k, j, i);
+                    B_P[V3] = P_init(m_p.B3, k, j, i);
+                }
 
                 compute_covariant_fourforce(
-                    G, P_mhd_m, P_rad_m, rho_m, eos, rad_opac, k, j, i, dS_m);
+                    G, P_mhd_m, P_rad_m, rho_m, B_P, eos, rad_opac, k, j, i, dS_m);
                 for (int n = 0; n < 4; n++) dS_m[n] = gdet * dS_m[n];
 
                 PARTHENON_REQUIRE(
@@ -1305,7 +1327,7 @@ KOKKOS_INLINE_FUNCTION int solve_4d_prad(const GRCoordinates& G,
         rho_iter_next = P_init(m_p.RHO, k, j, i);
 
         compute_covariant_fourforce(
-            G, P_mhd_guess, P_rad_guess, rho_iter_next, eos, rad_opac, k, j, i, dS_guess);
+            G, P_mhd_guess, P_rad_guess, rho_iter_next, B_P, eos, rad_opac, k, j, i, dS_guess);
 
         for (int n = 0; n < 4; n++) dS_guess[n] = gdet * dS_guess[n];
 
