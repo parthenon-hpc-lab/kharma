@@ -333,12 +333,13 @@ KOKKOS_FORCEINLINE_FUNCTION void vchar_rad(const GRCoordinates& G, const Global&
     const int& k, const int& j, const int& i, const Loci& loc, const int& dir, Real& cmax,
     Real& cmin)
 {
-    GReal Tgas = eos.TemperatureFromDensityInternalEnergy(P(m.RHO, k, j, i), P(m.UU, k, j, i) / P(m.RHO, k, j, i));
+    GReal Tgas = eos.TemperatureFromDensityInternalEnergy(
+        P(m.RHO, k, j, i), P(m.UU, k, j, i) / P(m.RHO, k, j, i));
 
-    
     // Out of the package modification RADM1.
     const Real bsq = dot(D.bcon, D.bcov);
-    //TODO PNM: This is an approximation, we should be using Tgas and T_rad. I guess it's fine for now
+    // TODO PNM: This is an approximation, we should be using Tgas and T_rad. I guess it's
+    // fine for now
     GReal kappa_abs = RadM1::calc_kabs(P(m.RHO, k, j, i), Tgas, Tgas, bsq, rad_opac);
     GReal kappa_s = RadM1::calc_kscattering(P(m.RHO, k, j, i), Tgas, bsq, rad_opac);
 

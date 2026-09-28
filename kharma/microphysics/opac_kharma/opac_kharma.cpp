@@ -70,7 +70,6 @@ std::shared_ptr<KHARMAPackage> Initialize(
 
     std::string opacity_kind = pin->GetOrAddString(block_name, "opac_kind", "none");
 
-
     // Currently bremsstrahlung only, as we add more stuff, we complete here.
     std::set<std::string> known_opacity_kinds = {"none", "bremsstrahlung"};
 

@@ -136,8 +136,7 @@ KOKKOS_INLINE_FUNCTION StatusRadiationInversion u_to_p_rad(const GRCoordinates& 
 
     bool failed = (y > y_max) || (y < 0.0) || !m::isfinite(U_dot_eta) ||
                   (U_dot_eta > 0.0) || !m::isfinite(uvec_rad[1]) ||
-                  !m::isfinite(uvec_rad[2]) ||
-                  !m::isfinite(uvec_rad[3]);
+                  !m::isfinite(uvec_rad[2]) || !m::isfinite(uvec_rad[3]);
 
     bool used_normal = !failed;
     if (used_normal_out != nullptr) *used_normal_out = used_normal;
@@ -151,7 +150,7 @@ KOKKOS_INLINE_FUNCTION StatusRadiationInversion u_to_p_rad(const GRCoordinates& 
                 P_rad[2] = 0.0;
                 P_rad[3] = 0.0;
                 return StatusRadiationInversion::urad_negative;
-            } else if (y < 0.0 && y > - RAD_EPS) {
+            } else if (y < 0.0 && y > -RAD_EPS) {
                 // 0 > y > -m: zero the velocity only, leave Erf as already computed above
                 if (!m::isfinite(Erf)) Erf = 1.e-300;
                 P_rad[0] = Erf;
@@ -169,8 +168,8 @@ KOKKOS_INLINE_FUNCTION StatusRadiationInversion u_to_p_rad(const GRCoordinates& 
                 Erf = p_rad_basic * 3.0;
                 for (int mu = 1; mu < 4; ++mu)
                     uvec_rad[mu] = m::sqrt(gamma_rad_sq_basic) * Utilde_con[mu] /
-                                            (4.0 * p_rad_basic * gamma_rad_sq_basic);
-                
+                                   (4.0 * p_rad_basic * gamma_rad_sq_basic);
+
                 if (!m::isfinite(Erf)) Erf = 1.e-300;
                 if (!m::isfinite(uvec_rad[1])) uvec_rad[1] = 0.0;
                 if (!m::isfinite(uvec_rad[2])) uvec_rad[2] = 0.0;
@@ -188,18 +187,13 @@ KOKKOS_INLINE_FUNCTION StatusRadiationInversion u_to_p_rad(const GRCoordinates& 
             for (int mu = 1; mu < 4; ++mu)
                 uvec_rad[mu] = GAMMAMAX * Utilde_con[mu] / Uabs;
 
-            Real qsq = G.gcov(Loci::center, j, i, 1, 1) * uvec_rad[1] *
-                        uvec_rad[1] +
-                    G.gcov(Loci::center, j, i, 2, 2) * uvec_rad[2] *
-                        uvec_rad[2] +
-                    G.gcov(Loci::center, j, i, 3, 3) * uvec_rad[3] *
-                        uvec_rad[3] +
-                    2.0 * G.gcov(Loci::center, j, i, 1, 2) * uvec_rad[1] *
-                        uvec_rad[2] +
-                    2.0 * G.gcov(Loci::center, j, i, 1, 3) * uvec_rad[1] *
-                        uvec_rad[3] +
-                    2.0 * G.gcov(Loci::center, j, i, 2, 3) * uvec_rad[2] *
-                        uvec_rad[3];
+            Real qsq =
+                G.gcov(Loci::center, j, i, 1, 1) * uvec_rad[1] * uvec_rad[1] +
+                G.gcov(Loci::center, j, i, 2, 2) * uvec_rad[2] * uvec_rad[2] +
+                G.gcov(Loci::center, j, i, 3, 3) * uvec_rad[3] * uvec_rad[3] +
+                2.0 * G.gcov(Loci::center, j, i, 1, 2) * uvec_rad[1] * uvec_rad[2] +
+                2.0 * G.gcov(Loci::center, j, i, 1, 3) * uvec_rad[1] * uvec_rad[3] +
+                2.0 * G.gcov(Loci::center, j, i, 2, 3) * uvec_rad[2] * uvec_rad[3];
             if (qsq < 0.0 || m::abs(qsq) < 1.e-10) qsq = 1.e-10;
             Real gamma_rad_sq_fb = 1.0 + qsq;
 
@@ -215,7 +209,7 @@ KOKKOS_INLINE_FUNCTION StatusRadiationInversion u_to_p_rad(const GRCoordinates& 
             Erf = p_rad_tp2 * 3.0;
             for (int mu = 1; mu < 4; ++mu)
                 uvec_rad[mu] = m::sqrt(gamma_rad_sq_tp2) * Utilde_con[mu] /
-                                        (4.0 * p_rad_tp2 * gamma_rad_sq_tp2);
+                               (4.0 * p_rad_tp2 * gamma_rad_sq_tp2);
             if (!m::isfinite(Erf)) Erf = 1.e-300;
             if (!m::isfinite(uvec_rad[1])) uvec_rad[1] = 0.0;
             if (!m::isfinite(uvec_rad[2])) uvec_rad[2] = 0.0;
@@ -290,11 +284,11 @@ KOKKOS_INLINE_FUNCTION void compute_covariant_fourforce(const GRCoordinates& G,
     Real bsq = dot(bcov, bcon);
     Real Trad = rad_opac.Trad(E_hat, rho, bsq);
 
-    Real kappa_abs_rad  = RadM1::calc_kabs(rho, Tg, Trad, bsq, rad_opac);  // phi uses Trad
-    Real kappa_emit_gas = RadM1::calc_kabs(rho, Tg, Tg,   bsq, rad_opac);  // phi uses Tg (Kirchhoff)
+    Real kappa_abs_rad = RadM1::calc_kabs(rho, Tg, Trad, bsq, rad_opac); // phi uses Trad
+    Real kappa_emit_gas =
+        RadM1::calc_kabs(rho, Tg, Tg, bsq, rad_opac); // phi uses Tg (Kirchhoff)
     Real kappa_sc = RadM1::calc_kscattering(rho, Tg, bsq, rad_opac);
     Real JBB_val = rad_opac.JBB(Tg, rho, bsq);
-
 
     Real kappa_tot = kappa_abs_rad + kappa_sc;
 
@@ -330,8 +324,8 @@ KOKKOS_INLINE_FUNCTION Real calculate_energy_residual(const GRCoordinates& G,
     rad_recovery_ok = (status == StatusRadiationInversion::success);
 
     Real P_mhd_trial[4] = {u_trial, uvec_frozen[0], uvec_frozen[1], uvec_frozen[2]};
-    compute_covariant_fourforce(
-        G, P_mhd_trial, P_rad_trial_out, rho_new, B_P, eos, rad_opac, k, j, i, dS_trial_out);
+    compute_covariant_fourforce(G, P_mhd_trial, P_rad_trial_out, rho_new, B_P, eos,
+        rad_opac, k, j, i, dS_trial_out);
     for (int n = 0; n < 4; n++) dS_trial_out[n] = gdet * dS_trial_out[n];
 
     Real resid = (U_mhd_trial_out[0] - U_mhd_0[0]) + dt * dS_trial_out[0];
@@ -827,7 +821,8 @@ KOKKOS_INLINE_FUNCTION int solve_4d_pmhd(const GRCoordinates& G,
 
         // Update guess via a damped Newton step, e.g, we take the full step, and if
         // it violates any of the checks below, shrink the step and retry.
-        // Currently we just shrink it by 3 with a max of 15 iterations or if scailing_factor < 1.e-5;
+        // Currently we just shrink it by 3 with a max of 15 iterations or if
+        // scailing_factor < 1.e-5;
         Real P_mhd_pre[4] = {
             P_mhd_guess[0], P_mhd_guess[1], P_mhd_guess[2], P_mhd_guess[3]};
         Real scaling_factor = 1.0;
@@ -866,8 +861,8 @@ KOKKOS_INLINE_FUNCTION int solve_4d_pmhd(const GRCoordinates& G,
 
             auto status =
                 u_to_p_rad(G, U_rad_guess, P_rad_guess, k, j, i, &used_normal_guess);
-            compute_covariant_fourforce(G, P_mhd_guess, P_rad_guess, rho_iter_next, B_P, eos,
-                rad_opac, k, j, i, dS_guess);
+            compute_covariant_fourforce(G, P_mhd_guess, P_rad_guess, rho_iter_next, B_P,
+                eos, rad_opac, k, j, i, dS_guess);
 
             for (int n = 0; n < 4; n++) dS_guess[n] = gdet * dS_guess[n];
 
@@ -1326,8 +1321,8 @@ KOKKOS_INLINE_FUNCTION int solve_4d_prad(const GRCoordinates& G,
         P_mhd_guess[3] = P_init(m_p.U3, k, j, i);
         rho_iter_next = P_init(m_p.RHO, k, j, i);
 
-        compute_covariant_fourforce(
-            G, P_mhd_guess, P_rad_guess, rho_iter_next, B_P, eos, rad_opac, k, j, i, dS_guess);
+        compute_covariant_fourforce(G, P_mhd_guess, P_rad_guess, rho_iter_next, B_P, eos,
+            rad_opac, k, j, i, dS_guess);
 
         for (int n = 0; n < 4; n++) dS_guess[n] = gdet * dS_guess[n];
 

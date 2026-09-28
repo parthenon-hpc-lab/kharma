@@ -162,7 +162,6 @@ std::shared_ptr<KHARMAPackage> RadM1::Initialize(
     Real const_sigma = pin->GetOrAddReal("opac", "sigma_rad", 0.0);
     Real const_kappa_a = pin->GetOrAddReal("opac", "kappa_a", 0.0);
     Real const_kappa_sc = pin->GetOrAddReal("opac", "kappa_sc", 0.0);
-    
 
     // Add everything to the package parameters
     pkg->AllParams().Add("opacity_type", opacity_type);
@@ -170,7 +169,6 @@ std::shared_ptr<KHARMAPackage> RadM1::Initialize(
     pkg->AllParams().Add("const_sigma", const_sigma, true);
     pkg->AllParams().Add("const_kappa_a", const_kappa_a, true);
     pkg->AllParams().Add("const_kappa_sc", const_kappa_sc, true);
-
 
     std::string regime_str = pin->GetOrAddString("opac", "regime", "AGN");
     RadOpac::FitType regime = RadOpac::FitType::AGN;
@@ -225,7 +223,8 @@ void RadM1::ApplyRadM1Floors(MeshBlockData<Real>* rc, IndexDomain domain)
             // GReal Xembed_fix[GR_DIM];
             // G.coord_embed(k, j, i, Loci::center, Xembed_fix);
             // const GReal r_hor_fix = G.coords.get_horizon();
-            // const bool inside_horizon = (r_hor_fix > 0.0) && (Xembed_fix[1] < r_hor_fix);
+            // const bool inside_horizon = (r_hor_fix > 0.0) && (Xembed_fix[1] <
+            // r_hor_fix);
             const bool inside_horizon = false;
 
             if (P(m_p.UU_RAD, k, j, i) < erad_floor || inside_horizon) {
@@ -341,7 +340,6 @@ TaskStatus RadM1::BlockUtoP(MeshBlockData<Real>* rc, IndexDomain domain, bool co
     return TaskStatus::complete;
 }
 
-
 void RadM1::AddSourceImplicitly(
     MeshData<Real>* md_sub_init, MeshData<Real>* md_flux_src, IndexDomain domain)
 {
@@ -414,8 +412,8 @@ void RadM1::AddSourceImplicitly(
                 // // have a horizon, and infact, we have negative values so we don't want
                 // // this check.
                 // if (r_hor > 0.0 && r < r_hor) {
-                //     rimplflag(0, k, j, i) = static_cast<int>(StatusImplicitStep::success);
-                //     return;
+                //     rimplflag(0, k, j, i) =
+                //     static_cast<int>(StatusImplicitStep::success); return;
                 // }
 
                 const Real U_entry[8] = {U_init_substep(m_u.UU, k, j, i),
@@ -435,7 +433,7 @@ void RadM1::AddSourceImplicitly(
 
                 Real dS_subinit[5] = {0., 0., 0., 0., 0.};
                 int rflagl;
-                
+
                 rflagl = solve_4d_pmhd(G, P_init_substep, m_p, m_u, k, j, i, dt, eos,
                     src_rootfind_eps, src_rootfind_tol, src_rootfind_maxiter, rad_opac,
                     pflag, rinvflag, U_entry, dS_subinit);
