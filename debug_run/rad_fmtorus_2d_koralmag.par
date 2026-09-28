@@ -24,7 +24,7 @@ hslope = 0.3
 correct_connections = true
 
 <parthenon/time>
-tlim = 3000.0
+tlim = 215.0
 nlim = -1
 
 <torus>
@@ -68,6 +68,10 @@ outer_x2 = reflecting
 # Minimal floors, applied in the default Normal Observer frame
 rho_min_geom = 1e-6
 u_min_geom   = 1e-8
+bsq_over_rho_max = 100
+bsq_over_u_max   = 1000
+u_over_rho_max   = 100
+gamma_max        = 20
 
 <fofc>
 on = false
@@ -83,7 +87,7 @@ src_rootfind_eps = 1e-8
 src_rootfind_tol = 1e-8
 #Max number of iterations the solver can take.
 src_rootfind_maxiter = 10
-u_rad_floor = 1e-50
+u_rad_floor = 1e-300
 
 <units>
 on = true
@@ -105,7 +109,7 @@ flag_verbose = 2
 
 <parthenon/output0>
 file_type = hdf5
-dt = 1.0
+dt = 0.0
 single_precision_output = true
 variables = prims, divB, jcon, fflag, pflag, rimplflag, rinvflag, fofcflag
 

@@ -574,6 +574,11 @@ KOKKOS_INLINE_FUNCTION int solve_4d_pmhd(const GRCoordinates& G,
 
     Real rho_iter = rho_init;
 
+    // Don't let it change too much, it usually leads to catastrophic results.
+    const Real ug0_entry = P_mhd_guess[0];
+    const Real ugas_max_entry = ug0_entry * 10.0;
+    const Real ugas_min_entry = ug0_entry / 10.0;
+
     do {
         if (err <= src_rootfind_tol) {
             break;
@@ -809,12 +814,6 @@ KOKKOS_INLINE_FUNCTION int solve_4d_pmhd(const GRCoordinates& G,
         // Inverting the 4x4 matrix;
         invert(&jac[0][0], &jacinv[0][0]);
 
-        // We already broke from here if the guess was bad.
-        Real ug0 = P_mhd_guess[0];
-
-        const Real ugas_max = ug0 * 10.0;
-        const Real ugas_min = ug0 / 10.0;
-
         // Update guess via a damped Newton step, e.g, we take the full step, and if
         // it violates any of the checks below, shrink the step and retry.
         // Currently we just shrink it by 3 with a max of 15 iterations or if scailing_factor < 1.e-5;
@@ -832,7 +831,7 @@ KOKKOS_INLINE_FUNCTION int solve_4d_pmhd(const GRCoordinates& G,
                 }
             }
 
-            if (!(P_mhd_guess[0] > ugas_min && P_mhd_guess[0] < ugas_max)) {
+            if (!(P_mhd_guess[0] > ugas_min_entry && P_mhd_guess[0] < ugas_max_entry)) {
                 scaling_factor /= 3.0; // Koral fixed 3.0 factor.
                 track++;
                 if (scaling_factor < 1.e-5 || track > 15) break;
@@ -869,7 +868,7 @@ KOKKOS_INLINE_FUNCTION int solve_4d_pmhd(const GRCoordinates& G,
             }
 
             const Real Tgas_old =
-                eos.TemperatureFromDensityInternalEnergy(rho_iter, ug0 / rho_iter);
+                eos.TemperatureFromDensityInternalEnergy(rho_iter, ug0_entry / rho_iter);
             const Real Tgas_new = eos.TemperatureFromDensityInternalEnergy(
                 rho_iter_next, P_mhd_guess[0] / rho_iter_next);
             if (Tgas_new > Tgas_old * 10.0 || Tgas_new < Tgas_old / 10.0) {
@@ -1004,6 +1003,14 @@ KOKKOS_INLINE_FUNCTION int solve_4d_prad(const GRCoordinates& G,
     bool bad_guess = false;
 
     Real rho_iter = rho_init;
+
+    // bound to how much it can change ur and ug.
+    const Real ur0_entry = P_rad_guess[0];
+    const Real erad_max_entry = ur0_entry * 10.0;
+    const Real erad_min_entry = ur0_entry / 10.0;
+    const Real ug0_entry = P_mhd_guess[0];
+    const Real ugas_max_entry = ug0_entry * 10.0;
+    const Real ugas_min_entry = ug0_entry / 10.0;
 
     do {
         if (err <= src_rootfind_tol) {
@@ -1230,12 +1237,6 @@ KOKKOS_INLINE_FUNCTION int solve_4d_prad(const GRCoordinates& G,
         // Inverting the 4x4 matrix;
         invert(&jac[0][0], &jacinv[0][0]);
 
-        // We already broke from here if the guess was bad.
-        Real ur0 = P_rad_guess[0];
-
-        const Real erad_max = ur0 * 10.0;
-        const Real erad_min = ur0 / 10.0;
-
         // Update guess via a damped/backtracking Newton step: take the full step, and if
         // it violates either check below, shrink the step (Koral's fixed factor of 3)
         // and retry, up to 15 shrinks.
@@ -1252,7 +1253,7 @@ KOKKOS_INLINE_FUNCTION int solve_4d_prad(const GRCoordinates& G,
                 }
             }
 
-            if (!(P_rad_guess[0] > erad_min && P_rad_guess[0] < erad_max)) {
+            if (!(P_rad_guess[0] > erad_min_entry && P_rad_guess[0] < erad_max_entry)) {
                 scaling_factor /= 3.0; // Koral fixed 3.0 factor.
                 track++;
                 if (scaling_factor < 1.e-5 || track > 15) break;
@@ -1275,6 +1276,14 @@ KOKKOS_INLINE_FUNCTION int solve_4d_prad(const GRCoordinates& G,
                 G, U_init, m_u, eos, k, j, i, P_init, m_p, Loci::center, 25, 1e-12);
 
             if (mhd_inverter_status != static_cast<int>(Inverter::Status::success)) {
+                scaling_factor /= 3.0;
+                track++;
+                if (track > 15 || scaling_factor < 1.e-5) break;
+                continue;
+            }
+
+            if (!(P_init(m_p.UU, k, j, i) > ugas_min_entry &&
+                    P_init(m_p.UU, k, j, i) < ugas_max_entry)) {
                 scaling_factor /= 3.0;
                 track++;
                 if (track > 15 || scaling_factor < 1.e-5) break;
