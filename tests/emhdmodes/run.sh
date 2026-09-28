@@ -13,7 +13,7 @@ conv_2d() {
     do
       # Four blocks
       half=$(( $res / 2 ))
-      $BASE/run.sh -i $BASE/pars/emhd/emhdmodes.par debug/verbose=1 debug/flag_verbose=2 \
+      $BASE/run.sh -d . -i $BASE/pars/emhd/emhdmodes.par debug/verbose=1 debug/flag_verbose=2 \
                       parthenon/mesh/nx1=$res parthenon/mesh/nx2=$res parthenon/mesh/nx3=1 \
                       parthenon/meshblock/nx1=$half parthenon/meshblock/nx2=$half parthenon/meshblock/nx3=1 \
                       $2 >log_${1}_${res}.txt 2>&1
@@ -43,5 +43,7 @@ conv_2d emhd2d_higher_order emhd/higher_order_terms=true "EMHD mode in 2D, highe
 conv_2d emhd2d_face_ct b_field/solver=face_ct "EMHD mode in 2D w/Face CT"
 # Test if it works with ideal solution as guess
 conv_2d emhd2d_ideal_guess emhd/ideal_guess=true "EMHD mode in 2D, Ideal guess"
+# Test with old LU solver
+conv_2d emhd2d_lu_decomp implicit/use_qr=false "EMHD mode in 2D, LU Decomposition"
 
 exit $exit_code

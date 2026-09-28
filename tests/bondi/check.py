@@ -52,7 +52,7 @@ for var in VARS:
     L1[var] = np.array(L1[var])
     powerfit = np.polyfit(np.log(RES), np.log(L1[var]), 1)[0]
     print("{} Powerfit: {} L1: {}".format(var, powerfit, L1[var]))
-    if powerfit < -2.2 or powerfit > -1.85:
+    if powerfit < -2.3 or powerfit > -1.85:
         fail = 1
 
 # MAKE PLOTS

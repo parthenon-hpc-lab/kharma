@@ -1,6 +1,6 @@
 # Viscous Bondi flow problem
 
-<parthenon/job> 
+<parthenon/job>
 problem_id = bondi
 
 <parthenon/mesh>
@@ -79,6 +79,7 @@ extra_checks = 1
 
 <parthenon/output0>
 file_type               = hdf5
+write_xdmf              = false
 dt                      = 10.0
 single_precision_output = false
 ghost_zones             = false

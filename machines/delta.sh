@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 
 # Config for NCSA Delta (RH9), ACCESS GPU resource
 # Uses Cray Programming Environment (CrayPE) + cray-mpich (no OpenMPI anymore!!)
@@ -10,6 +11,9 @@
 # What's new: https://docs.ncsa.illinois.edu/systems/delta/en/rh9/whats_new.html
 
 # HDF5: prefer KHARMA's vendored build:  ./make.sh clean cuda hdf5
+=======
+# Config for NCSA Delta, ACCESS GPU resource
+>>>>>>> dev
 
 if [[ ( $HOST == *".delta.internal.ncsa.edu" || $HOST == *".delta.ncsa.illinois.edu" ) 
 && ! $HOST =~ gh-login[0-9]+\.delta\.ncsa\.illinois\.edu && ! $HOST =~ gh[0-9]{3}\.hsn\.cm\.delta\.internal\.ncsa\.edu ]]
@@ -19,9 +23,17 @@ then
   MPI_EXE=srun
   NPROC=64
 
-  module purge
-  module load cmake
+  # Generally we want the Cray comipiler/environment,
+  # for better device-side MPI support
+  if [[ $ARGS == *"cray"* ]]; then
+    module swap PrgEnv-gnu PrgEnv-cray
+  fi
 
+  module load cmake
+  module load cray-hdf5-parallel
+  module list
+
+<<<<<<< HEAD
   # `cuda` argument still means to build with GPU support.
   if [[ $ARGS == *"cuda"* ]]
   then
@@ -34,10 +46,18 @@ then
     export MPICH_GPU_SUPPORT_ENABLED=1
     export MPICH_GPU_MANAGED_MEMORY_SUPPORT_ENABLED=1
 
+=======
+  export C_NATIVE=cc
+  export CXX_NATIVE=CC
+
+  if [[ $ARGS == *"cuda"* ]]; then
+    # GPU Compile
+>>>>>>> dev
     if [[ "$ARGS" == *"hostside"* ]]; then
       # Device-side buffers are broken on some Nvidia machines
       EXTRA_FLAGS="-DPARTHENON_ENABLE_HOST_COMM_BUFFERS=ON $EXTRA_FLAGS"
     fi
+<<<<<<< HEAD
 
     # GNU is the only build tested as of now. 
     # ToDo: Test nvidia HPC SDK and Cray builds.
@@ -76,5 +96,11 @@ then
   else
     echo "Error: No valid build type specified. Use 'cuda' for GPU build or 'cpu' for CPU-only build."
     exit 1
+=======
+  else
+    # CPU Compile (TODO test)
+    #module load modtree/cpu gcc
+    MPI_NUM_PROCS=1
+>>>>>>> dev
   fi
 fi

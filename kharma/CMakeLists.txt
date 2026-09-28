@@ -29,6 +29,7 @@ AUX_SOURCE_DIRECTORY(${CMAKE_CURRENT_SOURCE_DIR}/current EXE_NAME_SRC)
 AUX_SOURCE_DIRECTORY(${CMAKE_CURRENT_SOURCE_DIR}/driver EXE_NAME_SRC)
 AUX_SOURCE_DIRECTORY(${CMAKE_CURRENT_SOURCE_DIR}/electrons EXE_NAME_SRC)
 AUX_SOURCE_DIRECTORY(${CMAKE_CURRENT_SOURCE_DIR}/emhd EXE_NAME_SRC)
+AUX_SOURCE_DIRECTORY(${CMAKE_CURRENT_SOURCE_DIR}/entropy EXE_NAME_SRC)
 AUX_SOURCE_DIRECTORY(${CMAKE_CURRENT_SOURCE_DIR}/floors EXE_NAME_SRC)
 AUX_SOURCE_DIRECTORY(${CMAKE_CURRENT_SOURCE_DIR}/grmhd EXE_NAME_SRC)
 AUX_SOURCE_DIRECTORY(${CMAKE_CURRENT_SOURCE_DIR}/implicit EXE_NAME_SRC)
@@ -36,7 +37,18 @@ AUX_SOURCE_DIRECTORY(${CMAKE_CURRENT_SOURCE_DIR}/inverter EXE_NAME_SRC)
 AUX_SOURCE_DIRECTORY(${CMAKE_CURRENT_SOURCE_DIR}/ismr EXE_NAME_SRC)
 AUX_SOURCE_DIRECTORY(${CMAKE_CURRENT_SOURCE_DIR}/reductions EXE_NAME_SRC)
 AUX_SOURCE_DIRECTORY(${CMAKE_CURRENT_SOURCE_DIR}/emhd EXE_NAME_SRC)
+# Out of the package modification units.
+AUX_SOURCE_DIRECTORY(${CMAKE_CURRENT_SOURCE_DIR}/units EXE_NAME_SRC)
+# Out of the package modification RADM1.
+AUX_SOURCE_DIRECTORY(${CMAKE_CURRENT_SOURCE_DIR}/radM1 EXE_NAME_SRC)
+# Out of the package modification RADM1.
+AUX_SOURCE_DIRECTORY(${CMAKE_CURRENT_SOURCE_DIR}/prob/radm1 EXE_NAME_SRC)
 AUX_SOURCE_DIRECTORY(${CMAKE_CURRENT_SOURCE_DIR}/wind EXE_NAME_SRC)
+
+AUX_SOURCE_DIRECTORY(${CMAKE_CURRENT_SOURCE_DIR}/geometry EXE_NAME_SRC)
+AUX_SOURCE_DIRECTORY(${CMAKE_CURRENT_SOURCE_DIR}/microphysics/eos_kharma EXE_NAME_SRC)
+AUX_SOURCE_DIRECTORY(${CMAKE_CURRENT_SOURCE_DIR}/microphysics/opac_kharma EXE_NAME_SRC)
+AUX_SOURCE_DIRECTORY(${CMAKE_CURRENT_SOURCE_DIR}/phoebus_utils EXE_NAME_SRC)
 
 include_directories(${CMAKE_CURRENT_SOURCE_DIR})
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/prob)
@@ -56,6 +68,7 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR}/current)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/driver)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/electrons)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/emhd)
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/entropy)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/floors)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/grmhd)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/implicit)
@@ -63,7 +76,14 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR}/inverter)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/ismr)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/reductions)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/emhd)
+# Out of the package modification units.
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/units)
+# Out of the package modification RADM1.
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/radM1)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/wind)
+
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/microphysics/eos_kharma)
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/microphysics/opac_kharma)
 
 # generate version.cpp file from current git commit in a way that
 # 1. Re-generates if hash changes
@@ -160,3 +180,15 @@ if (Kokkos_ENABLE_HWLOC)
     target_compile_definitions(${EXE_NAME} PUBLIC Kokkos_ENABLE_HWLOC)
     target_link_libraries(${EXE_NAME} PUBLIC hwloc)
 endif()
+
+target_link_libraries(${EXE_NAME} 
+PUBLIC
+    singularity-eos::singularity-eos
+    singularity-opac::flags    
+)
+
+# Installation
+# Install binary
+install(TARGETS ${EXE_NAME} TYPE RUNTIME)
+
+# TODO could do headers, library, tests, or parameter files in share/docs...

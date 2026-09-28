@@ -146,6 +146,8 @@ if [[ ($HOSTNAME == "cn"* || $HOSTNAME == "darwin"*) &&
   fi
   MPI_NUM_PROCS=${MPI_NUM_PROCS:-$MPI_NUM_PROCS_D}
 
+  module list
+
   # Runtime
   #MPI_EXE="mpirun"
   # Lead MPI to water

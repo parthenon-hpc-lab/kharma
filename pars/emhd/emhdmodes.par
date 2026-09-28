@@ -91,6 +91,7 @@ viscosity_alpha  = 1.0
 
 <parthenon/output0>
 file_type = hdf5
+write_xdmf = false
 # Output only final state
 dt = 0.2
 # Output in double due to low amplitude

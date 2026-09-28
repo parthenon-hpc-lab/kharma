@@ -13,7 +13,7 @@ noh_test() {
     for res in 64 128 256 512 1024
     do
         eighth=$(($res / 8))
-        $KHARMADIR/run.sh -i $KHARMADIR/pars/electrons/noh.par debug/verbose=1 parthenon/output0/dt=1000 \
+        $KHARMADIR/run.sh -d . -i $KHARMADIR/pars/electrons/noh.par debug/verbose=1 parthenon/output0/dt=1000 \
                             electrons/gamma_e=1.666667 \
                             parthenon/mesh/nx1=$res parthenon/meshblock/nx1=$eighth \
                             >log_noh_${res}.txt 2>&1
@@ -21,7 +21,7 @@ noh_test() {
         cp noh.out0.final.phdf noh.out0.final.res$res.phdf
     done
     check_code=0
-    python check.py . . $ALL_RES 1.666667 || check_code=$?
+    python3 check.py . . $ALL_RES 1.666667 || check_code=$?
     if [[ $check_code != 0 ]]; then
         echo Noh shock test FAIL: $check_code
         exit_code=1

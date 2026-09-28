@@ -1,0 +1,101 @@
+# GRMHD Modes problem
+# Try to propagate several analytically-amenable linear modes
+# of the MHD equations
+# Heavily commented as a likely first problem for new users
+
+<parthenon/job>
+problem_id = radmhdmodes
+
+<mhdmodes>
+# can be sonic, slow or fast.
+wavetype = slow
+# can be puremhd, thin or thick.
+regime = thick
+
+
+# Size and parameters of the full mesh
+<parthenon/mesh>
+nx1 = 64
+x1min = 0.0
+x1max = 1.0
+
+nx2 = 1
+x2min = 0.0
+x2max = 1.0
+
+nx3 = 1
+x3min = 0.0
+x3max = 1.0
+
+# Size of a mesh block
+# # of meshblocks must be >= the number of MPI ranks,
+# however there may be multiple blocks per rank
+<parthenon/meshblock>
+nx1 = 64
+nx2 = 1
+nx3 = 1
+
+# Set boring box coordinates. Explanations in bondi.par
+<coordinates>
+base = cartesian_minkowski
+transform = null
+
+<parthenon/time>
+# tlim will be overridden depending on the problem
+tlim = 5.0
+integrator = vl2
+# Minimum is also the starting timestep
+dt_min = 0.0001
+
+<GRMHD>
+# Courant number, where limit of 2o scheme is 1.0 regardless of dimensionality
+cfl = 0.5
+implicit = false
+
+<radM1>
+on = true
+src_rootfind_eps = 1e-8
+src_rootfind_tol = 1e-14
+src_rootfind_maxiter = 100
+kappa_a = 0.1
+kappa_sc = 0.0
+#sigma_rad here won't have any effect. it is rewritten in radmhdmodes.hpp.
+
+
+<eos>
+gamma = 1.6666667;
+Cv = 1.0;
+
+<flux>
+type = llf
+reconstruction = weno5
+
+<b_field>
+# Use cell-centered Flux-CT for B field transport
+solver = flux_ct
+implicit = false
+
+<floors>
+# Disable all floor applications in this problem
+disable_floors = true
+
+<debug>
+verbose = 2
+extra_checks = 1
+flag_verbose = 2
+
+<driver>
+type = imex
+
+<parthenon/output0>
+file_type = hdf5
+write_xdmf = false
+# This is so as to output only the final state
+dt = 0.5
+single_precision_output = false
+variables = prims, divB
+
+<parthenon/output1>
+file_type = hst
+dt = 0.1
+

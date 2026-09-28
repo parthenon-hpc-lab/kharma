@@ -1,0 +1,95 @@
+name: Regression tests (AMD)
+
+on:
+  # when triggered manually
+  workflow_dispatch:
+  # when auto merge is enabled (hack to make sure it's run before merging)
+  pull_request:
+    types: [auto_merge_enabled]
+
+env:
+  NPROC: 12
+  MPI_NUM_PROCS: 1
+  OMP_NUM_THREADS: 1
+
+jobs:
+  # Job 1: Compilation
+  build-amd:
+    runs-on: [self-hosted, kharma-gpu-amd]
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: 'recursive'
+      - name: Patch for rx7800
+        run: |
+          cd external/parthenon/external/Kokkos
+          git apply ../../../patches/kokkos-rx7800.patch
+          cd -
+      - name: Run compilation
+        run: bash -i ./make.sh clean hip
+      - uses: actions/upload-artifact@v7
+        with:
+          name: build-artifacts
+          path: |
+            kharma.hip
+            make_args
+          if-no-files-found: 'error'
+
+  # Job 2: Test Matrix
+  test-amd:
+    needs: build-amd
+    runs-on: [self-hosted, kharma-gpu-amd]
+    continue-on-error: true
+    strategy:
+      fail-fast: false
+      matrix:
+        test_name:
+        - all_pars
+        - anisotropic_conduction
+        - bondi
+        - bondi_rad
+        - bondi_viscous
+        - bz_monopole
+        - conducting_atmosphere
+        - emhdmodes
+        - hubble_flow
+        - mhdmodes
+        - mhdmodes_smr
+        - noh
+        - rad_linear_waves
+        - radshock
+        - regrid
+        - reinit
+        - resize
+        - restart
+        - tilt_init
+        - torus_sanity
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: 'recursive'
+      - uses: actions/download-artifact@v8
+        with:
+          name: build-artifacts
+      - name: install pyharm
+        run: pip install git+https://github.com/c-prather/pyharm@dev
+      - name: Run ${{ matrix.test_name }}
+        working-directory: tests/${{ matrix.test_name }}
+        run: bash -i ./run.sh
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: ${{ matrix.test_name }}-artifacts
+          path: |
+            tests/${{ matrix.test_name }}
+            !*.phdf
+            !*.rhdf
+            !*.xdmf
+            !*.h5
+
+  # Require all tests in a single status check we can mark req'd for merge
+  tests-pass-amd:
+    runs-on: ubuntu-latest
+    needs: test-amd
+    steps:
+      - run: exit 0

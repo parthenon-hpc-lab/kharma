@@ -53,8 +53,7 @@ type = kastaun
 <floors>
 rho_min_geom = 1e-6
 u_min_geom = 1e-8
-bsq_over_rho_max = 1e3
 gamma_max = 32
 
 <fofc>
-on = true
+on = false

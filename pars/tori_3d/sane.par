@@ -1,6 +1,7 @@
 # SANE ("Standard and Normal Evolution" i.e. not Magnetically Arrested).
 # Similar to "v5" library parameters w/adiabatic index 5/3,
 # and a larger disk (rin=10/rmax=20)
+# Updated for low floors and appropriate floor frame for Kastaun inverter
 
 
 <parthenon/job>
@@ -8,15 +9,15 @@ problem_id = torus
 archive_parameters = timestamp
 
 <parthenon/mesh>
-nx1 = 128
-nx2 = 64
-nx3 = 64
+nx1 = 192
+nx2 = 128
+nx3 = 128
 
 <parthenon/meshblock>
-nx1 = 128
+nx1 = 96
 nx2 = 64
-# Many boundaries options are incompatible with multiple phi blocks
-nx3 = 64
+# Many boundary options are incompatible with multiple phi blocks
+nx3 = 128
 
 <coordinates>
 base = spherical_ks
@@ -64,10 +65,11 @@ inner_x2 = reflecting
 outer_x2 = reflecting
 
 <floors>
-# Minimal floors, applied in the default Normal Observer frame
+# Minimal floors, leveraging inversion recovery.
+# Normal frame is now the only supported injection frame --
+# material added is so minimal that drag effects are negligible
 rho_min_geom = 1e-6
 u_min_geom   = 1e-8
-gamma_max    = 32
 
 <fofc>
 # FOFC is disabled by default because of tests but recommended
@@ -81,14 +83,17 @@ flag_verbose = 0
 
 <parthenon/output0>
 file_type = hdf5
+write_xdmf = false
 dt = 5.0
 single_precision_output = true
 variables = prims, divB, jcon, fflag, pflag, fofcflag
 
 <parthenon/output1>
 file_type = rst
+write_xdmf = false
 dt = 100.0
 
 <parthenon/output2>
 file_type = hst
 dt = 0.1
+variables = all_reductions

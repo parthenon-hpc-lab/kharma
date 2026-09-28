@@ -1,0 +1,47 @@
+#!/bin/bash
+# Admin stuff
+#SBATCH -J KHARMA
+#SBATCH -t 1:00:00
+#SBATCH -o "out-%j.txt"
+#SBATCH --account=bfyx-delta-gpu
+#SBATCH --partition=gpuA100x4-interactive
+#SBATCH --constraint="work"
+
+#SBATCH --gpus=1
+#SBATCH --ntasks-per-gpu=1
+#SBATCH --mem-per-gpu=60GB
+#SBATCH --cpus-per-gpu=4
+#SBATCH --gpu-bind=closest
+# WORKAROUND: 1GPU/node to avoid MPI errors
+#SBATCH --gpus-per-node=1
+
+# NCSA Delta run script
+
+export MPICH_GPU_SUPPORT_ENABLED=1
+# RDMA is enabled by default
+# Uncomment this if MPI errors crop up again -- it's very slow tho
+#export MPICH_GPU_IPC_ENABLED=0
+
+# MPI debugging
+#export MPICH_ENV_DISPLAY=1
+#export MPICH_OFI_VERBOSE=1
+#export MPICH_OFI_NIC_VERBOSE=1
+
+# Manually specify using the single NIC
+#export MPICH_OFI_NUM_NICS=1
+#export MPICH_OFI_NIC_POLICY=USER
+#export MPICH_OFI_NIC_MAPPING="0:0-3"
+
+KHARMA_DIR=${KHARMA_DIR:-"$HOME/Code/kharma-stable"}
+
+# Load any defaults/modules from the machine file
+HOST=$(hostname -f)
+ARGS=$(cat $KHARMA_DIR/make_args)
+for machine in $KHARMA_DIR/machines/*.sh
+do
+  source $machine
+done
+
+# Run the tests
+cd $KHARMA_DIR/tests
+./run_all.sh

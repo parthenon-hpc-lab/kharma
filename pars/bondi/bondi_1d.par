@@ -30,6 +30,10 @@ cfl = 0.9
 gamma = 1.666667
 reconstruction = weno5
 
+<eos>
+type = IdealGas
+Cv = 1.0
+
 <bondi>
 # Bondi problem parameters:
 # density scaling/accretion rate
@@ -44,6 +48,7 @@ disable_floors = true
 #rho_min_geom = 1e-6
 #u_min_geom = 1e-8
 #gamma_max = 10
+
 
 <boundaries>
 # We'll be adding material, and that's okay
@@ -65,6 +70,7 @@ extra_checks = 1
 
 <parthenon/output0>
 file_type = hdf5
+write_xdmf = false
 dt = 5.0
 single_precision_output = true
 # Fields not present are silently ignored

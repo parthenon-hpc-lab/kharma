@@ -1,25 +1,25 @@
 /*
  *  File: b_cleanup.hpp
- *  
+ *
  *  BSD 3-Clause License
- *  
+ *
  *  Copyright (c) 2020, AFD Group at UIUC
  *  All rights reserved.
- *  
+ *
  *  Redistribution and use in source and binary forms, with or without
  *  modification, are permitted provided that the following conditions are met:
- *  
+ *
  *  1. Redistributions of source code must retain the above copyright notice, this
  *     list of conditions and the following disclaimer.
- *  
+ *
  *  2. Redistributions in binary form must reproduce the above copyright notice,
  *     this list of conditions and the following disclaimer in the documentation
  *     and/or other materials provided with the distribution.
- *  
+ *
  *  3. Neither the name of the copyright holder nor the names of its
  *     contributors may be used to endorse or promote products derived from
  *     this software without specific prior written permission.
- *  
+ *
  *  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  *  AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  *  IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -35,25 +35,80 @@
 
 #include <memory>
 
+#include <bvals/boundary_conditions_generic.hpp>
 #include <parthenon/parthenon.hpp>
 
 #include "grmhd_functions.hpp"
 #include "types.hpp"
 
 using namespace parthenon;
+using parthenon::BoundaryFunction::BCSide;
+
+#define VARIABLE(ns, varname)                                                            \
+    struct varname : public parthenon::variable_names::base_t<false>                     \
+    {                                                                                    \
+        template<class... Ts>                                                            \
+        KOKKOS_INLINE_FUNCTION varname(Ts&&... args)                                     \
+            : parthenon::variable_names::base_t<false>(std::forward<Ts>(args)...)        \
+        {}                                                                               \
+        static std::string name() { return #ns "." #varname; }                           \
+    }
 
 /**
- * This physics package implements an elliptic solver which minimizes the divergence of
- * the magnetic field B, most useful for mesh resizing.
- * Written to leave open the possibility of using this at every 
- * 
- * Mostly now, it is used when resizing input arrays
+ * This physics package uses Parthenon's Geometric Multigrid (GMG) solver to
+ * minimize magnetic field divergence.  Only useful for resizing face-centered fields.
  */
-namespace B_Cleanup {
+namespace B_Cleanup
+{
+
+// New type-based variables: pre-declare variable names and get the VarMap() for free!
+// All of KHARMA will be switching to these eventually...
+VARIABLE(b_clean, D);
+VARIABLE(b_clean, u);
+VARIABLE(b_clean, rhs);
+VARIABLE(b_clean, exact);
+
+// Build type that selects only variables within our namespace. Internal solver
+// variables have the namespace of input variables prepended, so they will also be
+// selected by this type.
+struct any_bclean : public parthenon::variable_names::base_t<true>
+{
+    template<class... Ts>
+    KOKKOS_INLINE_FUNCTION any_bclean(Ts&&... args)
+        : base_t<true>(std::forward<Ts>(args)...)
+    {}
+    static std::string name() { return "b_clean[.].*"; }
+};
+
+// Pointwise Dirichet boundaries adapted for GMG, if we need those
+template<CoordinateDirection DIR, BCSide SIDE>
+auto GetBCDirichlet()
+{
+    return [](std::shared_ptr<MeshBlockData<Real>>& rc, bool coarse) -> void
+    {
+        using namespace parthenon;
+        using namespace parthenon::BoundaryFunction;
+        GenericBC<DIR, SIDE, BCType::FixedFace, any_bclean>(rc, coarse, 0.0);
+    };
+}
+
+// Reflecting boundaries
+template<CoordinateDirection DIR, BCSide SIDE>
+auto GetBCReflecting()
+{
+    return [](std::shared_ptr<MeshBlockData<Real>>& rc, bool coarse) -> void
+    {
+        using namespace parthenon;
+        using namespace parthenon::BoundaryFunction;
+        GenericBC<DIR, SIDE, BCType::Reflect, any_bclean>(rc, coarse);
+    };
+}
+
 /**
- * Declare fields, initialize (few) parameters
+ * Declare fields, initialize parameters
  */
-std::shared_ptr<KHARMAPackage> Initialize(ParameterInput *pin, std::shared_ptr<Packages_t>& packages);
+std::shared_ptr<KHARMAPackage> Initialize(
+    ParameterInput* pin, std::shared_ptr<Packages_t>& packages);
 
 /**
  * Single-call divergence cleanup.  Lots of MPI syncs, probably slow to use in task lists.
@@ -61,28 +116,23 @@ std::shared_ptr<KHARMAPackage> Initialize(ParameterInput *pin, std::shared_ptr<P
 TaskStatus CleanupDivergence(std::shared_ptr<MeshData<Real>>& md);
 
 /**
- * Whether the parameters say to perform cleanup this step, during execution
- * Takes the mesh pointer to find our package parameters
- */
-bool CleanupThisStep(Mesh* pmesh, int nstep);
-
-/**
- * Calculate the laplacian using divergence at corners.
- * Extra MeshData arg is just to satisfy Parthenon solver calling convention
- */
-TaskStatus CornerLaplacian(MeshData<Real>* md, const std::string& p_var, MeshData<Real>* md_again, const std::string& lap_var);
-/**
- * Calculate the laplacian using divergence at centers.
- */
-TaskStatus CenterLaplacian(MeshData<Real>* md, const std::string& p_var, MeshData<Real>* md_again, const std::string& lap_var);
-
-/**
- * Apply B -= grad(P) on cell centers to subtract divergence from the magnetic field
- */
-TaskStatus ApplyPCenter(MeshData<Real> *msolve, MeshData<Real> *md);
-/**
  * Apply B -= grad(P) on faces to subtract divergence from the magnetic field
  */
-TaskStatus ApplyPFace(MeshData<Real> *msolve, MeshData<Real> *md);
+// TaskStatus ApplySolution(MeshData<Real>* md);
+TaskStatus ApplySolution(MeshData<Real>* mdsolve, MeshData<Real>* md);
+
+/**
+ * Function to make this solver's task collection.
+ * TODO try adding to e.g. kharma_step task list
+ */
+TaskCollection MakeTaskCollection(Mesh* pmesh);
+
+/**
+ * Return whether to cleanup B this step, when we're the field transport during a
+ * simulation.
+ * TODO(CEP) no-op, cleanup as transport is not tested.  In fact probably should throw
+ * here
+ */
+inline bool CleanupThisStep(Mesh* pmesh, int step) { return false; };
 
 } // namespace B_Cleanup

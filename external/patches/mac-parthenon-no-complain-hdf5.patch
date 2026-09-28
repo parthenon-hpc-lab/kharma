@@ -1,0 +1,25 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 994399d4..9b23bb59 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -142,13 +142,13 @@ if (NOT PARTHENON_DISABLE_HDF5)
+   endif()
+   set(ENABLE_HDF5 ON)
+ 
+-  if (ENABLE_MPI AND (NOT HDF5_IS_PARALLEL))
+-    message(FATAL_ERROR "Both MPI and HDF5 are enabled but only a serial version of HDF5 "
+-    "was found. Please install a parallel version of HDF5 (or point CMake to it by adding its path "
+-    "to the CMAKE_PREFIX_PATH environment variable or by setting the HDF5_ROOT variable), "
+-    "or disable either MPI or HDF5 by rerunning "
+-    "CMake with -DPARTHENON_DISABLE_MPI=ON or -DPARTHENON_DISABLE_HDF5=ON")
+-  endif()
++  #if (ENABLE_MPI AND (NOT HDF5_IS_PARALLEL))
++  #  message(FATAL_ERROR "Both MPI and HDF5 are enabled but only a serial version of HDF5 "
++  #  "was found. Please install a parallel version of HDF5 (or point CMake to it by adding its path "
++  #  "to the CMAKE_PREFIX_PATH environment variable or by setting the HDF5_ROOT variable), "
++  #  "or disable either MPI or HDF5 by rerunning "
++  #  "CMake with -DPARTHENON_DISABLE_MPI=ON or -DPARTHENON_DISABLE_HDF5=ON")
++  #endif()
+ 
+   if ((NOT ENABLE_MPI) AND HDF5_IS_PARALLEL)
+     message(FATAL_ERROR "MPI is disabled and HDF5 is enabled but only a parallel version of HDF5 "

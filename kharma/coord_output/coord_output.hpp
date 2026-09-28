@@ -1,25 +1,25 @@
-/* 
+/*
  *  File: coord_output.hpp
- *  
+ *
  *  BSD 3-Clause License
- *  
+ *
  *  Copyright (c) 2020, AFD Group at UIUC
  *  All rights reserved.
- *  
+ *
  *  Redistribution and use in source and binary forms, with or without
  *  modification, are permitted provided that the following conditions are met:
- *  
+ *
  *  1. Redistributions of source code must retain the above copyright notice, this
  *     list of conditions and the following disclaimer.
- *  
+ *
  *  2. Redistributions in binary form must reproduce the above copyright notice,
  *     this list of conditions and the following disclaimer in the documentation
  *     and/or other materials provided with the distribution.
- *  
+ *
  *  3. Neither the name of the copyright holder nor the names of its
  *     contributors may be used to endorse or promote products derived from
  *     this software without specific prior written permission.
- *  
+ *
  *  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  *  AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  *  IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -37,16 +37,19 @@
 
 #include <parthenon/parthenon.hpp>
 
-namespace CoordinateOutput {
+namespace CoordinateOutput
+{
 
 /**
  * Initialize the wind package with several options from the input deck
  */
-std::shared_ptr<KHARMAPackage> Initialize(ParameterInput *pin, std::shared_ptr<Packages_t>& packages);
+std::shared_ptr<KHARMAPackage> Initialize(
+    ParameterInput* pin, std::shared_ptr<Packages_t>& packages);
 
 /**
- * Fill the geometry output variables with quantities from the GRCoordinates object over a block
+ * Fill the geometry output variables with quantities from the GRCoordinates object over a
+ * block
  */
-TaskStatus BlockUserWorkBeforeOutput(MeshBlock *pmb, ParameterInput *pin);
+TaskStatus BlockUserWorkBeforeOutput(MeshBlock* pmb, ParameterInput* pin);
 
 }

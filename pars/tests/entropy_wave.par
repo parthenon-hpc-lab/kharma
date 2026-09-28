@@ -1,0 +1,88 @@
+# Advected entropy wave (2D): tests the Entropy package's Ktot & Ktot_adv against an
+# exact nonlinear solution with a *non-uniform* entropy.
+#
+# A uniform 4-velocity plus a uniform gas pressure plus an arbitrary density profile is
+# an exact solution of relativistic hydro, so the profile translates rigidly at v^i with
+# no steepening and no sound waves.  Since p is uniform and rho is not, the entropy
+# K = p/rho^gam varies strongly across the grid and is conserved along fluid worldlines
+# -- exactly the property Ktot_adv must reproduce.
+#
+# The wavevector (n1,n2) and the drift (v1,v2) are deliberately *not* proportional to
+# each other, so the x1 and x2 flux contributions differ and an error in one direction
+# cannot cancel against the other.  With these values k.v = 2*pi exactly, so one period
+# is t = 1.
+
+<parthenon/job>
+problem_id = entropy_wave
+
+<parthenon/mesh>
+nx1 = 64
+x1min = 0.0
+x1max = 1.0
+
+nx2 = 64
+x2min = 0.0
+x2max = 1.0
+
+nx3 = 1
+x3min = -0.01
+x3max = 0.01
+
+<parthenon/meshblock>
+# Deliberately smaller than the mesh: 4 blocks, so the internal ghost exchange of
+# cons.Ktot_adv is exercised rather than assumed.
+nx1 = 32
+nx2 = 32
+nx3 = 1
+
+<coordinates>
+base = cartesian_minkowski
+transform = null
+
+<parthenon/time>
+# tlim is overwritten with one period by the problem, see <entropy_wave>/one_period
+integrator = rk2
+
+<GRMHD>
+cfl = 0.9
+gamma = 1.666667
+reconstruction = weno5
+
+<entropy_wave>
+rho0 = 1.0
+# Large on purpose: K varies by ((1+amp)/(1-amp))^gam ~ 6.2 across the box
+amp = 0.5
+pgas = 1.0
+# Wavevector: k_i = 2*pi*n_i/L_i, so k = (2pi, 4pi)
+n1 = 1
+n2 = 2
+# Drift, as a coordinate 3-velocity.  v^2 = 0.3125, Lorentz factor ~1.21, so the
+# distinction between the coordinate velocity and utilde^i actually matters.
+v1 = 0.5
+v2 = 0.25
+one_period = true
+
+<entropy>
+on = true
+# The variable under test: advected for the whole run, never reset
+advect_entropy = true
+
+<b_field>
+solver = none
+
+<floors>
+# This is a smooth, well-resolved flow with no floor-worthy states.  Leaving floors on
+# would let them, rather than the scheme, set the entropy error we are trying to measure.
+disable_floors = true
+
+<debug>
+verbose = 1
+flag_verbose = 0
+extra_checks = 1
+
+<parthenon/output0>
+file_type = hdf5
+write_xdmf = false
+dt = 1e5
+single_precision_output = false
+variables = prims.rho, prims.u, prims.uvec, prims.Ktot, prims.Ktot_adv

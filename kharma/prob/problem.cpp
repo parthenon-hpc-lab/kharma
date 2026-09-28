@@ -36,6 +36,7 @@
 
 #include "boundaries.hpp"
 #include "electrons.hpp"
+#include "entropy.hpp"
 #include "floors.hpp"
 #include "flux.hpp"
 #include "gr_coordinates.hpp"
@@ -46,20 +47,30 @@
 
 // Problem initialization headers
 #include "bondi.hpp"
+#include "entropy_wave.hpp"
 #include "explosion.hpp"
 #include "fm_torus.hpp"
-#include "resize_restart.hpp"
-#include "resize_restart_kharma.hpp"
+#include "gizmo.hpp"
 #include "kelvin_helmholtz.hpp"
 #include "mhdmodes.hpp"
 #include "orszag_tang.hpp"
+#include "resize_restart.hpp"
+#include "resize_restart_kharma.hpp"
 #include "shock_tube.hpp"
-#include "gizmo.hpp"
 // EMHD problem headers
 #include "emhd/anisotropic_conduction.hpp"
+#include "emhd/conducting_atmosphere.hpp"
 #include "emhd/emhdmodes.hpp"
 #include "emhd/emhdshock.hpp"
-#include "emhd/conducting_atmosphere.hpp"
+
+// Out of the Package RadM1 modification
+// RadM1 problem headers
+#include "radm1/beam_of_light.hpp"
+#include "radm1/bondi_rad.hpp"
+#include "radm1/rad_pulse.hpp"
+#include "radm1/radmhdmodes.hpp"
+#include "radm1/thermal_equilibrium.hpp"
+
 // Electron problem headers
 #include "elec/driven_turbulence.hpp"
 #include "elec/hubble.hpp"
@@ -67,11 +78,11 @@
 
 using namespace parthenon;
 
-void KHARMA::ProblemGenerator(MeshBlock *pmb, ParameterInput *pin)
+void KHARMA::ProblemGenerator(MeshBlock* pmb, ParameterInput* pin)
 {
     auto rc = pmb->meshblock_data.Get("base");
     auto prob = pin->GetString("parthenon/job", "problem_id"); // Required parameter
-    Flag("ProblemGenerator_"+prob);
+    Flag("ProblemGenerator_" + prob);
     // Also just print this, it's important
     if (MPIRank0()) {
         // We have no way of tracking whether this is the first block we're initializing
@@ -90,21 +101,23 @@ void KHARMA::ProblemGenerator(MeshBlock *pmb, ParameterInput *pin)
         status = InitializeOrszagTang(rc, pin);
     } else if (prob == "explosion") {
         status = InitializeExplosion(rc, pin);
+    } else if (prob == "entropy_wave") {
+        status = InitializeEntropyWave(rc, pin);
     } else if (prob == "kelvin_helmholtz") {
         status = InitializeKelvinHelmholtz(rc, pin);
     } else if (prob == "shock") {
         status = InitializeShockTube(rc, pin);
-    // GRMHD
+        // GRMHD
     } else if (prob == "bondi") {
         status = InitializeBondi(rc, pin);
-    // Electrons
+        // Electrons
     } else if (prob == "noh") {
         status = InitializeNoh(rc, pin);
     } else if (prob == "hubble") {
         status = InitializeHubble(rc, pin);
     } else if (prob == "driven_turbulence") {
         status = InitializeDrivenTurbulence(rc, pin);
-    // Extended GRMHD
+        // Extended GRMHD
     } else if (prob == "emhdmodes") {
         status = InitializeEMHDModes(rc, pin);
     } else if (prob == "anisotropic_conduction") {
@@ -113,7 +126,18 @@ void KHARMA::ProblemGenerator(MeshBlock *pmb, ParameterInput *pin)
         status = InitializeEMHDShock(rc, pin);
     } else if (prob == "conducting_atmosphere") {
         status = InitializeAtmosphere(rc, pin);
-    // Everything
+        // RadM1
+    } else if (prob == "rad_pulse") {
+        status = InitializeRadiationPulse(rc, pin);
+    } else if (prob == "bondi_rad") {
+        status = InitializeRadiativeBondi(rc, pin);
+    } else if (prob == "beam_of_light") {
+        status = InitializeBeamOfLight(rc, pin);
+    } else if (prob == "thermal_equilibrium") {
+        status = InitializeThermalEquilibrium(rc, pin);
+    } else if (prob == "radmhdmodes") {
+        status = InitializeRadMHDModes(rc, pin);
+        // Everything
     } else if (prob == "torus") {
         status = InitializeFMTorus(rc, pin);
     } else if (prob == "resize_restart") {
@@ -122,22 +146,27 @@ void KHARMA::ProblemGenerator(MeshBlock *pmb, ParameterInput *pin)
         status = ReadKharmaRestart(rc, pin);
     } else if (prob == "gizmo") {
         status = InitializeGIZMO(rc, pin);
-    } else if (prob == "vacuum" || prob == "bz_monopole") {
+    } else if (prob == "vacuum" || prob == "bz_monopole" || prob == "split_monopole") {
         // No need for a separate initializer, just seed w/floors
         status = Floors::ApplyInitialFloors(pin, rc.get(), IndexDomain::interior);
     }
 
     // If we didn't initialize a problem, yell
     if (status != TaskStatus::complete) {
-        throw std::invalid_argument("Invalid or incomplete problem: "+prob);
+        throw std::invalid_argument("Invalid or incomplete problem: " + prob);
     }
 
     // If we're not restarting, do any grooming of the initial conditions
-    if ((prob != "resize_restart")) {
+    if ((prob != "resize_restart" && prob != "resize_restart_kharma")) {
         // Perturb the internal energy a bit to encourage accretion
         // Note this defaults to zero & is basically turned on only for torii
         if (pin->GetOrAddReal("perturbation", "u_jitter", 0.0) > 0.0) {
             PerturbU(rc, pin);
+        }
+
+        // Initialize tracked total (& idealized) entropy to defaults if enabled
+        if (pmb->packages.AllPackages().count("Entropy")) {
+            Entropy::InitEntropy(rc.get(), pin);
         }
 
         // Initialize electron entropies to defaults if enabled

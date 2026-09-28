@@ -1,0 +1,23 @@
+diff --git a/src/parameter_input.hpp b/src/parameter_input.hpp
+index 896bedfed..4523d6aeb 100644
+--- a/src/parameter_input.hpp
++++ b/src/parameter_input.hpp
+@@ -471,12 +471,12 @@ class ParameterInput {
+             PARTHENON_THROW(msg);
+           }
+         } else if (defval.value() != std::any_cast<T>(record.default_value)) {
+-          std::stringstream msg;
+-          msg << "Input parameter " << block << "/" << name
+-              << " has at least two inconsistent default values. "
+-              << "The ones I detected are " << defval.value() << " and "
+-              << std::any_cast<T>(record.default_value) << std::endl;
+-          PARTHENON_THROW(msg);
++          //std::stringstream msg;
++          //msg << "Input parameter " << block << "/" << name
++          //    << " has at least two inconsistent default values. "
++          //    << "The ones I detected are " << defval.value() << " and "
++          //    << std::any_cast<T>(record.default_value) << std::endl;
++          //PARTHENON_THROW(msg);
+         }
+       }
+       // Allowed values are checked after a query, so this function

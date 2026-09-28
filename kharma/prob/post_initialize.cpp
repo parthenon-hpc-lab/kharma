@@ -42,6 +42,7 @@
 #include "boundaries.hpp"
 #include "electrons.hpp"
 #include "emhd.hpp"
+#include "entropy.hpp"
 #include "floors.hpp"
 #include "flux.hpp"
 #include "gr_coordinates.hpp"
@@ -52,21 +53,25 @@
 #include "seed_B.hpp"
 #include "types.hpp"
 
-void KHARMA::PostInitialize(ParameterInput *pin, Mesh *pmesh, bool is_restart)
+void KHARMA::PostInitialize(ParameterInput* pin, Mesh* pmesh, bool is_restart)
 {
     // This call:
-    // 1. Initializes any magnetic fields, according to parameters set by the problem or user.
-    // 2. Renormalizes magnetic fields based on a desired ratio of maximum magnetic/gas pressures
-    // 3. Adds any extra material which might be superimposed when restarting, e.g. "hotspot" regions a.k.a. "blobs"
+    // 1. Initializes any magnetic fields, according to parameters set by the problem or
+    // user.
+    // 2. Renormalizes magnetic fields based on a desired ratio of maximum magnetic/gas
+    // pressures
+    // 3. Adds any extra material which might be superimposed when restarting, e.g.
+    // "hotspot" regions a.k.a. "blobs"
     // 4. Resets a couple of incidental flags, if Parthenon read them from a restart file
     // 5. If necessary, cleans up any magnetic field divergence present on the grid
 
-    // Coming into this function, at least the *interior* regions should be initialized with a problem:
-    // that is, rho, u, uvec, and any nonzero auxiliary variables, on each physical zone.
-    // If you need Dirichlet boundary conditions, the domain-edge *ghost* zones should also be initialized,
-    // as they will be "frozen in" during this function and applied thereafter.
+    // Coming into this function, at least the *interior* regions should be initialized
+    // with a problem: that is, rho, u, uvec, and any nonzero auxiliary variables, on each
+    // physical zone. If you need Dirichlet boundary conditions, the domain-edge *ghost*
+    // zones should also be initialized, as they will be "frozen in" during this function
+    // and applied thereafter.
 
-    auto &md = pmesh->mesh_data.Get();
+    auto& md = pmesh->mesh_data.Get();
 
     auto& pkgs = pmesh->packages.AllPackages();
 
@@ -77,7 +82,8 @@ void KHARMA::PostInitialize(ParameterInput *pin, Mesh *pmesh, bool is_restart)
         // If we need to seed a field based on the problem's fluid initialization...
         if (pin->GetOrAddString("b_field", "type", "none") != "none" && !is_restart) {
             // B field init is not stencil-1, needs boundaries sync'd.
-            // FreezeDirichlet ensures any Dirichlet conditions aren't overwritten by zeros
+            // FreezeDirichlet ensures any Dirichlet conditions aren't overwritten by
+            // zeros
             KBoundaries::FreezeDirichlet(md);
             KHARMADriver::SyncAllBounds(md);
 
@@ -98,7 +104,7 @@ void KHARMA::PostInitialize(ParameterInput *pin, Mesh *pmesh, bool is_restart)
     // Add any hotspots *after* we've seeded fields,
     // since seeding may be based on density
     if (pin->GetOrAddBoolean("blob", "add_blob", false)) {
-        for (auto &pmb : pmesh->block_list) {
+        for (auto& pmb : pmesh->block_list) {
             auto rc = pmb->meshblock_data.Get("base");
             // This inserts only in vicinity of some global r,th,phi
             InsertBlob(rc.get(), pin);
@@ -114,9 +120,11 @@ void KHARMA::PostInitialize(ParameterInput *pin, Mesh *pmesh, bool is_restart)
         // We only record the conserved magnetic field in KHARMA restarts,
         // but we record primitive field in iharm3d restarts
         bool iharm3d_restart = prob_name == "resize_restart";
-        // but sometimes in a pinch we want to restart from .phdf files, which are like iharm3d restarts
-        bool prims_only_restart = pin->GetBoolean("b_field", "restart_from_prims");
-        if (!(iharm3d_restart  || prims_only_restart)) {
+        // but sometimes in a pinch we want to restart from .phdf files, which are like
+        // iharm3d restarts
+        bool prims_only_restart =
+            pin->GetOrAddBoolean("b_field", "restart_from_prims", false);
+        if (!(iharm3d_restart || prims_only_restart)) {
             std::cout << "Restoring B field from conserved values" << std::endl;
             if (pkgs.count("B_FluxCT")) {
                 B_FluxCT::MeshUtoP(md.get(), IndexDomain::entire);
@@ -133,7 +141,7 @@ void KHARMA::PostInitialize(ParameterInput *pin, Mesh *pmesh, bool is_restart)
             } else if (pkgs.count("B_CT")) {
                 // This is dangerous: we're interpolating cell-centered data
                 // to faces, even for identical grids
-                B_CT::DangerousPtoU(md.get(), IndexDomain::interior, false);
+                // B_CT::DangerousPtoU(md.get(), IndexDomain::interior, false);
                 // TODO always force B field cleanup if we do this
                 // (Generally we're resizing so it gets triggered anyway)
             }
@@ -152,14 +160,14 @@ void KHARMA::PostInitialize(ParameterInput *pin, Mesh *pmesh, bool is_restart)
         } else if (pkgs.count("B_CT")) {
             B_CT::PrintGlobalMaxDivB(md.get());
         } else if (pkgs.count("B_CD")) {
-            //B_CD::PrintGlobalMaxDivB(md.get());
+            // B_CD::PrintGlobalMaxDivB(md.get());
         }
     }
 
     // Clean the B field, generally for resizing/restarting
     // We call this function any time the package is loaded:
     // if we decided to load it in kharma.cpp, we need to clean.
-    if (pkgs.count("B_Cleanup")) {
+    if (pkgs.count("B_Cleanup") || pkgs.count("B_Cleanup")) {
         if (pin->GetOrAddBoolean("b_cleanup", "output_before_cleanup", false)) {
             auto tm = SimTime(0., 0., 0, 0, 0, 0, 0.);
             auto pouts = std::make_unique<Outputs>(pmesh, pin, &tm);
@@ -167,20 +175,29 @@ void KHARMA::PostInitialize(ParameterInput *pin, Mesh *pmesh, bool is_restart)
         }
 
         // Cleanup is applied to conserved variables
-        B_Cleanup::CleanupDivergence(md);
+        if (pkgs.count("B_Cleanup"))
+            B_Cleanup::CleanupDivergence(md);
+        else if (pkgs.count("B_Cleanup"))
+            B_Cleanup::CleanupDivergence(md);
 
         if (pin->GetOrAddBoolean("b_cleanup", "output_after_cleanup", false)) {
             auto tm = SimTime(0., 0., 0, 0, 0, 0, 0.);
             auto pouts = std::make_unique<Outputs>(pmesh, pin, &tm);
             pouts->MakeOutputs(pmesh, pin, &tm, SignalHandler::OutputSignal::now);
         }
-
     }
 
-    // The e- initialization is called during problem initialization, but we want an option
-    // to force it -- for example, if restarting an ideal GRMHD run,
-    if (pkgs.count("Electrons") && pin->GetOrAddBoolean("electrons", "reinitialize", false)) {
+    // The e- initialization is called during problem initialization, but we want an
+    // option to force it -- for example, if restarting an ideal GRMHD run,
+    if (pkgs.count("Electrons") &&
+        pin->GetOrAddBoolean("electrons", "reinitialize", false)) {
         std::cout << "Reinitializing electron temperatures!" << std::endl;
+        // Ktot itself belongs to the Entropy package (always present alongside
+        // Electrons), and needs reinitializing too -- a restart from an ideal GRMHD run
+        // has no sensible value for it otherwise.
+        if (pkgs.count("Entropy")) {
+            Entropy::MeshInitEntropy(md.get(), pin);
+        }
         Electrons::MeshInitElectrons(md.get(), pin);
         // We probably don't want to do this again next time we restart
         pin->SetBoolean("electrons", "reinitialize", false);

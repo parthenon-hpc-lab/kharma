@@ -1,25 +1,25 @@
-/* 
+/*
  *  File: hubble.cpp
- *  
+ *
  *  BSD 3-Clause License
- *  
+ *
  *  Copyright (c) 2020, AFD Group at UIUC
  *  All rights reserved.
- *  
+ *
  *  Redistribution and use in source and binary forms, with or without
  *  modification, are permitted provided that the following conditions are met:
- *  
+ *
  *  1. Redistributions of source code must retain the above copyright notice, this
  *     list of conditions and the following disclaimer.
- *  
+ *
  *  2. Redistributions in binary form must reproduce the above copyright notice,
  *     this list of conditions and the following disclaimer in the documentation
  *     and/or other materials provided with the distribution.
- *  
+ *
  *  3. Neither the name of the copyright holder nor the names of its
  *     contributors may be used to endorse or promote products derived from
  *     this software without specific prior written permission.
- *  
+ *
  *  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  *  AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  *  IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -33,10 +33,13 @@
  */
 #include "hubble.hpp"
 
+#include "flux.hpp"
 #include "pack.hpp"
 #include "types.hpp"
 
-TaskStatus InitializeHubble(std::shared_ptr<MeshBlockData<Real>>& rc, ParameterInput *pin)
+#include <stdexcept>
+
+TaskStatus InitializeHubble(std::shared_ptr<MeshBlockData<Real>>& rc, ParameterInput* pin)
 {
     auto pmb = rc->GetBlockPointer();
 
@@ -48,23 +51,31 @@ TaskStatus InitializeHubble(std::shared_ptr<MeshBlockData<Real>>& rc, ParameterI
     bool context_boundaries = pin->GetOrAddBoolean("hubble", "context_boundaries", false);
     Real dyntimes = pin->GetOrAddReal("hubble", "dyntimes", 1.0);
 
-    // Add everything to package parameters, since they continue to be needed on boundaries
-    int counter = -5.0;
+    // Add everything to package parameters, since they continue to be needed on
+    // boundaries
     Params& g_params = pmb->packages.Get("GRMHD")->AllParams();
-    const Real gam = g_params.Get<Real>("gamma");
-    if(!g_params.hasKey("counter")) g_params.Add("counter", counter, true);
-    Real rho0 = (mach/v0) * sqrt(gam*(gam-1));
-    Real ug0  = (v0/mach) / sqrt(gam*(gam-1));
-    if(!g_params.hasKey("rho0")) g_params.Add("rho0", rho0);
-    if(!g_params.hasKey("v0"))  g_params.Add("v0", v0);
-    if(!g_params.hasKey("ug0")) g_params.Add("ug0", ug0);
-    if(!g_params.hasKey("cooling")) g_params.Add("cooling", cooling);
-    if(!g_params.hasKey("context_boundaries")) g_params.Add("context_boundaries", context_boundaries);
+    const Real gam = pmb->packages.Get("eos")->Param<Real>("gm1") + 1.0;
+    Real rho0 = (mach / v0) * sqrt(gam * (gam - 1));
+    Real ug0 = (v0 / mach) / sqrt(gam * (gam - 1));
+    if (!g_params.hasKey("rho0")) g_params.Add("rho0", rho0);
+    if (!g_params.hasKey("v0")) g_params.Add("v0", v0);
+    if (!g_params.hasKey("ug0")) g_params.Add("ug0", ug0);
+    if (!g_params.hasKey("cooling")) g_params.Add("cooling", cooling);
+    if (!g_params.hasKey("context_boundaries"))
+        g_params.Add("context_boundaries", context_boundaries);
 
-    // This is how we will initialize kel values later
+    // The electron entropy is pinned by the analytic solution (Ressler+ '15 eq. 40):
+    // requiring that solution to hold at t=0 fixes ue(0)/ug(0) = (gam-2)/(game-2).
+    // Nothing is free here, so refuse to run rather than let InitElectrons quietly
+    // overwrite what we set below with (game-1)*fel_0*u/rho^game.
     if (pmb->packages.AllPackages().count("Electrons")) {
-        const Real fel0 = pmb->packages.Get("Electrons")->Param<Real>("fel_0");
-        if(!g_params.hasKey("ue0")) g_params.Add("ue0", fel0 * ug0);
+        const Real game = pmb->packages.Get("Electrons")->Param<Real>("gamma_e");
+        const Real fel0_needed = (gam - 2) / (game - 2);
+        if (pin->GetOrAddBoolean("electrons", "init_to_fel_0", true)) {
+            throw std::invalid_argument("The Hubble problem sets the electron entropy "
+                                        "itself: set <electrons>/init_to_fel_0 = false");
+        }
+        if (!g_params.hasKey("ue0")) g_params.Add("ue0", fel0_needed * ug0);
     }
 
     // Override end time to be 1 dynamical time L/max(v@t=0)
@@ -76,7 +87,8 @@ TaskStatus InitializeHubble(std::shared_ptr<MeshBlockData<Real>>& rc, ParameterI
     auto bound_pkg = pmb->packages.Get<KHARMAPackage>("Boundaries");
     bound_pkg->KBoundaries[BoundaryFace::inner_x1] = SetHubble<IndexDomain::inner_x1>;
     bound_pkg->KBoundaries[BoundaryFace::outer_x1] = SetHubble<IndexDomain::outer_x1>;
-    bound_pkg->BlockApplyPrimSource = ApplyHubbleHeating;
+    // Only the "cooling" version of the problem has a source term at all
+    if (cooling) bound_pkg->BlockApplyPrimSource = ApplyHubbleHeating;
 
     // Then call the general function to fill the grid
     SetHubble<IndexDomain::entire>(rc);
@@ -84,26 +96,32 @@ TaskStatus InitializeHubble(std::shared_ptr<MeshBlockData<Real>>& rc, ParameterI
     return TaskStatus::complete;
 }
 
-TaskStatus SetHubbleImpl(std::shared_ptr<MeshBlockData<Real>>& rc, IndexDomain domain, bool coarse)
+TaskStatus SetHubbleImpl(
+    std::shared_ptr<MeshBlockData<Real>>& rc, IndexDomain domain, bool coarse)
 {
     auto pmb = rc->GetBlockPointer();
     GridScalar rho = rc->Get("prims.rho").data;
     GridScalar u = rc->Get("prims.u").data;
     GridVector uvec = rc->Get("prims.uvec").data;
 
-    const Real gam = pmb->packages.Get("GRMHD")->Param<Real>("gamma");
+    const Real gam = pmb->packages.Get("eos")->Param<Real>("gm1") + 1.0;
     const Real rho0 = pmb->packages.Get("GRMHD")->Param<Real>("rho0");
     const Real v0 = pmb->packages.Get("GRMHD")->Param<Real>("v0");
     const bool cooling = pmb->packages.Get("GRMHD")->Param<bool>("cooling");
-    const bool context_boundaries = pmb->packages.Get("GRMHD")->Param<bool>("context_boundaries");
+    const bool context_boundaries =
+        pmb->packages.Get("GRMHD")->Param<bool>("context_boundaries");
     const Real ug0 = pmb->packages.Get("GRMHD")->Param<Real>("ug0");
-    // first time this is called in boundary conditions inside the time stepping cycle is when counter == 0
-    int counter = pmb->packages.Get("GRMHD")->Param<int>("counter");
-    const Real tt = pmb->packages.Get("Globals")->Param<Real>("time");
-    const Real dt = pmb->packages.Get("Globals")->Param<Real>("dt_last");
 
-    Real t = tt + 0.5*dt;
-    if ((counter%4) > 1)   t = tt + dt;
+    // The whole point of this test is that the analytic solution be sampled at exactly
+    // the time each sub-step lands on -- otherwise the boundaries are only 1st-order
+    // accurate in time and swamp what we're trying to measure.  The driver records that
+    // time for us.  Before the evolution loop starts (initialization, and the boundary
+    // sync for the t=0 output) we are simply at "time": note we can't fall back on
+    // "dt_last" there, as it is still DBL_MAX until the first PreStepWork.
+    const bool in_loop = pmb->packages.Get("Globals")->Param<bool>("in_loop");
+    const Real t = (in_loop)
+                       ? pmb->packages.Get("Globals")->Param<double>("time_substep_end")
+                       : pmb->packages.Get("Globals")->Param<double>("time");
 
     const auto& G = pmb->coords;
 
@@ -111,73 +129,101 @@ TaskStatus SetHubbleImpl(std::shared_ptr<MeshBlockData<Real>>& rc, IndexDomain d
     IndexRange jb = pmb->cellbounds.GetBoundsJ(domain);
     IndexRange kb = pmb->cellbounds.GetBoundsK(domain);
 
-    if (!context_boundaries || counter < 0) {
+    if (!context_boundaries || !in_loop) {
         // Setting as in equation 37
-        Real toberho = rho0 / (1. + v0*t);
-        Real tobeu  = ug0 / pow(1 + v0*t, 2);
-        if (!cooling) tobeu  = ug0 / pow(1 + v0*t, gam);
+        Real toberho = rho0 / (1. + v0 * t);
+        Real tobeu = ug0 / pow(1 + v0 * t, 2);
+        if (!cooling) tobeu = ug0 / pow(1 + v0 * t, gam);
         pmb->par_for("hubble_init", kb.s, kb.e, jb.s, jb.e, ib.s, ib.e,
-            KOKKOS_LAMBDA (const int &k, const int &j, const int &i) {
+                     KOKKOS_LAMBDA(const int& k, const int& j, const int& i)
+            {
                 Real X[GR_DIM];
                 G.coord_embed(k, j, i, Loci::center, X);
                 rho(k, j, i) = toberho;
                 u(k, j, i) = tobeu;
-                uvec(0, k, j, i) = v0 * X[1] / (1 + v0*t);
+                uvec(0, k, j, i) = v0 * X[1] / (1 + v0 * t);
                 uvec(1, k, j, i) = 0.0;
                 uvec(2, k, j, i) = 0.0;
-            }
-        );
+            });
+
+        if (pmb->packages.AllPackages().count("Entropy")) {
+            GridScalar ktot = rc->Get("prims.Ktot").data;
+            // Ktot is the *total* entropy, tracked by the Entropy package, and it is what
+            // Electrons::ApplyElectronHeating differences against to find the
+            // dissipation.  Setting it to the entropy the gas actually has here means
+            // these zones see zero dissipation, so they keep exactly the analytic Kel we
+            // set below.
+            const Real tobektot = (gam - 1) * tobeu / pow(toberho, gam);
+            pmb->par_for("hubble_init_ktot", kb.s, kb.e, jb.s, jb.e, ib.s, ib.e,
+                         KOKKOS_LAMBDA(const int& k, const int& j, const int& i)
+                {
+                    ktot(k, j, i) = tobektot;
+                });
+        }
 
         if (pmb->packages.AllPackages().count("Electrons")) {
-            GridScalar ktot = rc->Get("prims.Ktot").data;
             GridScalar kel_const = rc->Get("prims.Kel_Constant").data;
             const Real game = pmb->packages.Get("Electrons")->Param<Real>("gamma_e");
             const Real ue0 = pmb->packages.Get("GRMHD")->Param<Real>("ue0");
-            Real tobeke = (gam - 2) * (game - 1)/(game - 2) * ue0/pow(rho0, game) * pow(1 + v0*t, game-2);
-            // Without cooling, the entropy of electrons should stay the same, analytic solution.
-            if (!cooling) tobeke = (gam - 2) * (game - 1)/(game - 2) * ue0/pow(rho0, game);
-            pmb->par_for("hubble_init", kb.s, kb.e, jb.s, jb.e, ib.s, ib.e,
-                KOKKOS_LAMBDA (const int &k, const int &j, const int &i) {
-                    ktot(k, j, i) = tobeke;
-                    kel_const(k, j, i) = tobeke; //Since we are using fel = 1
-                }
-            );
+            // Equation 40: with ue0 = (gam-2)/(game-2)*ug0 this is identically
+            // (gam-2)(game-1)/(game-2) * ug0/rho0^game * (1+v0*t)^(game-2)
+            Real tobeke = (game - 1) * ue0 / pow(rho0, game) * pow(1 + v0 * t, game - 2);
+            // Without cooling, the entropy of electrons should stay the same, analytic
+            // solution.
+            if (!cooling) tobeke = (game - 1) * ue0 / pow(rho0, game);
+            pmb->par_for("hubble_init_kel", kb.s, kb.e, jb.s, jb.e, ib.s, ib.e,
+                         KOKKOS_LAMBDA(const int& k, const int& j, const int& i)
+                {
+                    kel_const(k, j, i) = tobeke; // Since we are using fel = 1
+                });
         }
-    } else { // We assume the fluid is following the solution so we set the boundaries from the real zones
-        // Left zone is first one to be called and counter starts at zero
-        bool left_zone = !(counter%2);
+    } else { // We assume the fluid is following the solution so we set the boundaries
+             // from the real zones
+        // Take our cue from the first physical zone just inside this boundary
         int context_index = 0;
-        if (left_zone) context_index = ib.e + 1;
-        else context_index = ib.s - 1;
+        if (domain == IndexDomain::inner_x1)
+            context_index = ib.e + 1;
+        else
+            context_index = ib.s - 1;
 
         Real context_X[GR_DIM];
         G.coord_embed(0, 0, context_index, Loci::center, context_X);
-        Real context_t = (v0*context_X[1] - uvec(0, 0, context_index))/(uvec(0, 0, context_index)*v0);
-        
+        Real context_t = (v0 * context_X[1] - uvec(0, 0, 0, context_index)) /
+                         (uvec(0, 0, 0, context_index) * v0);
+
         pmb->par_for("hubble_init", kb.s, kb.e, jb.s, jb.e, ib.s, ib.e,
-            KOKKOS_LAMBDA (const int &k, const int &j, const int &i) {
+                     KOKKOS_LAMBDA(const int& k, const int& j, const int& i)
+            {
                 Real X[GR_DIM];
                 G.coord_embed(k, j, i, Loci::center, X);
                 rho(k, j, i) = rho(k, j, context_index);
                 u(k, j, i) = u(k, j, context_index);
-                uvec(0, k, j, i) = v0 * X[1] / (1 + v0*context_t);
-            }
-        );
+                uvec(0, k, j, i) = v0 * X[1] / (1 + v0 * context_t);
+            });
         if (pmb->packages.AllPackages().count("Electrons")) {
             GridScalar kel_const = rc->Get("prims.Kel_Constant").data;
             pmb->par_for("hubble_init", kb.s, kb.e, jb.s, jb.e, ib.s, ib.e,
-                KOKKOS_LAMBDA (const int &k, const int &j, const int &i) {
+                         KOKKOS_LAMBDA(const int& k, const int& j, const int& i)
+                {
                     kel_const(k, j, i) = kel_const(k, j, context_index);
-                }
-            );
+                });
         }
     }
-    pmb->packages.Get("GRMHD")->UpdateParam<int>("counter", ++counter);
+
+    // We just wrote *primitives* into these zones.  Under the ImEx driver KHARMA syncs
+    // primitives, and ApplyBoundary runs PtoU right after us, so that would be enough.
+    // The KHARMA driver instead syncs conserved variables, and ApplyBoundary then runs
+    // UtoP on everything but the GRMHD fluid -- which would recompute prims.Ktot &
+    // prims.Kel_* from stale ghost-zone conserved values and throw away the analytic
+    // solution we just set.  Writing U ourselves makes this boundary correct under
+    // either convention.
+    Flux::BlockPtoU(rc.get(), domain, coarse);
+
     return TaskStatus::complete;
 }
 
-// TODO(BSP) Add MeshApplySource callback & convert this
-void ApplyHubbleHeating(MeshBlockData<Real> *mbase)
+// TODO(CEP) Add MeshApplySource callback & convert this
+void ApplyHubbleHeating(MeshBlockData<Real>* mbase, Real t_start, Real dt_split)
 {
     auto pmb0 = mbase->GetBlockPointer();
 
@@ -186,21 +232,28 @@ void ApplyHubbleHeating(MeshBlockData<Real> *mbase)
     const VarMap m_p(prims_map, false);
 
     Real Q = 0;
-    const Real dt = pmb0->packages.Get("Globals")->Param<Real>("dt_last");  // Close enough?
-    const Real t = pmb0->packages.Get("Globals")->Param<Real>("time") + 0.5*dt;
+    // We own the half-interval [t_start, t_start+dt_split] of the Strang split, and we
+    // have to integrate Q across it to 2nd order or the whole composition drops an order.
+    // Q here depends on time alone, so the midpoint rule does it exactly to that order.
+    const Real dt = dt_split;
+    const Real t = t_start + 0.5 * dt_split;
     const Real v0 = pmb0->packages.Get("GRMHD")->Param<Real>("v0");
     const Real ug0 = pmb0->packages.Get("GRMHD")->Param<Real>("ug0");
-    const Real gam = pmb0->packages.Get("GRMHD")->Param<Real>("gamma");
+    const Real gam = pmb0->packages.Get("eos")->Param<Real>("gm1") + 1.0;
     Q = (ug0 * v0 * (gam - 2) / pow(1 + v0 * t, 3));
+    // Interior only: our boundary zones are held at the analytic solution, which already
+    // includes the heating, so adding Q there again would double-count it.  A package
+    // whose boundaries do *not* already carry the source must use IndexDomain::entire, so
+    // that the ghosts stay consistent with the interior for the next reconstruction.
     IndexDomain domain = IndexDomain::interior;
     auto ib = mbase->GetBoundsI(domain);
     auto jb = mbase->GetBoundsJ(domain);
     auto kb = mbase->GetBoundsK(domain);
-    auto block = IndexRange{0, P_mbase.GetDim(5)-1};
-    
+    auto block = IndexRange{0, P_mbase.GetDim(5) - 1};
+
     pmb0->par_for("heating_substep", kb.s, kb.e, jb.s, jb.e, ib.s, ib.e,
-        KOKKOS_LAMBDA (const int &k, const int &j, const int &i) {
-            P_mbase(m_p.UU, k, j, i) += Q*dt*0.5;
-        }
-    );
+                  KOKKOS_LAMBDA(const int& k, const int& j, const int& i)
+        {
+            P_mbase(m_p.UU, k, j, i) += Q * dt;
+        });
 }

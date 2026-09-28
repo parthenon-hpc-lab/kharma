@@ -20,7 +20,7 @@ conv_2d() {
     do
       # 3x3 & refine center
       block=$(($res / 3))
-      $BASE/run.sh -i $BASE/pars/smr/mhdmodes_refined.par debug/verbose=2 mhdmodes/dir=3 \
+      $BASE/run.sh -d . -i $BASE/pars/smr/mhdmodes_refined.par debug/verbose=2 mhdmodes/dir=3 \
                       parthenon/output0/single_precision_output=false parthenon/output0/dt=100. \
                       parthenon/mesh/nx1=$res parthenon/mesh/nx2=$res parthenon/mesh/nx3=1 \
                       parthenon/meshblock/nx1=$block parthenon/meshblock/nx2=$block parthenon/meshblock/nx3=1 \

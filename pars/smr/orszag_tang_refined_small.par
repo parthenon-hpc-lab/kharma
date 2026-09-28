@@ -70,6 +70,7 @@ reconstruction = weno5
 # Primary HDF5 output enabled in most problems
 <parthenon/output0>
 file_type = hdf5
+write_xdmf = false
 dt = 1.0
 variables = prims, divB
 

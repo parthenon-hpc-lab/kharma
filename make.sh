@@ -1,4 +1,5 @@
 #!/bin/bash
+set -euo pipefail
 
 # Make script for KHARMA
 # Used to set sensible default flags and call cmake/make
@@ -22,12 +23,25 @@
 # noimplicit: Disable implicit solver, avoids pulling in Kokkos-kernels
 # nocleanup:  Disable magnetic field cleaning code for resizing, avoids
 #             pulling in some unofficial Parthenon code.
+# test:       Build unit tests and register them with CTest
 # Many machine files have additional options, check machines/machinename.sh
 
 # Make processes to use
 # Set conservatively as nvcc/nvc++ uses a *lot* of memory
 # Set in environment or override in machine file
 NPROC=${NPROC:-8}
+# Set variables we expect to use to satisfy bash
+EXTRA_FLAGS=${EXTRA_FLAGS:-}
+CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH:-}
+CFLAGS=${CFLAGS:-}
+CXXFLAGS=${CXXFLAGS:-}
+CPLUS_INCLUDE_PATH=${CPLUS_INCLUDE_PATH:-}
+PREFIX_PATH=${PREFIX_PATH:-}
+C_NATIVE=${C_NATIVE:-}
+CXX_NATIVE=${CXX_NATIVE:-}
+HOST_ARCH=${HOST_ARCH:-NATIVE}
+# No default DEVICE_ARCH, only set if defined
+MPI_EXTRA_ARGS=${MPI_EXTRA_ARGS:-}
 
 ### Load basic stuff ###
 HOST=$(hostname -f)
@@ -36,6 +50,14 @@ if [ -z $HOST ]; then
 fi
 ARGS="$*"
 SOURCE_DIR=$(dirname "$(readlink -f "$0")")
+
+# Parse options in a slightly less insane way than before
+# At least this checks for the full space-separated word as a flag
+args_array=( "$@" )
+option() {
+  printf '%s\0' "${args_array[@]}" | grep -Fxqz -- $1
+}
+export -f option
 
 # A machine config in .config overrides our defaults
 if [ -f $HOME/.config/kharma.sh ]; then
@@ -49,7 +71,7 @@ fi
 
 # Default to compiling for the host architecture
 # Always better to specify, though, for cross-compile/older Kokkos support
-EXTRA_FLAGS="-DKokkos_ARCH_${HOST_ARCH:-NATIVE}=ON $EXTRA_FLAGS"
+EXTRA_FLAGS="-DKokkos_ARCH_${HOST_ARCH}=ON $EXTRA_FLAGS"
 
 # Kokkos does *not* support compiling for multiple devices!
 # But if they ever do, you can separate a list of DEVICE_ARCH
@@ -60,24 +82,28 @@ if [[ -v DEVICE_ARCH ]]; then
     EXTRA_FLAGS="-DKokkos_ARCH_${arch}=ON $EXTRA_FLAGS"
   done
 fi
-if [[ "$ARGS" == *"trace"* ]]; then
+if option "trace"; then
   EXTRA_FLAGS="-DKHARMA_TRACE=1 $EXTRA_FLAGS"
 fi
-if [[ "$ARGS" == *"nompi"* ]]; then
+if option "nompi"; then
   EXTRA_FLAGS="-DKHARMA_DISABLE_MPI=1 $EXTRA_FLAGS"
 fi
-if [[ "$ARGS" == *"noimplicit"* ]]; then
+if option "noimplicit"; then
   EXTRA_FLAGS="-DKHARMA_DISABLE_IMPLICIT=1 $EXTRA_FLAGS"
 fi
-if [[ "$ARGS" == *"nocleanup"* ]]; then
+if option "nocleanup"; then
   EXTRA_FLAGS="-DKHARMA_DISABLE_CLEANUP=1 $EXTRA_FLAGS"
 fi
-if [[ "$ARGS" == *"split_implicit"* ]]; then
+if option "split_implicit"; then
   EXTRA_FLAGS="-DKHARMA_SPLIT_IMPLICIT_SOLVE=1 $EXTRA_FLAGS"
+fi
+if option "test"; then
+  EXTRA_FLAGS="-DKHARMA_BUILD_TESTS=ON $EXTRA_FLAGS"
 fi
 
 ### Enivoronment Prep ###
-if [[ "$(which python3 2>/dev/null)" == *"conda"* ]]; then
+pythonbin="$(which python3 2>/dev/null)"
+if [[ "$pythonbin" == *"conda"* || "$pythonbin" == *"mamba"* ]]; then
   echo "make.sh note:"
   echo "It looks like you have Anaconda loaded."
   echo "This is usually okay, but double-check the line 'Found MPI_CXX:' below!"
@@ -85,11 +111,11 @@ if [[ "$(which python3 2>/dev/null)" == *"conda"* ]]; then
 fi
 # Save arguments if we've changed them
 # Used in run.sh for loading the same modules/etc.
-if [[ "$ARGS" == *"clean"* ]]; then
+if option "clean"; then
   echo "$ARGS" > $SOURCE_DIR/make_args
 fi
 # Choose configuration
-if [[ "$ARGS" == *"debug"* ]]; then
+if option "debug"; then
   TYPE=Debug
 else
   TYPE=Release
@@ -115,34 +141,44 @@ if [[ -z "$CXX_NATIVE" ]]; then
   elif which icpx >/dev/null 2>&1; then
     CXX_NATIVE=icpx
     C_NATIVE=icx
-    OMP_FLAG="-fiopenmp"
   elif which icpc >/dev/null 2>&1; then
     CXX_NATIVE=icpc
     C_NATIVE=icc
-    OMP_FLAG="-qopenmp"
   # Prefer NVHPC over generic compilers
   elif which nvc++ >/dev/null 2>&1; then
     CXX_NATIVE=nvc++
     C_NATIVE=nvc
-    OMP_FLAG="-mp"
   # Maybe we overwrote 'c++' to point to something
   # Usually this is GCC on Linux systems, which is fine
-  elif which cpp >/dev/null 2>&1; then
+  elif which c++ >/dev/null 2>&1; then
     CXX_NATIVE=c++
     C_NATIVE=cc
-    OMP_FLAG="-fopenmp"
   # Otherwise, trusty system GCC
   else
     CXX_NATIVE=g++
     C_NATIVE=gcc
-    OMP_FLAG="-fopenmp"
   fi
-  # clang/++ will never be used automatically;
-  # blame Apple, who don't support OpenMP
+  # TODO(CEP) finally use clang/++ automatically, just w/o OpenMP?
 fi
+
+# Set flags, incl. correct OpenMP flag for our compiler
+if [[ $CXX_NATIVE == *"icpx" ]]; then
+  # Avoid icpx's astonishing DEFAULT -ffast-math
+  export CXXFLAGS="-fno-fast-math $CXXFLAGS"
+  OMP_FLAG="-fiopenmp"
+elif [[ $CXX_NATIVE == *"icpc" ]]; then
+  # Avoid warning on nvcc pragmas Intel doesn't like
+  export CXXFLAGS="-Wno-unknown-pragmas $CXXFLAGS"
+  OMP_FLAG="-qopenmp"
+elif [[ $CXX_NATIVE == *"nvc++" ]]; then
+  OMP_FLAG="-mp"
+elif [[ $CXX_NATIVE == *"c++" || $CXX_NATIVE == *"g++" ]]; then
+  OMP_FLAG="-fopenmp"
+fi
+
 # Disable OpenMP for HIP compiles, it gets confused
 # and thinks we want to use OMP 5.0 offload stuff
-if [[ "$ARGS" != *"hip"* ]]; then
+if ! option "hip"; then
   export CXXFLAGS="$OMP_FLAG $CXXFLAGS"
 fi
 
@@ -156,42 +192,54 @@ export CC="$C_NATIVE"
 # OpenMP loop options for KNL:
 # Outer: SIMDFOR_LOOP;MANUAL1D_LOOP;MDRANGE_LOOP;TPTTR_LOOP;TPTVR_LOOP;TPTTRTVR_LOOP
 # Inner: SIMDFOR_INNER_LOOP;TVR_INNER_LOOP
-if [[ "$ARGS" == *"sycl"* ]]; then
+if option "sycl"; then
+  # TODO CXXFLAGS add -Wno-dynamic-class-memaccess
   OUTER_LAYOUT="MANUAL1D_LOOP"
   INNER_LAYOUT="TVR_INNER_LOOP"
   ENABLE_OPENMP="ON"
   ENABLE_CUDA="OFF"
   ENABLE_SYCL="ON"
   ENABLE_HIP="OFF"
-elif [[ "$ARGS" == *"hip"* ]]; then
+elif option "hip"; then
   OUTER_LAYOUT="MANUAL1D_LOOP"
   INNER_LAYOUT="TVR_INNER_LOOP"
   ENABLE_OPENMP="OFF"
   ENABLE_CUDA="OFF"
   ENABLE_SYCL="OFF"
   ENABLE_HIP="ON"
-elif [[ "$ARGS" == *"cuda"* ]]; then
-  export CXX="$SCRIPT_DIR/bin/nvcc_wrapper"
-  if [[ "$ARGS" == *"wrapper_dryrun"* ]]; then
+elif option "cuda"; then
+  export CXX="$SCRIPT_DIR/external/parthenon/external/Kokkos/bin/nvcc_wrapper"
+  if option "wrapper_dryrun"; then
     export CXXFLAGS="-dryrun $CXXFLAGS"
     echo "Dry-running the nvcc wrapper with $CXXFLAGS"
   fi
+  if [[ "$CXX_NATIVE" == "nvc++" ]]; then
+    export CXXFLAGS="--diag_suppress code_is_unreachable $CXXFLAGS"
+  fi
   export NVCC_WRAPPER_DEFAULT_COMPILER="$CXX_NATIVE"
+  EXTRA_FLAGS="$EXTRA_FLAGS -DKokkos_ENABLE_CUDA_CONSTEXPR=ON"
+  OUTER_LAYOUT="MANUAL1D_LOOP"
+  INNER_LAYOUT="TVR_INNER_LOOP"
+  ENABLE_OPENMP="OFF"
+  ENABLE_CUDA="ON"
+  ENABLE_SYCL="OFF"
+  ENABLE_HIP="OFF"
+elif option "nvc++"; then
   OUTER_LAYOUT="MANUAL1D_LOOP"
   INNER_LAYOUT="TVR_INNER_LOOP"
   ENABLE_OPENMP="ON"
   ENABLE_CUDA="ON"
   ENABLE_SYCL="OFF"
   ENABLE_HIP="OFF"
-elif [[ "$ARGS" == *"nvc++"* ]]; then
-  OUTER_LAYOUT="MANUAL1D_LOOP"
-  INNER_LAYOUT="TVR_INNER_LOOP"
-  ENABLE_OPENMP="ON"
-  ENABLE_CUDA="ON"
+elif option "noopenmp"; then
+  OUTER_LAYOUT="SIMDFOR_LOOP"
+  INNER_LAYOUT="SIMDFOR_INNER_LOOP"
+  ENABLE_OPENMP="OFF"
+  ENABLE_CUDA="OFF"
   ENABLE_SYCL="OFF"
   ENABLE_HIP="OFF"
 else
-  OUTER_LAYOUT="MDRANGE_LOOP"
+  OUTER_LAYOUT="MANUAL1D_LOOP"
   INNER_LAYOUT="SIMDFOR_INNER_LOOP"
   ENABLE_OPENMP="ON"
   ENABLE_CUDA="OFF"
@@ -204,28 +252,20 @@ fi
 if [[ -v LINKER ]]; then
   EXTRA_FLAGS="$EXTRA_FLAGS -DCMAKE_LINKER=$LINKER"
 fi
-if [[ "$ARGS" == *"special_link_line"* ]]; then
+if option "special_link_line"; then
   EXTRA_FLAGS="$EXTRA_FLAGS -DCMAKE_CXX_LINK_EXECUTABLE='<CMAKE_LINKER> <FLAGS> <CMAKE_CXX_LINK_FLAGS> <LINK_FLAGS> <OBJECTS> -o <TARGET> <LINK_LIBRARIES>'"
-fi
-
-# Avoid warning on nvcc pragmas Intel doesn't like
-if [[ $CXX == "icpc" ]]; then
-  export CXXFLAGS="-Wno-unknown-pragmas $CXXFLAGS"
-fi
-# Avoid icpx's astonishing DEFAULT -ffast-math
-if [[ $CXX == "icpx" ]]; then
-  export CXXFLAGS="-fno-fast-math $CXXFLAGS"
 fi
 
 ### Build HDF5 ###
 # If we're building HDF5, do it after we set *all flags*
-if [[ "$ARGS" == *"hdf5"* && "$ARGS" == *"clean"* && "$ARGS" != *"dryrun"* ]]; then
+if option "hdf5" && option "clean" && ! option "dryrun"; then
   H5VER=1.14.2
   H5VERU=1_14_2
 
-  cd external
+  # Download, blow away existing dir on option
+  cd $SOURCE_DIR/external
   # Allow complete reconfigure (for switching compilers, takes longer)
-  if [[ "$ARGS" == *"cleanhdf5"* ]]; then
+  if option "cleanhdf5"; then
     rm -rf hdf5-${H5VER}/
   fi
   # Download if needed
@@ -236,9 +276,11 @@ if [[ "$ARGS" == *"hdf5"* && "$ARGS" == *"clean"* && "$ARGS" != *"dryrun"* ]]; t
   if [ ! -d hdf5-${H5VER}/ ]; then
     tar xf hdf5-${H5VER}.tar.gz
   fi
-  cd hdf5-${H5VER}/
+
+  # Configure and compile
+  cd $SOURCE_DIR/external/hdf5-${H5VER}/
   # TODO better ensure we're using C_NATIVE underneath.  e.g. MPI_CFLAGS with -cc
-  if  [[ "$ARGS" == *"nompi"* ]]; then
+  if option "nompi"; then
     HDF_CC=$C_NATIVE
     HDF_EXTRA=""
   else
@@ -258,8 +300,8 @@ if [[ "$ARGS" == *"hdf5"* && "$ARGS" == *"clean"* && "$ARGS" != *"dryrun"* ]]; t
   echo Configuring HDF5...
 
   export CFLAGS="-fPIC $CFLAGS"
-  CC=$HDF_CC sh configure -C $HDF_EXTRA --prefix=$SOURCE_DIR/external/hdf5 --enable-build-mode=production \
-  --disable-dependency-tracking --disable-hl --disable-tests --disable-tools --disable-shared --disable-deprecated-symbols > build-hdf5.log
+  CC=$HDF_CC sh ./configure -C $HDF_EXTRA --prefix=$SOURCE_DIR/external/hdf5 --enable-build-mode=production \
+  --disable-dependency-tracking --disable-tests --disable-tools --disable-deprecated-symbols > build-hdf5.log
   sleep 1
 
   echo "Building HDF5 (probably 30s-2min)"
@@ -271,62 +313,63 @@ if [[ "$ARGS" == *"hdf5"* && "$ARGS" == *"clean"* && "$ARGS" != *"dryrun"* ]]; t
   fi
   make install >> build-hdf5.log 2>&1
   make clean >> build-hdf5.log 2>&1
-  cd ../..
+  cd $SOURCE_DIR
 
-  echo Built HDF5
+  echo Built HDF5 version $H5VER
 fi
-if [[ "$ARGS" == *"hdf5"* ]]; then
+
+# Compile against our hdf5 if specified
+if option "hdf5"; then
   PREFIX_PATH="$SOURCE_DIR/external/hdf5;$PREFIX_PATH"
+  #EXTRA_FLAGS="$EXTRA_FLAGS -DHDF5_USE_STATIC_LIBRARIES=ON"
 fi
 
 ### Build KHARMA ###
 # If we're doing a clean build, prep the source and
 # delete the build directory
-if [[ "$ARGS" == *"clean"* ]]; then
+if option "clean"; then
 
   # Should do this manually when compiling on backend nodes!
-  if [ ! -f external/parthenon/CMakeLists.txt ]; then
+  if [ ! -f external/parthenon/CMakeLists.txt -o \
+       ! -f external/singularity-eos/CMakeLists.txt ]; then
     git submodule update --recursive --init
   fi
 
   # Patch parthenon to use KHARMA's coordinates, anything incidental
   cd external/parthenon
   if [[ $(( $(git --version | cut -d '.' -f 2) > 35 )) == "1" ]]; then
-    git apply --quiet ../patches/parthenon-*.patch
+    git apply --quiet ../patches/parthenon-*.patch || true
   else
     echo "make.sh note: You may see errors applying patches below. These are normal."
-    git apply ../patches/parthenon-*.patch
+    git apply ../patches/parthenon-*.patch || true
   fi
   cd -
 
-  # HIP requires device-capable variant functions
-  if [[ "$ARGS" == *"hip"* ]]; then
-    cd external/variant
-    if [[ $(( $(git --version | cut -d '.' -f 2) > 35 )) == "1" ]]; then
-      git apply --quiet ../patches/variant-hip.patch
-    else
-      git apply ../patches/variant-hip.patch
-    fi
-    cd -
-
-    # HIP also prefers new Kokkos.
-    # TODO work something out if on HIP machines w/o internet
-    cd external/parthenon
-    git submodule update --remote external/Kokkos
-    cd -
-  fi
+  # Patches for ports-of-call
+  #cd external/singularity-eos/utils/ports-of-call
+  #if [[ $(( $(git --version | cut -d '.' -f 2) > 35 )) == "1" ]]; then
+  #  git apply --quiet ../../../patches/ports-of-call-*.patch
+  #else
+  #  echo "make.sh note: You may see errors applying patches below. These are normal."
+  #  git apply ../../../patches/ports-of-call-*.patch
+  #fi
+  #cd -
 
   rm -rf build
 fi
 mkdir -p build
 cd build
 
-if [[ "$ARGS" == *"clean"* ]]; then
+if option "clean"; then
 
-  if [[ "$ARGS" == *"dryrun"* ]]; then
+  # Print cmake command
+  if option "dryrun"; then
     set -x
   fi
 
+  # Currently we ignore output: cmake can error on "prefixed on source dir"
+  # if we build hdf5 for ourselves, but make still works fine.
+  # If it was a real error, make will yell anyway
   cmake ..\
     -DCMAKE_C_COMPILER="$CC" \
     -DCMAKE_CXX_COMPILER="$CXX" \
@@ -338,15 +381,25 @@ if [[ "$ARGS" == *"clean"* ]]; then
     -DKokkos_ENABLE_CUDA=$ENABLE_CUDA \
     -DKokkos_ENABLE_SYCL=$ENABLE_SYCL \
     -DKokkos_ENABLE_HIP=$ENABLE_HIP \
-    $EXTRA_FLAGS
+    $EXTRA_FLAGS || true
 
-  if [[ "$ARGS" == *"dryrun"* ]]; then
+  # Stop printing
+  if option "dryrun"; then
     set +x
-    exit
   fi
+
+  # Describe the kokkos version, for debugging
+  echo "--- Using Kokkos version: ---"
+  (cd $SCRIPT_DIR/external/parthenon/external/Kokkos && git describe --tags --always && cd -)
+  echo "-----------------------------"
 fi
 
-if [[ "$ARGS" != *"dryrun"* ]]; then
+if ! option "dryrun"; then
   make -j$NPROC
   cp kharma/kharma.* ..
+
+  # Needed now that we build packages
+  if option "install"; then
+    make install
+  fi
 fi

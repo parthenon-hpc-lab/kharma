@@ -77,12 +77,14 @@ bsq_over_rho_max = 100
 
 <parthenon/output0>
 file_type = hdf5
+write_xdmf = false
 dt = 5.0
 single_precision_output = true
 variables = prims, divB, fflag, pflag
 
 <parthenon/output1>
 file_type = rst
+write_xdmf = false
 dt = 100.0
 
 <parthenon/output2>

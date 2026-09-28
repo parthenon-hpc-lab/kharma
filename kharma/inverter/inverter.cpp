@@ -38,22 +38,23 @@
 #include "domain.hpp"
 #include "floors_functions.hpp"
 #include "flux.hpp"
+#include "kharma_driver.hpp"
 #include "reductions.hpp"
+#include <stdexcept>
 
-int Inverter::CountPFlags(MeshData<Real> *md)
-{
-    return Reductions::CountFlags(md, "pflag", Inverter::status_names, IndexDomain::interior, false)[0];
-}
+#include <singularity-eos/eos/eos_ideal.hpp>
 
-std::shared_ptr<KHARMAPackage> Inverter::Initialize(ParameterInput *pin, std::shared_ptr<Packages_t>& packages)
+std::shared_ptr<KHARMAPackage> Inverter::Initialize(
+    ParameterInput* pin, std::shared_ptr<Packages_t>& packages)
 {
     auto pkg = std::make_shared<KHARMAPackage>("Inverter");
-    Params &params = pkg->AllParams();
+    Params& params = pkg->AllParams();
 
     // Inversion scheme.  Could be separate packages but they do share a lot,
     // and could share more e.g. inline floor applications
     std::vector<std::string> allowed_inverter_names = {"none", "onedw", "kastaun"};
-    std::string inverter_name = pin->GetOrAddString("inverter", "type", "kastaun", allowed_inverter_names);
+    std::string inverter_name =
+        pin->GetOrAddString("inverter", "type", "kastaun", allowed_inverter_names);
     bool use_kastaun = false;
     if (inverter_name == "onedw") {
         params.Add("inverter_type", Type::onedw);
@@ -64,46 +65,63 @@ std::shared_ptr<KHARMAPackage> Inverter::Initialize(ParameterInput *pin, std::sh
         params.Add("inverter_type", Type::none);
     }
 
+    // An option that exits when someone use onedw with an equation of state that is not
+    // ideal gas. eos_kharma is solely responsible for setting/defaulting "eos"/"type"; we
+    // only ever read it here.
+    if (inverter_name == "onedw") {
+        const std::string eos_name = pin->GetString("eos", "type");
+        if (eos_name != singularity::IdealGas::EosType()) {
+            throw std::invalid_argument(
+                "onedw inverter only works with ideal gas equation of state");
+        }
+    }
+
     // Solver options
-    // Any other Noble et al. implemented for fun should use lower tol/iter count, see Noble+06
-    Real err_tol = pin->GetOrAddReal("inverter", "err_tol", (use_kastaun) ? 1e-12 : 1e-8);
+    // Any other Noble et al. implemented for fun should use lower tol/iter count, see
+    // Noble+06
+    Real err_tol = pin->GetOrAddReal("inverter", "err_tol", (use_kastaun) ? 1e-14 : 1e-8);
     params.Add("err_tol", err_tol);
     int iter_max = pin->GetOrAddInteger("inverter", "iter_max", (use_kastaun) ? 25 : 8);
     params.Add("iter_max", iter_max);
 
-    // Floor options
-    // Use a custom block for inverter floors to allow customization.  Not sure anyone *wants* that but...
-    if (!pin->DoesBlockExist("inverter_floors")) {
-        params.Add("inverter_prescription", Floors::MakePrescription(pin, "floors"));
-            if (pin->DoesBlockExist("floors_inner"))
-                params.Add("inverter_prescription_inner", Floors::MakePrescriptionInner(pin, Floors::MakePrescription(pin, "floors"), "floors_inner"));
-            else
-                params.Add("inverter_prescription_inner", Floors::MakePrescriptionInner(pin, Floors::MakePrescription(pin, "floors"), "floors"));
-    } else {
-        params.Add("inverter_prescription", Floors::MakePrescription(pin, "inverter_floors"));
-        params.Add("inverter_prescription_inner", Floors::MakePrescriptionInner(pin, Floors::MakePrescription(pin, "inverter_floors"), "inverter_floors"));
+    // Fixup options
+    // Fix by averaging neighboring cells.  Enabled by default for 1Dw, but (magnetized!)
+    // Kastaun failures are more dire
+    const bool nob = pin->GetString("b_field", "solver") == "none";
+    bool fix_average_neighbors =
+        pin->GetOrAddBoolean("inverter", "fix_average_neighbors", (!use_kastaun) || nob);
+    params.Add("fix_average_neighbors", fix_average_neighbors);
+    // Fix by replacing with floors, uvec=0. Last resort for impossible states
+    bool fix_atmosphere =
+        pin->GetOrAddBoolean("inverter", "fix_atmosphere", !use_kastaun);
+    params.Add("fix_atmosphere", fix_atmosphere);
+
+    // New "backstop" code: ensure positive internal energy by
+    // stealing some or all KE and adding any shortfall
+    // Not intended for unmagnetized flows/simulations, not very useful
+    bool backstop = pin->GetOrAddBoolean("inverter", "backstop", use_kastaun && !nob);
+    params.Add("backstop", backstop);
+    // Note these aren't called if the backstop isn't enabled!
+    bool backstop_recover_vel =
+        pin->GetOrAddBoolean("inverter", "backstop_recover_vel", true);
+    params.Add("backstop_recover_vel", backstop_recover_vel);
+    bool backstop_recover_u =
+        pin->GetOrAddBoolean("inverter", "backstop_recover_u", false);
+    params.Add("backstop_recover_u", backstop_recover_u);
+    int backstop_iter_max = pin->GetOrAddInteger("inverter", "backstop_iter_max", 100);
+    params.Add("backstop_iter_max", backstop_iter_max);
+    if (backstop && backstop_recover_vel && backstop_recover_u) {
+        throw std::runtime_error(
+            "Inverter parameters error: cannot recover with backstop_recover_vel and "
+            "backstop_recover_u!  Please choose one option.");
     }
 
-    // Fixup options
-    // Whether to apply Normal frame floors right after the inversion
-    bool apply_floors_with_inversion = pin->GetOrAddBoolean("inverter", "apply_floors_with_inversion", use_kastaun);
-    params.Add("apply_floors_with_inversion", apply_floors_with_inversion);
-    // Tolerance in the momenta before a zone is considered failed and the unsolvable velocity zeroed out
-    // Can't be set individually right now, set == 100*solver_tol
-    // Real bad_vel_tolerance = pin->GetOrAddReal("inverter", "bad_vel_tolerance", 1e-8);
-    // params.Add("bad_vel_tolerance", bad_vel_tolerance);
-
-    // Fix by averaging neighboring cells.  Enabled by default for 1Dw, but Kastaun failures are more dire
-    bool fix_average_neighbors = pin->GetOrAddBoolean("inverter", "fix_average_neighbors", !use_kastaun);
-    params.Add("fix_average_neighbors", fix_average_neighbors);
-    // Fix by zeroing the velocity, for particularly nasty zones.  Applied immediately rather than in fixup
-    // Generally you don't want this -- if you're eliminating velocity and therefore momentum, better to
-    // eliminate inertia too by setting floor density/temp
-    bool fix_zero_velocity = pin->GetOrAddBoolean("inverter", "fix_zero_velocity", false);
-    params.Add("fix_zero_velocity", fix_zero_velocity);
-    // Fix by replacing with floors, uvec=0. Backstop for states which are just impossible to use
-    bool fix_atmosphere = pin->GetOrAddBoolean("inverter", "fix_atmosphere", true);
-    params.Add("fix_atmosphere", fix_atmosphere);
+    // When to stop the trainwreck
+    Real kill_on_pflags_pct = pin->GetOrAddReal("inverter", "kill_on_pflags_pct", 5);
+    params.Add("kill_on_pflags_pct", kill_on_pflags_pct);
+    bool kill_on_any_max_iter =
+        pin->GetOrAddBoolean("inverter", "kill_on_any_max_iter", false);
+    params.Add("kill_on_any_max_iter", kill_on_any_max_iter);
 
     // Flag denoting UtoP inversion failures
     // Needs boundary sync if the fixup code will use neighbors, and if
@@ -111,14 +129,17 @@ std::shared_ptr<KHARMAPackage> Inverter::Initialize(ParameterInput *pin, std::sh
     bool sync_prims = packages->Get("Driver")->Param<bool>("sync_prims");
     Metadata m;
     if (sync_prims && fix_average_neighbors) {
-        m = Metadata({Metadata::Real, Metadata::Cell, Metadata::Derived, Metadata::OneCopy, Metadata::FillGhost});
+        m = Metadata({Metadata::Real, Metadata::Cell, Metadata::Derived,
+            Metadata::OneCopy, Metadata::FillGhost});
     } else {
-        m = Metadata({Metadata::Real, Metadata::Cell, Metadata::Derived, Metadata::OneCopy});
+        m = Metadata(
+            {Metadata::Real, Metadata::Cell, Metadata::Derived, Metadata::OneCopy});
     }
     pkg->AddField("pflag", m);
 
     // When not using floors, we need to declare fflag for ourselves
-    m = Metadata({Metadata::Real, Metadata::Cell, Metadata::Derived, Metadata::OneCopy, Metadata::Overridable});
+    m = Metadata({Metadata::Real, Metadata::Cell, Metadata::Derived, Metadata::OneCopy,
+        Metadata::Overridable});
     pkg->AddField("fflag", m);
 
     // This package may be loaded even when evolving implicitly, e.g. for FOFC
@@ -126,21 +147,27 @@ std::shared_ptr<KHARMAPackage> Inverter::Initialize(ParameterInput *pin, std::sh
     if (!pin->GetBoolean("GRMHD", "implicit") || pin->GetBoolean("emhd", "ideal_guess")) {
         // We exist basically to do this
         pkg->BlockUtoP = Inverter::BlockUtoP;
-        // We want to run U->P on most boundaries when we're synchronizing conserved variables
+        // We want to run U->P on most boundaries when we're synchronizing conserved
+        // variables
         pkg->BoundaryUtoP = Inverter::BlockUtoP;
         // However, we apply domain boundaries to primitives.
-        // Registering this additional function conveys that to the callers in `Packages` and `Boundaries`
+        // Registering this additional function conveys that to the callers in `Packages`
+        // and `Boundaries`
         pkg->DomainBoundaryPtoU = Flux::BlockPtoUMHD;
     }
 
+    // But always handle and print the flag
+    pkg->PreStepWork = Inverter::PreStepWork;
     pkg->PostStepDiagnosticsMesh = Inverter::PostStepDiagnostics;
 
     // List (vector) of HistoryOutputVars that will all be enrolled as output variables
     parthenon::HstVar_list hst_vars = {};
     // Count total floors as a history item
-    hst_vars.emplace_back(parthenon::HistoryOutputVar(UserHistoryOperation::sum, CountPFlags, "PFlags"));
+    hst_vars.emplace_back(
+        parthenon::HistoryOutputVar(UserHistoryOperation::sum, CountPFlags, "PFlags"));
     // TODO entries for each individual flag?
-    // add callbacks for HST output to the Params struct, identified by the `hist_param_key`
+    // add callbacks for HST output to the Params struct, identified by the
+    // `hist_param_key`
     pkg->AddParam<>(parthenon::hist_param_key, hst_vars);
 
     return pkg;
@@ -151,7 +178,8 @@ std::shared_ptr<KHARMAPackage> Inverter::Initialize(ParameterInput *pin, std::sh
  * This is called with the correct template argument from BlockUtoP
  */
 template<Inverter::Type inverter>
-inline void BlockPerformInversion(MeshBlockData<Real> *rc, IndexDomain domain, bool coarse)
+inline void BlockPerformInversion(
+    MeshBlockData<Real>* rc, IndexDomain domain, bool coarse)
 {
     auto pmb = rc->GetBlockPointer();
 
@@ -160,243 +188,108 @@ inline void BlockPerformInversion(MeshBlockData<Real> *rc, IndexDomain domain, b
     auto P = GRMHD::PackMHDPrims(rc, prims_map);
     const VarMap m_u(cons_map, true), m_p(prims_map, false);
 
-    auto fflag = rc->PackVariables(std::vector<std::string>{"fflag"});
+    // auto fflag = rc->PackVariables(std::vector<std::string>{"fflag"});
     auto pflag = rc->PackVariables(std::vector<std::string>{"pflag"});
 
-    if (U.GetDim(4) == 0 || pflag.GetDim(4) == 0)
-        return;
+    if (U.GetDim(4) == 0 || pflag.GetDim(4) == 0) return;
 
-    const Real gam = pmb->packages.Get("GRMHD")->Param<Real>("gamma");
+    const auto& eos_params = pmb->packages.Get("eos")->AllParams();
+    auto eos = eos_params.Get<Microphysics::EOS::EOS>("d.EOS");
 
-    auto &pars = pmb->packages.Get("Inverter")->AllParams();
+    auto& pars = pmb->packages.Get("Inverter")->AllParams();
     const Real err_tol = pars.Get<Real>("err_tol");
     const int iter_max = pars.Get<int>("iter_max");
-    const bool apply_floors_with_inversion = pars.Get<bool>("apply_floors_with_inversion");
-    //const Real bad_vel_tolerance = pars.Get<Real>("bad_vel_tolerance");
-    const bool fix_zero_velocity = pars.Get<bool>("fix_zero_velocity");
-    const Floors::Prescription inverter_floors       = pars.Get<Floors::Prescription>("inverter_prescription");
-    const Floors::Prescription inverter_floors_inner = pars.Get<Floors::Prescription>("inverter_prescription_inner");
 
     // If we set the floors package to use normal frame w/Kastaun inverter, *or*
     // if we disabled the floors package, go ahead and apply all floors in this function
-    const bool normal_frame_floors = (pmb->packages.AllPackages().count("Floors")) ?
-                                        pmb->packages.Get("Floors")->Param<Floors::InjectionFrame>("frame") ==
-                                            Floors::InjectionFrame::normal_kastaun :
-                                        true;
+    const bool normal_frame_floors =
+        (pmb->packages.AllPackages().count("Floors"))
+            ? pmb->packages.Get("Floors")->Param<Floors::InjectionFrame>("frame") ==
+                  Floors::InjectionFrame::normal_kastaun
+            : true;
 
     const auto& G = pmb->coords;
 
-    // No floors/floors_inner distinction, TODO?
-    const Real rhoh_denom_max = SQR(inverter_floors.gamma_max) *
-                                m::sqrt(1 - 1 / SQR(inverter_floors.gamma_max));
-
-    // Get the primitives from our conserved versions
-    // Notice by default, we recover variables for only the physical (interior or interior-ghost)
-    // zones!  These are the only ones which are filled at our point in the step
+    // Notice by default, we recover variables for only the physical (interior or
+    // interior-ghost) zones!  These are the only ones which are filled at our point in
+    // the step
     const IndexRange3 b = (domain == IndexDomain::entire)
-                          ? KDomain::GetPhysicalRange(rc) : KDomain::GetRange(rc, domain, coarse);
+                              ? KDomain::GetPhysicalRange(rc)
+                              : KDomain::GetRange(rc, domain, coarse);
+
+    // Get the basic/primitive variables from the conserved quantities
     pmb->par_for("U_to_P", b.ks, b.ke, b.js, b.je, b.is, b.ie,
-        KOKKOS_LAMBDA (const int &k, const int &j, const int &i) {
-            int pflagl = Inverter::u_to_p<inverter>(G, U, m_u, gam, k, j, i, P, m_p, Loci::center,
-                                                    iter_max, err_tol, false);
-
-            // Apply floors immediately, attempting to correct bad values
-            // from either failed or "successful" inversions
-            if (apply_floors_with_inversion) {
-                Real rhoflr_max, uflr_max;
-                int fflagl = 0; // There are no prior floors, reset
-                if (normal_frame_floors) {
-                    fflagl |= Floors::determine_floors(G, P, m_p, gam, k, j, i, inverter_floors, inverter_floors_inner,
-                        rhoflr_max, uflr_max);
-                } else {
-                    // Bare minimum floors for numerics, then we apply the rest in user-selected frame
-                    rhoflr_max = inverter_floors.rho_min_const;
-                    uflr_max = inverter_floors.u_min_const;
-                    if (P(m_p.RHO, k, j, i) < rhoflr_max) fflagl |= Floors::FFlag::GEOM_RHO;
-                    if (P(m_p.UU, k, j, i) < uflr_max) fflagl |= Floors::FFlag::GEOM_U;
-                }
-                if (fflagl) {
-                    // Add a floor to density which controls wayward velocities
-                    bool used_rho_to_slow = false;
-                    if (inverter_floors.use_rho_to_slow) {
-                        //const Real rho = std::max(P(m_p.RHO, k, j, i), rhoflr_max);
-                        //const Real u = std::max(P(m_p.UU, k, j, i), uflr_max);
-                        const Real rho = P(m_p.RHO, k, j, i);
-                        const Real u = P(m_p.UU, k, j, i);
-                        const Real rhoh = rho + gam * u;
-                        const Real alpha  = 1. / m::sqrt(-G.gcon(Loci::center, j, i, 0, 0));
-                        const Real a_over_g = alpha / G.gdet(Loci::center, j, i);
-                        Real Scov[3] = {U(m_u.U1, k, j, i) * a_over_g,
-                                        U(m_u.U2, k, j, i) * a_over_g,
-                                        U(m_u.U3, k, j, i) * a_over_g};
-                        Real Scon[3];
-                        Real gupper[GR_DIM][GR_DIM], glower[GR_DIM][GR_DIM];
-                        G.gcon(Loci::center, j, i, gupper);
-                        G.gcov(Loci::center, j, i, glower);
-                        Scon[0] = ((gupper[1][1] - gupper[0][1]*gupper[0][1]/gupper[0][0])*Scov[0] +
-                                    (gupper[1][2] - gupper[0][1]*gupper[0][2]/gupper[0][0])*Scov[1] +
-                                    (gupper[1][3] - gupper[0][1]*gupper[0][3]/gupper[0][0])*Scov[2]);
-
-                        Scon[1] = ((gupper[2][1] - gupper[0][2]*gupper[0][1]/gupper[0][0])*Scov[0] +
-                                    (gupper[2][2] - gupper[0][2]*gupper[0][2]/gupper[0][0])*Scov[1] +
-                                    (gupper[2][3] - gupper[0][2]*gupper[0][3]/gupper[0][0])*Scov[2]);
-
-                        Scon[2] = ((gupper[3][1] - gupper[0][3]*gupper[0][1]/gupper[0][0])*Scov[0] +
-                                    (gupper[3][2] - gupper[0][3]*gupper[0][2]/gupper[0][0])*Scov[1] +
-                                    (gupper[3][3] - gupper[0][3]*gupper[0][3]/gupper[0][0])*Scov[2]);
-                        Real Ssq = 0.0;
-                        SPACELOOP(ii) Ssq += Scon[ii] * Scov[ii];
-
-                        const Real rhoh_min = m::sqrt(Ssq) / rhoh_denom_max;
-                        if (rhoh < rhoh_min) {
-                            fflagl |= Floors::FFlag::INVERTER_GAMMA;
-                            // Proportional increases to rho,u preserve temperature
-                            // TODO could play with this ratio
-                            P(m_p.RHO, k, j, i) = rho * rhoh_min/rhoh;
-                            P(m_p.UU, k, j, i) = u * rhoh_min/rhoh;
-
-                            Real Bvec[] = {0.0, 0.0, 0.0};
-                            SPACELOOP(ii) Bvec[ii] = P(m_u.B1 + ii, k, j, i) * alpha;
-                            Real BdotS = 0.;
-                            SPACELOOP(ii) BdotS += Bvec[ii] * Scov[ii];
-                            Real Bsq = 0.;
-                            SPACELOOP2(ii, jj) Bsq += glower[ii + 1][jj + 1] * Bvec[ii] * Bvec[jj];
-                            Real Sparsq = BdotS * BdotS / Bsq;
-                            Real Sperpsq = Ssq - Sparsq;
-                            Real Spar[3], Sperp[3];
-                            SPACELOOP(ii) Spar[ii] = BdotS * Bvec[ii] / Bsq;
-                            SPACELOOP(ii) Sperp[ii] = Scon[ii] - Spar[ii];
-
-                            auto func_W = [&] (Real W) {
-                                const Real rhohW2 = rhoh_min * W * W;
-                                return Sparsq / SQR(rhohW2) +
-                                Sperpsq / SQR(rhohW2 + Bsq) +
-                                1. / (W * W) - 1.;
-                            };
-
-                            Real zm = 1.;
-                            Real zp = inverter_floors.gamma_max;
-                            Real z = 0.5*(zm + zp);
-
-                            Real fm = func_W(zm);
-                            Real fp = func_W(zp);
-
-                            bool vel_solve_failed = false;
-                            for (int iter = 0; iter < 30; ++iter) {
-                                z =  (zm*fp - zp*fm) / (fp-fm);  // linear interpolation to point f(z)=0
-                                Real f = func_W(z);
-                                // Quit if convergence reached
-                                if ((m::abs(f) < 1e-8) || (m::abs(zm-zp) < 1e-10)) {
-                                    // Return failure if 
-                                    vel_solve_failed = m::abs(f) > 1e-8;
-                                    break;
-                                }
-                                // assign zm-->zp if root bracketed by [z,zp]
-                                if (f*fp < 0.0) {
-                                    zm = zp;
-                                    fm = fp;
-                                    zp = z;
-                                    fp = f;
-                                } else {  // assign zp-->z if root bracketed by [zm,z]
-                                    fm = 0.5*fm; // 1/2 comes from "Illinois algorithm" to accelerate convergence
-                                    zp = z;
-                                    fp = f;
-                                }
-                            }
-
-                            if (!vel_solve_failed) {
-                                SPACELOOP(ii) P(m_p.U1+ii, k, j, i) = z * (Spar[ii] / (rhoh_min * z * z) +
-                                                                        Sperp[ii] / (rhoh_min * z * z + Bsq));
-                                // Even if Kastaun hit max_iter, we managed to reset everything correctly
-                                pflagl = static_cast<int>(Inverter::Status::success);
-                                used_rho_to_slow = true;
-                            } else {
-                                // This should basically NEVER happen
-                                // Only if the numbers are just floating-point gibberish
-                                pflagl = static_cast<int>(Inverter::Status::bad_velocity);
-                            }
-                        }
-                    }
-
-                    // If we haven't used floors to adjust the velocity, apply them in NOF
-                    if (!used_rho_to_slow) {
-                        // Apply floors to P -- this calls inversion again
-                        pflagl = Floors::apply_floors<Floors::InjectionFrame::normal_kastaun>(G, P, m_p, gam, k, j, i,
-                                rhoflr_max, uflr_max, U, m_u);
-                        apply_ceilings(G, P, m_p, gam, k, j, i, inverter_floors, inverter_floors_inner, U, m_u);
-                    }
-                }
-
-                // If we recovered the velocity, mark we used the gamma ceiling
-                // TODO real fflag for this
-                if (pflagl == static_cast<int>(Inverter::Status::floor)) {
-                    fflagl |= Floors::FFlag::GAMMA;
-                    pflagl = static_cast<int>(Inverter::Status::success);
-                // If we failed to recover the velocity, optionally zero it here
-                // otherwise it will just get set to atmosphere later
-                } else if (fix_zero_velocity &&
-                           pflagl == static_cast<int>(Inverter::Status::bad_velocity)) {
-                    P(m_p.U1, k, j, i) = 0.;
-                    P(m_p.U2, k, j, i) = 0.;
-                    P(m_p.U3, k, j, i) = 0.;
-                    pflagl = static_cast<int>(Inverter::Status::success);
-                }
-                // If we applied floors but we won't fix later, update U
-                if (fflagl && !pflagl) {
-                    // This is explicitly a GRMHD-only function, we don't need to account for
-                    // EMHD here.  Also this is done next anyway in the KHARMA driver,
-                    // but we want to eventually remove that function.
-                    GRMHD::p_to_u(G, P, m_p, gam, k, j, i, U, m_u, Loci::center);
-                }
-
-                fflag(0, k, j, i) = fflagl;
-            }
-
-            // If we're applying floors, record the *post-floor* flag since we only care if that failed
+        KOKKOS_LAMBDA (const int &k, const int &j, const int &i)
+        {
+            int pflagl = Inverter::u_to_p<inverter>(
+                G, U, m_u, eos, k, j, i, P, m_p, Loci::center, iter_max, err_tol);
             pflag(0, k, j, i) = pflagl;
-        }
-    );
+        });
 }
 
-void Inverter::BlockUtoP(MeshBlockData<Real> *rc, IndexDomain domain, bool coarse)
+void Inverter::BlockUtoP(MeshBlockData<Real>* rc, IndexDomain domain, bool coarse)
 {
-    // This only chooses an implementation.  See BlockPerformInversion and implementations e.g. onedw.hpp
-    auto& type = rc->GetBlockPointer()->packages.Get("Inverter")->Param<Type>("inverter_type");
-    switch(type) {
-    case Type::onedw:
-        BlockPerformInversion<Type::onedw>(rc, domain, coarse);
-        break;
-    case Type::kastaun:
-        BlockPerformInversion<Type::kastaun>(rc, domain, coarse);
-        break;
-    case Type::none:
-        break;
+    // This only chooses an implementation.  See BlockPerformInversion and implementations
+    // e.g. onedw.hpp
+    auto& type =
+        rc->GetBlockPointer()->packages.Get("Inverter")->Param<Type>("inverter_type");
+    switch (type) {
+        case Type::onedw:
+            BlockPerformInversion<Type::onedw>(rc, domain, coarse);
+            break;
+        case Type::kastaun:
+            BlockPerformInversion<Type::kastaun>(rc, domain, coarse);
+            break;
+        case Type::none:
+            break;
     }
-    // This is dangerous since there are many blocks/packs and we need one reduction. For later.
-    //Reductions::StartFlagReduce(md, "pflag", Inverter::status_names, IndexDomain::interior, false, 1);
 }
 
-TaskStatus Inverter::PostStepDiagnostics(const SimTime& tm, MeshData<Real> *md)
+int Inverter::CountPFlags(MeshData<Real>* md)
+{
+    return Reductions::CountFlags(
+        md, "pflag", Inverter::status_names, IndexDomain::interior, false)[0];
+}
+
+void Inverter::PreStepWork(Mesh* pmesh, ParameterInput* pin, const SimTime& tm)
+{
+    // Clear all floor flags before each step
+    auto md = pmesh->mesh_data.Get().get();
+    KHARMADriver::Scale(std::vector<std::string>{"pflag"}, md, 0.);
+}
+
+TaskStatus Inverter::PostStepDiagnostics(const SimTime& tm, MeshData<Real>* md)
 {
     auto pmesh = md->GetMeshPointer();
     auto pmb0 = md->GetBlockData(0)->GetBlockPointer();
     // Options
-    const auto& pars = pmesh->packages.Get("Globals")->AllParams();
-    const int flag_verbose = pars.Get<int>("flag_verbose");
+    const auto& globals = pmesh->packages.Get("Globals")->AllParams();
+    const auto flag_verbose = globals.Get<int>("flag_verbose");
+    const auto& pars = pmesh->packages.Get("Inverter")->AllParams();
+    const auto kill_on_any_max_iter = pars.Get<bool>("kill_on_any_max_iter");
+    const auto kill_on_pflags_pct = pars.Get<Real>("kill_on_pflags_pct");
 
     // Debugging/diagnostic info about inversion flags
-    // TODO grab the total and die on too many
-    if (flag_verbose >= 1) {
-        // TODO this should move into UtoP when everything goes MeshData
-        Reductions::StartFlagReduce(md, "pflag", Inverter::status_names, IndexDomain::interior, false, 1);
-        Reductions::CheckFlagReduceAndPrintHits(md, "pflag", Inverter::status_names, IndexDomain::interior, false, 1);
+    Reductions::StartFlagReduce(
+        md, "pflag", Inverter::status_names, IndexDomain::interior, false, 1);
+    auto totals = Reductions::CheckFlagReduceAndPrintHits(
+        md, "pflag", Inverter::status_names, IndexDomain::interior, false, 1);
 
-        // If we're the only floors, print those too
-        if (!pmesh->packages.AllPackages().count("Floors")) {
-            Reductions::StartFlagReduce(md, "fflag", Floors::FFlag::flag_names, IndexDomain::interior, true, 0);
-            // Debugging/diagnostic info about floors
-            Reductions::CheckFlagReduceAndPrintHits(md, "fflag", Floors::FFlag::flag_names, IndexDomain::interior, true, 0);
-        }
+    IndexRange ib = md->GetBoundsI(IndexDomain::interior);
+    IndexRange jb = md->GetBoundsJ(IndexDomain::interior);
+    IndexRange kb = md->GetBoundsK(IndexDomain::interior);
+    int n_cells =
+        pmesh->nbtotal * (kb.e - kb.s + 1) * (jb.e - jb.s + 1) * (ib.e - ib.s + 1);
+
+    Real pflags_pct = ((Real)totals[0]) / n_cells * 100.;
+    if ((kill_on_pflags_pct > 0.) && (pflags_pct > kill_on_pflags_pct)) {
+        throw std::runtime_error(
+            string_format("Too many pflags to continue! (%d, %f %) Quitting...",
+                totals[0], pflags_pct));
+    }
+
+    if (totals[(int)Status::max_iter] > 0 && kill_on_any_max_iter) {
+        throw std::runtime_error("Encountered max iter! Quitting...");
     }
 
     return TaskStatus::complete;
