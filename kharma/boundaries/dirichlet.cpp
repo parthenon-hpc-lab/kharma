@@ -47,8 +47,7 @@ void KBoundaries::DirichletImpl(
 {
     // Get all cell-centered ghosts, minus anything just used at startup
     using FC = Metadata::FlagCollection;
-    FC ghost_vars = FC({Metadata::FillGhost, Metadata::Conserved}) +
-                    FC({Metadata::FillGhost, Metadata::GetUserFlag("Primitive")}) -
+    FC ghost_vars = FC({Metadata::FillGhost, Metadata::Cell}) -
                     FC({Metadata::GetUserFlag("StartupOnly")});
     auto q = rc->PackVariables(ghost_vars, coarse);
     auto bound =

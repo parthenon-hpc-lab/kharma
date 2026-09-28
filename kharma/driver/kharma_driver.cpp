@@ -630,13 +630,17 @@ TaskID KHARMADriver::AddStateUpdate(TaskID& t_start, TaskList& tl,
     auto& pkgs = pmb0->packages.AllPackages();
 
     // If we're explicitly evolving, UtoP needs a guess
-    // TODO why is this necessary still?  Is it necessary on every AddStateUpdate?
-    // if (!pkgs.at("GRMHD")->Param<bool>("implicit")) {
-    //     t_copy_prims = tl.AddTask(t_start, Copy<MeshData<Real>>,
-    //         std::vector<MetadataFlag>(
-    //             {Metadata::GetUserFlag("MHD"), Metadata::GetUserFlag("Primitive")}),
-    //         md_sub_step_init, md_update);
-    // }
+    // TODO(CEP) This means FOFC is basically incompatible with 1Dw
+    if (pkgs.count("Inverter")) {
+        if (pkgs.at("Inverter")->Param<Inverter::Type>("inverter_type") ==
+                Inverter::Type::onedw &&
+            !pkgs.at("GRMHD")->Param<bool>("implicit")) {
+            t_copy_prims = tl.AddTask(t_start, Copy<MeshData<Real>>,
+                std::vector<MetadataFlag>(
+                    {Metadata::GetUserFlag("MHD"), Metadata::GetUserFlag("Primitive")}),
+                md_sub_step_init, md_update);
+        }
+    }
 
     return t_copy_prims | t_update_c | t_update_f;
 }
@@ -678,6 +682,7 @@ TaskID KHARMADriver::AddStateUpdateIdealGuess(TaskID& t_start, TaskList& tl,
 
     // We'll be running UtoP after this, which needs a guess in order to converge, so we
     // copy in md_sub_step_init
+    // TODO(CEP) don't run this w/Kastaun, should be a v small speed boost
     auto t_copy_prims = t_update_c | t_update_f;
     auto pmb0 = md_full_step_init->GetBlockData(0)->GetBlockPointer();
     auto& pkgs = pmb0->packages.AllPackages();
