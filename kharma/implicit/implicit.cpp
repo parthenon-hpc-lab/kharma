@@ -129,6 +129,24 @@ std::shared_ptr<KHARMAPackage> Implicit::Initialize(
     Real linesearch_lambda = pin->GetOrAddReal("implicit", "linesearch_lambda", 1.0);
     params.Add("linesearch_lambda", linesearch_lambda);
 
+    // Treatment of the EMHD relaxation (q, dP damping) source term inside the solve.
+    // Both default to the original behavior.
+    // emhd_relax_tau_min: evaluate the relaxation time as the *smaller* of tau on the
+    //   full-step and sub-step initial states.  Otherwise the corrector stage sizes tau
+    //   from the predictor result alone, and a zone the predictor relaxed back under the
+    //   instability thresholds is not damped at all when the corrector restarts from the
+    //   (still over-threshold) full-step initial state.
+    // emhd_relax_theta: implicit weight of the relaxation term.  0.5 is the original
+    //   trapezoidal (Crank-Nicolson) average of old and new states, whose amplification
+    //   factor tends to -1 for dt/tau >> 1.  1.0 is backward Euler, which is L-stable.
+    bool emhd_relax_tau_min =
+        pin->GetOrAddBoolean("implicit", "emhd_relax_tau_min", false);
+    params.Add("emhd_relax_tau_min", emhd_relax_tau_min);
+    Real emhd_relax_theta = pin->GetOrAddReal("implicit", "emhd_relax_theta", 0.5);
+    if (emhd_relax_theta < 0.5 || emhd_relax_theta > 1.0)
+        throw std::invalid_argument("implicit/emhd_relax_theta must be in [0.5, 1]");
+    params.Add("emhd_relax_theta", emhd_relax_theta);
+
     // Allocate the Jacobian and step so we can split the solver kernel
     auto resolved = StateDescriptor::CreateResolvedStateDescriptor(*packages);
     int nvars_implicit = resolved->GetPackDimension(Metadata::GetUserFlag("Implicit"));
@@ -208,6 +226,8 @@ TaskStatus Implicit::Step(MeshData<Real>* md_full_step_init,
     const int max_linesearch_iter = implicit_par.Get<int>("max_linesearch_iter");
     const Real linesearch_eps = implicit_par.Get<Real>("linesearch_eps");
     const Real linesearch_lambda = implicit_par.Get<Real>("linesearch_lambda");
+    const bool emhd_relax_tau_min = implicit_par.Get<bool>("emhd_relax_tau_min");
+    const Real emhd_relax_theta = implicit_par.Get<Real>("emhd_relax_theta");
 
     // Misc other constants for inside the kernel
     const bool am_rank0 = MPIRank0();
@@ -368,6 +388,13 @@ TaskStatus Implicit::Step(MeshData<Real>* md_full_step_init,
                         Real tau, chi_e, nu_e;
                         EMHD::set_parameters(G, P_sub_step_init_all(b), m_p,
                             emhd_params_sub_step_init, eos, k, j, i, tau, chi_e, nu_e);
+                        if (emhd_relax_tau_min) {
+                            Real tau_i, chi_i, nu_i;
+                            EMHD::set_parameters(G, P_full_step_init_all(b), m_p,
+                                emhd_params_sub_step_init, eos, k, j, i, tau_i, chi_i,
+                                nu_i);
+                            tau = m::min(tau, tau_i);
+                        }
                         EMHD::implicit_sources(G, P_full_step_init_all(b), m_p, eos, tau,
                             k, j, i, dUq, dUdP);
                     }
@@ -378,7 +405,8 @@ TaskStatus Implicit::Step(MeshData<Real>* md_full_step_init,
                         U_full_step_init_all(b), P_sub_step_init_all(b), flux_src_all(b),
                         dU_implicit_all(b), m_p, m_u, emhd_params_solver,
                         emhd_params_sub_step_init, nvar, nfvar, k, j, i, delta, eos, dt,
-                        jacobian_all(b), residual_all(b));
+                        emhd_relax_theta, emhd_relax_tau_min, jacobian_all(b),
+                        residual_all(b));
                 }
 #if SPLIT_IMPLICIT_SOLVE
             } // End lambda
@@ -560,7 +588,8 @@ TaskStatus Implicit::Step(MeshData<Real>* md_full_step_init,
                             U_full_step_init_all(b), P_sub_step_init_all(b),
                             flux_src_all(b), dU_implicit_all(b), m_p, m_u,
                             emhd_params_linesearch, emhd_params_solver, nfvar, k, j, i,
-                            eos, dt, residual_all(b));
+                            eos, dt, emhd_relax_theta, emhd_relax_tau_min,
+                            residual_all(b));
 
                         solve_norm = 0.;
                         FLOOP solve_norm += SQR(residual_all(b, ip, k, j, i));
@@ -587,7 +616,8 @@ TaskStatus Implicit::Step(MeshData<Real>* md_full_step_init,
                 calc_residual(G, P_solver_all(b), P_full_step_init_all(b),
                     U_full_step_init_all(b), P_sub_step_init_all(b), flux_src_all(b),
                     dU_implicit_all(b), m_p, m_u, emhd_params_solver,
-                    emhd_params_sub_step_init, nfvar, k, j, i, eos, dt, residual_all(b));
+                    emhd_params_sub_step_init, nfvar, k, j, i, eos, dt, emhd_relax_theta,
+                    emhd_relax_tau_min, residual_all(b));
 
                 // Store for maximum/output
                 solve_norm = 0;

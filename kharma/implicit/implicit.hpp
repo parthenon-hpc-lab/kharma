@@ -151,7 +151,8 @@ KOKKOS_INLINE_FUNCTION void calc_residual(const GRCoordinates& G, const Global& 
     const Global& dUi, const VarMap& m_p, const VarMap& m_u,
     const EMHD::EMHD_parameters& emhd_params, const EMHD::EMHD_parameters& emhd_params_s,
     const int& nfvar, const int& k, const int& j, const int& i,
-    const Microphysics::EOS::EOS& eos, const double& dt, Global& residual)
+    const Microphysics::EOS::EOS& eos, const double& dt, const Real& relax_theta,
+    const bool& relax_tau_min, Global& residual)
 {
     // These lines calculate res = (U_test - Ui)/dt - dudt_explicit - 0.5*(dU_new(ip) +
     // dUi(ip)) - dU_time(ip) ) Start with conserved vars corresponding to test P, U_test
@@ -181,14 +182,25 @@ KOKKOS_INLINE_FUNCTION void calc_residual(const GRCoordinates& G, const Global& 
             Ps(m_p.RHO, k, j, i), Ps(m_p.UU, k, j, i) / Ps(m_p.RHO, k, j, i));
         Real gam = bulk / pg;
         EMHD::set_parameters(G, Ps, m_p, emhd_params, eos, k, j, i, tau, chi_e, nu_e);
+        // Optionally use the shorter of the relaxation times on the sub-step and
+        // full-step initial states, so a zone over the instability thresholds at the
+        // start of the step is damped even if the predictor brought it back under them.
+        if (relax_tau_min) {
+            Real tau_i, chi_i, nu_i;
+            EMHD::set_parameters(G, Pi, m_p, emhd_params, eos, k, j, i, tau_i, chi_i, nu_i);
+            tau = m::min(tau, tau_i);
+        }
         GRMHD::calc_4vecs(G, Ps, m_p, k, j, i, Loci::center, Dtmp);
 
         // Compute new implicit source terms and time derivative source terms
         Real dUq, dUdP; // Don't need full array for these
         EMHD::implicit_sources(G, P_test, m_p, eos, tau, k, j, i, dUq, dUdP); // dU_new
-        // ... - 0.5*(dU_new(ip) + dUi(ip)) ...
-        if (m_u.Q >= 0) rq -= 0.5 * (dUq + dUi(m_u.Q, k, j, i));
-        if (m_u.DP >= 0) rdP -= 0.5 * (dUdP + dUi(m_u.DP, k, j, i));
+        // ... - (theta*dU_new(ip) + (1-theta)*dUi(ip)) ...
+        // theta = 0.5 is the trapezoidal average, theta = 1 is backward Euler
+        if (m_u.Q >= 0)
+            rq -= relax_theta * dUq + (1. - relax_theta) * dUi(m_u.Q, k, j, i);
+        if (m_u.DP >= 0)
+            rdP -= relax_theta * dUdP + (1. - relax_theta) * dUi(m_u.DP, k, j, i);
 
         // Note we're now getting tau/chi_e/nu_e with emhd_params_s!
         // TODO(CEP) split out time-dependent parts of the params struct
@@ -231,13 +243,13 @@ KOKKOS_INLINE_FUNCTION void calc_jacobian(const GRCoordinates& G, const Global& 
     const VarMap& m_p, const VarMap& m_u, const EMHD::EMHD_parameters& emhd_params_solver,
     const EMHD::EMHD_parameters& emhd_params_sub_step_init, const int& nvar,
     const int& nfvar, const int& k, const int& j, const int& i, const Real& jac_delta,
-    const Microphysics::EOS::EOS& eos, const double& dt, Global& jacobian,
-    Global& residual)
+    const Microphysics::EOS::EOS& eos, const double& dt, const Real& relax_theta,
+    const bool& relax_tau_min, Global& jacobian, Global& residual)
 {
     // Calculate residual of P, cache
     calc_residual(G, P_solver, P_full_step_init, U_full_step_init, P_sub_step_init,
         flux_src, dU_implicit, m_p, m_u, emhd_params_solver, emhd_params_sub_step_init,
-        nfvar, k, j, i, eos, dt, residual);
+        nfvar, k, j, i, eos, dt, relax_theta, relax_tau_min, residual);
 
     // These store the *original* residual and P values,
     // so we can mess with the *arrays* in the loop below.
@@ -264,7 +276,8 @@ KOKKOS_INLINE_FUNCTION void calc_jacobian(const GRCoordinates& G, const Global& 
         // Compute the residual for P_delta, OVERWRITES residual
         calc_residual(G, P_solver, P_full_step_init, U_full_step_init, P_sub_step_init,
             flux_src, dU_implicit, m_p, m_u, emhd_params_solver,
-            emhd_params_sub_step_init, nfvar, k, j, i, eos, dt, residual);
+            emhd_params_sub_step_init, nfvar, k, j, i, eos, dt, relax_theta,
+            relax_tau_min, residual);
 
         // Compute forward derivatives of each residual vs the primitive col
         for (int row = 0; row < nfvar; row++) {
