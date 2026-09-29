@@ -553,6 +553,17 @@ Packages_t KHARMA::ProcessPackages(std::unique_ptr<ParameterInput>& pin)
     // Execute the whole collection (just in case we do something fancy?)
     tc.Execute(); // TODO check return if Exe ever returns errors
 
+    // Load the implicit package last of the physics: if there are *any* variables that
+    // need implicit evolution This lets us just count by flag, rather than checking all
+    // the possible parameters that would trigger this
+    // TODO(CEP) add to task list?
+    int n_implicit =
+        StateDescriptor::CreateResolvedStateDescriptor(*packages)->GetPackDimension(
+            Metadata::GetUserFlag("Implicit"));
+    if (n_implicit > 0 && !use_radm1) {
+        KHARMA::AddPackage(packages, Implicit::Initialize, pin.get());
+    }
+
     // There are some packages which must be loaded after all physics
     // Easier to load them separately than list dependencies
 
@@ -575,16 +586,6 @@ Packages_t KHARMA::ProcessPackages(std::unique_ptr<ParameterInput>& pin)
     // And any dirichlet/constant boundaries
     // TODO avoid init if Parthenon will be handling all boundaries?
     KHARMA::AddPackage(packages, KBoundaries::Initialize, pin.get());
-
-    // Load the implicit package last, if there are *any* variables that need implicit
-    // evolution This lets us just count by flag, rather than checking all the possible
-    // parameters that would trigger this
-    int n_implicit =
-        StateDescriptor::CreateResolvedStateDescriptor(*packages)->GetPackDimension(
-            Metadata::GetUserFlag("Implicit"));
-    if (n_implicit > 0 && !use_radm1) {
-        KHARMA::AddPackage(packages, Implicit::Initialize, pin.get());
-    }
 
 #if DEBUG
     // Carry the ParameterInput with us, for generating outputs whenever we want

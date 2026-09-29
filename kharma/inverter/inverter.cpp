@@ -138,9 +138,9 @@ std::shared_ptr<KHARMAPackage> Inverter::Initialize(
     pkg->AddField("pflag", m);
 
     // When not using floors, we need to declare fflag for ourselves
-    m = Metadata({Metadata::Real, Metadata::Cell, Metadata::Derived, Metadata::OneCopy,
-        Metadata::Overridable});
-    pkg->AddField("fflag", m);
+    // m = Metadata({Metadata::Real, Metadata::Cell, Metadata::Derived, Metadata::OneCopy,
+    //     Metadata::Overridable});
+    // pkg->AddField("fflag", m);
 
     // This package may be loaded even when evolving implicitly, e.g. for FOFC
     // Only register our callbacks if they're needed for explicit evolution or a guess
