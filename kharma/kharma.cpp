@@ -553,8 +553,8 @@ Packages_t KHARMA::ProcessPackages(std::unique_ptr<ParameterInput>& pin)
     // Execute the whole collection (just in case we do something fancy?)
     tc.Execute(); // TODO check return if Exe ever returns errors
 
-    // Load the implicit package last of the physics: if there are *any* variables that
-    // need implicit evolution This lets us just count by flag, rather than checking all
+    // Load the implicit package last of the physics, if there are *any* variables that
+    // need implicit evolution. This lets us just count by flag, rather than checking all
     // the possible parameters that would trigger this
     // TODO(CEP) add to task list?
     int n_implicit =
