@@ -163,7 +163,7 @@ class VarMap
             B1 = name_map["cons.B"].first;
             Bf1 = name_map["cons.fB"].first;
             PSI = name_map["cons.psi_cd"].first;
-            //Ye/composition tracking
+            // Ye/composition tracking
             YE = name_map["cons.Ye"].first;
             // Temperature is primitive-only
             TEMP = -1;
@@ -198,7 +198,7 @@ class VarMap
             B1 = name_map["prims.B"].first;
             Bf1 = name_map["prims.fB"].first;
             PSI = name_map["prims.psi_cd"].first;
-            //Ye/composition tracking
+            // Ye/composition tracking
             YE = name_map["prims.Ye"].first;
             // Temperature fields
             TEMP = name_map["prims.Temperature"].first;
@@ -272,7 +272,6 @@ KOKKOS_FORCEINLINE_FUNCTION void fill_eos_lambda(const Global& P, const VarMap& 
     lambda[0] = (m_p.YE >= 0) ? P(m_p.YE, k, j, i) : 0.0;
     lambda[1] = (m_p.LT_GUESS >= 0) ? P(m_p.LT_GUESS, k, j, i) : 0.0;
 }
-
 
 // Reasonable maximum number of fluid primitive or conserved variables being evolved
 // e.g. 8 for GRMHD, 10 for EMHD, and additional vars for e-/passives

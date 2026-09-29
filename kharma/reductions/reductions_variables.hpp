@@ -161,7 +161,8 @@ KOKKOS_INLINE_FUNCTION Real reduction_var<Var::beta>(REDUCE_FUNCTION_ARGS)
     const Real sie = P(m_p.UU, k, j, i) / P(m_p.RHO, k, j, i);
     Real lambda[2];
     fill_eos_lambda(P, m_p, k, j, i, lambda);
-    const Real Pg = eos.PressureFromDensityInternalEnergy(P(m_p.RHO, k, j, i), sie, lambda);
+    const Real Pg =
+        eos.PressureFromDensityInternalEnergy(P(m_p.RHO, k, j, i), sie, lambda);
     return Pg / (0.5 * (dot(Dtmp.bcon, Dtmp.bcov) + SMALL_NUM));
 }
 

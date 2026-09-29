@@ -56,7 +56,8 @@ std::shared_ptr<KHARMAPackage> Initialize(
     const bool use_ye = pin->GetOrAddBoolean("fluid", "Ye", false);
     params.Add("use_ye", use_ye);
 
-    std::vector<MetadataFlag> flags_ye = {Metadata::Cell, Metadata::GetUserFlag("Explicit")};
+    std::vector<MetadataFlag> flags_ye = {
+        Metadata::Cell, Metadata::GetUserFlag("Explicit")};
 
     auto& driver = packages->Get("Driver")->AllParams();
     auto flags_prim = driver.Get<std::vector<MetadataFlag>>("prim_flags");
@@ -121,7 +122,6 @@ void ApplyFloors(MeshBlockData<Real>* mbd, IndexDomain domain)
                 fflag(0, k, j, i) = Floors::FFlag::YE | (int)fflag(0, k, j, i);
                 P(m_p.YE, k, j, i) = ye_max;
             }
-
         });
     Flux::BlockPtoU(mbd, domain);
 }

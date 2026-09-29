@@ -74,7 +74,8 @@ KOKKOS_FORCEINLINE_FUNCTION void calc_tensor(const Global& P, const VarMap& m_p,
         const Real ef =
             P(m_p.RHO, k, j, i) + P(m_p.UU, k, j, i) + pg; // \rho * h = rho + u + P.
         const Real cs2 =
-            eos.BulkModulusFromDensityInternalEnergy(P(m_p.RHO, k, j, i), sie,lambda) / ef;
+            eos.BulkModulusFromDensityInternalEnergy(P(m_p.RHO, k, j, i), sie, lambda) /
+            ef;
         // TODO_EOS: Is this actually what's needed here?
         const Real Theta = pg / P(m_p.RHO, k, j, i);
         // const Real Theta = (gam - 1) * P(m_p.UU, k, j, i) / P(m_p.RHO, k, j, i);
@@ -322,8 +323,9 @@ KOKKOS_FORCEINLINE_FUNCTION void vchar(const GRCoordinates& G, const Global& P,
     const Real sie = P(m.UU, k, j, i) / P(m.RHO, k, j, i);
     Real lambda[2];
     fill_eos_lambda(P, m, k, j, i, lambda);
-    const Real pg = eos.PressureFromDensityInternalEnergy(P(m.RHO, k, j, i), sie,lambda);
-    const Real bulk = eos.BulkModulusFromDensityInternalEnergy(P(m.RHO, k, j, i), sie,lambda);
+    const Real pg = eos.PressureFromDensityInternalEnergy(P(m.RHO, k, j, i), sie, lambda);
+    const Real bulk =
+        eos.BulkModulusFromDensityInternalEnergy(P(m.RHO, k, j, i), sie, lambda);
     const Real ef = P(m.RHO, k, j, i) + pg + P(m.UU, k, j, i);
     const Real gam = bulk / pg;
 

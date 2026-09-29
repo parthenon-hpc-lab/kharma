@@ -189,8 +189,10 @@ TaskStatus Inverter::Backstop(MeshBlockData<Real>* rc)
 
     const auto& eos_params = pmb->packages.Get("eos")->AllParams();
     auto eos = eos_params.Get<Microphysics::EOS::EOS>("d.EOS");
-    const bool is_ideal = pmb->packages.Get("eos")->Param<std::string>("type") == "IdealGas";
-    const Real gamma1 = is_ideal ? pmb->packages.Get("eos")->Param<Real>("gm1") + 1.0 : 5. / 3.;
+    const bool is_ideal =
+        pmb->packages.Get("eos")->Param<std::string>("type") == "IdealGas";
+    const Real gamma1 =
+        is_ideal ? pmb->packages.Get("eos")->Param<Real>("gm1") + 1.0 : 5. / 3.;
 
     // Use values from floors package if it's enabled, otherwise any we've been asked to
     // apply
@@ -237,10 +239,11 @@ TaskStatus Inverter::Backstop(MeshBlockData<Real>* rc)
             determine_geo_floors(
                 G, P, m_p, k, j, i, floors, floors_inner, rhomin_geom, umin_geom);
 
-            const Real umin = (is_ideal && m_p.KTOT >= 0) ? P(m_p.KTOT, k, j, i) *
-                                                    m::pow(P(m_p.RHO, k, j, i), gamma1) /
-                                                    (gamma1 - 1.)
-                                              : umin_geom;
+            const Real umin = (is_ideal && m_p.KTOT >= 0)
+                                  ? P(m_p.KTOT, k, j, i) *
+                                        m::pow(P(m_p.RHO, k, j, i), gamma1) /
+                                        (gamma1 - 1.)
+                                  : umin_geom;
 
             if (failed(pflag(k, j, i)) && (P(m_p.UU, k, j, i) < umin)) {
                 // const Real rho = P(m_p.RHO, k, j, i);
@@ -270,7 +273,8 @@ TaskStatus Inverter::Backstop(MeshBlockData<Real>* rc)
                 const Real uvec0[NVEC] = {0.};
                 Real rho_ut = 0.;
                 Real Trest[GR_DIM] = {0.};
-                GRMHD::p_to_u_mhd(G, D, umin, uvec0, B_P, eos, lambda, k, j, i, rho_ut, Trest);
+                GRMHD::p_to_u_mhd(
+                    G, D, umin, uvec0, B_P, eos, lambda, k, j, i, rho_ut, Trest);
                 // If we're below the at-rest energy (within tolerance),
                 // just bump it to that and kill all kinetic energy
                 if ((Trest[0] - U(m_u.UU, k, j, i)) / U(m_u.UU, k, j, i) > -tol ||
@@ -290,7 +294,8 @@ TaskStatus Inverter::Backstop(MeshBlockData<Real>* rc)
                     {
                         // Calculate tensor (we only need T0)
                         Real rho_ut, T[GR_DIM];
-                        GRMHD::p_to_u_mhd(G, D, u, uvec0, B_P, eos, lambda, k, j, i, rho_ut, T);
+                        GRMHD::p_to_u_mhd(
+                            G, D, u, uvec0, B_P, eos, lambda, k, j, i, rho_ut, T);
                         // Check that it matches
                         return (T[0] - U(m_u.UU, k, j, i)) / U(m_u.UU, k, j, i);
                     };

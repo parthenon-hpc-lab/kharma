@@ -44,7 +44,6 @@
 #include "electrons.hpp"
 #include "emhd.hpp"
 #include "entropy.hpp"
-#include "temperature.hpp"
 #include "floors.hpp"
 #include "flux.hpp"
 #include "gr_coordinates.hpp"
@@ -53,6 +52,7 @@
 #include "kharma_driver.hpp"
 #include "reductions.hpp"
 #include "seed_B.hpp"
+#include "temperature.hpp"
 #include "types.hpp"
 
 void KHARMA::PostInitialize(ParameterInput* pin, Mesh* pmesh, bool is_restart)

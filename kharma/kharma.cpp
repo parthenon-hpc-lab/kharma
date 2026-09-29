@@ -50,8 +50,6 @@
 #include "current.hpp"
 #include "electrons.hpp"
 #include "entropy.hpp"
-#include "ye.hpp"
-#include "temperature.hpp"
 #include "floors.hpp"
 #include "flux.hpp"
 #include "grmhd.hpp"
@@ -60,7 +58,9 @@
 #include "ismr.hpp"
 #include "kharma_driver.hpp"
 #include "reductions.hpp"
+#include "temperature.hpp"
 #include "wind.hpp"
+#include "ye.hpp"
 
 #include "bondi.hpp"
 #include "boundaries.hpp"
@@ -396,16 +396,15 @@ Packages_t KHARMA::ProcessPackages(std::unique_ptr<ParameterInput>& pin)
     // Driver package is the foundation
     auto t_driver = tl.AddTask(
         t_none, KHARMA::AddPackage, packages, KHARMADriver::Initialize, pin.get());
-    
+
     // Enable eos package
     auto t_eos = tl.AddTask(
         t_driver, KHARMA::AddPackage, packages, Microphysics::EOS::Initialize, pin.get());
-    // Ye/composition tracking, needed by tabulated EOS (stellarcollapse)    
+    // Ye/composition tracking, needed by tabulated EOS (stellarcollapse)
     bool ye_on = pin->GetOrAddBoolean("fluid", "Ye", false);
     auto t_ye = t_eos;
     if (ye_on) {
-        t_ye = tl.AddTask(
-            t_eos, KHARMA::AddPackage, packages, Ye::Initialize, pin.get());
+        t_ye = tl.AddTask(t_eos, KHARMA::AddPackage, packages, Ye::Initialize, pin.get());
     }
     // Cached temperature / EOS root-find guess. Only useful with a tabulated EOS,
     // so it's tied to the same flag as Ye
@@ -507,7 +506,8 @@ Packages_t KHARMA::ProcessPackages(std::unique_ptr<ParameterInput>& pin)
         entropy_on = true;
         pin->SetBoolean("entropy", "on", true);
     }
-    PARTHENON_REQUIRE(!entropy_on || is_ideal, "Entropy tracking requires the IdealGas EOS!");
+    PARTHENON_REQUIRE(
+        !entropy_on || is_ideal, "Entropy tracking requires the IdealGas EOS!");
 
     auto t_entropy = t_grmhd;
     if (entropy_on) {

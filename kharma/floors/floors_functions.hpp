@@ -328,7 +328,8 @@ KOKKOS_INLINE_FUNCTION int apply_floors<InjectionFrame::normal_onedw>(FLOOR_ONE_
     Real rho_ut, T[GR_DIM];
     Real lambda[2];
     fill_eos_lambda(P, m_p, k, j, i, lambda);
-    GRMHD::p_to_u_mhd(G, rho_add, u_add, uvec, B, eos, lambda, k, j, i, rho_ut, T, Loci::center);
+    GRMHD::p_to_u_mhd(
+        G, rho_add, u_add, uvec, B, eos, lambda, k, j, i, rho_ut, T, Loci::center);
 
     // 3. Add new conserved mass/energy to the current "conserved" state.
     U(m_u.RHO, k, j, i) += rho_ut;
@@ -364,7 +365,8 @@ KOKKOS_INLINE_FUNCTION int apply_floors<InjectionFrame::normal_kastaun>(FLOOR_ON
     Real rho_ut, T[GR_DIM];
     Real lambda[2];
     fill_eos_lambda(P, m_p, k, j, i, lambda);
-    GRMHD::p_to_u_mhd(G, rho_add, u_add, uvec, B, eos, lambda, k, j, i, rho_ut, T, Loci::center);
+    GRMHD::p_to_u_mhd(
+        G, rho_add, u_add, uvec, B, eos, lambda, k, j, i, rho_ut, T, Loci::center);
 
     // 3. Add new conserved mass/energy to the current "conserved" state.
     // (no need to modify the guess for Kastaun, esp once we sync mu)

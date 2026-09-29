@@ -57,10 +57,10 @@ std::shared_ptr<KHARMAPackage> Initialize(
     const Real mass_unit = unit_conv.GetMassCGSToCode();
     const Real length_unit = unit_conv.GetLengthCGSToCode();
     const Real temp_unit = unit_conv.GetTemperatureCGSToCode();
-    //const Real time_unit = unit_conv.GetTimeCodeToCGS();
-    //const Real mass_unit = unit_conv.GetMassCodeToCGS();
-    //const Real length_unit = unit_conv.GetLengthCodeToCGS();
-    //const Real temp_unit = unit_conv.GetTemperatureCodeToCGS();
+    // const Real time_unit = unit_conv.GetTimeCodeToCGS();
+    // const Real mass_unit = unit_conv.GetMassCodeToCGS();
+    // const Real length_unit = unit_conv.GetLengthCodeToCGS();
+    // const Real temp_unit = unit_conv.GetTemperatureCodeToCGS();
 
     // If using StellarCollapse, we need additional variables.
     // We also need table max and min values, regardless of the EOS.

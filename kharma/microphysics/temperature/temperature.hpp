@@ -64,5 +64,5 @@ inline TaskStatus MeshUpdateTemperature(MeshData<Real>* md)
     EndFlag();
     return TaskStatus::complete;
 }
-    
+
 } // namespace Temperature

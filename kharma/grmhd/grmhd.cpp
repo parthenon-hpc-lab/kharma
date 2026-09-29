@@ -88,8 +88,8 @@ std::shared_ptr<KHARMAPackage> Initialize(
     // and we can just use the equivalent code in eos_kharma.cpp.
     // Commenting it out for now -- in case it is needed for an external
     // package such as pyharm.
-    //double gamma;
-    //if (pin->DoesParameterExist("eos", "gamma")) {
+    // double gamma;
+    // if (pin->DoesParameterExist("eos", "gamma")) {
     //    gamma = pin->GetReal("eos", "gamma");
     //} else if (pin->DoesParameterExist("GRMHD", "gamma")) {
     //    gamma = pin->GetReal("GRMHD", "gamma");
@@ -97,7 +97,7 @@ std::shared_ptr<KHARMAPackage> Initialize(
     //    throw std::runtime_error(
     //        "GRMHD requires that gamma be specified in <eos> or <GRMHD> block!");
     //}
-    //params.Add("gamma", gamma);
+    // params.Add("gamma", gamma);
 
     // Proportion of courant condition for timesteps
     double cfl = pin->GetOrAddReal("GRMHD", "cfl", 0.9);

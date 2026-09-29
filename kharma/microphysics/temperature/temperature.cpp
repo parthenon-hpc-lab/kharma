@@ -35,8 +35,8 @@
 
 #include "decs.hpp"
 #include "domain.hpp"
-#include "microphysics/eos_kharma/eos_kharma.hpp"
 #include "kharma_driver.hpp"
+#include "microphysics/eos_kharma/eos_kharma.hpp"
 #include "types.hpp"
 
 #include <parthenon/parthenon.hpp>
@@ -53,7 +53,8 @@ std::shared_ptr<KHARMAPackage> Initialize(
 
     auto& driver = packages->Get("Driver")->AllParams();
     auto flags_prim = driver.Get<std::vector<MetadataFlag>>("prim_flags");
-    flags_prim.push_back(Metadata::Cell); // prim_flags has no location; these are per-cell
+    flags_prim.push_back(
+        Metadata::Cell); // prim_flags has no location; these are per-cell
 
     pkg->AddField("prims.Temperature", flags_prim);
     pkg->AddField("prims.lT_guess", flags_prim);
@@ -92,6 +93,5 @@ TaskStatus BlockUpdateTemperature(MeshBlockData<Real>* rc)
     EndFlag();
     return TaskStatus::complete;
 }
-
 
 } // namespace Temperature

@@ -153,8 +153,8 @@ inline EMHD_parameters GetEMHDParameters(Packages_t& packages)
 
 KOKKOS_INLINE_FUNCTION void set_parameters(const GRCoordinates& G, const Real& rho,
     const Real& u, const Real& qtilde, const Real& dPtilde, const Real& bsq,
-    const EMHD_parameters& emhd_params, const Microphysics::EOS::EOS& eos, Real lambda[2], const int& j,
-    const int& i, Real& tau, Real& chi_e, Real& nu_e)
+    const EMHD_parameters& emhd_params, const Microphysics::EOS::EOS& eos, Real lambda[2],
+    const int& j, const int& i, Real& tau, Real& chi_e, Real& nu_e)
 {}
 
 KOKKOS_INLINE_FUNCTION void set_parameters(const GRCoordinates& G,
@@ -180,8 +180,8 @@ KOKKOS_INLINE_FUNCTION void convert_prims_to_q_dP(const Real& q_tilde,
  */
 KOKKOS_INLINE_FUNCTION void set_parameters(const GRCoordinates& G, const Real& rho,
     const Real& u, const Real& qtilde, const Real& dPtilde, const Real& bsq,
-    const EMHD_parameters& emhd_params, const Microphysics::EOS::EOS& eos, Real lambda[2], const int& j,
-    const int& i, Real& tau, Real& chi_e, Real& nu_e)
+    const EMHD_parameters& emhd_params, const Microphysics::EOS::EOS& eos, Real lambda[2],
+    const int& j, const int& i, Real& tau, Real& chi_e, Real& nu_e)
 {
     // Formerly chi_e was only set if conduction was present, nu_e only if viscosity
     // Now assumes these will simply be unused if set when these effects are disabled
@@ -194,7 +194,7 @@ KOKKOS_INLINE_FUNCTION void set_parameters(const GRCoordinates& G, const Real& r
     } else if (emhd_params.type == ClosureType::soundspeed) {
         // Set tau=const, chi/nu prop. to sound speed squared
         const Real sie = u / rho; // specific internal energy
-        const Real pg = eos.PressureFromDensityInternalEnergy(rho, sie,lambda);
+        const Real pg = eos.PressureFromDensityInternalEnergy(rho, sie, lambda);
         const Real ef = rho + u + pg; // \rho * h = rho + u + P.
         const Real cs2 = eos.BulkModulusFromDensityInternalEnergy(rho, sie, lambda) / ef;
         tau = emhd_params.tau;
@@ -221,8 +221,9 @@ KOKKOS_INLINE_FUNCTION void set_parameters(const GRCoordinates& G, const Real& r
         // Compute local sound speed, ensure it is defined and >0
         // Passing NaN disables an upper bound (TODO should we have one?)
         const Real ef = rho + u + pg; // \rho * h = rho + u + P.
-        const Real cs2 = clip(
-            eos.BulkModulusFromDensityInternalEnergy(rho, sie, lambda) / ef, SMALL_NUM, 0. / 0.);
+        const Real cs2 =
+            clip(eos.BulkModulusFromDensityInternalEnergy(rho, sie, lambda) / ef,
+                SMALL_NUM, 0. / 0.);
 
         constexpr Real lambda_smooth = 0.01;
 
@@ -277,7 +278,7 @@ KOKKOS_INLINE_FUNCTION void set_parameters(const GRCoordinates& G,
     Real qtilde = (m_p.Q >= 0) ? P(m_p.Q, k, j, i) : 0.;
     Real dPtilde = (m_p.DP >= 0) ? P(m_p.DP, k, j, i) : 0.;
     Real lambda[2];
-    fill_eos_lambda(P,m_p,k,j,i,lambda);
+    fill_eos_lambda(P, m_p, k, j, i, lambda);
     set_parameters(G, P(m_p.RHO, k, j, i), P(m_p.UU, k, j, i), qtilde, dPtilde, bsq,
         emhd_params, eos, lambda, j, i, tau, chi_e, nu_e);
 }

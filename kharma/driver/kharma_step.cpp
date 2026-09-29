@@ -41,11 +41,10 @@
 #include "b_flux_ct.hpp"
 #include "electrons.hpp"
 #include "entropy.hpp"
-#include "temperature.hpp"
-#include "temperature.hpp"
 #include "grmhd.hpp"
 #include "inverter.hpp"
 #include "ismr.hpp"
+#include "temperature.hpp"
 #include "wind.hpp"
 // Other headers
 #include "boundaries.hpp"

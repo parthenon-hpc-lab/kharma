@@ -56,7 +56,6 @@ std::shared_ptr<KHARMAPackage> Initialize(
 
 void BlockUtoP(MeshBlockData<Real>* rc, IndexDomain domain, bool coarse = false);
 
-
 /**
  * Apply bounds to Ye.
  */

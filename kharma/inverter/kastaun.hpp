@@ -208,7 +208,7 @@ KOKKOS_INLINE_FUNCTION int u_to_p<Type::kastaun>(const GRCoordinates& G,
 
     const Real& Urho = U(m_u.RHO, k, j, i);
     const Real D = Urho * a_over_g;
-    const Real Ye = (m_u.YE >= 0) ? U(m_u.YE, k, j, i)/Urho : 0.0;
+    const Real Ye = (m_u.YE >= 0) ? U(m_u.YE, k, j, i) / Urho : 0.0;
 
     Real Qcov[GR_DIM] = {(U(m_u.UU, k, j, i) - Urho) * a_over_g,
         U(m_u.U1, k, j, i) * a_over_g, U(m_u.U2, k, j, i) * a_over_g,
