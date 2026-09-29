@@ -17,7 +17,7 @@
 problem_id = shock
 
 <parthenon/mesh>
-nx1         = 512
+nx1         = 1024
 x1min       = 0
 x1max       = 1
 
@@ -39,12 +39,20 @@ base = cartesian_minkowski
 transform = null
 
 <parthenon/time>
-tlim = 7.5
+tlim = .75
 integrator = rk2
 
 <GRMHD>
 cfl = 0.8
-reconstruction = weno5
+#reconstruction = weno5
+reconstruction = linear_mc
+
+<boundaries>
+inner_x1 = outflow
+outer_x1 = outflow
+
+<floors>
+disable_floors = false
 
 <inverter>
 type = kastaun
@@ -53,10 +61,13 @@ type = kastaun
 type = StellarCollapse
 filename = /Users/miah/Astro/CCSN/eos/stellarcollapse/SFHo.h5
 use_sp5 = false
-save_sp5 = true
+#save_sp5 = true
 # Once eos.sp5 has been written out by a first run, switch to:
-# filename = /Users/miah/Astro/CCSN/eos/stellarcollapse/eos.sp5
-# use_sp5 = true
+filename = eos.sp5
+use_sp5 = true
+
+<debug>
+flag_verbose = 2
 
 <fluid>
 Ye = true
@@ -87,10 +98,10 @@ solver = flux_ct
 <parthenon/output0>
 file_type = hdf5
 write_xdmf = false
-dt = 0.1
+dt = 0.01
 single_precision_output = true
-variables = prims
+variables = prims, cons
 
 <parthenon/output1>
 file_type = hst
-dt = 0.1
+dt = 0.01

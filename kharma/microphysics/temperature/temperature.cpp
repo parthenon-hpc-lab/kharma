@@ -53,10 +53,10 @@ std::shared_ptr<KHARMAPackage> Initialize(
 
     auto& driver = packages->Get("Driver")->AllParams();
     auto flags_prim = driver.Get<std::vector<MetadataFlag>>("prim_flags");
+    flags_prim.push_back(Metadata::Cell); // prim_flags has no location; these are per-cell
 
     pkg->AddField("prims.Temperature", flags_prim);
     pkg->AddField("prims.lT_guess", flags_prim);
-
     return pkg;
 }
 

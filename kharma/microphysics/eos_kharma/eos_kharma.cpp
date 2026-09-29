@@ -51,10 +51,16 @@ std::shared_ptr<KHARMAPackage> Initialize(
     const std::string block_name = "eos";
 
     phoebus::UnitConversions unit_conv(pin);
-    const Real time_unit = unit_conv.GetTimeCodeToCGS();
-    const Real mass_unit = unit_conv.GetMassCodeToCGS();
-    const Real length_unit = unit_conv.GetLengthCodeToCGS();
-    const Real temp_unit = unit_conv.GetTemperatureCodeToCGS();
+    // singularity-eos's LengthTimeUnitsInit inverts the base-unit factors internally
+    // (since singularity PR #639, commit 6ae74f49): pass CGS->code, not code->CGS.
+    const Real time_unit = unit_conv.GetTimeCGSToCode();
+    const Real mass_unit = unit_conv.GetMassCGSToCode();
+    const Real length_unit = unit_conv.GetLengthCGSToCode();
+    const Real temp_unit = unit_conv.GetTemperatureCGSToCode();
+    //const Real time_unit = unit_conv.GetTimeCodeToCGS();
+    //const Real mass_unit = unit_conv.GetMassCodeToCGS();
+    //const Real length_unit = unit_conv.GetLengthCodeToCGS();
+    //const Real temp_unit = unit_conv.GetTemperatureCodeToCGS();
 
     // If using StellarCollapse, we need additional variables.
     // We also need table max and min values, regardless of the EOS.

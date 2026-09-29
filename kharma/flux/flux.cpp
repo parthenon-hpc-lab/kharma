@@ -167,10 +167,13 @@ std::shared_ptr<KHARMAPackage> Flux::Initialize(
 
     // We can't just use GetVariables or something since there's no mesh yet.
     // That's what this function is for.
-    int nvar =
-        StateDescriptor::CreateResolvedStateDescriptor(*packages)->GetPackDimension(
-            Metadata::WithFluxes);
+    auto resolved = StateDescriptor::CreateResolvedStateDescriptor(*packages);
+    int nvar = resolved->GetPackDimension(Metadata::WithFluxes);
+    // P temporaries: reconstruction writes *every* primitive, which can outnumber the
+    // conserved variables (e.g. Temperature's fields have no conserved form)
+    int nprim = resolved->GetPackDimension(Metadata::GetUserFlag("Primitive"));
     std::vector<int> s_flux({nvar});
+    std::vector<int> s_prim({nprim});
     if (packages->Get("Globals")->Param<int>("verbose") > 2)
         std::cout << "Allocating fluxes for " << nvar << " variables" << std::endl;
     // TODO optionally move all these to faces? Not important yet, & faces have no output,
@@ -178,8 +181,9 @@ std::shared_ptr<KHARMAPackage> Flux::Initialize(
     std::vector<MetadataFlag> flags_flux = {
         Metadata::Real, Metadata::Cell, Metadata::Derived, Metadata::OneCopy};
     Metadata m = Metadata(flags_flux, s_flux);
-    pkg->AddField("Flux.Pr", m);
-    pkg->AddField("Flux.Pl", m);
+    Metadata m_prim = Metadata(flags_flux, s_prim);
+    pkg->AddField("Flux.Pr", m_prim);
+    pkg->AddField("Flux.Pl", m_prim);
     pkg->AddField("Flux.Ur", m);
     pkg->AddField("Flux.Ul", m);
     pkg->AddField("Flux.Fr", m);
