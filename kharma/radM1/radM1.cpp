@@ -464,35 +464,37 @@ void RadM1::AddSourceImplicitly(
                     return;
                 }
 
-                rflagl = solve_4d_prad(G, U_init_substep, P_init_substep, m_p, m_u, k, j,
-                    i, dt, eos, src_rootfind_eps, src_rootfind_tol, src_rootfind_maxiter,
-                    rad_opac, pflag, rinvflag, U_entry, dS_subinit);
+                if(P_init_substep(m_p.UU, k, j, i) > 100 * P_init_substep(m_p.UU_RAD, k, j, i)){
+                    rflagl = solve_4d_prad(G, U_init_substep, P_init_substep, m_p, m_u, k, j,
+                                    i, dt, eos, src_rootfind_eps, src_rootfind_tol, src_rootfind_maxiter,
+                                    rad_opac, pflag, rinvflag, U_entry, dS_subinit);
 
-                // Prad alters the P_init. So we gotta revert it back.
-                U_init_substep(m_u.UU, k, j, i) = U_entry[0];
-                U_init_substep(m_u.U1, k, j, i) = U_entry[1];
-                U_init_substep(m_u.U2, k, j, i) = U_entry[2];
-                U_init_substep(m_u.U3, k, j, i) = U_entry[3];
-                P_init_substep(m_p.RHO, k, j, i) = P_entry[0];
-                P_init_substep(m_p.UU, k, j, i) = P_entry[1];
-                P_init_substep(m_p.U1, k, j, i) = P_entry[2];
-                P_init_substep(m_p.U2, k, j, i) = P_entry[3];
-                P_init_substep(m_p.U3, k, j, i) = P_entry[4];
+                    // Prad alters the P_init. So we gotta revert it back.
+                    U_init_substep(m_u.UU, k, j, i) = U_entry[0];
+                    U_init_substep(m_u.U1, k, j, i) = U_entry[1];
+                    U_init_substep(m_u.U2, k, j, i) = U_entry[2];
+                    U_init_substep(m_u.U3, k, j, i) = U_entry[3];
+                    P_init_substep(m_p.RHO, k, j, i) = P_entry[0];
+                    P_init_substep(m_p.UU, k, j, i) = P_entry[1];
+                    P_init_substep(m_p.U1, k, j, i) = P_entry[2];
+                    P_init_substep(m_p.U2, k, j, i) = P_entry[3];
+                    P_init_substep(m_p.U3, k, j, i) = P_entry[4];
 
-                if (rflagl == static_cast<int>(StatusImplicitStep::success)) {
-                    dU_substep(m_u.UU, k, j, i) -= dS_subinit[0];
-                    dU_substep(m_u.U1, k, j, i) -= dS_subinit[1];
-                    dU_substep(m_u.U2, k, j, i) -= dS_subinit[2];
-                    dU_substep(m_u.U3, k, j, i) -= dS_subinit[3];
-                    dU_substep(m_u.UU_RAD, k, j, i) += dS_subinit[0];
-                    dU_substep(m_u.U1_RAD, k, j, i) += dS_subinit[1];
-                    dU_substep(m_u.U2_RAD, k, j, i) += dS_subinit[2];
-                    dU_substep(m_u.U3_RAD, k, j, i) += dS_subinit[3];
-                    if (m_u.KTOT_ADV >= 0) dU_substep(m_u.KTOT_ADV, k, j, i) += (gm1) / m::pow(P_init_substep(m_p.RHO, k, j, i), gm1) * dS_subinit[4];
+                    if (rflagl == static_cast<int>(StatusImplicitStep::success)) {
+                        dU_substep(m_u.UU, k, j, i) -= dS_subinit[0];
+                        dU_substep(m_u.U1, k, j, i) -= dS_subinit[1];
+                        dU_substep(m_u.U2, k, j, i) -= dS_subinit[2];
+                        dU_substep(m_u.U3, k, j, i) -= dS_subinit[3];
+                        dU_substep(m_u.UU_RAD, k, j, i) += dS_subinit[0];
+                        dU_substep(m_u.U1_RAD, k, j, i) += dS_subinit[1];
+                        dU_substep(m_u.U2_RAD, k, j, i) += dS_subinit[2];
+                        dU_substep(m_u.U3_RAD, k, j, i) += dS_subinit[3];
+                        if (m_u.KTOT_ADV >= 0) dU_substep(m_u.KTOT_ADV, k, j, i) += (gm1) / m::pow(P_init_substep(m_p.RHO, k, j, i), gm1) * dS_subinit[4];
 
-                    rimplflag(0, k, j, i) =
-                        static_cast<int>(StatusImplicitStep::pradfallback_success);
-                    return;
+                        rimplflag(0, k, j, i) =
+                            static_cast<int>(StatusImplicitStep::pradfallback_success);
+                        return;
+                    }
                 }
 
                 // auto status_1d = solve_radiation_1d(G, P_init_substep, m_p, m_u, eos,
@@ -515,7 +517,7 @@ void RadM1::AddSourceImplicitly(
                 // }
 
                 rimplflag(0, k, j, i) =
-                    static_cast<int>(StatusImplicitStep::onedfallback_failure);
+                    static_cast<int>(StatusImplicitStep::failure);
             });
     }
 }

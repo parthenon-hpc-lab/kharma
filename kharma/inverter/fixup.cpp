@@ -39,6 +39,7 @@
 #include "floors_functions.hpp"
 #include "flux_functions.hpp"
 #include "pack.hpp"
+#include "radM1/radM1.hpp"
 
 // phoebus includes
 #include "microphysics/eos_kharma/eos_kharma.hpp"
@@ -161,6 +162,67 @@ TaskStatus Inverter::FixUtoP(MeshBlockData<Real>* rc)
                 GRMHD::p_to_u(G, P, m_p, eos, k, j, i, U, m_u);
             }
         });
+
+    if (pmb->packages.AllPackages().count("RadM1")) {
+        PackIndexMap rad_prims_map;
+        auto Prad = rc->PackVariables(
+            std::vector<std::string>{"prims.u_rad", "prims.uvec_rad"}, rad_prims_map);
+        const VarMap m_prad(rad_prims_map, false);
+
+        GridScalar rinvflag = rc->Get("rinvflag").data;
+        GridScalar rimplflag = rc->Get("rimplflag").data;
+
+        const auto& rad_params = pmb->packages.Get("RadM1")->AllParams();
+        const Real erad_floor = rad_params.Get<Real>("u_rad_floor");
+
+        pmb->par_for("fix_radiation", b.ks, b.ke, b.js, b.je, b.is, b.ie,
+            KOKKOS_LAMBDA (const int &k, const int &j, const int &i)
+            {
+                const bool bad = failed(rinvflag(0, k, j, i)) ||
+                    rimplflag(0, k, j, i) ==
+                        static_cast<int>(RadM1::StatusImplicitStep::failure);
+                if (bad) {
+                    double wsum = 0.;
+                    double sum[4] = {0.};
+                    for (int n = -1; n <= 1; n++) {
+                        for (int m = -1; m <= 1; m++) {
+                            for (int l = -1; l <= 1; l++) {
+                                int ii = i + l, jj = j + m, kk = k + n;
+                                if (KDomain::inside(kk, jj, ii, b)) {
+                                    const bool nbad = failed(rinvflag(0, kk, jj, ii)) ||
+                                        rimplflag(0, kk, jj, ii) ==
+                                            static_cast<int>(
+                                                RadM1::StatusImplicitStep::failure);
+                                    if (!nbad) {
+                                        double w = 1. /
+                                            (m::abs(l) + m::abs(m) + m::abs(n) + 1);
+                                        wsum += w;
+                                        sum[0] += w * Prad(m_prad.UU_RAD, kk, jj, ii);
+                                        sum[1] += w * Prad(m_prad.U1_RAD, kk, jj, ii);
+                                        sum[2] += w * Prad(m_prad.U2_RAD, kk, jj, ii);
+                                        sum[3] += w * Prad(m_prad.U3_RAD, kk, jj, ii);
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    if (wsum < 1.e-10) {
+                        Prad(m_prad.UU_RAD, k, j, i) = erad_floor;
+                        Prad(m_prad.U1_RAD, k, j, i) = 0.;
+                        Prad(m_prad.U2_RAD, k, j, i) = 0.;
+                        Prad(m_prad.U3_RAD, k, j, i) = 0.;
+                    } else {
+                        Prad(m_prad.UU_RAD, k, j, i) = sum[0] / wsum;
+                        Prad(m_prad.U1_RAD, k, j, i) = sum[1] / wsum;
+                        Prad(m_prad.U2_RAD, k, j, i) = sum[2] / wsum;
+                        Prad(m_prad.U3_RAD, k, j, i) = sum[3] / wsum;
+                    }
+                }
+            });
+
+        RadM1::BlockPtoU(rc, IndexDomain::entire);
+    }
 
     EndFlag();
     return TaskStatus::complete;
