@@ -357,7 +357,7 @@ TaskStatus Flux::BlockPtoU(MeshBlockData<Real>* rc, IndexDomain domain, bool coa
     const int nvar = U.GetDim(4);
 
     // Return if we're not syncing U & P at all (e.g. edges)
-    if (P.GetDim(4) == 0) return TaskStatus::complete;
+    if (P.GetDim(4) == 0 || U.GetDim(4) == 0) return TaskStatus::complete;
 
     // Indices
     auto bounds = coarse ? pmb->c_cellbounds : pmb->cellbounds;
@@ -409,7 +409,7 @@ TaskStatus Flux::BlockPtoU_Send(MeshBlockData<Real>* rc, IndexDomain domain, boo
     const VarMap m_u(cons_map, true), m_p(prims_map, false);
 
     // Return if we're not syncing U & P at all (e.g. edges)
-    if (P.GetDim(4) == 0) return TaskStatus::complete;
+    if (P.GetDim(4) == 0 || U.GetDim(4) == 0) return TaskStatus::complete;
 
     // Make sure we always update center conserved B from the faces, not the prims
     // if (pmb->packages.AllPackages().count("B_CT"))
