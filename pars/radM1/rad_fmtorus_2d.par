@@ -72,6 +72,8 @@ u_min_geom   = 1e-8
 <fofc>
 on = false
 
+<entropy>
+advect_entropy = true
 
 <radM1>
 on = true

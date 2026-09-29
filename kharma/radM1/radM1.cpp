@@ -220,12 +220,12 @@ void RadM1::ApplyRadM1Floors(MeshBlockData<Real>* rc, IndexDomain domain)
     pmb->par_for("ApplyRadM1Floors", kb.s, kb.e, jb.s, jb.e, ib.s, ib.e,
         KOKKOS_LAMBDA (const int &k, const int &j, const int &i)
         {
-            // GReal Xembed_fix[GR_DIM];
-            // G.coord_embed(k, j, i, Loci::center, Xembed_fix);
-            // const GReal r_hor_fix = G.coords.get_horizon();
-            // const bool inside_horizon = (r_hor_fix > 0.0) && (Xembed_fix[1] <
-            // r_hor_fix);
-            const bool inside_horizon = false;
+            GReal Xembed_fix[GR_DIM];
+            G.coord_embed(k, j, i, Loci::center, Xembed_fix);
+            const GReal r_hor_fix = G.coords.get_horizon();
+            const bool inside_horizon = (r_hor_fix > 0.0) && (Xembed_fix[1] <
+            r_hor_fix);
+            // const bool inside_horizon = false;
 
             if (P(m_p.UU_RAD, k, j, i) < erad_floor || inside_horizon) {
                 P(m_p.UU_RAD, k, j, i) = erad_floor;
@@ -390,6 +390,7 @@ void RadM1::AddSourceImplicitly(
 
         auto rinvflag = pmb_data->PackVariables(std::vector<std::string>{"rinvflag"});
 
+        const Real gm1 = eos_params.Get<Real>("gm1");
         auto bounds = pmb->cellbounds;
         const IndexRange ib = bounds.GetBoundsI(IndexDomain::interior);
         const IndexRange jb = bounds.GetBoundsJ(IndexDomain::interior);
@@ -404,17 +405,17 @@ void RadM1::AddSourceImplicitly(
                 // and dU_subinit = 0; PNM: I've been having some trouble getting it to
                 // stay controled within the horizon.
 
-                // GReal Xembed[GR_DIM];
-                // G.coord_embed(k, j, i, Loci::center, Xembed);
-                // const GReal r = Xembed[1];
-                // const GReal r_hor = G.coords.get_horizon();
-                // // If there is no horizon, r_hor = 0.0. For some of the tests, we don't
-                // // have a horizon, and infact, we have negative values so we don't want
-                // // this check.
-                // if (r_hor > 0.0 && r < r_hor) {
-                //     rimplflag(0, k, j, i) =
-                //     static_cast<int>(StatusImplicitStep::success); return;
-                // }
+                GReal Xembed[GR_DIM];
+                G.coord_embed(k, j, i, Loci::center, Xembed);
+                const GReal r = Xembed[1];
+                const GReal r_hor = G.coords.get_horizon();
+                // If there is no horizon, r_hor = 0.0. For some of the tests, we don't
+                // have a horizon, and infact, we have negative values so we don't want
+                // this check.
+                if (r_hor > 0.0 && r < r_hor) {
+                    rimplflag(0, k, j, i) =
+                    static_cast<int>(StatusImplicitStep::success); return;
+                }
 
                 const Real U_entry[8] = {U_init_substep(m_u.UU, k, j, i),
                     U_init_substep(m_u.U1, k, j, i), U_init_substep(m_u.U2, k, j, i),
@@ -450,7 +451,15 @@ void RadM1::AddSourceImplicitly(
                     dU_substep(m_u.U1_RAD, k, j, i) += dS_subinit[1];
                     dU_substep(m_u.U2_RAD, k, j, i) += dS_subinit[2];
                     dU_substep(m_u.U3_RAD, k, j, i) += dS_subinit[3];
-                    if (m_u.KTOT >= 0) dU_substep(m_u.KTOT, k, j, i) += dS_subinit[4];
+                    // s_gas = ln(P^n/rho^(n+1)) (with n = 1/(gamma-1)), or s_gas = ln(K)/(gamma-1) where K = P * rho^{-gamma}.
+                    // Consider that S = rho * s_gas;
+                    // so K = exp(( gamma - 1) * S/rho)
+                    // dK/dt = dK/dS * dS/dt
+                    // dS/dt is exactly what I calculated
+                    // dK/dS = (gamma - 1) * K / rho;
+                    // so dK/dt = (gamma - 1) * K/rho * 1/T G^u u_u = (gamma - 1)/rho^(gam - 1) * G^u u_u
+                    // (PNM) I should ask cora if use KTOT_ADV here;
+                    if (m_u.KTOT_ADV >= 0) dU_substep(m_u.KTOT_ADV, k, j, i) += (gm1) / m::pow(P_init_substep(m_p.RHO, k, j, i), gm1) * dS_subinit[4];
                     rimplflag(0, k, j, i) = rflagl;
                     return;
                 }
@@ -479,31 +488,31 @@ void RadM1::AddSourceImplicitly(
                     dU_substep(m_u.U1_RAD, k, j, i) += dS_subinit[1];
                     dU_substep(m_u.U2_RAD, k, j, i) += dS_subinit[2];
                     dU_substep(m_u.U3_RAD, k, j, i) += dS_subinit[3];
-                    if (m_u.KTOT >= 0) dU_substep(m_u.KTOT, k, j, i) += dS_subinit[4];
+                    if (m_u.KTOT_ADV >= 0) dU_substep(m_u.KTOT_ADV, k, j, i) += (gm1) / m::pow(P_init_substep(m_p.RHO, k, j, i), gm1) * dS_subinit[4];
 
                     rimplflag(0, k, j, i) =
                         static_cast<int>(StatusImplicitStep::pradfallback_success);
                     return;
                 }
 
-                auto status_1d = solve_radiation_1d(G, P_init_substep, m_p, m_u, eos,
-                    rad_opac, k, j, i, dt, src_rootfind_tol, src_rootfind_maxiter, pflag,
-                    rinvflag, U_entry, dS_subinit);
+                // auto status_1d = solve_radiation_1d(G, P_init_substep, m_p, m_u, eos,
+                //     rad_opac, k, j, i, dt, src_rootfind_tol, src_rootfind_maxiter, pflag,
+                //     rinvflag, U_entry, dS_subinit);
 
-                if (status_1d == StatusImplicitStep::success) {
-                    dU_substep(m_u.UU, k, j, i) -= dS_subinit[0];
-                    dU_substep(m_u.U1, k, j, i) -= dS_subinit[1];
-                    dU_substep(m_u.U2, k, j, i) -= dS_subinit[2];
-                    dU_substep(m_u.U3, k, j, i) -= dS_subinit[3];
-                    dU_substep(m_u.UU_RAD, k, j, i) += dS_subinit[0];
-                    dU_substep(m_u.U1_RAD, k, j, i) += dS_subinit[1];
-                    dU_substep(m_u.U2_RAD, k, j, i) += dS_subinit[2];
-                    dU_substep(m_u.U3_RAD, k, j, i) += dS_subinit[3];
-
-                    rimplflag(0, k, j, i) =
-                        static_cast<int>(StatusImplicitStep::onedfallback_success);
-                    return;
-                }
+                // if (status_1d == StatusImplicitStep::success) {
+                //     dU_substep(m_u.UU, k, j, i) -= dS_subinit[0];
+                //     dU_substep(m_u.U1, k, j, i) -= dS_subinit[1];
+                //     dU_substep(m_u.U2, k, j, i) -= dS_subinit[2];
+                //     dU_substep(m_u.U3, k, j, i) -= dS_subinit[3];
+                //     dU_substep(m_u.UU_RAD, k, j, i) += dS_subinit[0];
+                //     dU_substep(m_u.U1_RAD, k, j, i) += dS_subinit[1];
+                //     dU_substep(m_u.U2_RAD, k, j, i) += dS_subinit[2];
+                //     dU_substep(m_u.U3_RAD, k, j, i) += dS_subinit[3];
+                //     if (m_u.KTOT_ADV >= 0) dU_substep(m_u.KTOT_ADV, k, j, i) += (gm1) / m::pow(P_init_substep(m_p.RHO, k, j, i), gm1) * dS_subinit[4];
+                //     rimplflag(0, k, j, i) =
+                //         static_cast<int>(StatusImplicitStep::onedfallback_success);
+                //     return;
+                // }
 
                 rimplflag(0, k, j, i) =
                     static_cast<int>(StatusImplicitStep::onedfallback_failure);

@@ -453,21 +453,24 @@ KOKKOS_INLINE_FUNCTION StatusImplicitStep solve_radiation_1d(const GRCoordinates
     }
 
     Real P_mhd_new[4];
-    Real dcov_rad[4];
 
     P_mhd_new[0] = u_root;
     P_mhd_new[1] = uvec_frozen[0];
     P_mhd_new[2] = uvec_frozen[1];
     P_mhd_new[3] = uvec_frozen[2];
 
-    for (int n = 0; n < 4; n++) {
-        dcov_rad[n] = U_rad_trial[n] - U_rad_0[n];
-    }
-
     dS_final[0] = dS_trial[0];
     dS_final[1] = dS_trial[1];
     dS_final[2] = dS_trial[2];
     dS_final[3] = dS_trial[3];
+
+    {
+        Real ucon_final[4];
+        GRMHD::calc_ucon(G, uvec_frozen, k, j, i, Loci::center, ucon_final);
+        Real Gdotu = dS_trial[0] * ucon_final[0] + dS_trial[1] * ucon_final[1] +
+                    dS_trial[2] * ucon_final[2] + dS_trial[3] * ucon_final[3];
+        dS_final[4] = Gdotu;
+    }
 
     return StatusImplicitStep::success;
 }
@@ -933,11 +936,9 @@ KOKKOS_INLINE_FUNCTION int solve_4d_pmhd(const GRCoordinates& G,
         Real uvec_final[NVEC] = {P_mhd_guess[1], P_mhd_guess[2], P_mhd_guess[3]};
         Real ucon_final[4];
         GRMHD::calc_ucon(G, uvec_final, k, j, i, Loci::center, ucon_final);
-        Real Tg_final =
-            eos.TemperatureFromDensityInternalEnergy(rho_init, P_mhd_guess[0] / rho_init);
         Real Gdotu = dS_guess[0] * ucon_final[0] + dS_guess[1] * ucon_final[1] +
                      dS_guess[2] * ucon_final[2] + dS_guess[3] * ucon_final[3];
-        dS_final[4] = Gdotu / Tg_final;
+        dS_final[4] = Gdotu;
     }
 
     return static_cast<int>(StatusImplicitStep::success);
@@ -1367,11 +1368,9 @@ KOKKOS_INLINE_FUNCTION int solve_4d_prad(const GRCoordinates& G,
         Real uvec_final[NVEC] = {P_mhd_guess[1], P_mhd_guess[2], P_mhd_guess[3]};
         Real ucon_final[4];
         GRMHD::calc_ucon(G, uvec_final, k, j, i, Loci::center, ucon_final);
-        Real Tg_final =
-            eos.TemperatureFromDensityInternalEnergy(rho_init, P_mhd_guess[0] / rho_init);
         Real Gdotu = dS_guess[0] * ucon_final[0] + dS_guess[1] * ucon_final[1] +
                      dS_guess[2] * ucon_final[2] + dS_guess[3] * ucon_final[3];
-        dS_final[4] = Gdotu / Tg_final;
+        dS_final[4] = Gdotu;
     }
 
     return static_cast<int>(StatusImplicitStep::success);
