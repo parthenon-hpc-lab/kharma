@@ -18,8 +18,6 @@ env:
 jobs:
   # Job 1: Compilation
   build-nvidia:
-    concurrency:
-      group: nvidia-compile
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -37,6 +35,7 @@ jobs:
       - name: Run compilation
         run: bash -ic './make.sh clean cuda'
       - uses: actions/upload-artifact@v7
+        id: build-artifacts-step
         with:
           name: build-artifacts
           path: |
@@ -47,12 +46,11 @@ jobs:
   # Job 2: Test Matrix
   test-nvidia:
     needs: build-nvidia
-    runs-on: [self-hosted, kharma-gpu-nv]
+    runs-on: ubuntu-latest
     continue-on-error: true
     strategy:
       fail-fast: false
       matrix:
-        # 'resize' should work but too big for the test GPU
         test_name:
         - all_pars
         - anisotropic_conduction
@@ -70,31 +68,99 @@ jobs:
         - radshock
         - regrid
         - reinit
+        - resize
         - restart
         - tilt_init
         - torus_sanity
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v5
         with:
-          submodules: 'recursive'
-      - uses: actions/download-artifact@v8
-        with:
-          name: build-artifacts
-      - name: install pyharm
-        run: pip install git+https://github.com/c-prather/pyharm@dev
-      - name: Run ${{ matrix.test_name }}
-        working-directory: tests/${{ matrix.test_name }}
-        run: bash -i ./run.sh
-      - uses: actions/upload-artifact@v7
-        if: always()
-        with:
-          name: ${{ matrix.test_name }}-artifacts
-          path: |
-            tests/${{ matrix.test_name }}
-            !*.phdf
-            !*.rhdf
-            !*.xdmf
-            !*.h5
+          python-version: "3.11"
+
+      - name: Install Kaggle CLI
+        run: pip install "kaggle>=1.8.3"
+
+      - name: Generate Kaggle Runner Script
+        run: |
+          mkdir .github/script/
+          cd .github/script/
+          
+          cat << 'EOF' > gpu_runner.py
+          import os
+          import subprocess
+          import sys
+
+          def run(cmd):
+              print(f"========== RUNNING: {cmd} ==========")
+              if subprocess.run(cmd, shell=True).returncode != 0:
+                  sys.exit(1)
+
+          run("nvidia-smi")
+
+          run("git clone https://github.com/${{ github.repository }}.git repo")
+          os.chdir("repo")
+          run("git checkout ${{ github.sha }}")
+
+          run("pip install git+https://github.com/c-prather/pyharm@dev")
+          
+          run("apt-get update && apt-get install -y build-essential libopenmpi-dev libhdf5-openmpi-dev hdf5-tools cmake curl")
+
+          print("Downloading Artifact...")
+          run("curl ${{ steps.build-artifacts-step.outputs.artifact-url }} -O kharma.zip")
+          run("unzip kharma.zip")
+
+          print("Running Test...")
+          os.chdir("tests/${{ matrix.test_name }}")
+          run("./run.sh")
+          EOF
+          
+          cat << EOF > kernel-metadata.json
+          {
+            "id": "${{ secrets.KAGGLE_USERNAME }}/kharma-ci-run",
+            "title": "kharma-ci-run",
+            "code_file": "ci_script.py",
+            "language": "python",
+            "kernel_type": "script",
+            "is_private": "true",
+            "enable_gpu": "true",
+            "enable_internet": "true",
+            "dataset_sources": [],
+            "competition_sources": [],
+            "kernel_sources": []
+          }
+          EOF
+
+      - name: Trigger Kaggle GPU and Wait for Results
+        env:
+          KAGGLE_USERNAME: ${{ secrets.KAGGLE_USERNAME }}
+          KAGGLE_API_TOKEN: ${{ secrets.KAGGLE_API_TOKEN }}
+        run: |
+          cd kaggle_run
+          
+          kaggle kernels push -p .
+          
+          echo "Code sent to Kaggle. Waiting for GPU provisioning and tests..."
+          
+          while true; do
+            STATUS=$(kaggle kernels status $KAGGLE_USERNAME/kharma-ci-run 2>&1)
+            STATUS_LOWER=$(echo "$STATUS" | tr '[:upper:]' '[:lower:]')
+            echo "Current status: $STATUS"
+
+            if [[ "$STATUS_LOWER" == *"complete"* ]]; then
+              echo "Tests passed successfully on Kaggle!"
+              kaggle kernels output $KAGGLE_USERNAME/kharma-ci-run -p ./output
+              cat ./output/*.log || true
+              break
+            elif [[ "$STATUS_LOWER" == *"error"* || "$STATUS_LOWER" == *"cancel"* || "$STATUS_LOWER" == *"fatal"* ]]; then
+              echo "Tests failed or kernel errored!"
+              kaggle kernels output $KAGGLE_USERNAME/kharma-ci-run -p ./output
+              cat ./output/*.log || true
+              exit 1
+            fi
+            sleep 30
+          done
+
+# TODO pull and upload test artifacts to github
 
   # Require all tests in a single status check we can mark req'd for merge
   tests-pass-nvidia:
