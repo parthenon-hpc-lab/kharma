@@ -117,7 +117,7 @@ jobs:
           {
             "id": "${{ secrets.KAGGLE_USERNAME }}/kharma-ci-run",
             "title": "kharma-ci-run",
-            "code_file": "ci_script.py",
+            "code_file": "gpu_runner.py",
             "language": "python",
             "kernel_type": "script",
             "is_private": "true",
