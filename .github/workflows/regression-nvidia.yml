@@ -8,9 +8,11 @@ on:
     types: [auto_merge_enabled]
 
 env:
-  NPROC: 12
+  NPROC: 4
   MPI_NUM_PROCS: 1
   OMP_NUM_THREADS: 1
+  HOST_ARCH: "HSW"
+  DEVICE_ARCH: "TURING75"
   MODULEPATH: '/opt/nvidia/hpc_sdk/modulefiles:/usr/share/modulefiles'
 
 jobs:
@@ -18,13 +20,22 @@ jobs:
   build-nvidia:
     concurrency:
       group: nvidia-compile
-    runs-on: [self-hosted, kharma-gpu-nv]
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
         with:
           submodules: 'recursive'
+      - name: Install prereqs
+        run: |
+          sudo apt-get update
+          sudo apt-get install build-essential
+          sudo apt-get install libopenmpi-dev libhdf5-openmpi-dev libfftw3-dev
+          sudo apt-get install hdf5-tools cmake
+      - uses: Jimver/cuda-toolkit@v0.2.36
+        with:
+          cuda: '13.2.0'
       - name: Run compilation
-        run: bash -ic 'module load nvhpc && ./make.sh clean cuda'
+        run: bash -ic './make.sh clean cuda'
       - uses: actions/upload-artifact@v7
         with:
           name: build-artifacts
