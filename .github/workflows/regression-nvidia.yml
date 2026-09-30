@@ -19,6 +19,8 @@ jobs:
   # Job 1: Compilation
   build-nvidia:
     runs-on: ubuntu-latest
+    outputs:
+      kharma-url: ${{ steps.build-artifacts.outputs.artifact-url }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -34,7 +36,7 @@ jobs:
       - name: Run compilation
         run: bash -ic './make.sh clean cuda hdf5 nompi'
       - uses: actions/upload-artifact@v7
-        id: build-artifacts-step
+        id: build-artifacts
         with:
           name: build-artifacts
           path: |
@@ -105,8 +107,8 @@ jobs:
           run("apt-get update && apt-get install -y build-essential libopenmpi-dev libhdf5-openmpi-dev hdf5-tools cmake curl")
 
           print("Downloading Artifact...")
-          run("curl ${{ steps.build-artifacts-step.outputs.artifact-url }} -O kharma.zip")
-          run("unzip kharma.zip")
+          run("curl ${{ needs.build-nvidia.outputs.kharma-url }} -o build-artifacts.zip")
+          run("unzip build-artifacts.zip && mv build-artifacts/* .")
 
           print("Running Test...")
           os.chdir("tests/${{ matrix.test_name }}")
@@ -115,7 +117,7 @@ jobs:
 
           cat << EOF > kernel-metadata.json
           {
-            "id": "${{ secrets.KAGGLE_USERNAME }}/kharma-ci-run",
+            "id": "${{ secrets.KAGGLE_USERNAME }}/kharma-ci-run-${{ matrix.test_name }}",
             "title": "kharma-ci-run",
             "code_file": "gpu_runner.py",
             "language": "python",
