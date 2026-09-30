@@ -174,13 +174,19 @@ TaskStatus Inverter::FixUtoP(MeshBlockData<Real>* rc)
 
         const auto& rad_params = pmb->packages.Get("RadM1")->AllParams();
         const Real erad_floor = rad_params.Get<Real>("u_rad_floor");
+        const GReal r_hor = G.coords.get_horizon();
 
         pmb->par_for("fix_radiation", b.ks, b.ke, b.js, b.je, b.is, b.ie,
             KOKKOS_LAMBDA (const int &k, const int &j, const int &i)
             {
-                const bool bad = failed(rinvflag(0, k, j, i)) ||
-                    rimplflag(0, k, j, i) ==
-                        static_cast<int>(RadM1::StatusImplicitStep::failure);
+                GReal Xembed[GR_DIM];
+                G.coord_embed(k, j, i, Loci::center, Xembed);
+                const bool inside_horizon = r_hor > 0.0 && Xembed[1] < r_hor;
+
+                const bool bad = !inside_horizon &&
+                    (failed(rinvflag(0, k, j, i)) ||
+                        rimplflag(0, k, j, i) ==
+                            static_cast<int>(RadM1::StatusImplicitStep::failure));
                 if (bad) {
                     double wsum = 0.;
                     double sum[4] = {0.};
@@ -189,7 +195,12 @@ TaskStatus Inverter::FixUtoP(MeshBlockData<Real>* rc)
                             for (int l = -1; l <= 1; l++) {
                                 int ii = i + l, jj = j + m, kk = k + n;
                                 if (KDomain::inside(kk, jj, ii, b)) {
-                                    const bool nbad = failed(rinvflag(0, kk, jj, ii)) ||
+                                    GReal Xembed_n[GR_DIM];
+                                    G.coord_embed(kk, jj, ii, Loci::center, Xembed_n);
+                                    const bool n_inside_horizon =
+                                        r_hor > 0.0 && Xembed_n[1] < r_hor;
+                                    const bool nbad = n_inside_horizon ||
+                                        failed(rinvflag(0, kk, jj, ii)) ||
                                         rimplflag(0, kk, jj, ii) ==
                                             static_cast<int>(
                                                 RadM1::StatusImplicitStep::failure);

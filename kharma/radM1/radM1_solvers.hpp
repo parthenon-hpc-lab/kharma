@@ -339,7 +339,7 @@ KOKKOS_INLINE_FUNCTION StatusImplicitStep solve_radiation_1d(const GRCoordinates
     const Microphysics::EOS::EOS& eos, const RadOpac& rad_opac, const int k, const int j,
     const int i, const Real dt, const double tol, const int maxiter,
     const VariablePack<Real> pflag, const VariablePack<Real> rinvflag,
-    const Real U_entry[8], Real dS_final[4])
+    const Real U_entry[8], Real dS_final[5])
 {
 
     const Real gdet = G.gdet(Loci::center, j, i);
@@ -386,7 +386,6 @@ KOKKOS_INLINE_FUNCTION StatusImplicitStep solve_radiation_1d(const GRCoordinates
         n_rebracket++;
     }
 
-    //
     if (!bracketed) {
         return StatusImplicitStep::failure;
     }
@@ -581,11 +580,6 @@ KOKKOS_INLINE_FUNCTION int solve_4d_pmhd(const GRCoordinates& G,
     bool bad_guess = false;
 
     Real rho_iter = rho_init;
-
-    // Don't let it change too much, it usually leads to catastrophic results.
-    const Real ug0_entry = P_mhd_guess[0];
-    const Real ugas_max_entry = ug0_entry * 10.0;
-    const Real ugas_min_entry = ug0_entry / 10.0;
 
     do {
         if (err <= src_rootfind_tol) {
@@ -825,7 +819,7 @@ KOKKOS_INLINE_FUNCTION int solve_4d_pmhd(const GRCoordinates& G,
         // Update guess via a damped Newton step, e.g, we take the full step, and if
         // it violates any of the checks below, shrink the step and retry.
         // Currently we just shrink it by 3 with a max of 15 iterations or if
-        // scailing_factor < 1.e-5;
+        // scailing_factor < 1.e-8;
         Real P_mhd_pre[4] = {
             P_mhd_guess[0], P_mhd_guess[1], P_mhd_guess[2], P_mhd_guess[3]};
         Real scaling_factor = 1.0;
@@ -840,10 +834,10 @@ KOKKOS_INLINE_FUNCTION int solve_4d_pmhd(const GRCoordinates& G,
                 }
             }
 
-            if (!(P_mhd_guess[0] > ugas_min_entry && P_mhd_guess[0] < ugas_max_entry)) {
-                scaling_factor /= 3.0; // Koral fixed 3.0 factor.
+            if (P_mhd_guess[0] <= 0.0) {
+                scaling_factor /= 3.0;
                 track++;
-                if (scaling_factor < 1.e-5 || track > 15) break;
+                if (track > 15 || scaling_factor < 1.e-8) break;
                 continue;
             }
 
@@ -872,25 +866,15 @@ KOKKOS_INLINE_FUNCTION int solve_4d_pmhd(const GRCoordinates& G,
             if (status != StatusRadiationInversion::success) {
                 scaling_factor /= 3.0;
                 track++;
-                if (track > 15 || scaling_factor < 1.e-5) break;
+                if (track > 15 || scaling_factor < 1.e-8) break;
                 continue;
             }
 
-            const Real Tgas_old =
-                eos.TemperatureFromDensityInternalEnergy(rho_iter, ug0_entry / rho_iter);
-            const Real Tgas_new = eos.TemperatureFromDensityInternalEnergy(
-                rho_iter_next, P_mhd_guess[0] / rho_iter_next);
-            if (Tgas_new > Tgas_old * 10.0 || Tgas_new < Tgas_old / 10.0) {
-                scaling_factor /= 3.0;
-                track++;
-                if (scaling_factor < 1.e-5 || track > 15) break;
-                continue;
-            }
             step_ok = true;
             rho_iter = rho_iter_next;
         } while (!step_ok && track <= 15);
 
-        if (track > 15 || scaling_factor < 1.e-5) {
+        if (track > 15 || scaling_factor < 1.e-8) {
             bad_guess = true;
             break;
         }
@@ -932,6 +916,7 @@ KOKKOS_INLINE_FUNCTION int solve_4d_pmhd(const GRCoordinates& G,
     dS_final[2] = dS_guess[2];
     dS_final[3] = dS_guess[3];
 
+    
     {
         Real uvec_final[NVEC] = {P_mhd_guess[1], P_mhd_guess[2], P_mhd_guess[3]};
         Real ucon_final[4];
@@ -1011,14 +996,6 @@ KOKKOS_INLINE_FUNCTION int solve_4d_prad(const GRCoordinates& G,
 
     Real rho_iter = rho_init;
 
-    // bound to how much it can change ur and ug.
-    const Real ur0_entry = P_rad_guess[0];
-    const Real erad_max_entry = ur0_entry * 10.0;
-    const Real erad_min_entry = ur0_entry / 10.0;
-    const Real ug0_entry = P_mhd_guess[0];
-    const Real ugas_max_entry = ug0_entry * 10.0;
-    const Real ugas_min_entry = ug0_entry / 10.0;
-
     do {
         if (err <= src_rootfind_tol) {
             break;
@@ -1054,8 +1031,13 @@ KOKKOS_INLINE_FUNCTION int solve_4d_prad(const GRCoordinates& G,
             Real P_rad_p[4] = {
                 P_rad_guess[0], P_rad_guess[1], P_rad_guess[2], P_rad_guess[3]};
 
-            const Real fd_step = m::max(src_rootfind_eps * P_rad_mag_min,
+            Real fd_step = m::max(src_rootfind_eps * P_rad_mag_min,
                 src_rootfind_eps * m::abs(P_rad_guess[m]));
+            {
+                const Real gas_energy_margin =
+                    0.1 * m::abs(P_mhd_guess[0]);
+                fd_step = m::min(fd_step, m::max(gas_energy_margin, RAD_SMALL));
+            }
             P_rad_m[m] -= fd_step;
             P_rad_p[m] += fd_step;
 
@@ -1153,8 +1135,14 @@ KOKKOS_INLINE_FUNCTION int solve_4d_prad(const GRCoordinates& G,
             for (int m = 0; m < 4; m++) {
                 Real P_rad_p[4] = {
                     P_rad_guess[0], P_rad_guess[1], P_rad_guess[2], P_rad_guess[3]};
-                P_rad_p[m] += std::max(src_rootfind_eps * P_rad_mag_min,
+                Real fd_step_p = std::max(src_rootfind_eps * P_rad_mag_min,
                     src_rootfind_eps * m::abs(P_rad_p[m]));
+                {
+                    const Real gas_energy_margin =
+                        0.1 * m::abs(P_mhd_guess[0]);
+                    fd_step_p = m::min(fd_step_p, m::max(gas_energy_margin, RAD_SMALL));
+                }
+                P_rad_p[m] += fd_step_p;
 
                 RadM1::calc_tensor(G, P_rad_p, 0, j, i, U_rad_p);
                 for (int n = 0; n < 4; n++) U_rad_p[n] *= gdet;
@@ -1207,8 +1195,14 @@ KOKKOS_INLINE_FUNCTION int solve_4d_prad(const GRCoordinates& G,
             for (int m = 0; m < 4; m++) {
                 Real P_rad_m[4] = {
                     P_rad_guess[0], P_rad_guess[1], P_rad_guess[2], P_rad_guess[3]};
-                P_rad_m[m] -= std::max(src_rootfind_eps * P_rad_mag_min,
+                Real fd_step_m = std::max(src_rootfind_eps * P_rad_mag_min,
                     src_rootfind_eps * m::abs(P_rad_m[m]));
+                {
+                    const Real gas_energy_margin =
+                        0.1 * m::abs(P_mhd_guess[0]);
+                    fd_step_m = m::min(fd_step_m, m::max(gas_energy_margin, RAD_SMALL));
+                }
+                P_rad_m[m] -= fd_step_m;
 
                 RadM1::calc_tensor(G, P_rad_m, 0, j, i, U_rad_m);
                 for (int n = 0; n < 4; n++) U_rad_m[n] *= gdet;
@@ -1271,13 +1265,6 @@ KOKKOS_INLINE_FUNCTION int solve_4d_prad(const GRCoordinates& G,
                 }
             }
 
-            if (!(P_rad_guess[0] > erad_min_entry && P_rad_guess[0] < erad_max_entry)) {
-                scaling_factor /= 3.0; // Koral fixed 3.0 factor.
-                track++;
-                if (scaling_factor < 1.e-5 || track > 15) break;
-                continue;
-            }
-
             RadM1::calc_tensor(G, P_rad_guess, 0, j, i, U_rad_guess);
             for (int n = 0; n < 4; n++) U_rad_guess[n] *= gdet;
 
@@ -1296,22 +1283,14 @@ KOKKOS_INLINE_FUNCTION int solve_4d_prad(const GRCoordinates& G,
             if (mhd_inverter_status != static_cast<int>(Inverter::Status::success)) {
                 scaling_factor /= 3.0;
                 track++;
-                if (track > 15 || scaling_factor < 1.e-5) break;
-                continue;
-            }
-
-            if (!(P_init(m_p.UU, k, j, i) > ugas_min_entry &&
-                    P_init(m_p.UU, k, j, i) < ugas_max_entry)) {
-                scaling_factor /= 3.0;
-                track++;
-                if (track > 15 || scaling_factor < 1.e-5) break;
+                if (track > 15 || scaling_factor < 1.e-8) break;
                 continue;
             }
 
             step_ok = true;
         } while (!step_ok && track <= 15);
 
-        if (track > 15 || scaling_factor < 1.e-5) {
+        if (track > 15 || scaling_factor < 1.e-8) {
             bad_guess = true;
             break;
         }

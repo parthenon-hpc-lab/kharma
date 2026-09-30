@@ -79,7 +79,7 @@ static const std::map<int, std::string> status_names_implicit = {
         "RadM1 4D Solver Fell Back to P_rad iteration and succeeded"},
     {(int)StatusImplicitStep::mhdfinalsolve,
         "PMHD solver converged but UtoP failed. Sending it to fixup."},
-    {(int)StatusImplicitStep::failure, "RadM1 implicit step update failure."}
+    {(int)StatusImplicitStep::failure, "RadM1 implicit step update failure."},
 };
 
 enum class RadLimiterType { BASIC, TYPE2 };

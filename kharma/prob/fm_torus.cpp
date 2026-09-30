@@ -219,10 +219,10 @@ TaskStatus InitializeFMTorus(
             rho(k, j, i) /= rho_max;
             u(k, j, i) /= rho_max;
 
-            // if (use_rad) {
-            //     // Following Koral initialization for fishbone moncrief
-            //     RadM1::initialize_radiation_pressure(u(k, j, i), uu_rad(k, j, i));
-            // }
+            if (use_rad) {
+                // start to 0.1% the value of u, just to help solver in the first initial steps.
+                RadM1::initialize_radiation_pressure(u(k, j, i), uu_rad(k, j, i));
+            }
         });
 
     // Apply floors to initialize the rest of the domain (regardless whether we'll use
@@ -230,6 +230,10 @@ TaskStatus InitializeFMTorus(
     // done in *fluid frame*, even if NOF frame is chosen (iharm3d does the same iiuc)
     // This is probably not a huge issue, just good to state explicitly
     Floors::ApplyInitialFloors(pin, rc.get(), IndexDomain::interior);
+
+    if (use_rad) {
+        RadM1::ApplyRadM1Floors(rc.get(), IndexDomain::interior);
+    }
 
     return TaskStatus::complete;
 }
