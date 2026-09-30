@@ -118,7 +118,7 @@ jobs:
           cat << EOF > kernel-metadata.json
           {
             "id": "${{ secrets.KAGGLE_USERNAME }}/kharma-ci-run-${{ matrix.test_name }}",
-            "title": "kharma-ci-run",
+            "title": "kharma-ci-run-${{ matrix.test_name }}",
             "code_file": "gpu_runner.py",
             "language": "python",
             "kernel_type": "script",
@@ -143,18 +143,18 @@ jobs:
           echo "Code sent to Kaggle. Waiting for GPU provisioning and tests..."
 
           while true; do
-            STATUS=$(kaggle kernels status $KAGGLE_USERNAME/kharma-ci-run 2>&1)
+            STATUS=$(kaggle kernels status $KAGGLE_USERNAME/kharma-ci-run-${{ matrix.test_name }} 2>&1)
             STATUS_LOWER=$(echo "$STATUS" | tr '[:upper:]' '[:lower:]')
             echo "Current status: $STATUS"
 
             if [[ "$STATUS_LOWER" == *"complete"* ]]; then
               echo "Tests passed successfully on Kaggle!"
-              kaggle kernels output $KAGGLE_USERNAME/kharma-ci-run -p ./output
+              kaggle kernels output $KAGGLE_USERNAME/kharma-ci-run-${{ matrix.test_name }} -p ./output
               cat ./output/*.log || true
               break
             elif [[ "$STATUS_LOWER" == *"error"* || "$STATUS_LOWER" == *"cancel"* || "$STATUS_LOWER" == *"fatal"* ]]; then
               echo "Tests failed or kernel errored!"
-              kaggle kernels output $KAGGLE_USERNAME/kharma-ci-run -p ./output
+              kaggle kernels output $KAGGLE_USERNAME/kharma-ci-run-${{ matrix.test_name }} -p ./output
               cat ./output/*.log || true
               exit 1
             fi
