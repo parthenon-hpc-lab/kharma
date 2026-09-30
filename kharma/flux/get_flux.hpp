@@ -484,9 +484,6 @@ inline TaskStatus GetFlux(MeshData<Real>* md)
 
     // Apply what we've calculated
     Flag("GetFlux_" + std::to_string(dir) + "_riemann");
-    // Apply what we've calculated
-    Flag("GetFlux_" + std::to_string(dir) + "_riemann");
-
     if (use_rad) {
         if (use_hlle) {
             pmb0->par_for("flux_hlle", block.s, block.e, 0, nvar - 1, b.ks, b.ke, b.js,
@@ -570,6 +567,8 @@ inline TaskStatus GetFlux(MeshData<Real>* md)
                 });
         }
     }
+    EndFlag();
+
     EndFlag();
     return TaskStatus::complete;
 }

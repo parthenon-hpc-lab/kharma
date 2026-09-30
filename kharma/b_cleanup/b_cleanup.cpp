@@ -50,7 +50,7 @@
 #include <solvers/cg_solver.hpp>
 #include <solvers/mg_solver.hpp>
 #include <solvers/solver_utils.hpp>
-#include <solvers/tridiag_solver.hpp>
+// #include <solvers/tridiag_solver.hpp>
 
 #if DISABLE_CLEANUP
 
@@ -184,8 +184,9 @@ std::shared_ptr<KHARMAPackage> B_Cleanup::Initialize(
             parthenon::solvers::BiCGSTABSolver<PoissEq, preconditioner_t>>(
             "base", "u", "rhs", pin, "b_cleanup", PoissEq(pin, "b_cleanup"));
     } else if (solver == "Tridiag") {
-        psolver = std::make_shared<parthenon::solvers::TridiagSolver<PoissEq>>(
-            "base", "u", "rhs", pin, "b_cleanup", PoissEq(pin, "b_cleanup"));
+        PARTHENON_FAIL("Tridiag not supported for B cleanup!");
+        // psolver = std::make_shared<parthenon::solvers::TridiagSolver<PoissEq>>(
+        //       "base", "u", "rhs", pin, "b_cleanup", PoissEq(pin, "b_cleanup"));
     } else {
         PARTHENON_FAIL("Unknown solver type " + solver + ".");
     }

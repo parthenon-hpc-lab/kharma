@@ -74,6 +74,7 @@ TaskCollection KHARMADriver::MakeTaskCollection(BlockList_t& blocks, int stage)
     // safe. "c" is the integrator's time offset per stage: stage "s" takes the state at
     // c[s-1] and produces the one used as input to stage "s+1", with the last stage
     // landing on the full step.
+    // TODO(CEP) figure out moving this to PreStepWork, it needs the integrator
     auto& globals = blocks[0]->packages.Get("Globals")->AllParams();
     const Real substep_end_frac =
         (stage < integrator->nstages) ? integrator->c[stage] : 1.0;
@@ -121,6 +122,7 @@ TaskCollection KHARMADriver::MakeDefaultTaskCollection(BlockList_t& blocks, int 
     // Whether anything needs the Strang-split primitive-source half-steps at all
     const bool use_prim_source = Packages::AnyPrimSource(pmesh);
     const bool use_fofc = flux_pkg.Get<bool>("use_fofc");
+    const bool use_fofc_pcp = (use_fofc) ? flux_pkg.Get<bool>("fofc_pcp") : false;
     const bool use_jcon = pkgs.count("Current");
     const bool track_additions = pkgs.at("Floors")->Param<bool>("track_additions");
     bool reconnect_b3 = false;
@@ -181,12 +183,14 @@ TaskCollection KHARMADriver::MakeDefaultTaskCollection(BlockList_t& blocks, int 
     static std::vector<std::string> sync_vars;
     if (sync_vars.size() == 0) {
         // Build the universe of variables to let Parthenon see when exchanging
-        // boundaries. This is built to exclude incidental variables like B field
-        // initialization stuff, EMFs, etc. "Boundaries" packs in buffers e.g. Dirichlet
-        // boundaries
-        auto sync_flags = FC({Metadata::GetUserFlag("Primitive"), Metadata::Conserved,
-                                 Metadata::Face, Metadata::GetUserFlag("Boundaries")},
-            true);
+        // boundaries. "Boundaries" packs in buffers from that package, e.g.
+        // Dirichlet boundaries, and anything "StartupOnly" does not still
+        // need to be sync'd during the run
+        auto sync_flags =
+            FC({Metadata::FillGhost, Metadata::GetUserFlag("Primitive"),
+                   Metadata::Conserved, Metadata::GetUserFlag("Boundaries")},
+                true) -
+            FC({Metadata::GetUserFlag("StartupOnly")});
         sync_vars = KHARMA::GetVariableNames(&(pmesh->packages), sync_flags);
     }
 
@@ -269,6 +273,11 @@ TaskCollection KHARMADriver::MakeDefaultTaskCollection(BlockList_t& blocks, int 
             t_fluxes = KHARMADriver::AddFOFC(t_flux_calc, tl, md_sub_step_init.get(),
                 md_full_step_init.get(), md_sub_step_init.get(), guess_src.get(),
                 guess.get(), stage);
+            if (use_fofc_pcp) {
+                t_fluxes = KHARMADriver::AddFOFC_PCP(t_fluxes, tl, md_sub_step_init.get(),
+                    md_full_step_init.get(), md_sub_step_init.get(), guess_src.get(),
+                    guess.get(), stage, sync_vars);
+            }
         }
 
         // Any package modifications to the fluxes.  e.g.:
@@ -286,8 +295,11 @@ TaskCollection KHARMADriver::MakeDefaultTaskCollection(BlockList_t& blocks, int 
                 auto& md_emf_only = pmesh->mesh_data.AddShallow("EMF", md_sub_step_init,
                     std::vector<std::string>{
                         "B_CT.emf"}); // TODO this gets weird if we partition
-                auto t_emf_local =
-                    tl.AddTask(t_flux_bounds, B_CT::CalculateEMF, md_sub_step_init.get());
+                auto t_start_recv_emf = tl.AddTask(t_none,
+                    parthenon::StartReceiveBoundBufs<parthenon::BoundaryType::any>,
+                    md_emf_only);
+                auto t_emf_local = tl.AddTask(t_flux_bounds | t_start_recv_emf,
+                    B_CT::CalculateEMF, md_sub_step_init.get());
                 t_emf = KHARMADriver::AddBoundarySync(t_emf_local, tl, md_emf_only);
             }
             auto t_load_send_flux = tl.AddTask(
@@ -342,6 +354,8 @@ TaskCollection KHARMADriver::MakeDefaultTaskCollection(BlockList_t& blocks, int 
         auto& md_sync = pmesh->mesh_data.AddShallow(
             "sync" + integrator->stage_name[stage] + std::to_string(i), md_sub_step_final,
             sync_vars);
+        // auto &md_guess = (use_fofc) ? pmesh->mesh_data.GetOrAdd("fofc_guess", i) :
+        // md_sub_step_final;
 
         // At this point, we've sync'd all internal boundaries using the conserved
         // variables. The physical boundaries (pole, inner/outer) are trickier,
@@ -380,8 +394,9 @@ TaskCollection KHARMADriver::MakeDefaultTaskCollection(BlockList_t& blocks, int 
         auto t_floors = tl.AddTask(t_utop, Packages::MeshApplyFloors,
             md_sub_step_final.get(), IndexDomain::entire);
 
-        // Then, fix any inversions which failed. Fixups average the adjacent zones, so we
-        // want to work from post-floor data. Floors are re-applied after fixups.
+        // Then, fix any inversions which failed. Fixups may average the adjacent zones,
+        // so we want to work from post-floor data. Floors are re-applied after fixups.
+        // TODO(CEP) take guess (prims w/B evolved w/o constraints) if using PCP
         auto t_fix_p =
             tl.AddTask(t_floors, Inverter::MeshFixUtoP, md_sub_step_final.get());
 

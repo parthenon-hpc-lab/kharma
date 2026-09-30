@@ -234,6 +234,8 @@ TaskStatus BlockUtoP(MeshBlockData<Real>* rc, IndexDomain domain, bool coarse)
     auto B_U = rc->PackVariables(std::vector<std::string>{"cons.B"});
     auto B_P = rc->PackVariables(std::vector<std::string>{"prims.B"});
 
+    if (B_U.GetDim(4) == 0 || B_P.GetDim(4) == 0) return TaskStatus::complete;
+
     const auto& G = pmb->coords;
 
     auto bounds = coarse ? pmb->c_cellbounds : pmb->cellbounds;

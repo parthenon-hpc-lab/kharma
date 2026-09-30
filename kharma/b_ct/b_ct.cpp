@@ -78,10 +78,12 @@ std::shared_ptr<KHARMAPackage> B_CT::Initialize(
         throw std::runtime_error(
             "Cannot use non-divergence-preserving prolongation in AMR!");
 
+    // Stay away from the outer boundary by N zones when reconnecting, prevents
+    // a magnetic field blowup sometimes seen in old KHARMA.
     // TODO don't set this unless we're reconnecting at boundaries (can't just check, we
     // load Boundaries pkg later)
     int reconnection_outer_buffer;
-    try {
+    try { // This try/catch is for restarting for runs after a bug wrote this as Boolean
         reconnection_outer_buffer =
             pin->GetOrAddInteger("b_field", "reconnection_outer_buffer", 5);
     } catch (std::invalid_argument) {
@@ -209,7 +211,8 @@ TaskStatus B_CT::BlockUtoP(MeshBlockData<Real>* rc, IndexDomain domain, bool coa
     auto B_P = rc->PackVariables(std::vector<std::string>{"prims.B"});
     const auto& G = pmb->coords;
     // Return if we're not syncing U & P at all (e.g. edges)
-    if (B_Uf.GetDim(4) == 0) return TaskStatus::complete;
+    if (B_Uf.GetDim(4) == 0 || B_U.GetDim(4) == 0 || B_P.GetDim(4) == 0)
+        return TaskStatus::complete;
 
     // We need one cell inside of the domain, since it will be updated by the domain-face
     // field this oversteps "interior" by a zone
