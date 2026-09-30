@@ -183,12 +183,14 @@ TaskCollection KHARMADriver::MakeDefaultTaskCollection(BlockList_t& blocks, int 
     static std::vector<std::string> sync_vars;
     if (sync_vars.size() == 0) {
         // Build the universe of variables to let Parthenon see when exchanging
-        // boundaries. This is built to exclude incidental variables like B field
-        // initialization stuff, EMFs, etc. "Boundaries" packs in buffers e.g. Dirichlet
-        // boundaries
-        auto sync_flags = FC({Metadata::GetUserFlag("Primitive"), Metadata::Conserved,
-                                 Metadata::Face, Metadata::GetUserFlag("Boundaries")},
-            true);
+        // boundaries. "Boundaries" packs in buffers from that package, e.g.
+        // Dirichlet boundaries, and anything "StartupOnly" does not still
+        // need to be sync'd during the run
+        auto sync_flags =
+            FC({Metadata::FillGhost, Metadata::GetUserFlag("Primitive"),
+                   Metadata::Conserved, Metadata::GetUserFlag("Boundaries")},
+                true) -
+            FC({Metadata::GetUserFlag("StartupOnly")});
         sync_vars = KHARMA::GetVariableNames(&(pmesh->packages), sync_flags);
     }
 

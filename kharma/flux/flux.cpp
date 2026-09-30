@@ -261,12 +261,17 @@ std::shared_ptr<KHARMAPackage> Flux::Initialize(
             fofc_pcp = false;
         }
         if (fofc_pcp) {
-            int fofc_pcp_chi = pin->GetOrAddInteger("fofc", "pcp_chi", 2);
-            params.Add("fofc_pcp_chi", fofc_pcp_chi);
-            Real fofc_pcp_umin = pin->GetOrAddReal("fofc", "pcp_umin", 1e-10);
-            params.Add("fofc_pcp_umin", fofc_pcp_umin);
-            // printf("pcp %d pcp_chi %d pcp_umin %g\n", fofc_pcp, fofc_pcp_chi,
-            // fofc_pcp_umin);
+            // Neither of these are respected right now.  Maybe should never be
+            // int fofc_pcp_chi = pin->GetOrAddInteger("fofc", "pcp_chi", 2);
+            // params.Add("fofc_pcp_chi", fofc_pcp_chi);
+            // Real fofc_pcp_umin = pin->GetOrAddReal("fofc", "pcp_umin", 1e-10);
+            // params.Add("fofc_pcp_umin", fofc_pcp_umin);
+
+            // Cache for PCP corrections
+            Metadata m = Metadata(
+                {Metadata::Real, Metadata::Cell, Metadata::Derived, Metadata::OneCopy});
+            pkg->AddField("Flux.fofc_pcp_alpha", m);
+            pkg->AddField("Flux.fofc_pcp_wsum", m);
         }
 
         // Flag for whether FOFC was applied, for diagnostics
@@ -278,9 +283,9 @@ std::shared_ptr<KHARMAPackage> Flux::Initialize(
         // List (vector) of HistoryOutputVars that will all be enrolled as output
         // variables
         parthenon::HstVar_list hst_vars = {};
-        // Count total floors as a history item
+        // Count total flags as a history item
         hst_vars.emplace_back(parthenon::HistoryOutputVar(
-            UserHistoryOperation::max, CountFOFCFlags, "FOFCFlags"));
+            UserHistoryOperation::sum, CountFOFCFlags, "FOFCFlags"));
         // TODO Domain::entire version?
         // TODO entries for each individual flag?
         // add callbacks for HST output to the Params struct, identified by the
@@ -352,7 +357,7 @@ TaskStatus Flux::BlockPtoU(MeshBlockData<Real>* rc, IndexDomain domain, bool coa
     const int nvar = U.GetDim(4);
 
     // Return if we're not syncing U & P at all (e.g. edges)
-    if (P.GetDim(4) == 0) return TaskStatus::complete;
+    if (P.GetDim(4) == 0 || U.GetDim(4) == 0) return TaskStatus::complete;
 
     // Indices
     auto bounds = coarse ? pmb->c_cellbounds : pmb->cellbounds;
@@ -404,7 +409,7 @@ TaskStatus Flux::BlockPtoU_Send(MeshBlockData<Real>* rc, IndexDomain domain, boo
     const VarMap m_u(cons_map, true), m_p(prims_map, false);
 
     // Return if we're not syncing U & P at all (e.g. edges)
-    if (P.GetDim(4) == 0) return TaskStatus::complete;
+    if (P.GetDim(4) == 0 || U.GetDim(4) == 0) return TaskStatus::complete;
 
     // Make sure we always update center conserved B from the faces, not the prims
     // if (pmb->packages.AllPackages().count("B_CT"))

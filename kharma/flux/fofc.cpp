@@ -301,6 +301,11 @@ TaskStatus Flux::FOFC_PCP(MeshData<Real>* md, MeshData<Real>* guess, const Real 
     // Pick up flag. Optionally synced
     auto fofcflag = guess->PackVariables(std::vector<std::string>{"fofcflag"});
 
+    // Temporary for amount to adjust
+    auto alpha_norm =
+        guess->PackVariables(std::vector<std::string>{"Flux.fofc_pcp_alpha"});
+    auto wsum = guess->PackVariables(std::vector<std::string>{"Flux.fofc_pcp_wsum"});
+
     // We want to update fluxes in md, based on prims from guess
     PackIndexMap cons_map, prims_map;
     std::vector<MetadataFlag> prims_flags = {
@@ -315,13 +320,13 @@ TaskStatus Flux::FOFC_PCP(MeshData<Real>* md, MeshData<Real>* guess, const Real 
 
     // Parameters
     const auto& pars = packages.Get("Fluxes")->AllParams();
-    const int chi = pars.Get<int>("fofc_pcp_chi"); // TODO(CEP) currently not read!!
+    // const int chi = pars.Get<int>("fofc_pcp_chi");
     // const Real umin = pars.Get<Real>("fofc_pcp_umin");
 
     const IndexRange3 b = KDomain::GetRange(md, IndexDomain::interior);
     const IndexRange block = IndexRange{0, P_all.GetDim(5) - 1};
 
-    // utilde -> w -> normalize -> alpha -> revised F
+    // utilde -> w -> normalize -> alpha
     pmb0->par_for("fix_FOFC_PCP", block.s, block.e, b.ks, b.ke, b.js, b.je, b.is, b.ie,
         KOKKOS_LAMBDA (const int &bl, const int &k, const int &j, const int &i)
         {
@@ -355,91 +360,114 @@ TaskStatus Flux::FOFC_PCP(MeshData<Real>* md, MeshData<Real>* guess, const Real 
                              : 0.;
 
                 // Normalize
-                Real wsum = 0.;
-                for (int ii = 0; ii < 6; ii++) wsum += wts[ii];
-                for (int ii = 0; ii < 6; ii++) wts[ii] /= wsum;
+                Real wsum_local = 0.;
+                for (int ii = 0; ii < 6; ii++) wsum_local += wts[ii];
+                for (int ii = 0; ii < 6; ii++) wts[ii] /= wsum_local;
 
-                // Coordinate frame
-                // const Real uvec[NVEC] = {0, 0, 0};
-                const Real uvec[NVEC] = {P_all(bl, m_p.U1, k, j, i),
-                    P_all(bl, m_p.U2, k, j, i), P_all(bl, m_p.U3, k, j, i)};
+                // If we have available neighbors...
+                if (wsum_local > 0.) {
+                    // Preserve the sum for reweighting fluxes later
+                    wsum(bl, 0, k, j, i) = wsum_local;
 
-                // Central B components when calculated from face
-                Real B_fP[NVEC];
-                B_fP[V1] =
-                    (B_Uf(bl, F1, 0, k, j, i) / G.gdet(Loci::face1, j, i) +
-                        B_Uf(bl, F1, 0, k, j, i + 1) / G.gdet(Loci::face1, j, i + 1)) /
-                    2;
-                B_fP[V2] = (ndim > 1)
-                               ? (B_Uf(bl, F2, 0, k, j, i) / G.gdet(Loci::face2, j, i) +
-                                     B_Uf(bl, F2, 0, k, j + 1, i) /
-                                         G.gdet(Loci::face2, j + 1, i)) /
-                                     2
-                               : B_Uf(bl, F2, 0, k, j, i) / G.gdet(Loci::face2, j, i);
-                B_fP[V3] =
-                    (ndim > 2)
-                        ? (B_Uf(bl, F3, 0, k, j, i) / G.gdet(Loci::face3, j, i) +
-                              B_Uf(bl, F3, 0, k + 1, j, i) / G.gdet(Loci::face3, j, i)) /
-                              2
-                        : B_Uf(bl, F3, 0, k, j, i) / G.gdet(Loci::face3, j, i);
+                    // Compute bsq in proper frame
+                    const Real uvec[NVEC] = {P_all(bl, m_p.U1, k, j, i),
+                        P_all(bl, m_p.U2, k, j, i), P_all(bl, m_p.U3, k, j, i)};
 
-                // Central B components updated from cells alone
-                const Real B_cP[NVEC] = {P_all(bl, m_p.B1, k, j, i),
-                    P_all(bl, m_p.B2, k, j, i), P_all(bl, m_p.B3, k, j, i)};
+                    // Central B components when calculated from face
+                    Real B_fP[NVEC];
+                    B_fP[V1] = (B_Uf(bl, F1, 0, k, j, i) / G.gdet(Loci::face1, j, i) +
+                                   B_Uf(bl, F1, 0, k, j, i + 1) /
+                                       G.gdet(Loci::face1, j, i + 1)) /
+                               2;
+                    B_fP[V2] =
+                        (ndim > 1)
+                            ? (B_Uf(bl, F2, 0, k, j, i) / G.gdet(Loci::face2, j, i) +
+                                  B_Uf(bl, F2, 0, k, j + 1, i) /
+                                      G.gdet(Loci::face2, j + 1, i)) /
+                                  2
+                            : B_Uf(bl, F2, 0, k, j, i) / G.gdet(Loci::face2, j, i);
+                    B_fP[V3] =
+                        (ndim > 2)
+                            ? (B_Uf(bl, F3, 0, k, j, i) / G.gdet(Loci::face3, j, i) +
+                                  B_Uf(bl, F3, 0, k + 1, j, i) /
+                                      G.gdet(Loci::face3, j, i)) /
+                                  2
+                            : B_Uf(bl, F3, 0, k, j, i) / G.gdet(Loci::face3, j, i);
 
-                // TODO Surely we can save on this with algebra
-                FourVectors Dtmp;
-                Real T[GR_DIM];
-                GRMHD::calc_4vecs(G, uvec, B_fP, k, j, i, Loci::center, Dtmp);
-                GRMHD::calc_tensor(0, 0, 0, Dtmp, 0, T);
-                const Real T0_face = T[0];
-                GRMHD::calc_4vecs(G, uvec, B_cP, k, j, i, Loci::center, Dtmp);
-                GRMHD::calc_tensor(0, 0, 0, Dtmp, 0, T);
-                const Real T0_cell = T[0];
+                    // Central B components updated from cells alone
+                    const Real B_cP[NVEC] = {P_all(bl, m_p.B1, k, j, i),
+                        P_all(bl, m_p.B2, k, j, i), P_all(bl, m_p.B3, k, j, i)};
 
-                // If we have too much magnetic field energy (compared to being PCP),
-                // and have available neighbors...
-                //(m::abs(T0_face) > m::abs(T0_cell)) &&
-                // if (m::abs(T0_cell) > m::abs(T0_face))
-                //    printf("T0_face: %g T0_cell: %g\n", T0_face, T0_cell);
-                if (wsum > 0.) {
+                    // TODO Surely we can save on this with algebra
+                    FourVectors Dtmp;
+                    Real T[GR_DIM];
+                    GRMHD::calc_4vecs(G, uvec, B_fP, k, j, i, Loci::center, Dtmp);
+                    GRMHD::calc_tensor(0, 0, 0, Dtmp, 0, T);
+                    const Real T0_face = T[0];
+                    GRMHD::calc_4vecs(G, uvec, B_cP, k, j, i, Loci::center, Dtmp);
+                    GRMHD::calc_tensor(0, 0, 0, Dtmp, 0, T);
+                    const Real T0_cell = T[0];
+
                     // Mark separately to track
                     fofcflag(bl, 0, k, j, i) = (int)Flux::Correction::pcp;
+
                     // This is alpha/dt as is customary for fluxes
                     // If the magnetic field stress-energy component (T0_face) will be
                     // different than the PCP value (T0_cell), we need to adjust our
                     // energy to reality
                     const Real alpha = (T0_face - T0_cell);
-                    const Real alpha_norm =
+                    alpha_norm(bl, 0, k, j, i) =
                         alpha * G.gdet(Loci::center, j, i) * G.CellVolume(k, j, i) / dt;
 
+                    // TODO bring back print on debug build?
                     // if (m::abs(alpha / T0_face) > 1e-3) {
                     //     printf("Total alpha %g (proportion %g)\n"
                     //         "First flux %g changed by %g\n", alpha, alpha / T0_face,
                     //         U_all(bl).flux(1, m_u.UU, k, j, i) * G.FaceArea<X1DIR>(k,
                     //         j, i + 1), wts[0] * alpha_norm);
                     // }
-
-                    // Flux correction to T^0_0
-                    // We're adding, so we don't care whether it's mass-subtracted
-                    // TODO eliminate race condition
-                    U_all(bl).flux(1, m_u.UU, k, j, i + 1) -=
-                        wts[0] * alpha_norm / G.FaceArea<X1DIR>(k, j, i + 1);
-                    U_all(bl).flux(1, m_u.UU, k, j, i) +=
-                        wts[1] * alpha_norm / G.FaceArea<X1DIR>(k, j, i);
-                    if (ndim > 1) {
-                        U_all(bl).flux(2, m_u.UU, k, j + 1, i) -=
-                            wts[2] * alpha_norm / G.FaceArea<X2DIR>(k, j + 1, i);
-                        U_all(bl).flux(2, m_u.UU, k, j, i) +=
-                            wts[3] * alpha_norm / G.FaceArea<X2DIR>(k, j, i);
-                    }
-                    if (ndim > 2) {
-                        U_all(bl).flux(3, m_u.UU, k + 1, j, i) -=
-                            wts[4] * alpha_norm / G.FaceArea<X3DIR>(k + 1, j, i);
-                        U_all(bl).flux(3, m_u.UU, k, j, i) +=
-                            wts[5] * alpha_norm / G.FaceArea<X3DIR>(k, j, i);
-                    }
                 }
+            }
+        });
+
+    // Now revise F
+    const IndexRange3 bf = KDomain::GetRange(md, IndexDomain::interior, 0, 1);
+    pmb0->par_for("fix_FOFC_PCP_flux", block.s, block.e, bf.ks, bf.ke, bf.js, bf.je,
+        bf.is, bf.ie,
+        KOKKOS_LAMBDA (const int &bl, const int &k, const int &j, const int &i)
+        {
+            const auto& G = U_all.GetCoords(bl);
+
+            // TODO duplicated...
+            Real rhomin_geom, umin_geom;
+            determine_geo_floors(
+                G, P_all(bl), m_p, k, j, i, floors, rhomin_geom, umin_geom);
+            const Real umin = umin_geom; // Keep flexibility
+
+            // Flux corrections to satisfy neighbors of this face.
+            // This recalculates & must match some of the weights wts[N] for each cell
+            U_all(bl).flux(1, m_u.UU, k, j, i) +=
+                (ipow<2>(m::max(P_all(bl, m_p.UU, k, j, i - 1) - umin, 0.)) /
+                        wsum(bl, 0, k, j, i - 1) * alpha_norm(bl, 0, k, j, i) -
+                    ipow<2>(m::max(P_all(bl, m_p.UU, k, j, i) - umin, 0.)) /
+                        wsum(bl, 0, k, j, i) * alpha_norm(bl, 0, k, j, i - 1)) /
+                G.FaceArea<X1DIR>(k, j, i);
+
+            if (ndim > 1) {
+                U_all(bl).flux(2, m_u.UU, k, j, i) +=
+                    (ipow<2>(m::max(P_all(bl, m_p.UU, k, j - 1, i) - umin, 0.)) /
+                            wsum(bl, 0, k, j - 1, i) * alpha_norm(bl, 0, k, j, i) -
+                        ipow<2>(m::max(P_all(bl, m_p.UU, k, j, i) - umin, 0.)) /
+                            wsum(bl, 0, k, j, i) * alpha_norm(bl, 0, k, j - 1, i)) /
+                    G.FaceArea<X2DIR>(k, j, i);
+            }
+            if (ndim > 2) {
+                U_all(bl).flux(3, m_u.UU, k, j, i) +=
+                    (ipow<2>(m::max(P_all(bl, m_p.UU, k - 1, j, i) - umin, 0.)) /
+                            wsum(bl, 0, k - 1, j, i) * alpha_norm(bl, 0, k, j, i) -
+                        ipow<2>(m::max(P_all(bl, m_p.UU, k, j, i) - umin, 0.)) /
+                            wsum(bl, 0, k, j, i) * alpha_norm(bl, 0, k - 1, j, i)) /
+                    G.FaceArea<X3DIR>(k, j, i);
             }
         });
 

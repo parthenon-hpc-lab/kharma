@@ -547,6 +547,8 @@ inline TaskStatus GetFlux(MeshData<Real>* md)
         }
     }
     EndFlag();
+
+    EndFlag();
     return TaskStatus::complete;
 }
 

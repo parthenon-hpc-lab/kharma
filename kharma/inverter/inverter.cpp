@@ -191,7 +191,8 @@ inline void BlockPerformInversion(
     // auto fflag = rc->PackVariables(std::vector<std::string>{"fflag"});
     auto pflag = rc->PackVariables(std::vector<std::string>{"pflag"});
 
-    if (U.GetDim(4) == 0 || pflag.GetDim(4) == 0) return;
+    // TODO error if pflag not present, that's a problem
+    if (U.GetDim(4) == 0 || P.GetDim(4) == 0 || pflag.GetDim(4) == 0) return;
 
     const auto& eos_params = pmb->packages.Get("eos")->AllParams();
     auto eos = eos_params.Get<Microphysics::EOS::EOS>("d.EOS");
@@ -199,14 +200,6 @@ inline void BlockPerformInversion(
     auto& pars = pmb->packages.Get("Inverter")->AllParams();
     const Real err_tol = pars.Get<Real>("err_tol");
     const int iter_max = pars.Get<int>("iter_max");
-
-    // If we set the floors package to use normal frame w/Kastaun inverter, *or*
-    // if we disabled the floors package, go ahead and apply all floors in this function
-    const bool normal_frame_floors =
-        (pmb->packages.AllPackages().count("Floors"))
-            ? pmb->packages.Get("Floors")->Param<Floors::InjectionFrame>("frame") ==
-                  Floors::InjectionFrame::normal_kastaun
-            : true;
 
     const auto& G = pmb->coords;
 
