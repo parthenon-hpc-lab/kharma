@@ -185,7 +185,7 @@ void BlockUtoP(MeshBlockData<Real>* rc, IndexDomain domain, bool coarse)
             KOKKOS_LAMBDA(const int& k, const int& j, const int& i)
             {
                 ktot_adv_P(k, j, i) =
-                    m::abs(ktot_adv_U(k, j, i) * rho_P(k, j, i) / rho_U(k, j, i));
+                    ktot_adv_U(k, j, i) * rho_P(k, j, i) / rho_U(k, j, i);
             });
     }
 }
