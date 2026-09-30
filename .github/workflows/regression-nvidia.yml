@@ -81,9 +81,9 @@ jobs:
 
       - name: Generate Kaggle Runner Script
         run: |
-          mkdir .github/script/
+          mkdir -p .github/script/
           cd .github/script/
-          
+
           cat << 'EOF' > gpu_runner.py
           import os
           import subprocess
@@ -101,7 +101,7 @@ jobs:
           run("git checkout ${{ github.sha }}")
 
           run("pip install git+https://github.com/c-prather/pyharm@dev")
-          
+
           run("apt-get update && apt-get install -y build-essential libopenmpi-dev libhdf5-openmpi-dev hdf5-tools cmake curl")
 
           print("Downloading Artifact...")
@@ -112,7 +112,7 @@ jobs:
           os.chdir("tests/${{ matrix.test_name }}")
           run("./run.sh")
           EOF
-          
+
           cat << EOF > kernel-metadata.json
           {
             "id": "${{ secrets.KAGGLE_USERNAME }}/kharma-ci-run",
@@ -134,12 +134,12 @@ jobs:
           KAGGLE_USERNAME: ${{ secrets.KAGGLE_USERNAME }}
           KAGGLE_API_TOKEN: ${{ secrets.KAGGLE_API_TOKEN }}
         run: |
-          cd kaggle_run
-          
+          cd .github/script/
+
           kaggle kernels push -p .
-          
+
           echo "Code sent to Kaggle. Waiting for GPU provisioning and tests..."
-          
+
           while true; do
             STATUS=$(kaggle kernels status $KAGGLE_USERNAME/kharma-ci-run 2>&1)
             STATUS_LOWER=$(echo "$STATUS" | tr '[:upper:]' '[:lower:]')
