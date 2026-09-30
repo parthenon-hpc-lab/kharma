@@ -60,10 +60,6 @@
 
 using FC = Metadata::FlagCollection;
 
-// TODO(CEP) ImEx is behind:
-// 1. No reordered/new polar/ISMR consolidation
-// 2. No fixups based on PCP guess
-
 TaskCollection KHARMADriver::MakeImExTaskCollection(BlockList_t& blocks, int stage)
 {
     // Reminder that this list is created BEFORE any of the list contents are run!
@@ -158,7 +154,9 @@ TaskCollection KHARMADriver::MakeImExTaskCollection(BlockList_t& blocks, int sta
         // Dirichlet boundaries, and anything "StartupOnly" does not still
         // need to be sync'd during the run
         auto sync_flags =
-            FC({Metadata::FillGhost, Metadata::GetUserFlag("Boundaries")}, true) -
+            FC({Metadata::FillGhost, Metadata::GetUserFlag("Primitive"),
+                   Metadata::Conserved, Metadata::GetUserFlag("Boundaries")},
+                true) -
             FC({Metadata::GetUserFlag("StartupOnly")});
         sync_vars = KHARMA::GetVariableNames(&(pmesh->packages), sync_flags);
     }

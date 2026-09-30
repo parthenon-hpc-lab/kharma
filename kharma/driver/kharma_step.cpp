@@ -187,7 +187,9 @@ TaskCollection KHARMADriver::MakeDefaultTaskCollection(BlockList_t& blocks, int 
         // Dirichlet boundaries, and anything "StartupOnly" does not still
         // need to be sync'd during the run
         auto sync_flags =
-            FC({Metadata::FillGhost, Metadata::GetUserFlag("Boundaries")}, true) -
+            FC({Metadata::FillGhost, Metadata::GetUserFlag("Primitive"),
+                   Metadata::Conserved, Metadata::GetUserFlag("Boundaries")},
+                true) -
             FC({Metadata::GetUserFlag("StartupOnly")});
         sync_vars = KHARMA::GetVariableNames(&(pmesh->packages), sync_flags);
     }
