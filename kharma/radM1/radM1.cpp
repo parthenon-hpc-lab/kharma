@@ -223,8 +223,7 @@ void RadM1::ApplyRadM1Floors(MeshBlockData<Real>* rc, IndexDomain domain)
             GReal Xembed_fix[GR_DIM];
             G.coord_embed(k, j, i, Loci::center, Xembed_fix);
             const GReal r_hor_fix = G.coords.get_horizon();
-            const bool inside_horizon = (r_hor_fix > 0.0) && (Xembed_fix[1] <
-            r_hor_fix);
+            const bool inside_horizon = (r_hor_fix > 0.0) && (Xembed_fix[1] < r_hor_fix);
             // const bool inside_horizon = false;
 
             if (P(m_p.UU_RAD, k, j, i) < erad_floor || inside_horizon) {
@@ -413,15 +412,16 @@ void RadM1::AddSourceImplicitly(
                 // have a horizon, and infact, we have negative values so we don't want
                 // this check.
                 if (r_hor > 0.0 && r < r_hor) {
-                    rimplflag(0, k, j, i) =
-                    static_cast<int>(StatusImplicitStep::success); return;
+                    rimplflag(0, k, j, i) = static_cast<int>(StatusImplicitStep::success);
+                    return;
                 }
 
                 // if U1_rad == 0 or U1 == 0 it means that it fell badly on floors
                 // we shouldn't bother to try to solve this
-                if (P_init_substep(m_p.U1_RAD, k, j, i) == 0.0 || P_init_substep(m_p.U1, k, j, i) == 0.0) {
-                    rimplflag(0, k, j, i) =
-                    static_cast<int>(StatusImplicitStep::success); return;
+                if (P_init_substep(m_p.U1_RAD, k, j, i) == 0.0 ||
+                    P_init_substep(m_p.U1, k, j, i) == 0.0) {
+                    rimplflag(0, k, j, i) = static_cast<int>(StatusImplicitStep::success);
+                    return;
                 }
 
                 const Real U_entry[8] = {U_init_substep(m_u.UU, k, j, i),
@@ -458,23 +458,23 @@ void RadM1::AddSourceImplicitly(
                     dU_substep(m_u.U1_RAD, k, j, i) += dS_subinit[1];
                     dU_substep(m_u.U2_RAD, k, j, i) += dS_subinit[2];
                     dU_substep(m_u.U3_RAD, k, j, i) += dS_subinit[3];
-                    // s_gas = ln(P^n/rho^(n+1)) (with n = 1/(gamma-1)), or s_gas = ln(K)/(gamma-1) where K = P * rho^{-gamma}.
-                    // Consider that S = rho * s_gas;
-                    // so K = exp(( gamma - 1) * S/rho)
-                    // dK/dt = dK/dS * dS/dt
-                    // dS/dt is exactly what I calculated
-                    // dK/dS = (gamma - 1) * K / rho;
-                    // so dK/dt = (gamma - 1) * K/rho * 1/T G^u u_u = (gamma - 1)/rho^(gam - 1) * G^u u_u
-                    // (PNM) I should ask cora if use KTOT_ADV here;
-                    if (m_u.KTOT_ADV >= 0) dU_substep(m_u.KTOT_ADV, k, j, i) += (gm1) / m::pow(P_init_substep(m_p.RHO, k, j, i), gm1) * dS_subinit[4];
+                    // s_gas = ln(P^n/rho^(n+1)) (with n = 1/(gamma-1)), or s_gas =
+                    // ln(K)/(gamma-1) where K = P * rho^{-gamma}. Consider that S = rho *
+                    // s_gas; so K = exp(( gamma - 1) * S/rho) dK/dt = dK/dS * dS/dt dS/dt
+                    // is exactly what I calculated dK/dS = (gamma - 1) * K / rho; so
+                    // dK/dt = (gamma - 1) * K/rho * 1/T G^u u_u = (gamma - 1)/rho^(gam -
+                    // 1) * G^u u_u (PNM) I should ask cora if use KTOT_ADV here;
+                    if (m_u.KTOT_ADV >= 0)
+                        dU_substep(m_u.KTOT_ADV, k, j, i) +=
+                            (gm1) / m::pow(P_init_substep(m_p.RHO, k, j, i), gm1) *
+                            dS_subinit[4];
                     rimplflag(0, k, j, i) = rflagl;
                     return;
                 }
 
-
                 rflagl = solve_4d_prad(G, U_init_substep, P_init_substep, m_p, m_u, k, j,
-                                i, dt, eos, src_rootfind_eps, src_rootfind_tol, src_rootfind_maxiter,
-                                rad_opac, pflag, rinvflag, U_entry, dS_subinit);
+                    i, dt, eos, src_rootfind_eps, src_rootfind_tol, src_rootfind_maxiter,
+                    rad_opac, pflag, rinvflag, U_entry, dS_subinit);
 
                 // Prad alters the P_init. So we gotta revert it back.
                 U_init_substep(m_u.UU, k, j, i) = U_entry[0];
@@ -496,17 +496,19 @@ void RadM1::AddSourceImplicitly(
                     dU_substep(m_u.U1_RAD, k, j, i) += dS_subinit[1];
                     dU_substep(m_u.U2_RAD, k, j, i) += dS_subinit[2];
                     dU_substep(m_u.U3_RAD, k, j, i) += dS_subinit[3];
-                    if (m_u.KTOT_ADV >= 0) dU_substep(m_u.KTOT_ADV, k, j, i) += (gm1) / m::pow(P_init_substep(m_p.RHO, k, j, i), gm1) * dS_subinit[4];
+                    if (m_u.KTOT_ADV >= 0)
+                        dU_substep(m_u.KTOT_ADV, k, j, i) +=
+                            (gm1) / m::pow(P_init_substep(m_p.RHO, k, j, i), gm1) *
+                            dS_subinit[4];
 
                     rimplflag(0, k, j, i) =
                         static_cast<int>(StatusImplicitStep::pradfallback_success);
                     return;
                 }
 
-
                 // auto status_1d = solve_radiation_1d(G, P_init_substep, m_p, m_u, eos,
-                //     rad_opac, k, j, i, dt, src_rootfind_tol, src_rootfind_maxiter, pflag,
-                //     rinvflag, U_entry, dS_subinit);
+                //     rad_opac, k, j, i, dt, src_rootfind_tol, src_rootfind_maxiter,
+                //     pflag, rinvflag, U_entry, dS_subinit);
 
                 // if (status_1d == StatusImplicitStep::success) {
                 //     dU_substep(m_u.UU, k, j, i) -= dS_subinit[0];
@@ -523,13 +525,18 @@ void RadM1::AddSourceImplicitly(
                 //     return;
                 // }
 
-               
-                // printf("This cell in: %d, %d, %d, with UU: %.15e, U1: %.15e, U2: %.15e, U3: %.15e, RHO = %.15e, and UU_RAD = %.15e, U1_RAD = %.15e, U2_RAD = %.15e, U3_RAD = %.15e, left with rflagl = %d\n", k, j, i, P_init_substep(m_p.UU, k, j, i), P_init_substep(m_p.U1, k, j, i), P_init_substep(m_p.U2, k, j, i), P_init_substep(m_p.U3, k, j, i), P_init_substep(m_p.RHO, k, j, i), P_init_substep(m_p.UU_RAD, k, j, i), P_init_substep(m_p.U1_RAD, k, j, i), P_init_substep(m_p.U2_RAD, k, j, i), P_init_substep(m_p.U3_RAD, k, j, i), rflagl);
+                // printf("This cell in: %d, %d, %d, with UU: %.15e, U1: %.15e, U2: %.15e,
+                // U3: %.15e, RHO = %.15e, and UU_RAD = %.15e, U1_RAD = %.15e, U2_RAD =
+                // %.15e, U3_RAD = %.15e, left with rflagl = %d\n", k, j, i,
+                // P_init_substep(m_p.UU, k, j, i), P_init_substep(m_p.U1, k, j, i),
+                // P_init_substep(m_p.U2, k, j, i), P_init_substep(m_p.U3, k, j, i),
+                // P_init_substep(m_p.RHO, k, j, i), P_init_substep(m_p.UU_RAD, k, j, i),
+                // P_init_substep(m_p.U1_RAD, k, j, i), P_init_substep(m_p.U2_RAD, k, j,
+                // i), P_init_substep(m_p.U3_RAD, k, j, i), rflagl);
                 // if(P_init_substep(m_p.U1, k, j, i) != 0.0) {
                 //     exit(666);
                 // }
-                rimplflag(0, k, j, i) =
-                    static_cast<int>(StatusImplicitStep::failure);
+                rimplflag(0, k, j, i) = static_cast<int>(StatusImplicitStep::failure);
             });
     }
 }

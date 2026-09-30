@@ -220,7 +220,8 @@ TaskStatus InitializeFMTorus(
             u(k, j, i) /= rho_max;
 
             if (use_rad) {
-                // start to 0.1% the value of u, just to help solver in the first initial steps.
+                // start to 0.1% the value of u, just to help solver in the first initial
+                // steps.
                 RadM1::initialize_radiation_pressure(u(k, j, i), uu_rad(k, j, i));
             }
         });

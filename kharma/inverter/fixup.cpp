@@ -183,7 +183,8 @@ TaskStatus Inverter::FixUtoP(MeshBlockData<Real>* rc)
                 G.coord_embed(k, j, i, Loci::center, Xembed);
                 const bool inside_horizon = r_hor > 0.0 && Xembed[1] < r_hor;
 
-                const bool bad = !inside_horizon &&
+                const bool bad =
+                    !inside_horizon &&
                     (failed(rinvflag(0, k, j, i)) ||
                         rimplflag(0, k, j, i) ==
                             static_cast<int>(RadM1::StatusImplicitStep::failure));
@@ -199,14 +200,15 @@ TaskStatus Inverter::FixUtoP(MeshBlockData<Real>* rc)
                                     G.coord_embed(kk, jj, ii, Loci::center, Xembed_n);
                                     const bool n_inside_horizon =
                                         r_hor > 0.0 && Xembed_n[1] < r_hor;
-                                    const bool nbad = n_inside_horizon ||
+                                    const bool nbad =
+                                        n_inside_horizon ||
                                         failed(rinvflag(0, kk, jj, ii)) ||
                                         rimplflag(0, kk, jj, ii) ==
                                             static_cast<int>(
                                                 RadM1::StatusImplicitStep::failure);
                                     if (!nbad) {
-                                        double w = 1. /
-                                            (m::abs(l) + m::abs(m) + m::abs(n) + 1);
+                                        double w =
+                                            1. / (m::abs(l) + m::abs(m) + m::abs(n) + 1);
                                         wsum += w;
                                         sum[0] += w * Prad(m_prad.UU_RAD, kk, jj, ii);
                                         sum[1] += w * Prad(m_prad.U1_RAD, kk, jj, ii);

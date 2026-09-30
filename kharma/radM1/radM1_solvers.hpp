@@ -467,7 +467,7 @@ KOKKOS_INLINE_FUNCTION StatusImplicitStep solve_radiation_1d(const GRCoordinates
         Real ucon_final[4];
         GRMHD::calc_ucon(G, uvec_frozen, k, j, i, Loci::center, ucon_final);
         Real Gdotu = dS_trial[0] * ucon_final[0] + dS_trial[1] * ucon_final[1] +
-                    dS_trial[2] * ucon_final[2] + dS_trial[3] * ucon_final[3];
+                     dS_trial[2] * ucon_final[2] + dS_trial[3] * ucon_final[3];
         dS_final[4] = Gdotu;
     }
 
@@ -916,7 +916,6 @@ KOKKOS_INLINE_FUNCTION int solve_4d_pmhd(const GRCoordinates& G,
     dS_final[2] = dS_guess[2];
     dS_final[3] = dS_guess[3];
 
-    
     {
         Real uvec_final[NVEC] = {P_mhd_guess[1], P_mhd_guess[2], P_mhd_guess[3]};
         Real ucon_final[4];
@@ -1034,8 +1033,7 @@ KOKKOS_INLINE_FUNCTION int solve_4d_prad(const GRCoordinates& G,
             Real fd_step = m::max(src_rootfind_eps * P_rad_mag_min,
                 src_rootfind_eps * m::abs(P_rad_guess[m]));
             {
-                const Real gas_energy_margin =
-                    0.1 * m::abs(P_mhd_guess[0]);
+                const Real gas_energy_margin = 0.1 * m::abs(P_mhd_guess[0]);
                 fd_step = m::min(fd_step, m::max(gas_energy_margin, RAD_SMALL));
             }
             P_rad_m[m] -= fd_step;
@@ -1138,8 +1136,7 @@ KOKKOS_INLINE_FUNCTION int solve_4d_prad(const GRCoordinates& G,
                 Real fd_step_p = std::max(src_rootfind_eps * P_rad_mag_min,
                     src_rootfind_eps * m::abs(P_rad_p[m]));
                 {
-                    const Real gas_energy_margin =
-                        0.1 * m::abs(P_mhd_guess[0]);
+                    const Real gas_energy_margin = 0.1 * m::abs(P_mhd_guess[0]);
                     fd_step_p = m::min(fd_step_p, m::max(gas_energy_margin, RAD_SMALL));
                 }
                 P_rad_p[m] += fd_step_p;
@@ -1198,8 +1195,7 @@ KOKKOS_INLINE_FUNCTION int solve_4d_prad(const GRCoordinates& G,
                 Real fd_step_m = std::max(src_rootfind_eps * P_rad_mag_min,
                     src_rootfind_eps * m::abs(P_rad_m[m]));
                 {
-                    const Real gas_energy_margin =
-                        0.1 * m::abs(P_mhd_guess[0]);
+                    const Real gas_energy_margin = 0.1 * m::abs(P_mhd_guess[0]);
                     fd_step_m = m::min(fd_step_m, m::max(gas_energy_margin, RAD_SMALL));
                 }
                 P_rad_m[m] -= fd_step_m;
