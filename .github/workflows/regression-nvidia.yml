@@ -27,13 +27,12 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install build-essential
-          sudo apt-get install libopenmpi-dev libhdf5-openmpi-dev libfftw3-dev
           sudo apt-get install hdf5-tools cmake
       - uses: Jimver/cuda-toolkit@v0.2.36
         with:
           cuda: '13.2.0'
       - name: Run compilation
-        run: bash -ic './make.sh clean cuda'
+        run: bash -ic './make.sh clean cuda hdf5 nompi'
       - uses: actions/upload-artifact@v7
         id: build-artifacts-step
         with:
