@@ -32,7 +32,7 @@ jobs:
           sudo apt-get install hdf5-tools cmake
       - uses: Jimver/cuda-toolkit@v0.2.36
         with:
-          cuda: '13.2.0'
+          cuda: '13.0.0'
       - name: Run compilation
         run: bash -ic './make.sh clean cuda hdf5 nompi'
       - uses: actions/upload-artifact@v7
@@ -55,26 +55,26 @@ jobs:
       fail-fast: false
       matrix:
         test_name:
-        - all_pars
-        - anisotropic_conduction
+        - all-pars
+        - anisotropic-conduction
         - bondi
-        - bondi_rad
-        - bondi_viscous
-        - bz_monopole
-        - conducting_atmosphere
+        - bondi-rad
+        - bondi-viscous
+        - bz-monopole
+        - conducting-atmosphere
         - emhdmodes
-        - hubble_flow
+        - hubble-flow
         - mhdmodes
-        - mhdmodes_smr
+        - mhdmodes-smr
         - noh
-        - rad_linear_waves
+        - rad-linear-waves
         - radshock
         - regrid
         - reinit
         - resize
         - restart
-        - tilt_init
-        - torus_sanity
+        - tilt-init
+        - torus-sanity
     steps:
       - uses: actions/setup-python@v5
         with:
@@ -118,7 +118,7 @@ jobs:
           run("unzip build-artifacts.zip")
 
           print("Running Test...")
-          os.chdir("tests/${{ matrix.test_name }}")
+          os.chdir("tests/${{ matrix.test_name }}".replace("-", "_"))
           run("./run.sh")
           EOF
 
