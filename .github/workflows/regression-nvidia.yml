@@ -44,6 +44,11 @@ jobs:
           path: |
             kharma.cuda
             make_args
+            pars/
+            scripts/
+            tests/
+            machines/
+            run.sh
           if-no-files-found: 'error'
 
   # Job 2: Test Matrix
@@ -105,7 +110,7 @@ jobs:
           run("git clone https://github.com/${{ github.repository }}.git repo")
           os.chdir("repo")
           # TODO why does checking out SHA give "no tree"
-          run("git fetch && git checkout ${{ github.ref_name }}")
+          #run("git fetch && git checkout ${{ github.sha }}")
 
           run("pip install git+https://github.com/c-prather/pyharm@dev")
 
