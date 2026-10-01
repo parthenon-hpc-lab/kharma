@@ -110,7 +110,7 @@ jobs:
 
           print("Downloading Artifact...")
           ${{ needs.build-nvidia.outputs.kharma-id }}
-          run("""curl -L \
+          run("""curl -L -o build-artifacts.zip \
           -H "Accept: application/vnd.github+json" \
           -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
           -H "X-GitHub-Api-Version: 2026-03-10" \
