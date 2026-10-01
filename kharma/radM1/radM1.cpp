@@ -403,7 +403,6 @@ void RadM1::AddSourceImplicitly(
                 // Check if it's within the horizon, if it is, just assume no interaction
                 // and dU_subinit = 0; PNM: I've been having some trouble getting it to
                 // stay controled within the horizon.
-
                 GReal Xembed[GR_DIM];
                 G.coord_embed(k, j, i, Loci::center, Xembed);
                 const GReal r = Xembed[1];

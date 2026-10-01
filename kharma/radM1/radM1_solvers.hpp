@@ -256,7 +256,6 @@ KOKKOS_INLINE_FUNCTION void compute_covariant_fourforce(const GRCoordinates& G,
     G.lower(ucon_mhd, ucov_mhd, k, j, i, Loci::center);
 
     Real Erf = P_rad[0];
-    Real uvec_rad[3] = {P_rad[1], P_rad[2], P_rad[3]};
     Real ucon_rad[4], ucov_rad[4];
     RadM1::calc_ucon_rad(G, P_rad, j, i, ucon_rad);
     G.lower(ucon_rad, ucov_rad, k, j, i, Loci::center);
@@ -451,12 +450,6 @@ KOKKOS_INLINE_FUNCTION StatusImplicitStep solve_radiation_1d(const GRCoordinates
         return StatusImplicitStep::onedfallback_failure;
     }
 
-    Real P_mhd_new[4];
-
-    P_mhd_new[0] = u_root;
-    P_mhd_new[1] = uvec_frozen[0];
-    P_mhd_new[2] = uvec_frozen[1];
-    P_mhd_new[3] = uvec_frozen[2];
 
     dS_final[0] = dS_trial[0];
     dS_final[1] = dS_trial[1];
@@ -542,7 +535,6 @@ KOKKOS_INLINE_FUNCTION int solve_4d_pmhd(const GRCoordinates& G,
     Real U_rad_guess[4];
     Real P_rad_guess[4];
     Real dS_guess[4];
-    Real dcov_rad[4] = {0., 0., 0., 0.};
 
     U_mhd_0[0] = U_entry[0];
     U_mhd_0[1] = U_entry[1];
@@ -957,7 +949,6 @@ KOKKOS_INLINE_FUNCTION int solve_4d_prad(const GRCoordinates& G,
     Real U_rad_guess[4];
     Real P_rad_guess[4];
     Real dS_guess[4];
-    Real dcov_rad[4] = {0., 0., 0., 0.};
 
     // Iteration 0
     U_mhd_guess[0] = U_mhd_0[0];
@@ -992,8 +983,6 @@ KOKKOS_INLINE_FUNCTION int solve_4d_prad(const GRCoordinates& G,
     Real err = calculate_error(resid, U_rad_guess, U_rad_0, dtdS_0);
     int niter = 0;
     bool bad_guess = false;
-
-    Real rho_iter = rho_init;
 
     do {
         if (err <= src_rootfind_tol) {

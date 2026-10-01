@@ -128,7 +128,7 @@ class RadOpac
     }
 
     KOKKOS_INLINE_FUNCTION
-    const Real Trad(Real E_hat, Real rho, Real bsq) const
+    Real Trad(Real E_hat, Real rho, Real bsq) const
     {
         switch (static_cast<OpacityType>(opacity_type)) {
             case OpacityType::Constant:
@@ -153,9 +153,12 @@ class RadOpac
     }
 
   private:
-    const Real synchrotron(
+    KOKKOS_INLINE_FUNCTION
+    Real synchrotron(
         const Real rho, const Real Tg, const Real Trad, const Real bsq) const
     {
+        if (bsq <= 0.0)
+            return 0.0;
         const Real rho_cgs = rho * units_cgs.GetMassDensityCodeToCGS();
         const Real Tg_cgs = m::abs(Tg) * units_cgs.GetTemperatureCodeToCGS();
         const Real Trad_cgs = m::abs(Trad) * units_cgs.GetTemperatureCodeToCGS();
