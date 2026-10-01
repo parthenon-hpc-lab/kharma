@@ -20,7 +20,7 @@ env:
 jobs:
   # Job 1: Compilation
   build-nvidia:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     outputs:
       kharma-id: ${{ steps.build-artifacts.outputs.artifact-id }}
     steps:
