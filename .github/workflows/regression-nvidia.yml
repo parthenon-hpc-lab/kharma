@@ -100,11 +100,12 @@ jobs:
               if subprocess.run(cmd, shell=True).returncode != 0:
                   sys.exit(1)
 
-          run("nvidia-smi")
+          # run("nvidia-smi")
 
           run("git clone https://github.com/${{ github.repository }}.git repo")
           os.chdir("repo")
-          run("git fetch && git checkout ${{ github.sha }}")
+          # TODO why does checking out SHA give "no tree"
+          run("git fetch && git checkout ${{ github.ref_name }}")
 
           run("pip install git+https://github.com/c-prather/pyharm@dev")
 
