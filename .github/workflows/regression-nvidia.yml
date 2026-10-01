@@ -104,7 +104,7 @@ jobs:
 
           run("git clone https://github.com/${{ github.repository }}.git repo")
           os.chdir("repo")
-          run("git checkout ${{ github.sha }}")
+          run("git fetch && git checkout ${{ github.sha }}")
 
           run("pip install git+https://github.com/c-prather/pyharm@dev")
 
