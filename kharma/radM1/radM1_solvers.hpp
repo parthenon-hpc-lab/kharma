@@ -450,7 +450,6 @@ KOKKOS_INLINE_FUNCTION StatusImplicitStep solve_radiation_1d(const GRCoordinates
         return StatusImplicitStep::onedfallback_failure;
     }
 
-
     dS_final[0] = dS_trial[0];
     dS_final[1] = dS_trial[1];
     dS_final[2] = dS_trial[2];
