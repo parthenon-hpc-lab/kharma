@@ -6,8 +6,8 @@ on:
   # when triggered manually
   workflow_dispatch:
   # when auto merge is enabled (hack to make sure it's run before merging)
-  pull_request:
-    types: [auto_merge_enabled]
+#  pull_request:
+#    types: [auto_merge_enabled]
 
 env:
   NPROC: 4
