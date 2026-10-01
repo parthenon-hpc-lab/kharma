@@ -1,6 +1,8 @@
 name: Regression tests (Nvidia)
 
 on:
+  pull_request:
+    branches: [ stable, dev ]
   # when triggered manually
   workflow_dispatch:
   # when auto merge is enabled (hack to make sure it's run before merging)
@@ -32,7 +34,7 @@ jobs:
           sudo apt-get install hdf5-tools cmake
       - uses: Jimver/cuda-toolkit@v0.2.36
         with:
-          cuda: '13.0.0'
+          cuda: '12.6.0'
       - name: Run compilation
         run: bash -ic './make.sh clean cuda hdf5 nompi'
       - uses: actions/upload-artifact@v7
