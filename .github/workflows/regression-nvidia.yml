@@ -34,7 +34,7 @@ jobs:
           sudo apt-get install hdf5-tools cmake
       - uses: Jimver/cuda-toolkit@v0.2.36
         with:
-          cuda: '12.9.2'
+          cuda: '12.8.2'
       - name: Run compilation
         run: bash -ic './make.sh clean cuda hdf5 nompi'
       - uses: actions/upload-artifact@v7
