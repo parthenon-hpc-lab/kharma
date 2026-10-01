@@ -117,7 +117,6 @@ jobs:
           run("apt-get update && apt-get install -y build-essential libopenmpi-dev libhdf5-openmpi-dev hdf5-tools cmake curl")
 
           print("Downloading Artifact...")
-          ${{ needs.build-nvidia.outputs.kharma-id }}
           run("""curl -L -o build-artifacts.zip \
           -H "Accept: application/vnd.github+json" \
           -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
