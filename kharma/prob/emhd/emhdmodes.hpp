@@ -68,7 +68,6 @@ TaskStatus InitializeEMHDModes(
 
     const EMHD::EMHD_parameters& emhd_params = EMHD::GetEMHDParameters(pmb->packages);
     const auto& grmhd_pars = pmb->packages.Get("GRMHD")->AllParams();
-    // const Real& gam = grmhd_pars.Get<Real>("gamma");
 
     const auto& eos_params = pmb->packages.Get("eos")->AllParams();
     auto eos = eos_params.Get<Microphysics::EOS::EOS>("d.EOS");

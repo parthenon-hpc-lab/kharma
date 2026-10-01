@@ -73,11 +73,13 @@ TaskCollection KHARMADriver::MakeImExTaskCollection(BlockList_t& blocks, int sta
     auto& flux_pkg = pkgs.at("Fluxes")->AllParams();
     const bool use_b_cleanup = pkgs.count("B_Cleanup");
     const bool use_b_ct = pkgs.count("B_CT");
+    const bool use_ismr = pkgs.count("ISMR");
     const bool use_electrons = pkgs.count("Electrons");
     const bool use_entropy = pkgs.count("Entropy");
     // Whether anything needs the Strang-split primitive-source half-steps at all
     const bool use_prim_source = Packages::AnyPrimSource(pmesh);
     const bool use_fofc = flux_pkg.Get<bool>("use_fofc");
+    const bool use_fofc_pcp = (use_fofc) ? flux_pkg.Get<bool>("fofc_pcp") : false;
     const bool use_implicit_package = pkgs.count("Implicit");
     const bool use_jcon = pkgs.count("Current");
     const bool use_linesearch =
@@ -87,6 +89,12 @@ TaskCollection KHARMADriver::MakeImExTaskCollection(BlockList_t& blocks, int sta
         (emhd_enabled) ? pkgs.at("GRMHD")->Param<bool>("ideal_guess") : false;
     // Out of the package modification RADM1.
     const bool use_radm1 = pkgs.count("RadM1");
+    bool reconnect_b3 = false;
+    if (use_b_ct) {
+        reconnect_b3 = pkgs.at("Boundaries")->Param<bool>("reconnect_B3_inner_x2");
+        if (reconnect_b3 && !pkgs.at("Boundaries")->Param<bool>("reconnect_B3_outer_x2"))
+            throw std::runtime_error("Must enable reconnection for both boundaries!");
+    }
 
     // Allocate/copy the things we need
     // TODO these can now be reduced by including the var lists/flags which actually need
@@ -142,12 +150,14 @@ TaskCollection KHARMADriver::MakeImExTaskCollection(BlockList_t& blocks, int sta
     static std::vector<std::string> sync_vars;
     if (sync_vars.size() == 0) {
         // Build the universe of variables to let Parthenon see when exchanging
-        // boundaries. This is built to exclude incidental variables like B field
-        // initialization stuff, EMFs, etc. "Boundaries" packs in buffers e.g. Dirichlet
-        // boundaries
-        auto sync_flags = FC({Metadata::GetUserFlag("Primitive"), Metadata::Conserved,
-                                 Metadata::Face, Metadata::GetUserFlag("Boundaries")},
-            true);
+        // boundaries. "Boundaries" packs in buffers from that package, e.g.
+        // Dirichlet boundaries, and anything "StartupOnly" does not still
+        // need to be sync'd during the run
+        auto sync_flags =
+            FC({Metadata::FillGhost, Metadata::GetUserFlag("Primitive"),
+                   Metadata::Conserved, Metadata::GetUserFlag("Boundaries")},
+                true) -
+            FC({Metadata::GetUserFlag("StartupOnly")});
         sync_vars = KHARMA::GetVariableNames(&(pmesh->packages), sync_flags);
     }
 
@@ -236,6 +246,11 @@ TaskCollection KHARMADriver::MakeImExTaskCollection(BlockList_t& blocks, int sta
             t_fluxes = KHARMADriver::AddFOFC(t_flux_calc, tl, md_sub_step_init.get(),
                 md_full_step_init.get(), md_sub_step_init.get(), guess_src.get(),
                 guess.get(), stage);
+            if (use_fofc_pcp) {
+                t_fluxes = KHARMADriver::AddFOFC_PCP(t_fluxes, tl, md_sub_step_init.get(),
+                    md_full_step_init.get(), md_sub_step_init.get(), guess_src.get(),
+                    guess.get(), stage, sync_vars);
+            }
         }
 
         // Any package modifications to the fluxes.  e.g.:
@@ -302,11 +317,31 @@ TaskCollection KHARMADriver::MakeImExTaskCollection(BlockList_t& blocks, int sta
                 false, stage);
         }
 
+        // Reconnect then derefine, the "local" operations on U
+        // TODO very not sure how this interacts with implicitly-evolved vars
+        auto t_reconnect = t_ideal_guess;
+        if (use_b_ct && reconnect_b3) {
+            t_reconnect =
+                tl.AddTask(t_ideal_guess, B_CT::ReconnectB3Task, md_solver.get());
+        }
+
+        auto t_derefine = t_reconnect;
+        if (use_ismr) {
+            if (pkgs.at("ISMR")->Param<uint>("nlevels") > 0) {
+                auto t_derefine_b = t_reconnect;
+                if (use_b_ct)
+                    t_derefine_b =
+                        tl.AddTask(t_reconnect, B_CT::DerefinePoles, md_solver.get());
+                t_derefine = tl.AddTask(t_derefine_b, ISMR::DerefinePoles,
+                    md_solver.get(), std::vector<MetadataFlag>{Metadata::WithFluxes});
+            }
+        }
+
         // Make sure the primitive values of *explicitly-evolved* variables are updated.
         // Packages with implicitly-evolved vars should only register BoundaryUtoP or
         // BoundaryPtoU
-        auto t_explicit_UtoP = tl.AddTask(t_ideal_guess, Packages::MeshUtoP,
-            md_solver.get(), IndexDomain::entire, false);
+        auto t_explicit_UtoP = tl.AddTask(
+            t_derefine, Packages::MeshUtoP, md_solver.get(), IndexDomain::entire, false);
 
         // Done with explicit update
         auto t_explicit = t_explicit_UtoP;
@@ -444,14 +479,6 @@ TaskCollection KHARMADriver::MakeImExTaskCollection(BlockList_t& blocks, int sta
             IndexDomain::entire, false);
 
         auto t_step_done = t_ptou;
-        if (pkgs.count("ISMR")) {
-            auto t_derefine_b = t_ptou;
-            if (pkgs.count("B_CT"))
-                t_derefine_b =
-                    tl.AddTask(t_ptou, B_CT::DerefinePoles, md_sub_step_final.get());
-            t_step_done =
-                tl.AddTask(t_derefine_b, ISMR::DerefinePoles, md_sub_step_final.get());
-        }
 
         // Estimate next time step based on ctop
         if (stage == integrator->nstages) {

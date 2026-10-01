@@ -41,7 +41,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # add back 'resize' when new solvers work
+        # 'resize' should work but too big for the test GPU
         test_name:
         - all_pars
         - anisotropic_conduction

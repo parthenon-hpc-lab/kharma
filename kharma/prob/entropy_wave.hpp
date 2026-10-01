@@ -128,7 +128,7 @@ TaskStatus InitializeEntropyWave(
     }
 
     const auto& G = pmb->coords;
-    const Real gam = pmb->packages.Get("GRMHD")->Param<Real>("gamma");
+    const Real gm1 = pmb->packages.Get("eos")->Param<Real>("gm1");
 
     IndexDomain domain = IndexDomain::entire;
     IndexRange3 b = KDomain::GetRange(rc, domain, 0, 0);
@@ -140,7 +140,7 @@ TaskStatus InitializeEntropyWave(
 
             rho(k, j, i) = rho0 * (1. + amp * m::sin(k1 * X[1] + k2 * X[2] + k3 * X[3]));
             // Uniform pressure: this is the whole point, it makes K = p/rho^gam vary
-            u(k, j, i) = pgas / (gam - 1.);
+            u(k, j, i) = pgas / gm1;
             uvec(0, k, j, i) = ut1;
             uvec(1, k, j, i) = ut2;
             uvec(2, k, j, i) = ut3;
