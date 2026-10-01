@@ -20,7 +20,7 @@ jobs:
   build-nvidia:
     runs-on: ubuntu-latest
     outputs:
-      kharma-url: ${{ steps.build-artifacts.outputs.artifact-url }}
+      kharma-id: ${{ steps.build-artifacts.outputs.artifact-id }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -49,6 +49,8 @@ jobs:
     needs: build-nvidia
     runs-on: ubuntu-latest
     continue-on-error: true
+    concurrency:
+      group: kaggle-gpu
     strategy:
       fail-fast: false
       matrix:
@@ -107,7 +109,12 @@ jobs:
           run("apt-get update && apt-get install -y build-essential libopenmpi-dev libhdf5-openmpi-dev hdf5-tools cmake curl")
 
           print("Downloading Artifact...")
-          run("curl ${{ needs.build-nvidia.outputs.kharma-url }} -o build-artifacts.zip")
+          ${{ needs.build-nvidia.outputs.kharma-id }}
+          run("""curl -L \
+          -H "Accept: application/vnd.github+json" \
+          -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+          -H "X-GitHub-Api-Version: 2026-03-10" \
+          https://api.github.com/repos/${{ github.repository }}/actions/artifacts/${{ needs.build-nvidia.outputs.kharma-id }}/zip""")
           run("unzip build-artifacts.zip && mv build-artifacts/* .")
 
           print("Running Test...")
