@@ -15,7 +15,7 @@ env:
   OMP_NUM_THREADS: 1
   HOST_ARCH: "HSW"
   DEVICE_ARCH: "TURING75"
-  MODULEPATH: '/opt/nvidia/hpc_sdk/modulefiles:/usr/share/modulefiles'
+  EXTRA_FLAGS: "-DHDF5_USE_STATIC_LIBRARIES=ON"
 
 jobs:
   # Job 1: Compilation
