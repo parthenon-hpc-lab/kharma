@@ -115,7 +115,7 @@ jobs:
           -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
           -H "X-GitHub-Api-Version: 2026-03-10" \
           https://api.github.com/repos/${{ github.repository }}/actions/artifacts/${{ needs.build-nvidia.outputs.kharma-id }}/zip""")
-          run("unzip build-artifacts.zip && mv build-artifacts/* .")
+          run("unzip build-artifacts.zip")
 
           print("Running Test...")
           os.chdir("tests/${{ matrix.test_name }}")
