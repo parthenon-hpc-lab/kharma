@@ -45,8 +45,8 @@
 #include "grmhd.hpp"
 #include "inverter.hpp"
 #include "ismr.hpp"
-#include "temperature.hpp"
 #include "radM1.hpp"
+#include "temperature.hpp"
 #include "wind.hpp"
 // Other headers
 #include "boundaries.hpp"
