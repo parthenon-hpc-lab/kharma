@@ -449,7 +449,7 @@ TaskStatus Flux::FOFC_PCP(MeshData<Real>* md, MeshData<Real>* guess, const Real 
                 int kk = (dir == 3) ? k - 1 : k;
                 int jj = (dir == 2) ? j - 1 : j;
                 int ii = (dir == 1) ? i - 1 : i;
-                // If either bordering cell is marked
+                // If either bordering cell is marked (TODO test flag instead?)
                 if (alpha_norm(bl, 0, k, j, i) != 0. ||
                     alpha_norm(bl, 0, kk, jj, ii) != 0.) {
 

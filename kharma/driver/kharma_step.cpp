@@ -116,7 +116,8 @@ TaskCollection KHARMADriver::MakeDefaultTaskCollection(BlockList_t& blocks, int 
     auto& flux_pkg = pkgs.at("Fluxes")->AllParams();
     const bool use_b_cleanup = pkgs.count("B_Cleanup");
     const bool use_b_ct = pkgs.count("B_CT");
-    const bool use_ismr = pkgs.count("ISMR");
+    const bool use_ismr =
+        (pkgs.count("ISMR")) ? pkgs.at("ISMR")->Param<uint>("nlevels") > 0 : false;
     const bool use_electrons = pkgs.count("Electrons");
     const bool use_entropy = pkgs.count("Entropy");
     // Whether anything needs the Strang-split primitive-source half-steps at all
@@ -371,15 +372,12 @@ TaskCollection KHARMADriver::MakeDefaultTaskCollection(BlockList_t& blocks, int 
 
         auto t_derefine = t_reconnect;
         if (use_ismr) {
-            if (pkgs.at("ISMR")->Param<uint>("nlevels") > 0) {
-                auto t_derefine_b = t_reconnect;
-                if (use_b_ct)
-                    t_derefine_b = tl.AddTask(
-                        t_reconnect, B_CT::DerefinePoles, md_sub_step_final.get());
-                t_derefine =
-                    tl.AddTask(t_derefine_b, ISMR::DerefinePoles, md_sub_step_final.get(),
-                        std::vector<MetadataFlag>{Metadata::WithFluxes});
-            }
+            auto t_derefine_b = t_reconnect;
+            if (use_b_ct)
+                t_derefine_b =
+                    tl.AddTask(t_reconnect, B_CT::DerefinePoles, md_sub_step_final.get());
+            t_derefine = tl.AddTask(t_derefine_b, ISMR::DerefinePoles,
+                md_sub_step_final.get(), std::vector<MetadataFlag>{Metadata::WithFluxes});
         }
 
         // This call fills the fluid primitive values in all physical zones, that is,

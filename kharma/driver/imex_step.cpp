@@ -73,7 +73,8 @@ TaskCollection KHARMADriver::MakeImExTaskCollection(BlockList_t& blocks, int sta
     auto& flux_pkg = pkgs.at("Fluxes")->AllParams();
     const bool use_b_cleanup = pkgs.count("B_Cleanup");
     const bool use_b_ct = pkgs.count("B_CT");
-    const bool use_ismr = pkgs.count("ISMR");
+    const bool use_ismr =
+        (pkgs.count("ISMR")) ? pkgs.at("ISMR")->Param<uint>("nlevels") > 0 : false;
     const bool use_electrons = pkgs.count("Electrons");
     const bool use_entropy = pkgs.count("Entropy");
     // Whether anything needs the Strang-split primitive-source half-steps at all
@@ -323,14 +324,12 @@ TaskCollection KHARMADriver::MakeImExTaskCollection(BlockList_t& blocks, int sta
 
         auto t_derefine = t_reconnect;
         if (use_ismr) {
-            if (pkgs.at("ISMR")->Param<uint>("nlevels") > 0) {
-                auto t_derefine_b = t_reconnect;
-                if (use_b_ct)
-                    t_derefine_b =
-                        tl.AddTask(t_reconnect, B_CT::DerefinePoles, md_solver.get());
-                t_derefine = tl.AddTask(t_derefine_b, ISMR::DerefinePoles,
-                    md_solver.get(), std::vector<MetadataFlag>{Metadata::WithFluxes});
-            }
+            auto t_derefine_b = t_reconnect;
+            if (use_b_ct)
+                t_derefine_b =
+                    tl.AddTask(t_reconnect, B_CT::DerefinePoles, md_solver.get());
+            t_derefine = tl.AddTask(t_derefine_b, ISMR::DerefinePoles, md_solver.get(),
+                std::vector<MetadataFlag>{Metadata::WithFluxes});
         }
 
         // Make sure the primitive values of *explicitly-evolved* variables are updated.
@@ -476,8 +475,15 @@ TaskCollection KHARMADriver::MakeImExTaskCollection(BlockList_t& blocks, int sta
                 t_heat_electrons, Entropy::MeshUpdateEntropy, md_sub_step_final.get());
         }
 
+        auto t_derefinep = t_entropy;
+        if (use_ismr) {
+            t_derefinep =
+                tl.AddTask(t_entropy, ISMR::DerefinePoles, md_sub_step_final.get(),
+                    std::vector<MetadataFlag>{Metadata::GetUserFlag("Primitive")});
+        }
+
         // Make sure *all* conserved vars are synchronized at step end
-        auto t_ptou = tl.AddTask(t_entropy, Flux::MeshPtoU, md_sub_step_final.get(),
+        auto t_ptou = tl.AddTask(t_derefinep, Flux::MeshPtoU, md_sub_step_final.get(),
             IndexDomain::entire, false);
 
         auto t_step_done = t_ptou;

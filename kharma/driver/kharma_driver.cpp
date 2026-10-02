@@ -414,10 +414,7 @@ TaskID KHARMADriver::AddFOFC(TaskID& t_start, TaskList& tl, MeshData<Real>* md,
         std::vector<MetadataFlag>{
             Metadata::Independent, Metadata::Cell, Metadata::WithFluxes},
         3);
-    // Add geometric source term to more accurately predict floor hits.
-    // Could add everything here with Packages::AddSource but would be slower
-    // also would need to deal with B_CT::AddSource == flux update, which we don't
-    // want/need
+    // Add all source terms so we can accurately predict floor hits
     auto t_guess_sources = tl.AddTask(
         t_guess_divergence, Packages::AddSource, md, guess_src, IndexDomain::entire);
 
@@ -450,9 +447,16 @@ TaskID KHARMADriver::AddFOFC(TaskID& t_start, TaskList& tl, MeshData<Real>* md,
         tl.AddTask(t_derefine, B_CT::MeshUtoP, guess, IndexDomain::entire, false);
     auto t_guess_prims =
         tl.AddTask(t_guess_Bp, Inverter::MeshUtoP, guess, IndexDomain::entire, false);
+
+    auto t_derefinep = t_guess_prims;
+    if (use_ismr) {
+        t_derefinep = tl.AddTask(t_guess_prims, ISMR::DerefinePoles, guess,
+            std::vector<MetadataFlag>{Metadata::GetUserFlag("Primitive")});
+    }
+
     // Check and mark floors
     auto t_mark_floors = tl.AddTask(
-        t_guess_prims, Floors::DetermineGRMHDFloors, guess, IndexDomain::entire, floors);
+        t_derefinep, Floors::DetermineGRMHDFloors, guess, IndexDomain::entire, floors);
     // Determine which cells are FOFC in our block, put that in a new flag
     auto t_mark_fofc = tl.AddTask(t_guess_prims, Flux::MarkFOFC, guess);
     // And clear the flags, this step was fake
@@ -483,7 +487,8 @@ TaskID KHARMADriver::AddFOFC_PCP(TaskID& t_start, TaskList& tl, MeshData<Real>* 
     auto pmb0 = md->GetBlockData(0)->GetBlockPointer();
     auto& pkgs = pmb0->packages.AllPackages();
     const bool use_b_ct = pkgs.count("B_CT");
-    const bool use_ismr = pkgs.count("ISMR");
+    const bool use_ismr =
+        (pkgs.count("ISMR")) ? pkgs.at("ISMR")->Param<uint>("nlevels") > 0 : false;
     bool reconnect_b3 = false;
     if (use_b_ct) {
         reconnect_b3 = pkgs.at("Boundaries")->Param<bool>("reconnect_B3_inner_x2");
@@ -580,8 +585,14 @@ TaskID KHARMADriver::AddFOFC_PCP(TaskID& t_start, TaskList& tl, MeshData<Real>* 
     auto t_clear_flags = tl.AddTask(
         t_guess_prims, KHARMADriver::Scale, std::vector<std::string>{"pflag"}, md, 0.);
 
+    auto t_derefinep = t_guess_prims;
+    if (use_ismr) {
+        t_derefinep = tl.AddTask(t_guess_prims, ISMR::DerefinePoles, guess,
+            std::vector<MetadataFlag>{Metadata::GetUserFlag("Primitive")});
+    }
+
     // Revise the first order corrections according to new Bf^2 - Bc^2
-    auto t_fofc_pcp = tl.AddTask(t_guess_prims, Flux::FOFC_PCP, md, guess,
+    auto t_fofc_pcp = tl.AddTask(t_derefinep, Flux::FOFC_PCP, md, guess,
         integrator->beta[stage - 1] * integrator->dt);
 
     EndFlag();
