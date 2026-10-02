@@ -22,8 +22,9 @@
 
 // phoebus includes
 #include "microphysics/eos_kharma/eos_kharma.hpp"
-#include "phoebus_utils/unit_conversions.hpp"
 #include "phoebus_utils/variables.hpp"
+
+#include "units.hpp"
 
 using namespace singularity;
 
@@ -50,7 +51,7 @@ std::shared_ptr<KHARMAPackage> Initialize(
 
     const std::string block_name = "eos";
 
-    phoebus::UnitConversions unit_conv(pin);
+    Units::UnitConversions unit_conv(pin);
     // singularity-eos's LengthTimeUnitsInit inverts the base-unit factors internally
     // (since singularity PR #639, commit 6ae74f49): pass CGS->code, not code->CGS.
     const Real time_unit = unit_conv.GetTimeCGSToCode();

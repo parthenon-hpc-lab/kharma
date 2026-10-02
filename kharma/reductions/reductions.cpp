@@ -226,3 +226,37 @@ std::vector<int> Reductions::CheckFlagReduceAndPrintHits(MeshData<Real>* md,
     EndFlag();
     return total_flag_counts;
 }
+
+// Out of the package modification RADM1
+// Print out which flags were hit with what % for radm1 package.
+// This should work for other packages too?
+void Reductions::PrintFlagPercentages(MeshData<Real>* md, std::string field_name,
+    const std::map<int, std::string>& flag_values, IndexDomain domain,
+    const std::vector<int>& total_flag_counts)
+{
+    if (total_flag_counts.empty() || total_flag_counts[0] == 0) return;
+
+    if (MPIRank0()) {
+        const auto& pmesh = md->GetMeshPointer();
+
+        IndexRange ib = md->GetBoundsI(domain);
+        IndexRange jb = md->GetBoundsJ(domain);
+        IndexRange kb = md->GetBoundsK(domain);
+        int n_cells =
+            pmesh->nbtotal * (kb.e - kb.s + 1) * (jb.e - jb.s + 1) * (ib.e - ib.s + 1);
+
+        std::cout << "Flags breakdown: " << field_name << std::endl;
+
+        int i = 1;
+        for (const auto& status : flag_values) {
+            if (total_flag_counts[i] > 0) {
+                // Calculate percentage for this specific flag using floating-point math
+                double flag_pct = ((double)total_flag_counts[i] / n_cells) * 100.0;
+
+                std::cout << "  * " << status.second << ": " << total_flag_counts[i]
+                          << " cells (" << (int)flag_pct << "%)" << std::endl;
+            }
+            ++i;
+        }
+    }
+}

@@ -19,18 +19,28 @@
 
 using namespace parthenon::package::prelude;
 
-// singularity includes
-#include <singularity-opac/base/radiation_types.hpp>
+#include "kharma_package.hpp"
+// Include neutrinos opacities
 #include <singularity-opac/neutrinos/mean_opacity_neutrinos.hpp>
 #include <singularity-opac/neutrinos/mean_s_opacity_neutrinos.hpp>
 #include <singularity-opac/neutrinos/opac_neutrinos.hpp>
 #include <singularity-opac/neutrinos/s_opac_neutrinos.hpp>
 
+<<<<<<< HEAD
+namespace Microphysics
+{
+=======
+#include <singularity-opac/photons/mean_opacity_photons.hpp>
+#include <singularity-opac/photons/mean_photon_s_variant.hpp>
+#include <singularity-opac/photons/mean_s_opacity_photons.hpp>
+#include <singularity-opac/photons/opac_photons.hpp>
+#include <singularity-opac/photons/s_opac_photons.hpp>
+>>>>>>> origin/feature/RadM1
+
 namespace Microphysics
 {
 
-using RadiationType = singularity::RadiationType;
-
+<<<<<<< HEAD
 /// One class to contain all opacity objects and wrap the subset of calls we use in
 /// phoebus for convenience.
 class Opacities
@@ -41,6 +51,18 @@ class Opacities
     using SOpacity = singularity::neutrinos::SOpacity;
     using MeanSOpacity = singularity::neutrinos::MeanSOpacity;
     using MeanNonCGSUnitsS = singularity::neutrinos::MeanNonCGSUnitsS<MeanSOpacity>;
+=======
+class Opacities
+{
+    using Opacity = singularity::photons::Opacity;
+    using MeanOpacity = singularity::photons::MeanOpacity;
+    using MeanNonCGSUnits = singularity::photons::MeanNonCGSUnits<MeanOpacity>;
+    using SOpacity = singularity::photons::SOpacity;
+    using MeanSOpacityBase = singularity::photons::MeanSOpacityBase;
+    using MeanSOpacity = singularity::photons::impl::MeanSVariant<MeanSOpacityBase,
+        singularity::photons::MeanNonCGSUnitsS<MeanSOpacityBase>>;
+    using MeanNonCGSUnitsS = singularity::photons::MeanNonCGSUnitsS<MeanSOpacity>;
+>>>>>>> origin/feature/RadM1
 
   public:
     Opacities() = default;
@@ -55,6 +77,7 @@ class Opacities
 
     /// Radiation equation of state calls
     KOKKOS_INLINE_FUNCTION
+<<<<<<< HEAD
     Real EnergyDensityFromTemperature(const Real& T, const RadiationType& type) const
     {
         return opac_.EnergyDensityFromTemperature(T, type);
@@ -108,10 +131,62 @@ class Opacities
         Real* lambda = nullptr) const
     {
         return opac_.AngleAveragedAbsorptionCoefficient(rho, T, Ye, type, nu, lambda);
+=======
+    Real EnergyDensityFromTemperature(const Real& T) const
+    {
+        return opac_.EnergyDensityFromTemperature(T);
+    }
+
+    KOKKOS_INLINE_FUNCTION
+    Real TemperatureFromEnergyDensity(const Real& E) const
+    {
+        return opac_.TemperatureFromEnergyDensity(E);
+    }
+
+    KOKKOS_INLINE_FUNCTION
+    Real ThermalDistributionOfTNu(const Real& T, const Real& nu) const
+    {
+        return opac_.ThermalDistributionOfTNu(T, nu);
+    }
+
+    /// Absorption/emission quantities
+    KOKKOS_INLINE_FUNCTION
+    Real Emissivity(const Real& rho, const Real& T, Real* lambda = nullptr) const
+    {
+        return opac_.Emissivity(rho, T, lambda);
+    }
+
+    KOKKOS_INLINE_FUNCTION
+    Real NumberEmissivity(const Real& rho, const Real& T, Real* lambda = nullptr) const
+    {
+        return opac_.NumberEmissivity(rho, T, lambda);
+    }
+
+    KOKKOS_INLINE_FUNCTION
+    Real EmissivityPerNu(
+        const Real& rho, const Real& T, const Real nu, Real* lambda = nullptr) const
+    {
+        return opac_.EmissivityPerNu(rho, T, nu, lambda);
+    }
+
+    KOKKOS_INLINE_FUNCTION
+    Real AbsorptionCoefficient(
+        const Real& rho, const Real& T, const Real nu, Real* lambda = nullptr) const
+    {
+        return opac_.AbsorptionCoefficient(rho, T, nu, lambda);
+    }
+
+    KOKKOS_INLINE_FUNCTION
+    Real AngleAveragedAbsorptionCoefficient(
+        const Real& rho, const Real& T, const Real nu, Real* lambda = nullptr) const
+    {
+        return opac_.AngleAveragedAbsorptionCoefficient(rho, T, nu, lambda);
+>>>>>>> origin/feature/RadM1
     }
 
     // Scattering quantities
     KOKKOS_INLINE_FUNCTION
+<<<<<<< HEAD
     Real TotalScatteringCoefficient(const Real& rho, const Real& T, const Real& Ye,
         const RadiationType& type, const Real nu, Real* lambda = nullptr) const
     {
@@ -134,6 +209,33 @@ class Opacities
         return m_s_opac_.RosselandMeanTotalScatteringCoefficient(rho, T, Ye, type);
     }
 
+=======
+    Real TotalScatteringCoefficient(
+        const Real& rho, const Real& T, const Real nu, Real* lambda = nullptr) const
+    {
+        return s_opac_.TotalScatteringCoefficient(rho, T, nu, lambda);
+    }
+
+    KOKKOS_INLINE_FUNCTION
+    Real PlanckMeanAbsorptionCoefficient(const Real& rho, const Real& T) const
+    {
+        return m_opac_.PlanckGroupAbsorptionCoefficient(rho, T, 0);
+    }
+
+    KOKKOS_INLINE_FUNCTION
+    Real RosselandMeanAbsorptionCoefficient(const Real& rho, const Real& T) const
+    {
+        return m_opac_.RosselandGroupAbsorptionCoefficient(rho, T, 0);
+    }
+
+    /// Mean scattering opacities
+    KOKKOS_INLINE_FUNCTION
+    Real RosselandMeanScatteringCoefficient(const Real& rho, const Real& T) const
+    {
+        return m_s_opac_.RosselandGroupScatteringCoefficient(rho, T, 0);
+    }
+
+>>>>>>> origin/feature/RadM1
   private:
     Opacity opac_;
     MeanOpacity m_opac_;

@@ -39,10 +39,10 @@
 #include "floors_functions.hpp"
 #include "flux_functions.hpp"
 #include "pack.hpp"
+#include "radM1/radM1.hpp"
 
 // phoebus includes
 #include "microphysics/eos_kharma/eos_kharma.hpp"
-#include "phoebus_utils/unit_conversions.hpp"
 #include "phoebus_utils/variables.hpp"
 
 // Version of "PLOOP" guaranteeing specifically the 5 GRMHD fixup-amenable primitive vars
@@ -102,9 +102,9 @@ TaskStatus Inverter::FixUtoP(MeshBlockData<Real>* rc)
                                 int ii = i + l, jj = j + m, kk = k + n;
                                 // If we haven't overstepped array bounds...
                                 if (KDomain::inside(kk, jj, ii, b)) {
-                                    // Count only the good cells (not failed AND not
-                                    // corner), if we can Note interpolated "fixed" cells
-                                    // stay flagged
+                                    // Count only the good cells (not failed/fixed AND not
+                                    // corner). Note that interpolated "fixed" cells
+                                    // stay flagged, so there is not a race cond. here
                                     if (!failed(pflag(kk, jj, ii))) {
                                         // Weight by distance
                                         double w =
@@ -132,16 +132,7 @@ TaskStatus Inverter::FixUtoP(MeshBlockData<Real>* rc)
     // Use values from floors package if it's enabled, otherwise any we've been asked to
     // apply
     const Floors::Prescription floors =
-        pmb->packages.AllPackages().count("Floors")
-            ? pmb->packages.Get("Floors")->Param<Floors::Prescription>("prescription")
-            : pmb->packages.Get("Inverter")
-                  ->Param<Floors::Prescription>("inverter_prescription");
-    const Floors::Prescription floors_inner =
-        pmb->packages.AllPackages().count("Floors")
-            ? pmb->packages.Get("Floors")->Param<Floors::Prescription>(
-                  "prescription_inner")
-            : pmb->packages.Get("Inverter")
-                  ->Param<Floors::Prescription>("inverter_prescription");
+        pmb->packages.Get("Floors")->Param<Floors::Prescription>("prescription");
 
     // We need the full packs of prims/cons for p_to_u
     // Pack new variables
@@ -162,8 +153,7 @@ TaskStatus Inverter::FixUtoP(MeshBlockData<Real>* rc)
                 // Make sure all fixed values still abide by floors
                 // TODO Full floors instead of just geo?
                 int fflagl = fflag(0, k, j, i);
-                fflagl |=
-                    Floors::apply_geo_floors(G, P, m_p, k, j, i, floors, floors_inner);
+                fflagl |= Floors::apply_geo_floors(G, P, m_p, k, j, i, floors);
                 fflag(0, k, j, i) = fflagl;
 
                 // Make sure to keep lockstep
@@ -171,6 +161,80 @@ TaskStatus Inverter::FixUtoP(MeshBlockData<Real>* rc)
                 GRMHD::p_to_u(G, P, m_p, eos, k, j, i, U, m_u);
             }
         });
+
+    if (pmb->packages.AllPackages().count("RadM1")) {
+        PackIndexMap rad_prims_map;
+        auto Prad = rc->PackVariables(
+            std::vector<std::string>{"prims.u_rad", "prims.uvec_rad"}, rad_prims_map);
+        const VarMap m_prad(rad_prims_map, false);
+
+        GridScalar rinvflag = rc->Get("rinvflag").data;
+        GridScalar rimplflag = rc->Get("rimplflag").data;
+
+        const auto& rad_params = pmb->packages.Get("RadM1")->AllParams();
+        const Real erad_floor = rad_params.Get<Real>("u_rad_floor");
+        const GReal r_hor = G.coords.get_horizon();
+
+        pmb->par_for("fix_radiation", b.ks, b.ke, b.js, b.je, b.is, b.ie,
+            KOKKOS_LAMBDA (const int &k, const int &j, const int &i)
+            {
+                GReal Xembed[GR_DIM];
+                G.coord_embed(k, j, i, Loci::center, Xembed);
+                const bool inside_horizon = r_hor > 0.0 && Xembed[1] < r_hor;
+
+                const bool bad =
+                    !inside_horizon &&
+                    (failed(rinvflag(0, k, j, i)) ||
+                        rimplflag(0, k, j, i) ==
+                            static_cast<int>(RadM1::StatusImplicitStep::failure));
+                if (bad) {
+                    double wsum = 0.;
+                    double sum[4] = {0.};
+                    for (int n = -1; n <= 1; n++) {
+                        for (int m = -1; m <= 1; m++) {
+                            for (int l = -1; l <= 1; l++) {
+                                int ii = i + l, jj = j + m, kk = k + n;
+                                if (KDomain::inside(kk, jj, ii, b)) {
+                                    GReal Xembed_n[GR_DIM];
+                                    G.coord_embed(kk, jj, ii, Loci::center, Xembed_n);
+                                    const bool n_inside_horizon =
+                                        r_hor > 0.0 && Xembed_n[1] < r_hor;
+                                    const bool nbad =
+                                        n_inside_horizon ||
+                                        failed(rinvflag(0, kk, jj, ii)) ||
+                                        rimplflag(0, kk, jj, ii) ==
+                                            static_cast<int>(
+                                                RadM1::StatusImplicitStep::failure);
+                                    if (!nbad) {
+                                        double w =
+                                            1. / (m::abs(l) + m::abs(m) + m::abs(n) + 1);
+                                        wsum += w;
+                                        sum[0] += w * Prad(m_prad.UU_RAD, kk, jj, ii);
+                                        sum[1] += w * Prad(m_prad.U1_RAD, kk, jj, ii);
+                                        sum[2] += w * Prad(m_prad.U2_RAD, kk, jj, ii);
+                                        sum[3] += w * Prad(m_prad.U3_RAD, kk, jj, ii);
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    if (wsum < 1.e-10) {
+                        Prad(m_prad.UU_RAD, k, j, i) = erad_floor;
+                        Prad(m_prad.U1_RAD, k, j, i) = 0.;
+                        Prad(m_prad.U2_RAD, k, j, i) = 0.;
+                        Prad(m_prad.U3_RAD, k, j, i) = 0.;
+                    } else {
+                        Prad(m_prad.UU_RAD, k, j, i) = sum[0] / wsum;
+                        Prad(m_prad.U1_RAD, k, j, i) = sum[1] / wsum;
+                        Prad(m_prad.U2_RAD, k, j, i) = sum[2] / wsum;
+                        Prad(m_prad.U3_RAD, k, j, i) = sum[3] / wsum;
+                    }
+                }
+            });
+
+        RadM1::BlockPtoU(rc, IndexDomain::entire);
+    }
 
     EndFlag();
     return TaskStatus::complete;
@@ -189,24 +253,11 @@ TaskStatus Inverter::Backstop(MeshBlockData<Real>* rc)
 
     const auto& eos_params = pmb->packages.Get("eos")->AllParams();
     auto eos = eos_params.Get<Microphysics::EOS::EOS>("d.EOS");
-    const bool is_ideal =
-        pmb->packages.Get("eos")->Param<std::string>("type") == "IdealGas";
-    const Real gamma1 =
-        is_ideal ? pmb->packages.Get("eos")->Param<Real>("gm1") + 1.0 : 5. / 3.;
 
     // Use values from floors package if it's enabled, otherwise any we've been asked to
     // apply
     const Floors::Prescription floors =
-        pmb->packages.AllPackages().count("Floors")
-            ? pmb->packages.Get("Floors")->Param<Floors::Prescription>("prescription")
-            : pmb->packages.Get("Inverter")
-                  ->Param<Floors::Prescription>("inverter_prescription");
-    const Floors::Prescription floors_inner =
-        pmb->packages.AllPackages().count("Floors")
-            ? pmb->packages.Get("Floors")->Param<Floors::Prescription>(
-                  "prescription_inner")
-            : pmb->packages.Get("Inverter")
-                  ->Param<Floors::Prescription>("inverter_prescription");
+        pmb->packages.Get("Floors")->Param<Floors::Prescription>("prescription");
 
     // Get flags
     GridScalar fflag = rc->Get("fflag").data;
@@ -229,25 +280,29 @@ TaskStatus Inverter::Backstop(MeshBlockData<Real>* rc)
     // const Real umin = floors.u_min_const;
     // const Real umin = 1e-15;
 
-    // If after the first round of floors, we still reconstructed
+    // If after the first round of floors, we still reconstructed something bad, fix it
     pmb->par_for("fix_U_to_P_energy", b.ks, b.ke, b.js, b.je, b.is, b.ie,
         KOKKOS_LAMBDA (const int &k, const int &j, const int &i)
         {
+            // Preserve/append floor flag
+            int fflagl = fflag(0, k, j, i);
+
             // If the solve failed, because we reconstructed a
             // negative or zero internal energy (even after floors!)
             Real rhomin_geom, umin_geom;
-            determine_geo_floors(
-                G, P, m_p, k, j, i, floors, floors_inner, rhomin_geom, umin_geom);
+            determine_geo_floors(G, P, m_p, k, j, i, floors, rhomin_geom, umin_geom);
 
-            const Real umin = (is_ideal && m_p.KTOT >= 0)
-                                  ? P(m_p.KTOT, k, j, i) *
-                                        m::pow(P(m_p.RHO, k, j, i), gamma1) /
-                                        (gamma1 - 1.)
-                                  : umin_geom;
+            const Real umin =
+                (m_p.KTOT >= 0)
+                    ? m::max(P(m_p.KTOT, k, j, i) *
+                                 m::pow(P(m_p.RHO, k, j, i), floors.gamma_floor) /
+                                 (floors.gamma_floor - 1.),
+                          umin_geom)
+                    : umin_geom;
 
-            if (failed(pflag(k, j, i)) && (P(m_p.UU, k, j, i) < umin)) {
-                // const Real rho = P(m_p.RHO, k, j, i);
-                // const Real u = P(m_p.UU, k, j, i);
+            // Don't *trigger* on umin from KTOT, just use it if we need
+            if ((failed(pflag(k, j, i)) || P(m_p.RHO, k, j, i) < rhomin_geom / 10. ||
+                    P(m_p.UU, k, j, i) < umin_geom / 10.)) {
                 const Real uvec[NVEC] = {
                     P(m_p.U1, k, j, i), P(m_p.U2, k, j, i), P(m_p.U3, k, j, i)};
                 Real B_P[NVEC] = {0.};
@@ -256,15 +311,10 @@ TaskStatus Inverter::Backstop(MeshBlockData<Real>* rc)
                     B_P[V2] = P(m_p.B2, k, j, i);
                     B_P[V3] = P(m_p.B3, k, j, i);
                 }
-                // Real rho_ut, T[GR_DIM];
-                // GRMHD::p_to_u_mhd(G, rho, u, uvec, B_P, gam, k, j, i, rho_ut, T);
 
-                int fflagl = fflag(0, k, j, i);
-
-                // Calculate P->U on the inverted values
-                const Real D =
+                const Real D = m::max(rhomin_geom,
                     U(m_u.RHO, k, j, i) / (m::sqrt(-G.gcon(Loci::center, j, i, 0, 0)) *
-                                              G.gdet(Loci::center, j, i));
+                                              G.gdet(Loci::center, j, i)));
                 const Real W = GRMHD::lorentz_calc(G, uvec, k, j, i, Loci::center);
                 Real lambda[2];
                 fill_eos_lambda(P, m_p, k, j, i, lambda);
@@ -277,8 +327,9 @@ TaskStatus Inverter::Backstop(MeshBlockData<Real>* rc)
                     G, D, umin, uvec0, B_P, eos, lambda, k, j, i, rho_ut, Trest);
                 // If we're below the at-rest energy (within tolerance),
                 // just bump it to that and kill all kinetic energy
+                // Also use this if v=0.
                 if ((Trest[0] - U(m_u.UU, k, j, i)) / U(m_u.UU, k, j, i) > -tol ||
-                    (!backstop_recover_vel && !backstop_recover_u)) {
+                    !(W > 1.0) || (!backstop_recover_vel && !backstop_recover_u)) {
                     // W = 1
                     P(m_p.RHO, k, j, i) = D;
                     P(m_p.UU, k, j, i) = umin;
@@ -309,10 +360,9 @@ TaskStatus Inverter::Backstop(MeshBlockData<Real>* rc)
                         fflagl |= Floors::FFlag::FIXUP_U_RANGE;
                     } else {
                         Real uc = (up + um) / 2.;
-                        int iter = 0;
-                        for (iter = 0; iter < iter_max; iter++) {
+                        for (int i = 0; i < 100; i++) {
                             Real resv = m::abs(f(uc));
-                            if ((resv < tol) || (m::abs((up - um) / 2) < tol / 10)) {
+                            if ((resv < tol) || (m::abs((up - um) / 2) < tol) || i > 90) {
                                 uu = uc;
                                 e_solve_failed = (resv > tol);
                                 break;
@@ -323,10 +373,6 @@ TaskStatus Inverter::Backstop(MeshBlockData<Real>* rc)
                             else // default to shifting window up -> slower
                                 um = uc;
                             uc = (um + up) / 2.;
-                        }
-                        if (iter == iter_max) {
-                            uu = uc;
-                            e_solve_failed = true;
                         }
                     }
 
@@ -367,7 +413,7 @@ TaskStatus Inverter::Backstop(MeshBlockData<Real>* rc)
                         return (T[0] - U(m_u.UU, k, j, i)) / U(m_u.UU, k, j, i);
                     };
 
-                    // Rootfind for iW that would have produced the current u
+                    // Rootfind for iW that would have produced the current T00
                     bool e_solve_failed = false;
                     Real iWm = 1 / m::min(W, 50.), iWp = 1.;
                     Real iW;
@@ -376,10 +422,10 @@ TaskStatus Inverter::Backstop(MeshBlockData<Real>* rc)
                         fflagl |= Floors::FFlag::FIXUP_VEL_RANGE;
                     } else {
                         Real iWc = (iWp + iWm) / 2.;
-                        int iter = 0;
-                        for (iter = 0; iter < iter_max; iter++) {
+                        for (int i = 0; i < 100; i++) {
                             Real resv = m::abs(f(iWc));
-                            if ((resv < tol) || (m::abs((iWp - iWm) / 2) < tol / 10)) {
+                            if ((resv < tol) || (m::abs((iWp - iWm) / 2) < tol) ||
+                                i > 90) {
                                 iW = iWc;
                                 e_solve_failed = (resv > tol);
                                 break;
@@ -391,15 +437,11 @@ TaskStatus Inverter::Backstop(MeshBlockData<Real>* rc)
                                 iWm = iWc;
                             iWc = (iWm + iWp) / 2.;
                         }
-                        if (iter == iter_max) {
-                            iW = iWc;
-                            e_solve_failed = true;
-                        }
                     }
 
                     // Compute what we really need
                     Real gamma_fac = m::sqrt((SQR(1. / iW) - 1.) / (SQR(W) - 1.));
-                    if (gamma_fac > 1 && !e_solve_failed) {
+                    if (!(gamma_fac < 1) && !e_solve_failed) {
                         fflagl |= Floors::FFlag::FIXUP_VEL_GAMMA;
                         e_solve_failed = true;
                         // TO PRINT (for verifying this only happens via round-off error)
@@ -439,24 +481,23 @@ TaskStatus Inverter::Backstop(MeshBlockData<Real>* rc)
                         fflagl |= Floors::FFlag::FIXUP_VEL_FAILED;
                     }
                 }
-
-                // Set remaining floors the dumb way if they're *still* low
-                // Verified this basically never happens. Not sure if it's possible
-                // TODO should this just be up to SMALL and not the constant floor?
-                if (P(m_p.RHO, k, j, i) < floors.rho_min_const) {
-                    P(m_p.RHO, k, j, i) = floors.rho_min_const;
-                    fflagl |= Floors::FFlag::FIXUP_RHO_DIRECT;
-                }
-                if (P(m_p.UU, k, j, i) < floors.u_min_const) {
-                    P(m_p.UU, k, j, i) = floors.u_min_const;
-                    fflagl |= Floors::FFlag::FIXUP_U_DIRECT;
-                }
-                fflag(0, k, j, i) = fflagl;
-
-                // We definitely fixed a zone that definitely needed fixing.  Respect
-                // primitive vars
-                GRMHD::p_to_u(G, P, m_p, eos, k, j, i, U, m_u);
             }
+
+            // Set remaining floors the dumb way if they're *still* low
+            // Verified this basically never happens. Not sure if it's possible
+            // TODO should this just be up to SMALL and not the constant floor?
+            if (P(m_p.RHO, k, j, i) < floors.rho_min_const) {
+                P(m_p.RHO, k, j, i) = floors.rho_min_const;
+                fflagl |= Floors::FFlag::FIXUP_RHO_DIRECT;
+            }
+            if (P(m_p.UU, k, j, i) < floors.u_min_const) {
+                P(m_p.UU, k, j, i) = floors.u_min_const;
+                fflagl |= Floors::FFlag::FIXUP_U_DIRECT;
+            }
+            fflag(0, k, j, i) = fflagl;
+
+            // P->U if we had to apply any of this
+            if (fflagl) GRMHD::p_to_u(G, P, m_p, eos, k, j, i, U, m_u);
         });
     EndFlag();
     return TaskStatus::complete;

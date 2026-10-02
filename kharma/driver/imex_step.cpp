@@ -46,6 +46,7 @@
 #include "inverter.hpp"
 #include "ismr.hpp"
 #include "temperature.hpp"
+#include "radM1.hpp"
 #include "wind.hpp"
 // Other headers
 #include "boundaries.hpp"
@@ -65,7 +66,6 @@ TaskCollection KHARMADriver::MakeImExTaskCollection(BlockList_t& blocks, int sta
     // Reminder that this list is created BEFORE any of the list contents are run!
     // Prints or function calls here will likely not do what you want: instead, add to the
     // list by calling tl.AddTask()
-
     TaskCollection tc;
     TaskID t_none(0);
 
@@ -74,19 +74,29 @@ TaskCollection KHARMADriver::MakeImExTaskCollection(BlockList_t& blocks, int sta
     auto& flux_pkg = pkgs.at("Fluxes")->AllParams();
     const bool use_b_cleanup = pkgs.count("B_Cleanup");
     const bool use_b_ct = pkgs.count("B_CT");
+    const bool use_ismr = pkgs.count("ISMR");
     const bool use_electrons = pkgs.count("Electrons");
     const bool use_entropy = pkgs.count("Entropy");
     const bool use_temperature = pkgs.count("Temperature");
     // Whether anything needs the Strang-split primitive-source half-steps at all
     const bool use_prim_source = Packages::AnyPrimSource(pmesh);
     const bool use_fofc = flux_pkg.Get<bool>("use_fofc");
-    const bool use_implicit = pkgs.count("Implicit");
+    const bool use_fofc_pcp = (use_fofc) ? flux_pkg.Get<bool>("fofc_pcp") : false;
+    const bool use_implicit_package = pkgs.count("Implicit");
     const bool use_jcon = pkgs.count("Current");
     const bool use_linesearch =
-        (use_implicit) ? pkgs.at("Implicit")->Param<bool>("linesearch") : false;
+        (use_implicit_package) ? pkgs.at("Implicit")->Param<bool>("linesearch") : false;
     const bool emhd_enabled = pkgs.count("EMHD");
     const bool use_ideal_guess =
         (emhd_enabled) ? pkgs.at("GRMHD")->Param<bool>("ideal_guess") : false;
+    // Out of the package modification RADM1.
+    const bool use_radm1 = pkgs.count("RadM1");
+    bool reconnect_b3 = false;
+    if (use_b_ct) {
+        reconnect_b3 = pkgs.at("Boundaries")->Param<bool>("reconnect_B3_inner_x2");
+        if (reconnect_b3 && !pkgs.at("Boundaries")->Param<bool>("reconnect_B3_outer_x2"))
+            throw std::runtime_error("Must enable reconnection for both boundaries!");
+    }
 
     // Allocate/copy the things we need
     // TODO these can now be reduced by including the var lists/flags which actually need
@@ -128,7 +138,7 @@ TaskCollection KHARMADriver::MakeImExTaskCollection(BlockList_t& blocks, int sta
             pmesh->mesh_data.Add("fofc_source", base);
             pmesh->mesh_data.Add("fofc_guess", base);
         }
-        if (use_implicit) {
+        if (use_implicit_package) {
             // When solving, we need a temporary copy with any explicit updates,
             // but not overwriting the beginning- or mid-step values
             pmesh->mesh_data.Add("solver", base);
@@ -142,12 +152,14 @@ TaskCollection KHARMADriver::MakeImExTaskCollection(BlockList_t& blocks, int sta
     static std::vector<std::string> sync_vars;
     if (sync_vars.size() == 0) {
         // Build the universe of variables to let Parthenon see when exchanging
-        // boundaries. This is built to exclude incidental variables like B field
-        // initialization stuff, EMFs, etc. "Boundaries" packs in buffers e.g. Dirichlet
-        // boundaries
-        auto sync_flags = FC({Metadata::GetUserFlag("Primitive"), Metadata::Conserved,
-                                 Metadata::Face, Metadata::GetUserFlag("Boundaries")},
-            true);
+        // boundaries. "Boundaries" packs in buffers from that package, e.g.
+        // Dirichlet boundaries, and anything "StartupOnly" does not still
+        // need to be sync'd during the run
+        auto sync_flags =
+            FC({Metadata::FillGhost, Metadata::GetUserFlag("Primitive"),
+                   Metadata::Conserved, Metadata::GetUserFlag("Boundaries")},
+                true) -
+            FC({Metadata::GetUserFlag("StartupOnly")});
         sync_vars = KHARMA::GetVariableNames(&(pmesh->packages), sync_flags);
     }
 
@@ -178,7 +190,8 @@ TaskCollection KHARMADriver::MakeImExTaskCollection(BlockList_t& blocks, int sta
         // variables and copy back. If we're not doing an implicit solve at all, just
         // write straight to sub_step_final
         std::shared_ptr<MeshData<Real>>& md_solver =
-            (use_implicit) ? pmesh->mesh_data.GetOrAdd("solver", i) : md_sub_step_final;
+            (use_implicit_package) ? pmesh->mesh_data.GetOrAdd("solver", i)
+                                   : md_sub_step_final;
         auto& md_sync = pmesh->mesh_data.AddShallow(
             "sync" + integrator->stage_name[stage] + std::to_string(i), md_sub_step_final,
             sync_vars);
@@ -232,9 +245,14 @@ TaskCollection KHARMADriver::MakeImExTaskCollection(BlockList_t& blocks, int sta
         if (use_fofc) {
             auto& guess_src = pmesh->mesh_data.GetOrAdd("fofc_source", i);
             auto& guess = pmesh->mesh_data.GetOrAdd("fofc_guess", i);
-            auto t_fluxes = KHARMADriver::AddFOFC(t_flux_calc, tl, md_sub_step_init.get(),
+            t_fluxes = KHARMADriver::AddFOFC(t_flux_calc, tl, md_sub_step_init.get(),
                 md_full_step_init.get(), md_sub_step_init.get(), guess_src.get(),
                 guess.get(), stage);
+            if (use_fofc_pcp) {
+                t_fluxes = KHARMADriver::AddFOFC_PCP(t_fluxes, tl, md_sub_step_init.get(),
+                    md_full_step_init.get(), md_sub_step_init.get(), guess_src.get(),
+                    guess.get(), stage, sync_vars);
+            }
         }
 
         // Any package modifications to the fluxes.  e.g.:
@@ -268,9 +286,13 @@ TaskCollection KHARMADriver::MakeImExTaskCollection(BlockList_t& blocks, int sta
         auto t_flux_div = tl.AddTask(t_flux_bounds, FluxDivergence,
             md_sub_step_init.get(), md_flux_src.get(),
             std::vector<MetadataFlag>{
-                Metadata::Independent, Metadata::Cell, Metadata::WithFluxes},
+                Metadata::Independent, Metadata::WithFluxes, Metadata::Cell},
             0);
 
+        if (use_radm1) {
+            blocks[0]->packages.Get("RadM1")->UpdateParam(
+                "current_stage_dt", integrator->beta[stage - 1] * integrator->dt);
+        }
         // Add any source terms: geometric \Gamma * T, wind, damping, etc etc
         auto t_sources = tl.AddTask(t_flux_div, Packages::AddSource,
             md_sub_step_init.get(), md_flux_src.get(), IndexDomain::interior);
@@ -297,17 +319,37 @@ TaskCollection KHARMADriver::MakeImExTaskCollection(BlockList_t& blocks, int sta
                 false, stage);
         }
 
+        // Reconnect then derefine, the "local" operations on U
+        // TODO very not sure how this interacts with implicitly-evolved vars
+        auto t_reconnect = t_ideal_guess;
+        if (use_b_ct && reconnect_b3) {
+            t_reconnect =
+                tl.AddTask(t_ideal_guess, B_CT::ReconnectB3Task, md_solver.get());
+        }
+
+        auto t_derefine = t_reconnect;
+        if (use_ismr) {
+            if (pkgs.at("ISMR")->Param<uint>("nlevels") > 0) {
+                auto t_derefine_b = t_reconnect;
+                if (use_b_ct)
+                    t_derefine_b =
+                        tl.AddTask(t_reconnect, B_CT::DerefinePoles, md_solver.get());
+                t_derefine = tl.AddTask(t_derefine_b, ISMR::DerefinePoles,
+                    md_solver.get(), std::vector<MetadataFlag>{Metadata::WithFluxes});
+            }
+        }
+
         // Make sure the primitive values of *explicitly-evolved* variables are updated.
         // Packages with implicitly-evolved vars should only register BoundaryUtoP or
         // BoundaryPtoU
-        auto t_explicit_UtoP = tl.AddTask(t_ideal_guess, Packages::MeshUtoP,
-            md_solver.get(), IndexDomain::entire, false);
+        auto t_explicit_UtoP = tl.AddTask(
+            t_derefine, Packages::MeshUtoP, md_solver.get(), IndexDomain::entire, false);
 
         // Done with explicit update
         auto t_explicit = t_explicit_UtoP;
 
         auto t_implicit = t_explicit;
-        if (use_implicit) {
+        if (use_implicit_package) {
             // Extra containers for implicit solve
             std::shared_ptr<MeshData<Real>>& md_linesearch =
                 (use_linesearch) ? pmesh->mesh_data.GetOrAdd("linesearch", i) : md_solver;
@@ -398,7 +440,7 @@ TaskCollection KHARMADriver::MakeImExTaskCollection(BlockList_t& blocks, int sta
                 tl.AddTask(t_none, Inverter::MeshFixUtoP, md_sub_step_final.get());
         }
         auto t_fix_solve = t_fix_utop;
-        if (use_implicit) {
+        if (use_implicit_package) {
             t_fix_solve =
                 tl.AddTask(t_fix_utop, Implicit::MeshFixSolve, md_sub_step_final.get());
         }
@@ -447,14 +489,6 @@ TaskCollection KHARMADriver::MakeImExTaskCollection(BlockList_t& blocks, int sta
             IndexDomain::entire, false);
 
         auto t_step_done = t_ptou;
-        if (pkgs.count("ISMR")) {
-            auto t_derefine_b = t_ptou;
-            if (pkgs.count("B_CT"))
-                t_derefine_b =
-                    tl.AddTask(t_ptou, B_CT::DerefinePoles, md_sub_step_final.get());
-            t_step_done =
-                tl.AddTask(t_derefine_b, ISMR::DerefinePoles, md_sub_step_final.get());
-        }
 
         // Estimate next time step based on ctop
         if (stage == integrator->nstages) {

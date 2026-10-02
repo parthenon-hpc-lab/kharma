@@ -36,7 +36,6 @@
 #include "emhd.hpp"
 // phoebus includes
 #include "microphysics/eos_kharma/eos_kharma.hpp"
-#include "phoebus_utils/unit_conversions.hpp"
 #include "phoebus_utils/variables.hpp"
 
 #include "flux_functions.hpp"

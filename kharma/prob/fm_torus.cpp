@@ -38,6 +38,8 @@
 #include "floors.hpp"
 #include "types.hpp"
 
+#include "radM1.hpp"
+
 TaskStatus InitializeFMTorus(
     std::shared_ptr<MeshBlockData<Real>>& rc, ParameterInput* pin)
 {
@@ -69,6 +71,20 @@ TaskStatus InitializeFMTorus(
 
     // Fishbone-Moncrief parameters
     Real l = lfish_calc(a, rmax);
+
+    // RadM1 initialization alongside torus.
+    //  I think this can be moved to RadM1::Initialize, but for now it's easier to just
+    //  have it here since we need the plasma four-velocity. especially since we want to
+    //  test the radiation with other problems, and we should be able to initialize it
+    //  without the torus solution.
+    const bool use_rad = pmb->packages.AllPackages().count("RadM1");
+
+    GridScalar uu_rad;
+    GridVector uvec_rad;
+    if (use_rad) {
+        uu_rad = rc->Get("prims.u_rad").data;
+        uvec_rad = rc->Get("prims.uvec_rad").data;
+    }
 
     pmb->par_for("fm_torus_init", ks, ke, js, je, is, ie,
         KOKKOS_LAMBDA(const int& k, const int& j, const int& i)
@@ -126,6 +142,17 @@ TaskStatus InitializeFMTorus(
                 uvec(0, k, j, i) = u_prim[0];
                 uvec(1, k, j, i) = u_prim[1];
                 uvec(2, k, j, i) = u_prim[2];
+
+                // Out of the package modification RADM1.
+                if (use_rad) {
+                    uu_rad(k, j, i) = 0.0;
+                    // uvec_rad(0, k, j, i) = u_prim[0];
+                    // uvec_rad(1, k, j, i) = u_prim[1];
+                    // uvec_rad(2, k, j, i) = u_prim[2];
+                    uvec_rad(0, k, j, i) = 0.0;
+                    uvec_rad(1, k, j, i) = 0.0;
+                    uvec_rad(2, k, j, i) = 0.0;
+                }
             }
         });
 
@@ -171,7 +198,7 @@ TaskStatus InitializeFMTorus(
             const GReal r = Xembed[1];
             // Regardless of native coordinate shenanigans,
             // set th=pi/2 since the midplane is densest in the solution
-            const GReal rho = fm_torus_rho(a, rin, rmax, gam, kappa, r, M_PI / 2.);
+            const GReal rho = fm_torus_rho(a, rin, rmax, gam, kappa, r, M_PI_2);
             // TODO umax for printing/recording?
 
             // Record max
@@ -191,6 +218,12 @@ TaskStatus InitializeFMTorus(
         {
             rho(k, j, i) /= rho_max;
             u(k, j, i) /= rho_max;
+
+            if (use_rad) {
+                // start to 0.1% the value of u, just to help solver in the first initial
+                // steps.
+                RadM1::initialize_radiation_pressure(u(k, j, i), uu_rad(k, j, i));
+            }
         });
 
     // Apply floors to initialize the rest of the domain (regardless whether we'll use
@@ -198,6 +231,10 @@ TaskStatus InitializeFMTorus(
     // done in *fluid frame*, even if NOF frame is chosen (iharm3d does the same iiuc)
     // This is probably not a huge issue, just good to state explicitly
     Floors::ApplyInitialFloors(pin, rc.get(), IndexDomain::interior);
+
+    if (use_rad) {
+        RadM1::ApplyRadM1Floors(rc.get(), IndexDomain::interior);
+    }
 
     return TaskStatus::complete;
 }

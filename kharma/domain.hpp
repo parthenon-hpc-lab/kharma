@@ -101,7 +101,7 @@ template<typename T>
 inline const IndexShape& GetCellbounds(
     std::shared_ptr<MeshBlockData<T>> rc, bool coarse = false)
 {
-    return GetCellbounds(rc.get());
+    return GetCellbounds(rc.get(), coarse);
 }
 template<typename T>
 inline const IndexShape& GetCellbounds(MeshData<T>* md, bool coarse = false)
@@ -113,7 +113,7 @@ template<typename T>
 inline const IndexShape& GetCellbounds(
     std::shared_ptr<MeshData<T>> md, bool coarse = false)
 {
-    return GetCellbounds(md.get());
+    return GetCellbounds(md.get(), coarse);
 }
 
 /**
@@ -123,8 +123,8 @@ inline const IndexShape& GetCellbounds(
  * This seemed more natural for people coming from for loops.
  */
 template<typename T>
-inline IndexRange3 GetRange(T data, IndexDomain domain, TopologicalElement el = CC,
-    int left_halo = 0, int right_halo = 0, bool coarse = false)
+inline IndexRange3 GetRange(T data, IndexDomain domain, TopologicalElement el,
+    int left_halo, int right_halo, bool coarse = false)
 {
     // TODO also offsets for e.g. PtoU_Send?
     // Get sizes
@@ -146,6 +146,12 @@ inline IndexRange3 GetRange(T data, IndexDomain domain, TopologicalElement el = 
     const IndexRange kbe = cellbounds.GetBoundsK(IndexDomain::entire, el);
     return IndexRange3{m::max(il.s, ibe.s), m::min(il.e, ibe.e), m::max(jl.s, jbe.s),
         m::min(jl.e, jbe.e), m::max(kl.s, kbe.s), m::min(kl.e, kbe.e)};
+}
+template<typename T>
+inline IndexRange3 GetRange(
+    T data, IndexDomain domain, TopologicalElement el = CC, bool coarse = false)
+{
+    return GetRange(data, domain, el, 0, 0, coarse);
 }
 template<typename T>
 inline IndexRange3 GetRange(

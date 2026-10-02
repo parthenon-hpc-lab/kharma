@@ -214,11 +214,13 @@ class CoordinateEmbedding
                                 // mesh, future general default
             if (pin->DoesParameterExist("coordinates", "fmks_zero_point")) {
                 startx1 = pin->GetReal("coordinates", "fmks_zero_point");
+            } else if (pin->DoesParameterExist("coordinates", "fmks_start")) {
+                startx1 = m::log(pin->GetReal("coordinates", "fmks_start"));
             } else if (pin->DoesParameterExist("parthenon/mesh", "x1min")) {
                 std::cout << "KHARMA WARNING: Constructing FMKS coordinates using mesh "
                              "x1min is deprecated."
                           << std::endl
-                          << "Set coordinates/fmks_zero_point for consistent behavior."
+                          << "Set coordinates/fmks_start for consistent behavior."
                           << std::endl;
                 startx1 = pin->GetReal("parthenon/mesh", "x1min");
             }
@@ -314,21 +316,47 @@ class CoordinateEmbedding
             },
             base);
     }
-    GReal startx(int dir) const
+    KOKKOS_INLINE_FUNCTION GReal startx(int dir) const
     {
         return PortsOfCall::visit(
             [&](const auto& self)
             {
-                return self.startx[dir - 1];
+                switch (dir) {
+                    case 1:
+                        return self.startx1;
+                        break;
+                    case 2:
+                        return self.startx2;
+                        break;
+                    case 3:
+                        return self.startx3;
+                        break;
+                    default:
+                        return -1.;
+                        break;
+                }
             },
             transform);
     }
-    GReal stopx(int dir) const
+    KOKKOS_INLINE_FUNCTION GReal stopx(int dir) const
     {
         return PortsOfCall::visit(
             [&](const auto& self)
             {
-                return self.stopx[dir - 1];
+                switch (dir) {
+                    case 1:
+                        return self.stopx1;
+                        break;
+                    case 2:
+                        return self.stopx2;
+                        break;
+                    case 3:
+                        return self.stopx3;
+                        break;
+                    default:
+                        return -1.;
+                        break;
+                }
             },
             transform);
     }

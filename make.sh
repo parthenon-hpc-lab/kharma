@@ -31,12 +31,12 @@ set -euo pipefail
 # Set conservatively as nvcc/nvc++ uses a *lot* of memory
 # Set in environment or override in machine file
 NPROC=${NPROC:-8}
-
 # Set variables we expect to use to satisfy bash
 EXTRA_FLAGS=${EXTRA_FLAGS:-}
 CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH:-}
 CFLAGS=${CFLAGS:-}
 CXXFLAGS=${CXXFLAGS:-}
+CPLUS_INCLUDE_PATH=${CPLUS_INCLUDE_PATH:-}
 PREFIX_PATH=${PREFIX_PATH:-}
 C_NATIVE=${C_NATIVE:-}
 CXX_NATIVE=${CXX_NATIVE:-}
@@ -44,6 +44,7 @@ HOST_ARCH=${HOST_ARCH:-NATIVE}
 LDFLAGS=${LDFLAGS:-}
 OMP_FLAG=${OMP_FLAG:-}
 # No default DEVICE_ARCH, only set if defined
+MPI_EXTRA_ARGS=${MPI_EXTRA_ARGS:-}
 
 ### Load basic stuff ###
 HOST=$(hostname -f)
@@ -93,10 +94,9 @@ fi
 if option "noimplicit"; then
   EXTRA_FLAGS="-DKHARMA_DISABLE_IMPLICIT=1 $EXTRA_FLAGS"
 fi
-# Always disable old resizing, it's broken w/new tasking
-#if option "nocleanup"; then
-EXTRA_FLAGS="-DKHARMA_DISABLE_CLEANUP=1 $EXTRA_FLAGS"
-#fi
+if option "nocleanup"; then
+  EXTRA_FLAGS="-DKHARMA_DISABLE_CLEANUP=1 $EXTRA_FLAGS"
+fi
 if option "split_implicit"; then
   EXTRA_FLAGS="-DKHARMA_SPLIT_IMPLICIT_SOLVE=1 $EXTRA_FLAGS"
 fi

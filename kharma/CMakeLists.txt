@@ -21,7 +21,6 @@ AUX_SOURCE_DIRECTORY(${CMAKE_CURRENT_SOURCE_DIR}/flux EXE_NAME_SRC)
 
 AUX_SOURCE_DIRECTORY(${CMAKE_CURRENT_SOURCE_DIR}/b_cd EXE_NAME_SRC)
 AUX_SOURCE_DIRECTORY(${CMAKE_CURRENT_SOURCE_DIR}/b_cleanup EXE_NAME_SRC)
-AUX_SOURCE_DIRECTORY(${CMAKE_CURRENT_SOURCE_DIR}/b_cleanup_gmg EXE_NAME_SRC)
 AUX_SOURCE_DIRECTORY(${CMAKE_CURRENT_SOURCE_DIR}/b_ct EXE_NAME_SRC)
 AUX_SOURCE_DIRECTORY(${CMAKE_CURRENT_SOURCE_DIR}/b_flux_ct EXE_NAME_SRC)
 AUX_SOURCE_DIRECTORY(${CMAKE_CURRENT_SOURCE_DIR}/boundaries EXE_NAME_SRC)
@@ -38,6 +37,12 @@ AUX_SOURCE_DIRECTORY(${CMAKE_CURRENT_SOURCE_DIR}/inverter EXE_NAME_SRC)
 AUX_SOURCE_DIRECTORY(${CMAKE_CURRENT_SOURCE_DIR}/ismr EXE_NAME_SRC)
 AUX_SOURCE_DIRECTORY(${CMAKE_CURRENT_SOURCE_DIR}/reductions EXE_NAME_SRC)
 AUX_SOURCE_DIRECTORY(${CMAKE_CURRENT_SOURCE_DIR}/emhd EXE_NAME_SRC)
+# Out of the package modification units.
+AUX_SOURCE_DIRECTORY(${CMAKE_CURRENT_SOURCE_DIR}/units EXE_NAME_SRC)
+# Out of the package modification RADM1.
+AUX_SOURCE_DIRECTORY(${CMAKE_CURRENT_SOURCE_DIR}/radM1 EXE_NAME_SRC)
+# Out of the package modification RADM1.
+AUX_SOURCE_DIRECTORY(${CMAKE_CURRENT_SOURCE_DIR}/prob/radm1 EXE_NAME_SRC)
 AUX_SOURCE_DIRECTORY(${CMAKE_CURRENT_SOURCE_DIR}/wind EXE_NAME_SRC)
 
 AUX_SOURCE_DIRECTORY(${CMAKE_CURRENT_SOURCE_DIR}/geometry EXE_NAME_SRC)
@@ -57,7 +62,6 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR}/flux)
 
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/b_cd)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/b_cleanup)
-include_directories(${CMAKE_CURRENT_SOURCE_DIR}/b_cleanup_gmg)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/b_ct)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/b_flux_ct)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/boundaries)
@@ -74,6 +78,10 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR}/inverter)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/ismr)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/reductions)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/emhd)
+# Out of the package modification units.
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/units)
+# Out of the package modification RADM1.
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/radM1)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/wind)
 
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/microphysics/eos_kharma)

@@ -37,7 +37,6 @@
 
 // phoebus includes
 #include "microphysics/eos_kharma/eos_kharma.hpp"
-#include "phoebus_utils/unit_conversions.hpp"
 #include "phoebus_utils/variables.hpp"
 
 #include "gr_coordinates.hpp"
@@ -302,8 +301,7 @@ KOKKOS_INLINE_FUNCTION void p_to_u(const GRCoordinates& G, const Global& P,
 }
 
 /**
- * Special all-local "p_to_u" call for just MHD variables, used in fluid frame floors &
- * wind source.
+ * Special all-local "p_to_u" call for just MHD variables.
  */
 KOKKOS_INLINE_FUNCTION void p_to_u_mhd(const GRCoordinates& G, const Real& rho,
     const Real& u, const Real uvec[NVEC], const Real B_P[NVEC],

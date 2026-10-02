@@ -72,13 +72,16 @@ GRCoordinates::GRCoordinates(const RegionSize& rs, ParameterInput* pin)
     , coords(pin)
 {
     // TODO use new .symmetric?
-    n1 = rs.nx(X1DIR) + 2 * Globals::nghost;
+    n1 = rs.nx(X1DIR) > 1 ? rs.nx(X1DIR) + 2 * Globals::nghost : 1;
     n2 = rs.nx(X2DIR) > 1 ? rs.nx(X2DIR) + 2 * Globals::nghost : 1;
     n3 = rs.nx(X3DIR) > 1 ? rs.nx(X3DIR) + 2 * Globals::nghost : 1;
     // cout << "Initialized coordinates with nghost " << Globals::nghost << std::endl;
 
     connection_average_points =
         pin->GetOrAddInteger("coordinates", "connection_average_points", 1);
+    if (connection_average_points % 2 == 0 || connection_average_points < 1)
+        throw std::invalid_argument(
+            "connection_average_points must be positive and odd!");
     correct_connections =
         pin->GetOrAddBoolean("coordinates", "correct_connections", false);
 
@@ -88,9 +91,9 @@ GRCoordinates::GRCoordinates(const RegionSize& rs, ParameterInput* pin)
 GRCoordinates::GRCoordinates(const GRCoordinates& src, int coarsen)
     : UniformCartesian(src, coarsen)
     , coords(src.coords)
-    , n1(src.n1 / coarsen)
-    , n2(src.n2 / coarsen)
-    , n3(src.n3 / coarsen)
+    , n1(src.n1 > 1 ? (src.n1 - 2 * Globals::nghost) / coarsen + 2 * Globals::nghost : 1)
+    , n2(src.n2 > 1 ? (src.n2 - 2 * Globals::nghost) / coarsen + 2 * Globals::nghost : 1)
+    , n3(src.n3 > 1 ? (src.n3 - 2 * Globals::nghost) / coarsen + 2 * Globals::nghost : 1)
     , connection_average_points(src.connection_average_points)
     , correct_connections(src.correct_connections)
 {
@@ -225,55 +228,55 @@ void init_GRCoordinates(GRCoordinates& G)
                 }
             }
         });
+    // Out of the package modification RADM1.
+    // Here we follow Mckinney et al. (2012) to correct the connection coefficients:
+    // https://ui.adsabs.harvard.edu/abs/2012MNRAS.423.3083M/abstract
+    //  Probably a better way to make this more efficient.
     if (correct_connections) {
         Kokkos::parallel_for("geom_corrections", MDRangePolicy<Rank<2>>({0, 0}, {n2, n1}),
-            KOKKOS_LAMBDA(const int& j, const int& i)
+            KOKKOS_LAMBDA (const int& j, const int& i)
             {
-                // In the two directions the grid changes, make sure that we *exactly*
-                // satisfy the req't gdet*conn^mu_mu_nu = d_nu gdet, when evaluated on
-                // faces This will make the source term exactly balance the flux
-                // differences, crucial near the poles
                 GReal X[GR_DIM];
                 G.coord(0, j, i, Loci::center, X);
-                if (1) { //(m::abs(X[2] - 0) < 0.08 || m::abs(X[2] - 1.0) < 0.08)) {
-                    for (int lam = 1; lam < GR_DIM; lam++) {
-                        const Loci loc = loc_of(lam);
-                        // Get gdet values at faces we calculated above
-                        GReal Xfm[GR_DIM], Xfp[GR_DIM];
-                        G.coord(0, j, i, loc, Xfm);
-                        G.coord(0, j + (lam == X2DIR), i + (lam == X1DIR), loc, Xfp);
-                        double gdetfm = gdet_local(loc, j, i);
-                        double gdetfp =
-                            gdet_local(loc, j + (lam == X2DIR), i + (lam == X1DIR));
-                        GReal target =
-                            (gdetfp - gdetfm) / (Xfp[lam] - Xfm[lam] + SMALL_NUM);
+                for (int lam = 1; lam < GR_DIM; lam++) {
+                    const Loci loc = loc_of(lam);
+                    // Get gdet values at faces we calculated above
+                    GReal Xfm[GR_DIM], Xfp[GR_DIM];
+                    G.coord(0, j, i, loc, Xfm);
+                    G.coord(0, j + (lam == X2DIR), i + (lam == X1DIR), loc, Xfp);
+                    double gdetfm = gdet_local(loc, j, i);
+                    double gdetfp =
+                        gdet_local(loc, j + (lam == X2DIR), i + (lam == X1DIR));
 
-                        // Then sum the coefficients and record nonzero ones for
-                        // modification
-                        GReal test_sum = 0;
-                        GReal sum_portions = 0;
-                        GReal portions[GR_DIM] = {0};
-                        DLOOP1 {
-                            test_sum += gdet_conn_local(j, i, mu, mu, lam);
-                            portions[mu] = m::abs(gdet_conn_local(j, i, mu, mu, lam));
-                            sum_portions += portions[mu];
-                        }
-                        DLOOP1
-                            portions[mu] /= sum_portions;
-                        // printf("Zone %d %d target: %.3g test_sum: %.3g correction:
-                        // %.3g\n", i, j, target, test_sum, diff);
+                    // Get cell center metric determinant
+                    double gdet_c = gdet_local(Loci::center, j, i);
 
-                        // Add the difference among components equally
-                        const GReal diff = test_sum - target;
-                        DLOOP1
-                            gdet_conn_local(j, i, mu, mu, lam) =
-                                gdet_conn_local(j, i, mu, mu, lam) - diff * portions[mu];
+                    GReal D_k =
+                        (gdetfp - gdetfm) / ((Xfp[lam] - Xfm[lam] + SMALL_NUM) * gdet_c);
 
-                        // This is separated and set equal, as there will be one
-                        // self-assignment
-                        DLOOP1
-                            gdet_conn_local(j, i, mu, lam, mu) =
-                                gdet_conn_local(j, i, mu, mu, lam);
+                    // Then sum the coefficients and record nonzero ones for modification
+                    GReal C_k = 0;
+                    GReal S_k = 1e-300;
+                    DLOOP1 {
+                        GReal Gam_local = gdet_conn_local(j, i, mu, mu, lam) / gdet_c;
+
+                        C_k += Gam_local;
+                        S_k += m::abs(Gam_local);
+                    }
+
+                    GReal dS_k = D_k - C_k;
+
+                    DLOOP1 {
+                        GReal Gam_val = gdet_conn_local(j, i, mu, mu, lam) / gdet_c;
+                        GReal W_kmu = m::abs(Gam_val) / S_k;
+                        GReal Delta_Gamma = dS_k * W_kmu;
+                        GReal correction_term = Delta_Gamma * gdet_c;
+                        gdet_conn_local(j, i, mu, mu, lam) += correction_term;
+                        // Enforce symmetry of Christoffel symbols: Gamma^mu_lam_nu =
+                        // Gamma^mu_nu_lam We correct Gamma^mu_mu_lam and Gamma^mu_lam_mu
+                        // identicaly
+                        gdet_conn_local(j, i, mu, lam, mu) =
+                            gdet_conn_local(j, i, mu, mu, lam);
                     }
                 }
             });

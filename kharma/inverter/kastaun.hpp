@@ -69,7 +69,6 @@
 
 // phoebus includes
 #include "microphysics/eos_kharma/eos_kharma.hpp"
-#include "phoebus_utils/unit_conversions.hpp"
 #include "phoebus_utils/variables.hpp"
 
 // This isn't a vecloop, also it takes an argument.
@@ -197,9 +196,11 @@ KOKKOS_INLINE_FUNCTION int u_to_p<Type::kastaun>(const GRCoordinates& G,
     // static_cast<int>(Status::neg_input);
 
     // This exists only to keep the math stable on first call,
-    // so we can add floors instead of failing outright
-    if (U(m_u.RHO, k, j, i) < 1e-20) {
-        U(m_u.RHO, k, j, i) = 1e-20;
+    // so we can add floors instead of failing completely
+    int returncode = static_cast<int>(Status::success);
+    if (U(m_u.RHO, k, j, i) < 0.) {
+        U(m_u.RHO, k, j, i) = 0.;
+        returncode = static_cast<int>(Status::neg_input);
     }
 
     // Transform GRMHD variables for the SRMHD Kastaun solver
@@ -280,10 +281,9 @@ KOKKOS_INLINE_FUNCTION int u_to_p<Type::kastaun>(const GRCoordinates& G,
     KastaunResidual res(D, q, bsq, bsq_rpsq, rsq, rbsq, v0sq, eos, lambda);
 
     // SOLVE
-    // TODO(CEP) better or faster solver?  (Optionally) skip bracketing?
     // Need to find initial bracket. Requires separate solve
     Real zm = 0.;
-    Real zp = 1.; // This is the lowest specific enthalpy admitted by the EOS
+    Real zp = 1.;
 
     // Evaluate master function (eq 49) at bracket values
     Real fm = res.aux_func(zm);
@@ -375,21 +375,46 @@ KOKKOS_INLINE_FUNCTION int u_to_p<Type::kastaun>(const GRCoordinates& G,
     Real u = res.ehat_mu(mu, qbar, rbarsq, vsq, W) * P(m_p.RHO, k, j, i);
     P(m_p.UU, k, j, i) = m::max(u, 0.);
     // Latter part is a vector/signed quantity, don't set a minimum at 0
-    Real mag_vel = W * mu * x;
-    SPACELOOP(ii)
-    P(m_p.U1 + ii, k, j, i) = std::max(mag_vel, 0.) * (rcon[ii] + mu * bdotr * bu[ii]);
+    const Real mag_vel = W * mu * x;
 
+    if (rho > 0 && u > 0) {
+        // Set velocity normally
+        SPACELOOP(ii)
+        {
+            const Real dir_vel = (rcon[ii] + mu * bdotr * bu[ii]);
+            // Test for NaN or related madness, without isnan since that's often a no-op.
+            // We return 0 here if neg rho/u would give some invalid vel: it's handled in
+            // floors
+            P(m_p.U1 + ii, k, j, i) =
+                (dir_vel < 0. || dir_vel > 0.) ? m::max(mag_vel, 0.) * dir_vel : 0.;
+        }
+    } else {
+        // Reduce the velocity, but don't zero it.
+        // This "droops" very problematic velocities by dividing by the Lorentz factor
+        // We don't actually care about the magnitude much, it will get rescaled
+        SPACELOOP(ii)
+        {
+            const Real dir_vel = (rcon[ii] + mu * bdotr * bu[ii]);
+            // Test for NaN or related madness, without isnan since that's often a no-op.
+            // We return 0 here if neg rho/u would give some invalid vel: it's handled in
+            // floors
+            P(m_p.U1 + ii, k, j, i) =
+                (dir_vel < 0. || dir_vel > 0.) ? m::max(mu * x, 0.) * dir_vel : 0.;
+        }
+    }
+
+    // Mark for fix if the solution is obviously unusable
     if (rho <= 0.) {
         return static_cast<int>(Status::neg_rho);
     } else if (u <= 0.) {
         return static_cast<int>(Status::neg_u);
-    } else if (mag_vel <= 0.) {
+    } else if (mag_vel < 0. || !(W < 50.)) {
         return static_cast<int>(Status::bad_gamma);
+    } else if (returncode) {
+        return returncode;
+    } else {
+        return static_cast<int>(Status::success);
     }
-
-    // Mark for fix only if convergence is not established within max_iterations (should
-    // be *extremely* rare)
-    return static_cast<int>(Status::success);
 }
 
 }

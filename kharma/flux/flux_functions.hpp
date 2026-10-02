@@ -37,7 +37,6 @@
 
 // phoebus includes
 #include "microphysics/eos_kharma/eos_kharma.hpp"
-#include "phoebus_utils/unit_conversions.hpp"
 #include "phoebus_utils/variables.hpp"
 
 #include "emhd.hpp"
@@ -46,6 +45,8 @@
 #include "kharma_utils.hpp"
 #include "types.hpp"
 
+// Out of the package modification RADM1.
+#include "radM1.hpp"
 /**
  * Device-side functions calc_tensor, prim_to_flux, and vchar, which will depend on
  * the set of enabled packages.
@@ -156,6 +157,20 @@ KOKKOS_FORCEINLINE_FUNCTION void prim_to_flux(const GRCoordinates& G, const Glob
     if (m_u.Q >= 0) flux[m_u.Q] = P(m_p.Q, k, j, i) * D.ucon[dir] * gdet;
     if (m_u.DP >= 0) flux[m_u.DP] = P(m_p.DP, k, j, i) * D.ucon[dir] * gdet;
 
+    // Out of the package modification RADM1.
+    if (m_u.U1_RAD >= 0) {
+        Real R_dir_mu[GR_DIM];
+
+        // Use the new M1 tensor function.
+        RadM1::calc_tensor(G, P, m_p, dir, k, j, i, loc, R_dir_mu);
+
+        // Then calculate the fluxes
+        flux[m_u.UU_RAD] = R_dir_mu[0] * gdet;
+        flux[m_u.U1_RAD] = R_dir_mu[1] * gdet;
+        flux[m_u.U2_RAD] = R_dir_mu[2] * gdet;
+        flux[m_u.U3_RAD] = R_dir_mu[3] * gdet;
+    }
+
     // Electrons: normalized by density
     if (m_u.KTOT >= 0) {
         flux[m_u.KTOT] = flux[m_u.RHO] * P(m_p.KTOT, k, j, i);
@@ -229,6 +244,20 @@ KOKKOS_FORCEINLINE_FUNCTION void prim_to_flux(const GRCoordinates& G, const Glob
     if (m_u.Q >= 0) flux(m_u.Q, k, j, i) = P(m_p.Q, k, j, i) * D.ucon[dir] * gdet;
     if (m_u.DP >= 0) flux(m_u.DP, k, j, i) = P(m_p.DP, k, j, i) * D.ucon[dir] * gdet;
 
+    // Out of the package modification RADM1.
+    if (m_u.U1_RAD >= 0) {
+        Real R_dir_mu[GR_DIM];
+
+        // Use the new M1 tensor function.
+        RadM1::calc_tensor(G, P, m_p, dir, k, j, i, loc, R_dir_mu);
+
+        // Then calculate the fluxes
+        flux(m_u.UU_RAD, k, j, i) = R_dir_mu[0] * gdet;
+        flux(m_u.U1_RAD, k, j, i) = R_dir_mu[1] * gdet;
+        flux(m_u.U2_RAD, k, j, i) = R_dir_mu[2] * gdet;
+        flux(m_u.U3_RAD, k, j, i) = R_dir_mu[3] * gdet;
+    }
+
     // Electrons: normalized by density
     if (m_u.KTOT >= 0) {
         flux(m_u.KTOT, k, j, i) = flux(m_u.RHO, k, j, i) * P(m_p.KTOT, k, j, i);
@@ -300,6 +329,83 @@ KOKKOS_FORCEINLINE_FUNCTION void p_to_u_mhd(const GRCoordinates& G, const Global
     FourVectors Dtmp;
     GRMHD::calc_4vecs(G, P, m_p, k, j, i, Loci::center, Dtmp);
     prim_to_flux_mhd(G, P, m_p, Dtmp, emhd_params, eos, k, j, i, 0, U, m_u, loc);
+}
+
+/**
+ * Calculate the radiation characteristic speeds.
+ * Out of the package modification RADM1.
+ */
+template<typename Global>
+KOKKOS_FORCEINLINE_FUNCTION void vchar_rad(const GRCoordinates& G, const Global& P,
+    const VarMap& m, const FourVectors& D, const Microphysics::EOS::EOS& eos,
+    const EMHD::EMHD_parameters& emhd_params, const RadM1::RadOpac& rad_opac,
+    const int& k, const int& j, const int& i, const Loci& loc, const int& dir, Real& cmax,
+    Real& cmin)
+{
+    GReal Tgas = eos.TemperatureFromDensityInternalEnergy(
+        P(m.RHO, k, j, i), P(m.UU, k, j, i) / P(m.RHO, k, j, i));
+
+    // Out of the package modification RADM1.
+    const Real bsq = dot(D.bcon, D.bcov);
+    // TODO PNM: This is an approximation, we should be using Tgas and T_rad. I guess it's
+    // fine for now
+    GReal kappa_abs = RadM1::calc_kabs(P(m.RHO, k, j, i), Tgas, Tgas, bsq, rad_opac);
+    GReal kappa_s = RadM1::calc_kscattering(P(m.RHO, k, j, i), Tgas, bsq, rad_opac);
+
+    GReal kappa_tot = kappa_abs + kappa_s;
+
+    GReal dx;
+    if (dir == 0) {
+        dx = 0.;
+    } else if (dir == 1) {
+        dx = G.Dxc<1>(i);
+    } else if (dir == 2) {
+        dx = G.Dxc<2>(j);
+    } else if (dir == 3) {
+        dx = G.Dxc<3>(k);
+    }
+
+    // tau will be kappa * sqrt(g_{dir,dir}) * dx_dir
+    GReal tau = kappa_tot * sqrt(G.gcov(loc, j, i, dir, dir)) * dx;
+
+    // radiation sound speed squared will be the min between 1/3 and (4/(3*tau))**2
+    GReal cs2 = m::min(1. / 3., m::pow(4. / (3. * tau), 2.));
+
+    cs2 = clip(cs2, 0., 1.);
+
+    GReal cms2 = cs2;
+
+    Real ucon_rad[GR_DIM];
+    RadM1::calc_ucon_rad(G, P, m, k, j, i, loc, ucon_rad);
+    // Require that speed of wave measured by observer q.ucon is cms2
+    Real A, B, C;
+    {
+        Real Bcov[GR_DIM] = {1., 0., 0., 0.};
+        Real Acov[GR_DIM] = {0};
+        Acov[dir] = 1.;
+
+        Real Acon[GR_DIM], Bcon[GR_DIM];
+        G.raise(Acov, Acon, k, j, i, loc);
+        G.raise(Bcov, Bcon, k, j, i, loc);
+
+        const Real Asq = dot(Acon, Acov);
+        const Real Bsq = dot(Bcon, Bcov);
+        const Real Au = dot(Acov, ucon_rad);
+        const Real Bu = dot(Bcov, ucon_rad);
+        const Real AB = dot(Acon, Bcov);
+
+        A = Bu * Bu - (Bsq + Bu * Bu) * cms2;
+        B = 2. * (Au * Bu - (AB + Au * Bu) * cms2);
+        C = Au * Au - (Asq + Au * Au) * cms2;
+    }
+
+    Real discr = m::sqrt(m::max(B * B - 4. * A * C, 0.));
+
+    Real vp = -(-B + discr) / (2. * A);
+    Real vm = -(-B - discr) / (2. * A);
+
+    cmax = m::max(vp, vm);
+    cmin = m::min(vp, vm);
 }
 
 /**

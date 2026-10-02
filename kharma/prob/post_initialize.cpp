@@ -36,7 +36,6 @@
 
 #include "b_cd.hpp"
 #include "b_cleanup.hpp"
-#include "b_cleanup_gmg.hpp"
 #include "b_ct.hpp"
 #include "b_flux_ct.hpp"
 #include "blob.hpp"
@@ -124,7 +123,8 @@ void KHARMA::PostInitialize(ParameterInput* pin, Mesh* pmesh, bool is_restart)
         bool iharm3d_restart = prob_name == "resize_restart";
         // but sometimes in a pinch we want to restart from .phdf files, which are like
         // iharm3d restarts
-        bool prims_only_restart = pin->GetBoolean("b_field", "restart_from_prims");
+        bool prims_only_restart =
+            pin->GetOrAddBoolean("b_field", "restart_from_prims", false);
         if (!(iharm3d_restart || prims_only_restart)) {
             std::cout << "Restoring B field from conserved values" << std::endl;
             if (pkgs.count("B_FluxCT")) {
@@ -142,7 +142,7 @@ void KHARMA::PostInitialize(ParameterInput* pin, Mesh* pmesh, bool is_restart)
             } else if (pkgs.count("B_CT")) {
                 // This is dangerous: we're interpolating cell-centered data
                 // to faces, even for identical grids
-                B_CT::DangerousPtoU(md.get(), IndexDomain::interior, false);
+                // B_CT::DangerousPtoU(md.get(), IndexDomain::interior, false);
                 // TODO always force B field cleanup if we do this
                 // (Generally we're resizing so it gets triggered anyway)
             }
@@ -168,7 +168,7 @@ void KHARMA::PostInitialize(ParameterInput* pin, Mesh* pmesh, bool is_restart)
     // Clean the B field, generally for resizing/restarting
     // We call this function any time the package is loaded:
     // if we decided to load it in kharma.cpp, we need to clean.
-    if (pkgs.count("B_Cleanup") || pkgs.count("B_CleanupGMG")) {
+    if (pkgs.count("B_Cleanup") || pkgs.count("B_Cleanup")) {
         if (pin->GetOrAddBoolean("b_cleanup", "output_before_cleanup", false)) {
             auto tm = SimTime(0., 0., 0, 0, 0, 0, 0.);
             auto pouts = std::make_unique<Outputs>(pmesh, pin, &tm);
@@ -178,8 +178,8 @@ void KHARMA::PostInitialize(ParameterInput* pin, Mesh* pmesh, bool is_restart)
         // Cleanup is applied to conserved variables
         if (pkgs.count("B_Cleanup"))
             B_Cleanup::CleanupDivergence(md);
-        else if (pkgs.count("B_CleanupGMG"))
-            B_CleanupGMG::CleanupDivergence(md);
+        else if (pkgs.count("B_Cleanup"))
+            B_Cleanup::CleanupDivergence(md);
 
         if (pin->GetOrAddBoolean("b_cleanup", "output_after_cleanup", false)) {
             auto tm = SimTime(0., 0., 0, 0, 0, 0, 0.);

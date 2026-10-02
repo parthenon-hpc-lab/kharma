@@ -84,35 +84,6 @@ std::shared_ptr<KHARMAPackage> Inverter::Initialize(
     int iter_max = pin->GetOrAddInteger("inverter", "iter_max", (use_kastaun) ? 25 : 8);
     params.Add("iter_max", iter_max);
 
-    // TODO only need these if Floors aren't loaded
-    // Floor options
-    // Use a custom block for inverter floors to allow customization.  Not sure anyone
-    // *wants* that but...
-    const bool is_ideal =
-        pin->GetString("eos", "type") == singularity::IdealGas::EosType();
-    Real gamma_floor = is_ideal ? packages->Get("eos")->Param<Real>("gm1") + 1. : 5. / 3.;
-    if (!pin->DoesBlockExist("inverter_floors")) {
-        params.Add("inverter_prescription",
-            Floors::MakePrescription(pin, "floors", gamma_floor, is_ideal));
-        if (pin->DoesBlockExist("floors_inner"))
-            params.Add("inverter_prescription_inner",
-                Floors::MakePrescriptionInner(pin,
-                    Floors::MakePrescription(pin, "floors", gamma_floor, is_ideal),
-                    "floors_inner", is_ideal));
-        else
-            params.Add("inverter_prescription_inner",
-                Floors::MakePrescriptionInner(pin,
-                    Floors::MakePrescription(pin, "floors", gamma_floor, is_ideal),
-                    "floors", is_ideal));
-    } else {
-        params.Add("inverter_prescription",
-            Floors::MakePrescription(pin, "inverter_floors", gamma_floor, is_ideal));
-        params.Add("inverter_prescription_inner",
-            Floors::MakePrescriptionInner(pin,
-                Floors::MakePrescription(pin, "inverter_floors", gamma_floor, is_ideal),
-                "inverter_floors", is_ideal));
-    }
-
     // Fixup options
     // Fix by averaging neighboring cells.  Enabled by default for 1Dw, but (magnetized!)
     // Kastaun failures are more dire
@@ -167,9 +138,9 @@ std::shared_ptr<KHARMAPackage> Inverter::Initialize(
     pkg->AddField("pflag", m);
 
     // When not using floors, we need to declare fflag for ourselves
-    m = Metadata({Metadata::Real, Metadata::Cell, Metadata::Derived, Metadata::OneCopy,
-        Metadata::Overridable});
-    pkg->AddField("fflag", m);
+    // m = Metadata({Metadata::Real, Metadata::Cell, Metadata::Derived, Metadata::OneCopy,
+    //     Metadata::Overridable});
+    // pkg->AddField("fflag", m);
 
     // This package may be loaded even when evolving implicitly, e.g. for FOFC
     // Only register our callbacks if they're needed for explicit evolution or a guess
@@ -227,7 +198,8 @@ inline void BlockPerformInversion(
     // auto fflag = rc->PackVariables(std::vector<std::string>{"fflag"});
     auto pflag = rc->PackVariables(std::vector<std::string>{"pflag"});
 
-    if (U.GetDim(4) == 0 || pflag.GetDim(4) == 0) return;
+    // TODO error if pflag not present, that's a problem
+    if (U.GetDim(4) == 0 || P.GetDim(4) == 0 || pflag.GetDim(4) == 0) return;
 
     const auto& eos_params = pmb->packages.Get("eos")->AllParams();
     auto eos = eos_params.Get<Microphysics::EOS::EOS>("d.EOS");
@@ -235,14 +207,6 @@ inline void BlockPerformInversion(
     auto& pars = pmb->packages.Get("Inverter")->AllParams();
     const Real err_tol = pars.Get<Real>("err_tol");
     const int iter_max = pars.Get<int>("iter_max");
-
-    // If we set the floors package to use normal frame w/Kastaun inverter, *or*
-    // if we disabled the floors package, go ahead and apply all floors in this function
-    const bool normal_frame_floors =
-        (pmb->packages.AllPackages().count("Floors"))
-            ? pmb->packages.Get("Floors")->Param<Floors::InjectionFrame>("frame") ==
-                  Floors::InjectionFrame::normal_kastaun
-            : true;
 
     const auto& G = pmb->coords;
 

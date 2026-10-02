@@ -67,7 +67,7 @@ class KHARMADriver : public MultiStageDriver
 
     // Eliminate Parthenon's print statements when starting up the driver, we have a bunch
     // of our own
-    // void PreExecute() override { timer_main.reset(); }
+    void PreExecute() override;
 
     // Also override the timestep calculation, so we can start moving options etc out of
     // GRMHD package
@@ -125,6 +125,16 @@ class KHARMADriver : public MultiStageDriver
     TaskID AddFOFC(TaskID& t_start, TaskList& tl, MeshData<Real>* md,
         MeshData<Real>* md_full_step_init, MeshData<Real>* md_sub_step_init,
         MeshData<Real>* guess_src, MeshData<Real>* guess, int stage);
+
+    /**
+     * Add first-order flux corrections.  This is split out because it needs an additional
+     * MeshData object for the "guess"
+     */
+    TaskID AddFOFC_PCP(TaskID& t_start, TaskList& tl, MeshData<Real>* md,
+        MeshData<Real>* md_full_step_init, MeshData<Real>* md_sub_step_init,
+        MeshData<Real>* guess_src, MeshData<Real>* guess, int stage,
+        std::vector<std::string> sync_vars);
+
     /**
      * This function updates a state md_update with the results of an explicit source term
      * calculation placed in md_flux_src.  It includes initialization/RK factors and so

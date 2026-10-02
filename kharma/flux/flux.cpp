@@ -40,11 +40,12 @@
 #include "kharma.hpp"
 #include <stdexcept>
 
+// Out of the package modification RADM1.
+#include "radM1.hpp"
+
 // phoebus includes
 #include "microphysics/eos_kharma/eos_kharma.hpp"
-#include "phoebus_utils/unit_conversions.hpp"
 #include "phoebus_utils/variables.hpp"
-#include <singularity-eos/eos/eos_ideal.hpp>
 
 using namespace parthenon;
 
@@ -94,9 +95,9 @@ std::shared_ptr<KHARMAPackage> Flux::Initialize(
     if (lower_edges && lower_poles)
         throw std::runtime_error(
             "Cannot enable lowered reconstruction on edges and poles!");
-    if ((lower_edges || lower_poles) && recon != "weno5")
+    if ((lower_edges || lower_poles)) // && recon != "weno5")
         throw std::runtime_error(
-            "Lowered reconstructions can only be enabled with weno5!");
+            "Spatially lowered-order reconstructions are not supported currently!");
 
     int stencil = 0;
     if (recon == "donor_cell" || recon == "donor_cell_c") {
@@ -108,12 +109,12 @@ std::shared_ptr<KHARMAPackage> Flux::Initialize(
     } else if (recon == "linear_mc") {
         params.Add("recon", KReconstruction::Type::linear_mc);
         stencil = 3;
-    } else if (recon == "weno5" && lower_edges) {
-        params.Add("recon", KReconstruction::Type::weno5_lower_edges);
-        stencil = 5;
-    } else if (recon == "weno5" && lower_poles) {
-        params.Add("recon", KReconstruction::Type::weno5_lower_poles);
-        stencil = 5;
+        // } else if (recon == "weno5" && lower_edges) {
+        //     params.Add("recon", KReconstruction::Type::weno5_lower_edges);
+        //     stencil = 5;
+        // } else if (recon == "weno5" && lower_poles) {
+        //     params.Add("recon", KReconstruction::Type::weno5_lower_poles);
+        //     stencil = 5;
     } else if (recon == "weno5") {
         params.Add("recon", KReconstruction::Type::weno5);
         stencil = 5;
@@ -135,8 +136,9 @@ std::shared_ptr<KHARMAPackage> Flux::Initialize(
     } // we only allow these options
     // Warn if using less than 3 ghost zones w/WENO etc, 2 w/Linear, etc.
     // SMR/AMR independently requires an even number of zones, so we usually use 4
-    if (Globals::nghost < (stencil / 2 + 1)) {
-        throw std::runtime_error("Not enough ghost zones for specified reconstruction!");
+    if (Globals::nghost < 4) {
+        throw std::runtime_error(
+            "Not enough ghost zones!  KHARMA currently requires 4 ghosts to avoid OOB");
     }
 
     // Fallback to TVD reconstruction when these algorithms reconstruct something outside
@@ -196,6 +198,12 @@ std::shared_ptr<KHARMAPackage> Flux::Initialize(
     pkg->AddField("Flux.cmax", m);
     pkg->AddField("Flux.cmin", m);
 
+    // Out of the package modification RADM1.
+    if (packages->AllPackages().count("RadM1")) {
+        pkg->AddField("Flux.cmax_rad", m);
+        pkg->AddField("Flux.cmin_rad", m);
+    }
+
     // PROCESS FOFC
     // Accept this a bunch of places, maybe we'll trim this...
     bool default_fofc = false;
@@ -205,6 +213,15 @@ std::shared_ptr<KHARMAPackage> Flux::Initialize(
         default_fofc = pin->GetBoolean("flux", "fofc");
     }
     bool use_fofc = pin->GetOrAddBoolean("fofc", "on", default_fofc);
+
+    // Warn and disable if we don't have B_CT, FOFC NEEDS it now
+    if (use_fofc && !packages->AllPackages().count("B_CT")) {
+        std::cerr << "WARNING: First-order flux corrections require face-centered fields!"
+                  << std::endl;
+        std::cerr << "WARNING: Force-disabling FOFC!" << std::endl;
+        use_fofc = false;
+        pin->SetBoolean("fofc", "on", use_fofc);
+    }
     params.Add("use_fofc", use_fofc);
 
     if (use_fofc) {
@@ -231,44 +248,34 @@ std::shared_ptr<KHARMAPackage> Flux::Initialize(
             params.Add("fofc_eh_buffer", eh_buffer);
         }
 
+        bool fofc_pcp = false;
         if (packages->AllPackages().count("B_CT")) {
             // Use consistent B for FOFC (see above)
             // It is mildly inadvisable to disable this
             bool fofc_consistent_face_b =
                 pin->GetOrAddBoolean("fofc", "consistent_face_b", consistent_face_b);
             params.Add("fofc_consistent_face_b", fofc_consistent_face_b);
-        }
 
-        // Use a custom block for fofc floors.  We now do the same for Kastaun, where we
-        // can *also* have floors
-        // TODO even post-reconstruction/reconstruction fallback?
-
-        const bool is_ideal =
-            pin->GetString("eos", "type") == singularity::IdealGas::EosType();
-        // For non-ideal EOS, gamma_floor only sets the geometric floor's density scaling
-        Real gamma_floor =
-            is_ideal ? packages->Get("eos")->Param<Real>("gm1") + 1. : 5. / 3.;
-        if (!pin->DoesBlockExist("fofc_floors")) {
-            params.Add("fofc_prescription",
-                Floors::MakePrescription(pin, "floors", gamma_floor, is_ideal));
-            if (pin->DoesBlockExist("floors_inner"))
-                params.Add("fofc_prescription_inner",
-                    Floors::MakePrescriptionInner(pin,
-                        Floors::MakePrescription(pin, "floors", gamma_floor, is_ideal),
-                        "floors_inner", is_ideal));
-            else
-                params.Add("fofc_prescription_inner",
-                    Floors::MakePrescriptionInner(pin,
-                        Floors::MakePrescription(pin, "floors", gamma_floor, is_ideal),
-                        "floors", is_ideal));
+            fofc_pcp = pin->GetOrAddBoolean("fofc", "pcp", true);
+            params.Add("fofc_pcp", fofc_pcp);
         } else {
-            // Override inner and outer floors with `fofc_floors` block
-            params.Add("fofc_prescription",
-                Floors::MakePrescription(pin, "fofc_floors", gamma_floor, is_ideal));
-            params.Add("fofc_prescription_inner",
-                Floors::MakePrescriptionInner(pin,
-                    Floors::MakePrescription(pin, "fofc_floors", gamma_floor, is_ideal),
-                    "fofc_floors", is_ideal));
+            // PCP update in FOFC relies on face-centered B w/CT
+            pin->SetBoolean("fofc", "pcp", false);
+            params.Add("fofc_pcp", false);
+            fofc_pcp = false;
+        }
+        if (fofc_pcp) {
+            // Neither of these are respected right now.  Maybe should never be
+            // int fofc_pcp_chi = pin->GetOrAddInteger("fofc", "pcp_chi", 2);
+            // params.Add("fofc_pcp_chi", fofc_pcp_chi);
+            // Real fofc_pcp_umin = pin->GetOrAddReal("fofc", "pcp_umin", 1e-10);
+            // params.Add("fofc_pcp_umin", fofc_pcp_umin);
+
+            // Cache for PCP corrections
+            Metadata m = Metadata(
+                {Metadata::Real, Metadata::Cell, Metadata::Derived, Metadata::OneCopy});
+            pkg->AddField("Flux.fofc_pcp_alpha", m);
+            pkg->AddField("Flux.fofc_pcp_wsum", m);
         }
 
         // Flag for whether FOFC was applied, for diagnostics
@@ -280,9 +287,9 @@ std::shared_ptr<KHARMAPackage> Flux::Initialize(
         // List (vector) of HistoryOutputVars that will all be enrolled as output
         // variables
         parthenon::HstVar_list hst_vars = {};
-        // Count total floors as a history item
+        // Count total flags as a history item
         hst_vars.emplace_back(parthenon::HistoryOutputVar(
-            UserHistoryOperation::max, CountFOFCFlags, "FOFCFlags"));
+            UserHistoryOperation::sum, CountFOFCFlags, "FOFCFlags"));
         // TODO Domain::entire version?
         // TODO entries for each individual flag?
         // add callbacks for HST output to the Params struct, identified by the
@@ -344,7 +351,7 @@ TaskStatus Flux::BlockPtoU(MeshBlockData<Real>* rc, IndexDomain domain, bool coa
     const EMHD::EMHD_parameters& emhd_params = EMHD::GetEMHDParameters(pmb->packages);
 
     // Make sure we don't step on face CT: unnecessary so far, might fix ordering mistakes
-    if (pmb->packages.AllPackages().count("B_CT")) B_CT::BlockUtoP(rc, domain, coarse);
+    // if (pmb->packages.AllPackages().count("B_CT")) B_CT::BlockUtoP(rc, domain, coarse);
 
     // Pack variables
     PackIndexMap prims_map, cons_map;
@@ -354,7 +361,7 @@ TaskStatus Flux::BlockPtoU(MeshBlockData<Real>* rc, IndexDomain domain, bool coa
     const int nvar = U.GetDim(4);
 
     // Return if we're not syncing U & P at all (e.g. edges)
-    if (P.GetDim(4) == 0) return TaskStatus::complete;
+    if (P.GetDim(4) == 0 || U.GetDim(4) == 0) return TaskStatus::complete;
 
     // Indices
     auto bounds = coarse ? pmb->c_cellbounds : pmb->cellbounds;
@@ -406,11 +413,11 @@ TaskStatus Flux::BlockPtoU_Send(MeshBlockData<Real>* rc, IndexDomain domain, boo
     const VarMap m_u(cons_map, true), m_p(prims_map, false);
 
     // Return if we're not syncing U & P at all (e.g. edges)
-    if (P.GetDim(4) == 0) return TaskStatus::complete;
+    if (P.GetDim(4) == 0 || U.GetDim(4) == 0) return TaskStatus::complete;
 
     // Make sure we always update center conserved B from the faces, not the prims
-    if (pmb->packages.AllPackages().count("B_CT"))
-        B_CT::BlockUtoP(rc, IndexDomain::interior, coarse);
+    // if (pmb->packages.AllPackages().count("B_CT"))
+    //     B_CT::BlockUtoP(rc, IndexDomain::interior, coarse);
 
     // Indices
     auto bounds = coarse ? pmb->c_cellbounds : pmb->cellbounds;
@@ -465,6 +472,9 @@ void Flux::AddGeoSource(MeshData<Real>* md, MeshData<Real>* mdudt, IndexDomain d
     const auto& eos_params = pkgs.Get("eos")->AllParams();
     auto eos = eos_params.Get<Microphysics::EOS::EOS>("d.EOS");
 
+    // Out of the package modification RADM1.
+    const bool use_rad = pmb0->packages.AllPackages().count("RadM1");
+
     // All connection coefficients are zero in Cartesian Minkowski space
     // TODO do we know this fully in init?
     if (pmb0->coords.coords.is_cart_minkowski()) return;
@@ -495,8 +505,24 @@ void Flux::AddGeoSource(MeshData<Real>* md, MeshData<Real>* mdudt, IndexDomain d
             // calc_tensor based on the number of primitives
             Real Tmu[GR_DIM] = {0};
             Real new_du[GR_DIM] = {0};
+
+            // Out of the package modification RADM1.
+            Real Rmu[GR_DIM] = {0};
+            Real new_du_rad[GR_DIM] = {0};
             for (int mu = 0; mu < GR_DIM; ++mu) {
                 Flux::calc_tensor(P(b), m_p, D, emhd_params, eos, k, j, i, mu, Tmu);
+
+                // Out of the package modification RADM1.
+                if (use_rad) {
+
+                    RadM1::calc_tensor(G, P(b), m_p, mu, k, j, i, Loci::center, Rmu);
+
+                    for (int nu = 0; nu < GR_DIM; ++nu) {
+                        for (int lam = 0; lam < GR_DIM; ++lam) {
+                            new_du_rad[lam] += Rmu[nu] * G.gdet_conn(j, i, nu, lam, mu);
+                        }
+                    }
+                }
                 for (int nu = 0; nu < GR_DIM; ++nu) {
                     // Contract mhd stress tensor with connection, and multiply
                     // by metric determinant
@@ -509,6 +535,13 @@ void Flux::AddGeoSource(MeshData<Real>* md, MeshData<Real>* mdudt, IndexDomain d
             dUdt(b, m_u.UU, k, j, i) += new_du[0];
             VLOOP
                 dUdt(b, m_u.U1 + v, k, j, i) += new_du[1 + v];
+
+            // Out of the package modification RADM1.
+            if (use_rad) {
+                dUdt(b, m_u.UU_RAD, k, j, i) += new_du_rad[0];
+                VLOOP
+                    dUdt(b, m_u.U1_RAD + v, k, j, i) += new_du_rad[1 + v];
+            }
         });
 }
 
@@ -535,12 +568,11 @@ TaskStatus Flux::PostStepDiagnostics(const SimTime& tm, MeshData<Real>* md)
     // This verbosity check is only here to save time, Check&Print hits will
     // stay silent by itself and just return values
     if (use_fofc && flag_verbose > 0) {
-        std::map<int, std::string> fofc_label = {{1, "Flux-corrected"}};
         Reductions::StartFlagReduce(
-            md, "fofcflag", fofc_label, IndexDomain::interior, false, 10);
+            md, "fofcflag", fofc_names, IndexDomain::interior, false, 10);
         // Debugging/diagnostic info about floor and inversion flags
         Reductions::CheckFlagReduceAndPrintHits(
-            md, "fofcflag", fofc_label, IndexDomain::interior, false, 10);
+            md, "fofcflag", fofc_names, IndexDomain::interior, false, 10);
     }
 
     // Check for a soundspeed (ctop) of 0 or NaN

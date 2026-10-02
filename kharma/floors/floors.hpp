@@ -120,6 +120,7 @@ enum class InjectionFrame {
     fluid = 0,
     normal_onedw,
     normal_kastaun,
+    normal_kastaun_eenough,
     mixed_fluid_normal,
     mixed_normal_drift,
     drift
@@ -133,6 +134,7 @@ enum class InjectionFrame {
 class Prescription
 {
   public:
+    Real gamma_floor;
     // Constant sanity limits
     Real gamma_floor;
     Real rho_min_const, u_min_const;
@@ -144,24 +146,25 @@ class Prescription
     Real ktot_max;
     // Limit fluid Lorentz factor
     Real gamma_max;
+    // floor radiation energy density
+    Real urad_floor;
     // Floor options (frame was MOVED to templating)
     bool use_r_char, temp_adjust_u, adjust_k;
-    // Radius dependent floors?
-    bool radius_dependent_floors;
     // Add density to respect the gamma ceiling?
     bool use_rho_to_slow;
     // Minimum u based on no dissipation/entropy advection
     bool use_u_min_entropy;
 };
 
-inline Prescription MakePrescription(parthenon::ParameterInput* pin,
-    std::string block = "floors", Real gamma_floor_default = 5. / 3.,
-    bool is_ideal = true)
+inline Prescription MakePrescription(
+    parthenon::ParameterInput* pin, Real gamma_floor, std::string block = "floors")
 {
     Prescription p;
     // Floor parameters
-    // TODO(JWM): Delete
-    p.gamma_floor = gamma_floor_default;
+
+    p.urad_floor = pin->GetOrAddReal(block, "urad_floor", 1.e-20);
+
+    p.gamma_floor = gamma_floor;
     if (pin->GetBoolean("coordinates", "spherical")) {
         // In spherical systems, floors drop as r^2, so set them higher by default
         p.rho_min_geom = pin->GetOrAddReal(block, "rho_min_geom", 1.e-6);
@@ -208,82 +211,13 @@ inline Prescription MakePrescription(parthenon::ParameterInput* pin,
     // Limit the fluid Lorentz factor gamma
     p.gamma_max = pin->GetOrAddReal(block, "gamma_max", std::numeric_limits<Real>::max());
 
-    p.radius_dependent_floors =
-        pin->GetOrAddBoolean("floors", "radius_dependent_floors", false);
     p.floors_switch_r = pin->GetOrAddReal("floors", "floors_switch_r", 50.);
 
     p.use_rho_to_slow = pin->GetOrAddBoolean("floors", "use_rho_to_slow", false);
 
-    p.use_u_min_entropy =
-        is_ideal && pin->GetOrAddBoolean("floors", "u_min_from_entropy", false);
+    p.use_u_min_entropy = pin->GetOrAddBoolean("floors", "u_min_from_entropy", false);
 
     return p;
-}
-
-/**
- * Set prescription struct for inner domain (r < floor_switch_r) if
- * 'radius_dependent_floors' is enabled. Sets values provided in the 'floors_inner' block
- * in input par file if provided, else sets it equal to the values in the whole/outer
- * domain.
- */
-inline Prescription MakePrescriptionInner(parthenon::ParameterInput* pin,
-    Prescription p_outer, std::string block = "floors_inner", bool is_ideal = true)
-{
-    // TODO(CEP) I wonder if there's an easier way to "set if parameter exists" from pin,
-    // that would be broadly useful
-    Prescription p_inner;
-
-    // Floor parameters
-    if (pin->GetBoolean("coordinates", "spherical")) {
-        // In spherical systems, floors drop as r^2, so set them higher by default
-        p_inner.rho_min_geom =
-            pin->GetOrAddReal(block, "rho_min_geom", p_outer.rho_min_geom);
-        p_inner.u_min_geom = pin->GetOrAddReal(block, "u_min_geom", p_outer.u_min_geom);
-        // Some constant for large distances. New, out of the way by default
-        p_inner.rho_min_const =
-            pin->GetOrAddReal(block, "rho_min_const", p_outer.rho_min_const);
-        p_inner.u_min_const =
-            pin->GetOrAddReal(block, "u_min_const", p_outer.u_min_const);
-    } else { // TODO spherical cart will also have both
-        // Accept old names
-        Real rho_min_const_default = pin->DoesParameterExist(block, "rho_min_geom")
-                                         ? pin->GetReal(block, "rho_min_geom")
-                                         : p_outer.rho_min_geom;
-        Real u_min_const_default = pin->DoesParameterExist(block, "u_min_geom")
-                                       ? pin->GetReal(block, "u_min_geom")
-                                       : p_outer.u_min_geom;
-        p_inner.rho_min_const =
-            pin->GetOrAddReal(block, "rho_min_const", rho_min_const_default);
-        p_inner.u_min_const =
-            pin->GetOrAddReal(block, "u_min_const", u_min_const_default);
-    }
-
-    p_inner.use_r_char = pin->GetOrAddBoolean(block, "use_r_char", p_outer.use_r_char);
-    p_inner.r_char = pin->GetOrAddReal(block, "r_char", p_outer.r_char);
-
-    p_inner.bsq_over_rho_max =
-        pin->GetOrAddReal(block, "bsq_over_rho_max", p_outer.bsq_over_rho_max);
-    p_inner.bsq_over_u_max =
-        pin->GetOrAddReal(block, "bsq_over_u_max", p_outer.bsq_over_u_max);
-
-    p_inner.u_over_rho_max =
-        pin->GetOrAddReal(block, "u_over_rho_max", p_outer.u_over_rho_max);
-    p_inner.ktot_max = pin->GetOrAddReal(block, "ktot_max", p_outer.ktot_max);
-    p_inner.temp_adjust_u =
-        pin->GetOrAddBoolean(block, "temp_adjust_u", p_outer.temp_adjust_u);
-    p_inner.adjust_k = pin->GetOrAddBoolean(block, "adjust_k", p_outer.adjust_k);
-
-    p_inner.gamma_max = pin->GetOrAddReal(block, "gamma_max", p_outer.gamma_max);
-
-    p_inner.use_u_min_entropy =
-        is_ideal &&
-        pin->GetOrAddBoolean(block, "u_min_from_entropy", p_outer.use_u_min_entropy);
-
-    // Always grab these from p_outer, they should never differ between outer/inner floors
-    p_inner.radius_dependent_floors = p_outer.radius_dependent_floors;
-    p_inner.floors_switch_r = p_outer.floors_switch_r;
-
-    return p_inner;
 }
 
 /**
@@ -308,8 +242,8 @@ TaskStatus ApplyGRMHDFloors(MeshData<Real>* md, IndexDomain domain);
  * 2. fflag, which floors were hit by the current state
  * This is what ApplyFloors uses to determine the floor values/locations
  */
-TaskStatus DetermineGRMHDFloors(MeshData<Real>* md, IndexDomain domain,
-    const Floors::Prescription& floors, const Floors::Prescription& floors_inner);
+TaskStatus DetermineGRMHDFloors(
+    MeshData<Real>* md, IndexDomain domain, const Floors::Prescription& floors);
 
 /**
  * Apply the same floors as above, in the same way, except:

@@ -1,0 +1,136 @@
+# The Magnetically Arrested Disk (MAD) accretion flow
+# This is a normal large-disk (20/41 r_g) MAD with gamma=5/3,
+# like the "Illinois v5" simulation library.
+# Very low floors now that we have good recovery
+
+<parthenon/job>
+problem_id = torus
+archive_parameters = timestamp
+
+<parthenon/mesh>
+nx1 = 192
+nx2 = 128
+nx3 = 128
+
+<parthenon/meshblock>
+nx1 = 96
+nx2 = 64
+# Many boundary options are incompatible with multiple phi blocks
+nx3 = 128
+
+<coordinates>
+base = spherical_ks
+transform = fmks
+r_out = 1000
+a = 0.9375
+hslope = 0.3
+
+<parthenon/time>
+tlim = 60000.0
+nlim = -1
+
+<torus>
+rin = 20.0
+rmax = 41.0
+
+<perturbation>
+u_jitter = 0.04
+
+<b_field>
+solver = face_ct
+type = mad
+beta_min = 100.
+
+<GRMHD>
+cfl = 0.7
+gamma = 1.666667
+
+<flux>
+type = llf
+# WENO5 Adaptive Order "At Home" --
+# WENO5Z with fallback to linear recon in difficult regions
+reconstruction = ppm
+
+<driver>
+type = kharma
+# Second sync at the end of each step
+# Can skip this with the robust inverter & face_ct B fields
+two_sync = false
+
+<boundaries>
+inner_x2 = reflecting
+outer_x2 = reflecting
+
+<floors>
+# Minimal floors, leveraging inversion recovery.
+# Normal frame is now the only supported injection frame --
+# material added is so minimal that drag effects are negligible
+frame = normal
+rho_min_geom = 1e-6
+u_min_geom   = 1e-8
+# Enable to preserve momentum in all cases at the cost of much more
+# density injection
+use_rho_to_slow = false
+# Note there is a hard cap on Lorentz factor at 50 in the source code,
+# but in practice simulations do not reproduce fast enough gamma for
+# this to matter
+
+<fofc>
+# FOFC is disabled by default because of tests but recommended
+# for most production runs
+on = true
+
+
+<eos>
+type = IdealGas
+gamma = 1.666667
+
+
+<radM1>
+on = true
+mu = 0.6
+#Solver quantities
+# this is the step size of the jacobian
+src_rootfind_eps = 1e-8
+#This is the tolerance of the solver
+src_rootfind_tol = 1e-8
+#Max number of iterations the solver can take.
+src_rootfind_maxiter = 150
+u_rad_floor = 1e-12
+
+
+<units>
+on = true
+scale_free = false
+geom_mass_msun = 10
+fluid_density_cgs = 1.e-6
+
+<opac>
+# type here sets if you wanna handle the opacities yourself or give it to singularity opac
+# default, you handle it, other types can be seen in radM1.hpp: OpacityType.
+type = default
+opac_kind = bremsstrahlung
+s_opac_kind = thomson
+
+
+<debug>
+verbose = 1
+extra_checks = 2
+flag_verbose = 2
+
+<parthenon/output0>
+file_type = hdf5
+write_xdmf = false
+dt = 10.0
+single_precision_output = true
+variables = prims, divB, jcon, fflag, pflag, fofcflag, rimplflag, rinvflag
+
+<parthenon/output1>
+file_type = rst
+write_xdmf = false
+dt = 10.0
+
+<parthenon/output2>
+file_type = hst
+dt = 5.0
+variables = all_reductions

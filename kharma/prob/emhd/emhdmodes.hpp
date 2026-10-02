@@ -39,7 +39,6 @@
 
 // phoebus includes
 #include "microphysics/eos_kharma/eos_kharma.hpp"
-#include "phoebus_utils/unit_conversions.hpp"
 #include "phoebus_utils/variables.hpp"
 
 using namespace std::literals::complex_literals;
@@ -74,7 +73,6 @@ TaskStatus InitializeEMHDModes(
 
     const EMHD::EMHD_parameters& emhd_params = EMHD::GetEMHDParameters(pmb->packages);
     const auto& grmhd_pars = pmb->packages.Get("GRMHD")->AllParams();
-    // const Real& gam = grmhd_pars.Get<Real>("gamma");
 
     const auto& eos_params = pmb->packages.Get("eos")->AllParams();
     auto eos = eos_params.Get<Microphysics::EOS::EOS>("d.EOS");
@@ -163,8 +161,13 @@ TaskStatus InitializeEMHDModes(
                     eos, lambda, j, i, tau, chi_e, nu_e);
                 Real sie = u(k, j, i) / rho(k, j, i);
                 Real gamma1 =
+<<<<<<< HEAD
                     eos.BulkModulusFromDensityInternalEnergy(rho(k, j, i), sie, lambda) /
                     eos.PressureFromDensityInternalEnergy(rho(k, j, i), sie, lambda);
+=======
+                    eos.BulkModulusFromDensityInternalEnergy(rho(k, j, i), sie) /
+                    eos.PressureFromDensityInternalEnergy(rho(k, j, i), sie);
+>>>>>>> origin/feature/RadM1
                 // TODO_EOS: This function uses a definition of temperature that is only
                 // valid for ideal gas case. Should probably be modified to work with
                 // general EOS.
