@@ -63,8 +63,8 @@ filename = /Users/miah/Astro/CCSN/eos/stellarcollapse/SFHo.h5
 use_sp5 = false
 #save_sp5 = true
 # Once eos.sp5 has been written out by a first run, switch to:
-filename = eos.sp5
-use_sp5 = true
+#filename = eos.sp5
+#use_sp5 = true
 
 <debug>
 flag_verbose = 2
