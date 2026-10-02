@@ -109,9 +109,11 @@ KOKKOS_INLINE_FUNCTION StatusRadiationInversion u_to_p_rad(const GRCoordinates& 
     for (int mu = 1; mu < 4; ++mu)
         Utilde_con[mu] = Ucon_zamo[mu] + eta_con[mu] * U_dot_eta;
 
-    Real U_sq = 0.0;
-    for (int mu = 0; mu < 4; ++mu) U_sq += Ucov_zamo[mu] * Ucon_zamo[mu];
-    Real Utilde_sq = U_sq + U_dot_eta * U_dot_eta;
+    Real Utilde_sq = 0.0;
+    for (int mu = 1; mu < 4; ++mu)
+        for (int nu = 1; nu < 4; ++nu)
+            Utilde_sq +=
+                G.gcov(Loci::center, j, i, mu, nu) * Utilde_con[mu] * Utilde_con[nu];
 
     if (Utilde_sq < 0.0) {
         Utilde_sq = 0.0;
