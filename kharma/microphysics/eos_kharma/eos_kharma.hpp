@@ -47,7 +47,6 @@ using EOS = singularity::Variant<singularity::UnitSystem<singularity::IdealGas>,
 
 std::shared_ptr<KHARMAPackage> Initialize(
     ParameterInput* pin, std::shared_ptr<Packages_t>& packages);
-<<<<<<< HEAD
 
 /**
  * Specific internal energy from (rho, P, lambda), for any EOS in the variant.
@@ -82,8 +81,6 @@ KOKKOS_INLINE_FUNCTION Real SieFromDensityPressure(const EOS& eos, const bool is
         rho, m::exp(0.5 * (lT_lo + lT_hi)), lambda);
 }
 
-=======
->>>>>>> origin/feature/RadM1
 } // namespace EOS
 
 } // namespace Microphysics

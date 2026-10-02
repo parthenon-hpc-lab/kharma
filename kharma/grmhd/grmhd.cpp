@@ -700,8 +700,9 @@ void CancelBoundaryU3(MeshBlockData<Real>* rc, IndexDomain domain, bool coarse)
                 {
                     P(m_p.U3, k, jf, i) -= U3_avg;
 
-                    // Apply floors
-                    Floors::apply_geo_floors(G, P, m_p, k, jf, i, floors, Loci::center);
+                    // Apply floors TODO reintroduce if necessary
+                    // Floors::apply_geo_floors(G, P, m_p, k, jf, i, floors,
+                    // Loci::center);
 
                     // Always PtoU, we modified P.  Accommodate EMHD
                     Flux::p_to_u_mhd(G, P, m_p, emhd_params, eos, k, jf, i, U, m_u);
@@ -781,14 +782,6 @@ void CancelBoundaryT3(MeshBlockData<Real>* rc, IndexDomain domain, bool coarse)
                 [&](const int& k)
                 {
                     U(m_u.U3, k, jf, i) -= T3_avg;
-                    // Recover primitive GRMHD variables from our modified U
-                    Inverter::u_to_p<Inverter::Type::kastaun>(
-                        G, U, m_u, eos, k, jf, i, P, m_p, Loci::center, 25, 1e-14);
-                    // Floor them
-                    int fflag = Floors::apply_geo_floors(
-                        G, P, m_p, k, jf, i, floors, Loci::center);
-                    // Recalculate U on anything we floored
-                    if (fflag) p_to_u(G, P, m_p, eos, k, jf, i, U, m_u, Loci::center);
                 });
         });
 }

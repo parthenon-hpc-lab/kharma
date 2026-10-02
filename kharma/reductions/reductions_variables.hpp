@@ -46,13 +46,8 @@
 // Arguments to computing any variable defined below
 #define REDUCE_FUNCTION_ARGS                                                             \
     const GRCoordinates &G, const VariablePack<Real>&P, const VarMap &m_p,               \
-<<<<<<< HEAD
-        const VariableFluxPack<Real>&U, const VarMap &m_u,                               \
-        const VariablePack<Real>&cmax, const VariablePack<Real>&cmin,                    \
-=======
         const VariablePack<Real>&U, const VarMap &m_u, const VariableFluxPack<Real>&F,   \
         const VarMap &m_f, const VariablePack<Real>&cmax, const VariablePack<Real>&cmin, \
->>>>>>> origin/feature/RadM1
         const EMHD::EMHD_parameters &emhd_params, const Microphysics::EOS::EOS &eos,     \
         const int &k, const int &j, const int &i
 // Call for passing a particular block's values
@@ -152,13 +147,9 @@ template<>
 KOKKOS_INLINE_FUNCTION Real reduction_var<Var::gas_pressure>(REDUCE_FUNCTION_ARGS)
 {
     const Real sie = P(m_p.UU, k, j, i) / P(m_p.RHO, k, j, i);
-<<<<<<< HEAD
     Real lambda[2];
     fill_eos_lambda(P, m_p, k, j, i, lambda);
     return eos.PressureFromDensityInternalEnergy(P(m_p.RHO, k, j, i), sie, lambda);
-=======
-    return eos.PressureFromDensityInternalEnergy(P(m_p.RHO, k, j, i), sie);
->>>>>>> origin/feature/RadM1
     // return (gam - 1) * P(m_p.UU, k, j, i);
 }
 template<>
@@ -167,14 +158,10 @@ KOKKOS_INLINE_FUNCTION Real reduction_var<Var::beta>(REDUCE_FUNCTION_ARGS)
     FourVectors Dtmp;
     GRMHD::calc_4vecs(G, P, m_p, k, j, i, Loci::center, Dtmp);
     const Real sie = P(m_p.UU, k, j, i) / P(m_p.RHO, k, j, i);
-<<<<<<< HEAD
     Real lambda[2];
     fill_eos_lambda(P, m_p, k, j, i, lambda);
     const Real Pg =
         eos.PressureFromDensityInternalEnergy(P(m_p.RHO, k, j, i), sie, lambda);
-=======
-    const Real Pg = eos.PressureFromDensityInternalEnergy(P(m_p.RHO, k, j, i), sie);
->>>>>>> origin/feature/RadM1
     return Pg / (0.5 * (dot(Dtmp.bcon, Dtmp.bcov) + SMALL_NUM));
 }
 

@@ -293,12 +293,11 @@ TaskStatus Inverter::Backstop(MeshBlockData<Real>* rc)
             determine_geo_floors(G, P, m_p, k, j, i, floors, rhomin_geom, umin_geom);
 
             const Real umin =
-                (m_p.KTOT >= 0)
-                    ? m::max(P(m_p.KTOT, k, j, i) *
-                                 m::pow(P(m_p.RHO, k, j, i), floors.gamma_floor) /
-                                 (floors.gamma_floor - 1.),
-                          umin_geom)
-                    : umin_geom;
+                (m_p.KTOT >= 0) ? m::max(P(m_p.KTOT, k, j, i) *
+                                             m::pow(P(m_p.RHO, k, j, i), floors.gamma1) /
+                                             (floors.gamma1 - 1.),
+                                      umin_geom)
+                                : umin_geom;
 
             // Don't *trigger* on umin from KTOT, just use it if we need
             if ((failed(pflag(k, j, i)) || P(m_p.RHO, k, j, i) < rhomin_geom / 10. ||

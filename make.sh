@@ -1,5 +1,7 @@
 #!/bin/bash
 set -euo pipefail
+
+ZSH_VERSION=${ZSH_VERSION:-}
 [ -n "$ZSH_VERSION" ] && setopt SH_WORD_SPLIT
 
 # Make script for KHARMA
@@ -97,6 +99,9 @@ fi
 if option "nocleanup"; then
   EXTRA_FLAGS="-DKHARMA_DISABLE_CLEANUP=1 $EXTRA_FLAGS"
 fi
+#if option "norad"; then
+EXTRA_FLAGS="-DKHARMA_DISABLE_RADM1=1 $EXTRA_FLAGS"
+#fi
 if option "split_implicit"; then
   EXTRA_FLAGS="-DKHARMA_SPLIT_IMPLICIT_SOLVE=1 $EXTRA_FLAGS"
 fi
