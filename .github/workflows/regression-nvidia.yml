@@ -56,10 +56,9 @@ jobs:
     needs: build-nvidia
     runs-on: ubuntu-latest
     continue-on-error: true
-    concurrency:
-      group: kaggle-gpu
     strategy:
       fail-fast: false
+      max-parallel: 2
       matrix:
         test_name:
         - all-pars
