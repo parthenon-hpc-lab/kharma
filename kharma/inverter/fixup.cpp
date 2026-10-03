@@ -293,12 +293,11 @@ TaskStatus Inverter::Backstop(MeshBlockData<Real>* rc)
             determine_geo_floors(G, P, m_p, k, j, i, floors, rhomin_geom, umin_geom);
 
             const Real umin =
-                (m_p.KTOT >= 0)
-                    ? m::max(P(m_p.KTOT, k, j, i) *
-                                 m::pow(P(m_p.RHO, k, j, i), floors.gamma_floor) /
-                                 (floors.gamma_floor - 1.),
-                          umin_geom)
-                    : umin_geom;
+                (m_p.KTOT >= 0) ? m::max(P(m_p.KTOT, k, j, i) *
+                                             m::pow(P(m_p.RHO, k, j, i), floors.gamma1) /
+                                             (floors.gamma1 - 1.),
+                                      umin_geom)
+                                : umin_geom;
 
             // Don't *trigger* on umin from KTOT, just use it if we need
             if ((failed(pflag(k, j, i)) || P(m_p.RHO, k, j, i) < rhomin_geom / 10. ||
@@ -316,12 +315,15 @@ TaskStatus Inverter::Backstop(MeshBlockData<Real>* rc)
                     U(m_u.RHO, k, j, i) / (m::sqrt(-G.gcon(Loci::center, j, i, 0, 0)) *
                                               G.gdet(Loci::center, j, i)));
                 const Real W = GRMHD::lorentz_calc(G, uvec, k, j, i, Loci::center);
+                Real lambda[2];
+                fill_eos_lambda(P, m_p, k, j, i, lambda);
 
                 // Calculate the total energy of the fluid at rest
                 const Real uvec0[NVEC] = {0.};
                 Real rho_ut = 0.;
                 Real Trest[GR_DIM] = {0.};
-                GRMHD::p_to_u_mhd(G, D, umin, uvec0, B_P, eos, k, j, i, rho_ut, Trest);
+                GRMHD::p_to_u_mhd(
+                    G, D, umin, uvec0, B_P, eos, lambda, k, j, i, rho_ut, Trest);
                 // If we're below the at-rest energy (within tolerance),
                 // just bump it to that and kill all kinetic energy
                 // Also use this if v=0.
@@ -342,7 +344,8 @@ TaskStatus Inverter::Backstop(MeshBlockData<Real>* rc)
                     {
                         // Calculate tensor (we only need T0)
                         Real rho_ut, T[GR_DIM];
-                        GRMHD::p_to_u_mhd(G, D, u, uvec0, B_P, eos, k, j, i, rho_ut, T);
+                        GRMHD::p_to_u_mhd(
+                            G, D, u, uvec0, B_P, eos, lambda, k, j, i, rho_ut, T);
                         // Check that it matches
                         return (T[0] - U(m_u.UU, k, j, i)) / U(m_u.UU, k, j, i);
                     };
@@ -404,7 +407,7 @@ TaskStatus Inverter::Backstop(MeshBlockData<Real>* rc)
                         // Calculate tensor (we only need T0)
                         Real rho_ut, T[GR_DIM];
                         GRMHD::p_to_u_mhd(
-                            G, D * iW, umin, uv, B_P, eos, k, j, i, rho_ut, T);
+                            G, D * iW, umin, uv, B_P, eos, lambda, k, j, i, rho_ut, T);
                         // Check that it matches
                         return (T[0] - U(m_u.UU, k, j, i)) / U(m_u.UU, k, j, i);
                     };

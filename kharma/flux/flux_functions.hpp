@@ -63,7 +63,9 @@ KOKKOS_FORCEINLINE_FUNCTION void calc_tensor(const Global& P, const VarMap& m_p,
 {
     // calc pressure
     Real sie = P(m_p.UU, k, j, i) / P(m_p.RHO, k, j, i); // specific internal energy
-    Real pg = eos.PressureFromDensityInternalEnergy(P(m_p.RHO, k, j, i), sie);
+    Real lambda[2];
+    fill_eos_lambda(P, m_p, k, j, i, lambda);
+    Real pg = eos.PressureFromDensityInternalEnergy(P(m_p.RHO, k, j, i), sie, lambda);
     if ((m_p.Q >= 0 || m_p.DP >= 0) && emhd_params.feedback) {
         // Apply higher-order terms conversion if necessary
         Real qtilde = 0., dPtilde = 0.;
@@ -73,7 +75,8 @@ KOKKOS_FORCEINLINE_FUNCTION void calc_tensor(const Global& P, const VarMap& m_p,
         const Real ef =
             P(m_p.RHO, k, j, i) + P(m_p.UU, k, j, i) + pg; // \rho * h = rho + u + P.
         const Real cs2 =
-            eos.BulkModulusFromDensityInternalEnergy(P(m_p.RHO, k, j, i), sie) / ef;
+            eos.BulkModulusFromDensityInternalEnergy(P(m_p.RHO, k, j, i), sie, lambda) /
+            ef;
         // TODO_EOS: Is this actually what's needed here?
         const Real Theta = pg / P(m_p.RHO, k, j, i);
         // const Real Theta = (gam - 1) * P(m_p.UU, k, j, i) / P(m_p.RHO, k, j, i);
@@ -146,6 +149,9 @@ KOKKOS_FORCEINLINE_FUNCTION void prim_to_flux(const GRCoordinates& G, const Glob
             }
         }
     }
+
+    // Ye
+    if (m_u.YE >= 0) flux[m_u.YE] = flux[m_u.RHO] * P(m_p.YE, k, j, i);
 
     // EMHD Variables: advect like rho
     if (m_u.Q >= 0) flux[m_u.Q] = P(m_p.Q, k, j, i) * D.ucon[dir] * gdet;
@@ -230,6 +236,9 @@ KOKKOS_FORCEINLINE_FUNCTION void prim_to_flux(const GRCoordinates& G, const Glob
             }
         }
     }
+
+    // Ye
+    if (m_u.YE >= 0) flux(m_u.YE, k, j, i) = flux(m_u.RHO, k, j, i) * P(m_p.YE, k, j, i);
 
     // EMHD Variables: advect like rho
     if (m_u.Q >= 0) flux(m_u.Q, k, j, i) = P(m_p.Q, k, j, i) * D.ucon[dir] * gdet;
@@ -418,8 +427,11 @@ KOKKOS_FORCEINLINE_FUNCTION void vchar(const GRCoordinates& G, const Global& P,
     // take care of making sure the sound speed is less than c. Check it out later
     // https://lanl.github.io/singularity-eos/main/src/modifiers.html
     const Real sie = P(m.UU, k, j, i) / P(m.RHO, k, j, i);
-    const Real pg = eos.PressureFromDensityInternalEnergy(P(m.RHO, k, j, i), sie);
-    const Real bulk = eos.BulkModulusFromDensityInternalEnergy(P(m.RHO, k, j, i), sie);
+    Real lambda[2];
+    fill_eos_lambda(P, m, k, j, i, lambda);
+    const Real pg = eos.PressureFromDensityInternalEnergy(P(m.RHO, k, j, i), sie, lambda);
+    const Real bulk =
+        eos.BulkModulusFromDensityInternalEnergy(P(m.RHO, k, j, i), sie, lambda);
     const Real ef = P(m.RHO, k, j, i) + pg + P(m.UU, k, j, i);
     const Real gam = bulk / pg;
 

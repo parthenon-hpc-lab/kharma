@@ -1,0 +1,107 @@
+# SFHo nuclear-EOS shock tube
+# Miller, Ryan & Dolence, ApJS 241, 30 (2019) [nubhlight]
+# Also Sec. IV.1.2 / Fig. 5 of the Phoebus paper (Barker et al., arXiv:2410.09146)
+#
+# Left:  rho = 1e11 g/cm^3, P = 2.231e31 erg/cm^3, Ye = 0.3
+# Right: rho = 0.25e11 g/cm^3, P = 2.232e30 erg/cm^3, Ye = 0.5
+# v = 0 both sides, unmagnetized. Domain [0,300] km, discontinuity at 150 km.
+#
+# Unit scale chosen so rhoL comes out to exactly 1.0 in code units:
+#   geom_length_cm = 3e7   -> domain width (300 km) = 1 code length unit
+#   fluid_mass_g   = 2.7e33 -> mass_density_ = fluid_mass_g / geom_length_cm^3 = 1e11 g/cm^3
+# (NOT the same fluid_mass_g Phoebus's own shocktube_stellarcollapse.pin uses --
+#  that file's own comment puts its density scale at ~1e9 g/cm^3, which doesn't match
+#  the paper's stated 1e11 g/cm^3. This file targets the paper's number directly.)
+
+<parthenon/job>
+problem_id = shock
+
+<parthenon/mesh>
+nx1         = 1024
+x1min       = 0
+x1max       = 1
+
+nx2         = 1
+x2min       = 0
+x2max       = 1
+
+nx3         = 1
+x3min       = 0
+x3max       = 1
+
+<parthenon/meshblock>
+nx1 = 512
+nx2 = 1
+nx3 = 1
+
+<coordinates>
+base = cartesian_minkowski
+transform = null
+
+<parthenon/time>
+tlim = .75
+integrator = rk2
+
+<GRMHD>
+cfl = 0.8
+#reconstruction = weno5
+reconstruction = linear_mc
+
+<boundaries>
+inner_x1 = outflow
+outer_x1 = outflow
+
+<floors>
+disable_floors = false
+
+<inverter>
+type = kastaun
+
+<eos>
+type = StellarCollapse
+filename = /Users/miah/Astro/CCSN/eos/stellarcollapse/SFHo.h5
+use_sp5 = false
+save_sp5 = true
+# Once eos.sp5 has been written out by a first run, switch to:
+#filename = eos.sp5
+#use_sp5 = true
+
+<debug>
+flag_verbose = 2
+
+<fluid>
+Ye = true
+
+<shock>
+rhoL = 1.0
+PL = 0.2482
+YeL = 0.3
+u1L = 0.0
+u2L = 0.0
+u3L = 0.0
+
+rhoR = 0.25
+PR = 0.02484
+YeR = 0.5
+u1R = 0.0
+u2R = 0.0
+u3R = 0.0
+
+<units>
+scale_free = false
+fluid_mass_g = 2.7e33
+geom_length_cm = 3e7
+
+<b_field>
+solver = flux_ct
+
+<parthenon/output0>
+file_type = hdf5
+write_xdmf = false
+dt = 0.01
+single_precision_output = true
+variables = prims, cons
+
+<parthenon/output1>
+file_type = hst
+dt = 0.01

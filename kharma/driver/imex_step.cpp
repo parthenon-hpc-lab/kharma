@@ -46,6 +46,7 @@
 #include "inverter.hpp"
 #include "ismr.hpp"
 #include "radM1.hpp"
+#include "temperature.hpp"
 #include "wind.hpp"
 // Other headers
 #include "boundaries.hpp"
@@ -76,6 +77,7 @@ TaskCollection KHARMADriver::MakeImExTaskCollection(BlockList_t& blocks, int sta
     const bool use_ismr = pkgs.count("ISMR");
     const bool use_electrons = pkgs.count("Electrons");
     const bool use_entropy = pkgs.count("Entropy");
+    const bool use_temperature = pkgs.count("Temperature");
     // Whether anything needs the Strang-split primitive-source half-steps at all
     const bool use_prim_source = Packages::AnyPrimSource(pmesh);
     const bool use_fofc = flux_pkg.Get<bool>("use_fofc");
@@ -447,13 +449,21 @@ TaskCollection KHARMADriver::MakeImExTaskCollection(BlockList_t& blocks, int sta
         auto t_set_bc = tl.AddTask(t_fix_solve,
             parthenon::ApplyBoundaryConditionsOnCoarseOrFineMD, md_sync, false);
 
+        // Recompute cached temperature from the final floored, fixed-up, boundary-filled
+        // primitives. Its lT_guess seeds the next substep's EOS root-finds.
+        auto t_temperature = t_set_bc;
+        if (use_temperature) {
+            t_temperature = tl.AddTask(
+                t_set_bc, Temperature::MeshUpdateTemperature, md_sub_step_final.get());
+        }
+
         // Strang splitting, second half: the sources advance the transported state over
         // the remaining dt/2.  Only after the last stage, so that the pair straddles the
         // whole transport step symmetrically. That symmetry is what cancels the
         // leading splitting error and keeps the composition 2nd order.
-        auto t_prim_source = t_set_bc;
+        auto t_prim_source = t_temperature;
         if (stage == integrator->nstages) {
-            t_prim_source = tl.AddTask(t_set_bc, Packages::MeshApplyPrimSource,
+            t_prim_source = tl.AddTask(t_temperature, Packages::MeshApplyPrimSource,
                 md_sub_step_final.get(), tm.time + 0.5 * integrator->dt,
                 0.5 * integrator->dt);
         }

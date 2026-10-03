@@ -42,6 +42,8 @@
 #include "kharma_driver.hpp"
 #include "pack.hpp"
 
+#include <singularity-eos/eos/eos_ideal.hpp>
+
 // Floors.  Apply limits to fluid values to maintain integrable state
 
 std::shared_ptr<KHARMAPackage> Floors::Initialize(
@@ -49,11 +51,11 @@ std::shared_ptr<KHARMAPackage> Floors::Initialize(
 {
     auto pkg = std::make_shared<KHARMAPackage>("Floors");
     Params& params = pkg->AllParams();
-
-    Real gamma_floor = pin->GetOrAddReal(
-        "floors", "gamma_floor", packages->Get("eos")->AllParams().Get<Real>("gm1") + 1);
+    const bool is_ideal =
+        pin->GetString("eos", "type") == singularity::IdealGas::EosType();
+    Real gamma1 = is_ideal ? packages->Get("eos")->Param<Real>("gm1") + 1. : 5. / 3.;
     // Parse all the particular floor values into a nice struct we can pass device-side
-    params.Add("prescription", MakePrescription(pin, gamma_floor));
+    params.Add("prescription", MakePrescription(pin, gamma1));
 
     // Frame to apply floors: usually we use normal observer frame, but
     // the option exists to use the fluid frame exclusively 'fluid' or outside a

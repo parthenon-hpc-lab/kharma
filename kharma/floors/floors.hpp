@@ -87,6 +87,7 @@ static constexpr int FIXUP_U_RANGE = ipow(2, 22);
 // Direct last-ditch fixups
 static constexpr int FIXUP_RHO_DIRECT = ipow(2, 23);
 static constexpr int FIXUP_U_DIRECT = ipow(2, 24);
+static constexpr int YE = ipow(2, 25);
 // Lowest flag value. Needed for combining floor and other return flags
 static constexpr int MINIMUM = GEOM_RHO;
 
@@ -99,7 +100,7 @@ static const std::map<int, std::string> flag_names = {
     {GEOM_U, "GEOM_U: Geometric floor on internal energy"},
     {B_RHO, "B_RHO: Ceiling on plasma sigma"}, {B_U, "B_U: Ceiling on plasma beta"},
     {GAMMA, "GAMMA: Direct limit on Lorentz factor"}, {TEMP, "TEMP: Temperature ceiling"},
-    {KTOT, "KTOT: Entropy ceiling"},
+    {KTOT, "KTOT: Entropy ceiling"}, {YE, "YE: Electron fraction bounds"},
     {GEOM_RHO_FLUX,
         "GEOM_RHO_FLUX: Geometric rho floor at face or reconstruction fallback"},
     {GEOM_U_FLUX, "GEOM_U_FLUX: Geometric u floor at face or reconstruction fallback"},
@@ -133,8 +134,8 @@ enum class InjectionFrame {
 class Prescription
 {
   public:
-    Real gamma_floor;
     // Constant sanity limits
+    Real gamma1;
     Real rho_min_const, u_min_const;
     // Purely geometric limits
     Real rho_min_geom, u_min_geom, r_char, floors_switch_r;
@@ -155,14 +156,14 @@ class Prescription
 };
 
 inline Prescription MakePrescription(
-    parthenon::ParameterInput* pin, Real gamma_floor, std::string block = "floors")
+    parthenon::ParameterInput* pin, Real gamma1, std::string block = "floors")
 {
     Prescription p;
     // Floor parameters
 
     p.urad_floor = pin->GetOrAddReal(block, "urad_floor", 1.e-20);
 
-    p.gamma_floor = gamma_floor;
+    p.gamma1 = gamma1;
     if (pin->GetBoolean("coordinates", "spherical")) {
         // In spherical systems, floors drop as r^2, so set them higher by default
         p.rho_min_geom = pin->GetOrAddReal(block, "rho_min_geom", 1.e-6);

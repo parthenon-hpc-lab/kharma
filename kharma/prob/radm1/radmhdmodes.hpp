@@ -36,9 +36,20 @@
 #include <complex>
 
 #include "decs.hpp"
-#include "radM1_solvers.hpp"
 using namespace std::literals::complex_literals;
 using namespace parthenon;
+
+#if DISABLE_RADM1
+
+TaskStatus InitializeRadMHDModes(
+    std::shared_ptr<MeshBlockData<Real>>& rc, ParameterInput* pin)
+{
+    throw std::runtime_error("KHARMA was compiled without RadM1 support!");
+}
+
+#else
+
+#include "radM1_solvers.hpp"
 
 /**
  * Initialization for different analytic wave modes in magnetized plasma.
@@ -312,3 +323,4 @@ TaskStatus InitializeRadMHDModes(
 
     return TaskStatus::complete;
 }
+#endif // DISABLE_RADM1

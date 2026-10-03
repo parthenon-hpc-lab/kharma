@@ -57,12 +57,14 @@
 #include "ismr.hpp"
 #include "kharma_driver.hpp"
 #include "reductions.hpp"
+#include "temperature.hpp"
 
 // Out of the package modification units.
 #include "units.hpp"
 // Out of the package modification RADM1.
 #include "radM1.hpp"
 #include "wind.hpp"
+#include "ye.hpp"
 
 #include "bondi.hpp"
 #include "boundaries.hpp"
@@ -413,9 +415,24 @@ Packages_t KHARMA::ProcessPackages(std::unique_ptr<ParameterInput>& pin)
     // Driver package is the foundation
     auto t_driver = tl.AddTask(
         t_none, KHARMA::AddPackage, packages, KHARMADriver::Initialize, pin.get());
+
     // Enable eos package
     auto t_eos = tl.AddTask(
         t_driver, KHARMA::AddPackage, packages, Microphysics::EOS::Initialize, pin.get());
+    // Ye/composition tracking, needed by tabulated EOS (stellarcollapse)
+    bool ye_on = pin->GetOrAddBoolean("fluid", "Ye", false);
+    auto t_ye = t_eos;
+    if (ye_on) {
+        t_ye = tl.AddTask(t_eos, KHARMA::AddPackage, packages, Ye::Initialize, pin.get());
+    }
+    // Cached temperature / EOS root-find guess. Only useful with a tabulated EOS,
+    // so it's tied to the same flag as Ye
+    auto t_temperature = t_eos;
+    if (ye_on) {
+        t_temperature = tl.AddTask(
+            t_eos, KHARMA::AddPackage, packages, Temperature::Initialize, pin.get());
+    }
+
     // GRMHD needs globals to mark packages
     auto t_grmhd = tl.AddTask(
         t_globals | t_eos, KHARMA::AddPackage, packages, GRMHD::Initialize, pin.get());
@@ -501,11 +518,16 @@ Packages_t KHARMA::ProcessPackages(std::unique_ptr<ParameterInput>& pin)
     // Entropy tracking (Ktot, & optionally idealized/advected Ktot_adv) is independent of
     // any package that might use it, but Electrons relies on it to get the fluid's
     // current & purely-advected entropy, so it's forced on whenever Electrons is.
-    bool entropy_on = pin->GetOrAddBoolean("entropy", "on", !simple_driver);
+    const bool is_ideal = pin->GetOrAddString("eos", "type", "IdealGas") == "IdealGas";
+    bool entropy_on = pin->GetOrAddBoolean("entropy", "on", !simple_driver && is_ideal);
     if (pin->GetOrAddBoolean("electrons", "on", false)) {
+        PARTHENON_REQUIRE(is_ideal, "Electron heating requires the IdealGas EOS!");
         entropy_on = true;
         pin->SetBoolean("entropy", "on", true);
     }
+    PARTHENON_REQUIRE(
+        !entropy_on || is_ideal, "Entropy tracking requires the IdealGas EOS!");
+
     auto t_entropy = t_grmhd;
     if (entropy_on) {
         t_entropy = tl.AddTask(

@@ -32,7 +32,6 @@
  *  OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 #include "radM1.hpp"
-#include "radM1_solvers.hpp"
 
 #include "domain.hpp"
 #include "inverter.hpp"
@@ -41,6 +40,28 @@
 #include "units.hpp"
 #include <limits>
 #include <stdexcept>
+
+#if DISABLE_RADM1
+
+std::shared_ptr<KHARMAPackage> RadM1::Initialize(
+    ParameterInput* pin, std::shared_ptr<Packages_t>& packages)
+{
+    throw std::runtime_error("KHARMA was compiled without RadM1 support!");
+}
+
+void RadM1::ApplyRadM1Floors(MeshBlockData<Real>* rc, IndexDomain domain)
+{
+    throw std::runtime_error("KHARMA was compiled without RadM1 support!");
+}
+
+TaskStatus RadM1::BlockPtoU(MeshBlockData<Real>* rc, IndexDomain domain, bool coarse)
+{
+    throw std::runtime_error("KHARMA was compiled without RadM1 support!");
+}
+
+#else
+
+#include "radM1_solvers.hpp"
 
 std::shared_ptr<KHARMAPackage> RadM1::Initialize(
     ParameterInput* pin, std::shared_ptr<Packages_t>& packages)
@@ -565,3 +586,4 @@ TaskStatus RadM1::PostStepDiagnostics(const SimTime& tm, MeshData<Real>* md)
 
     return TaskStatus::complete;
 }
+#endif // DISABLE_RADM1
