@@ -66,7 +66,6 @@ TaskStatus ApplyFloorsInFrame(MeshData<Real>* md, IndexDomain domain)
 
     const auto& eos_params = pmb0->packages.Get("eos")->AllParams();
     auto eos = eos_params.Get<Microphysics::EOS::EOS>("d.EOS");
-    
 
     const EMHD::EMHD_parameters& emhd_params = EMHD::GetEMHDParameters(pmb0->packages);
     const Real switch_r =
@@ -101,16 +100,17 @@ TaskStatus ApplyFloorsInFrame(MeshData<Real>* md, IndexDomain domain)
                 // constexpr ifs
                 if (frame == InjectionFrame::mixed_fluid_normal) {
                     if (G.r(k, j, i) > switch_r) {
-                        pflag_l = apply_floors<InjectionFrame::fluid>(G, P(b), m_p, eos, floors.gamma1, 
-                            k, j, i, floor_vals(b, rhofi, k, j, i),
+                        pflag_l = apply_floors<InjectionFrame::fluid>(G, P(b), m_p, eos,
+                            floors.gamma1, k, j, i, floor_vals(b, rhofi, k, j, i),
                             floor_vals(b, ufi, k, j, i), U(b), m_u);
                     } else {
                         // TODO should mixed frames respect Kastaun vs 1Dw?
                         // Since no prior simulations use mixed frames thus requiring
                         // back-compat, I said no
                         pflag_l = apply_floors<InjectionFrame::normal_kastaun>(G, P(b),
-                            m_p, eos, floors.gamma1, k, j, i, floor_vals(b, rhofi, k, j, i),
-                            floor_vals(b, ufi, k, j, i), U(b), m_u);
+                            m_p, eos, floors.gamma1, k, j, i,
+                            floor_vals(b, rhofi, k, j, i), floor_vals(b, ufi, k, j, i),
+                            U(b), m_u);
                     }
                 } else if (frame == InjectionFrame::mixed_normal_drift) {
                     FourVectors Dtmp;
@@ -119,18 +119,19 @@ TaskStatus ApplyFloorsInFrame(MeshData<Real>* md, IndexDomain domain)
                         m::min(P(b, m_p.RHO, k, j, i), P(b, m_p.UU, k, j, i)) /
                         dot(Dtmp.bcon, Dtmp.bcov);
                     if (mag_switch < switch_beta) {
-                        pflag_l = apply_floors<InjectionFrame::drift>(G, P(b), m_p, eos, floors.gamma1,
-                            k, j, i, floor_vals(b, rhofi, k, j, i),
+                        pflag_l = apply_floors<InjectionFrame::drift>(G, P(b), m_p, eos,
+                            floors.gamma1, k, j, i, floor_vals(b, rhofi, k, j, i),
                             floor_vals(b, ufi, k, j, i), U(b), m_u);
                     } else {
                         pflag_l = apply_floors<InjectionFrame::normal_kastaun>(G, P(b),
-                            m_p, eos, floors.gamma1, k, j, i, floor_vals(b, rhofi, k, j, i),
-                            floor_vals(b, ufi, k, j, i), U(b), m_u);
+                            m_p, eos, floors.gamma1, k, j, i,
+                            floor_vals(b, rhofi, k, j, i), floor_vals(b, ufi, k, j, i),
+                            U(b), m_u);
                     }
                 } else {
-                    pflag_l = apply_floors<frame>(G, P(b), m_p, eos, floors.gamma1, k, j, i,
-                        floor_vals(b, rhofi, k, j, i), floor_vals(b, ufi, k, j, i), U(b),
-                        m_u);
+                    pflag_l = apply_floors<frame>(G, P(b), m_p, eos, floors.gamma1, k, j,
+                        i, floor_vals(b, rhofi, k, j, i), floor_vals(b, ufi, k, j, i),
+                        U(b), m_u);
                 }
 
                 // Record the pflag if we applied normal floors -- successful or not
