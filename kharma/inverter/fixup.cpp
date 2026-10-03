@@ -295,8 +295,8 @@ TaskStatus Inverter::Backstop(MeshBlockData<Real>* rc)
             const Real umin =
                 (m_p.KTOT >= 0)
                     ? m::max(P(m_p.KTOT, k, j, i) *
-                                 m::pow(P(m_p.RHO, k, j, i), floors.gamma_floor) /
-                                 (floors.gamma_floor - 1.),
+                                 m::pow(P(m_p.RHO, k, j, i), floors.gamma1) /
+                                 (floors.gamma1 - 1.),
                           umin_geom)
                     : umin_geom;
 
