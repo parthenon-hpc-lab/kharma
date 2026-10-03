@@ -271,7 +271,7 @@ std::shared_ptr<KHARMAPackage> Flux::Initialize(
             Metadata m = Metadata(
                 {Metadata::Real, Metadata::Cell, Metadata::Derived, Metadata::OneCopy});
             pkg->AddField("Flux.fofc_pcp_alpha", m);
-            pkg->AddField("Flux.fofc_pcp_wsum", m);
+            // pkg->AddField("Flux.fofc_pcp_wsum", m);
         }
 
         // Flag for whether FOFC was applied, for diagnostics
