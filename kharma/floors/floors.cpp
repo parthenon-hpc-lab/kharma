@@ -50,10 +50,10 @@ std::shared_ptr<KHARMAPackage> Floors::Initialize(
     auto pkg = std::make_shared<KHARMAPackage>("Floors");
     Params& params = pkg->AllParams();
 
-    Real gamma_floor = pin->GetOrAddReal(
-        "floors", "gamma_floor", packages->Get("eos")->AllParams().Get<Real>("gm1") + 1);
+    Real gamma1 = pin->GetOrAddReal(
+        "floors", "gamma1", packages->Get("eos")->AllParams().Get<Real>("gm1") + 1);
     // Parse all the particular floor values into a nice struct we can pass device-side
-    params.Add("prescription", MakePrescription(pin, gamma_floor));
+    params.Add("prescription", MakePrescription(pin, gamma1));
 
     // Frame to apply floors: usually we use normal observer frame, but
     // the option exists to use the fluid frame exclusively 'fluid' or outside a
@@ -278,8 +278,12 @@ TaskStatus Floors::ApplyInitialFloors(
                 determine_floors(G, P, m_p, k, j, i, floors, rhoflr_max, uflr_max);
             if (fflag) {
                 apply_ceilings(G, P, m_p, k, j, i, floors, U, m_u);
+                // It should take gamma here in the place of 0.0. But it is not needed for
+                // the fluid frame apply_floors So instead of pulling gamma here
+                // unnecesarilly, I'm just passing 0.0 In case you don't agree, complain
+                // with Cora.
                 apply_floors<InjectionFrame::fluid>(
-                    G, P, m_p, eos, k, j, i, rhoflr_max, uflr_max, U, m_u);
+                    G, P, m_p, eos, 0.0, k, j, i, rhoflr_max, uflr_max, U, m_u);
                 // P->U for any modified zones
                 Flux::p_to_u_mhd(
                     G, P, m_p, emhd_params, eos, k, j, i, U, m_u, Loci::center);
