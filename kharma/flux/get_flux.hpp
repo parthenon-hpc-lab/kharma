@@ -98,6 +98,8 @@ inline TaskStatus GetFlux(MeshData<Real>* md)
         rad_opac.const_kappa_sc = rad_pars.Get<Real>("const_kappa_sc");
         rad_opac.units_cgs =
             packages.Get("Units")->AllParams().Get<Units::UnitConversions>("unit_conv");
+        rad_opac.mean_molecular_weight = rad_pars.Get<Real>("mean_molecular_weight");
+        rad_opac.regime = rad_pars.Get<RadM1::RadOpac::FitType>("regime");
         if (packages.AllPackages().count("opacity")) {
             rad_opac.sing_opac =
                 packages.Get("opacity")->AllParams().Get<Microphysics::Opacities>(

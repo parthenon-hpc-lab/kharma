@@ -636,6 +636,10 @@ KOKKOS_INLINE_FUNCTION int determine_geo_floors(const GRCoordinates& G, Global& 
     // Record Geometric floor hits
     fflag |= (rhoflr_geom > P(m.RHO, k, j, i)) * FFlag::GEOM_RHO_FLUX;
     fflag |= (uflr_geom > P(m.UU, k, j, i)) * FFlag::GEOM_U_FLUX;
+
+    // if(m.U1_RAD >= 0){
+    //     fflag |= (floors.urad_floor > P(m.UU_RAD, k, j, i)) * FFlag::GEOM_RHO_FLUX;
+    // }
     return fflag;
 }
 

@@ -4,7 +4,7 @@
 problem_id = shock
 
 <parthenon/mesh>
-nx1 = 800
+nx1 = 1200
 x1min = -15.0
 x1max = 15.0
 
@@ -17,7 +17,7 @@ x3min = 0.0
 x3max = 1.0
 
 <parthenon/meshblock>
-nx1 = 400
+nx1 = 1200
 nx2 = 1
 nx3 = 1
 
