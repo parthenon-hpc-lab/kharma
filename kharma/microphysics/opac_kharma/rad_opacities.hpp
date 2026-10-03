@@ -41,6 +41,7 @@ class RadOpac
     Real const_kappa_a;
     Real const_kappa_sc;
     Real mean_molecular_weight;
+    bool use_bremsstrahlung, use_synchrotron, use_tops_table;
     Units::UnitConversions units_cgs;
     Microphysics::Opacities sing_opac;
     enum class FitType { AGN, XRB };
@@ -70,8 +71,11 @@ class RadOpac
                 return 0.4 * rho_cgs * units_cgs.GetLengthCodeToCGS();
             }
             default: {
-                return sing_opac.PlanckMeanAbsorptionCoefficient(rho, Tg) +
-                       synchrotron(rho, Tg, Trad, bsq);
+                Real kappa = 0.0;
+                if (use_bremsstrahlung) kappa += sing_opac.PlanckMeanAbsorptionCoefficient(rho, Tg);
+                if (use_synchrotron)    kappa += synchrotron(rho, Tg, Trad, bsq);
+                if (use_tops_table)     kappa += sing_opac.TopsTableAbsorptionCoefficient(rho, Tg);
+                return kappa;
             }
         }
     }

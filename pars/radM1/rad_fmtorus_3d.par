@@ -109,8 +109,9 @@ fluid_density_cgs = 1.e-6
 # type here sets if you wanna handle the opacities yourself or give it to singularity opac
 # default, you handle it, other types can be seen in radM1.hpp: OpacityType.
 type = default
-opac_kind = bremsstrahlung
+opac_kind = bremsstrahlung, synchrotron, tops_table
 s_opac_kind = thomson
+tops_table_file = "../../opacities/solar_gray.sp5"
 
 
 <debug>

@@ -50,11 +50,12 @@ class Opacities
     Opacities() = default;
     KOKKOS_FUNCTION
     Opacities(const Opacity& opac, const MeanOpacity& m_opac, const SOpacity& s_opac,
-        const MeanSOpacity& m_s_opac)
+        const MeanSOpacity& m_s_opac, const MeanOpacity& m_opac_tops)
         : opac_(opac)
         , m_opac_(m_opac)
         , s_opac_(s_opac)
         , m_s_opac_(m_s_opac)
+        , m_opac_tops_(m_opac_tops)
     {}
 
     /// Radiation equation of state calls
@@ -130,6 +131,12 @@ class Opacities
         return m_opac_.RosselandGroupAbsorptionCoefficient(rho, T, 0);
     }
 
+    KOKKOS_INLINE_FUNCTION
+    Real TopsTableAbsorptionCoefficient(const Real& rho, const Real& T) const
+    {
+        return m_opac_tops_.PlanckGroupAbsorptionCoefficient(rho, T, 0);
+    }
+
     /// Mean scattering opacities
     KOKKOS_INLINE_FUNCTION
     Real RosselandMeanScatteringCoefficient(const Real& rho, const Real& T) const
@@ -142,6 +149,7 @@ class Opacities
     MeanOpacity m_opac_;
     SOpacity s_opac_;
     MeanSOpacity m_s_opac_;
+    MeanOpacity m_opac_tops_;
 };
 
 namespace Opacity

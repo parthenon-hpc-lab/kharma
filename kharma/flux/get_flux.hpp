@@ -100,6 +100,9 @@ inline TaskStatus GetFlux(MeshData<Real>* md)
             packages.Get("Units")->AllParams().Get<Units::UnitConversions>("unit_conv");
         rad_opac.mean_molecular_weight = rad_pars.Get<Real>("mean_molecular_weight");
         rad_opac.regime = rad_pars.Get<RadM1::RadOpac::FitType>("regime");
+        rad_opac.use_bremsstrahlung = packages.Get("opacity")->AllParams().Get<bool>("use_bremsstrahlung");
+        rad_opac.use_synchrotron = packages.Get("opacity")->AllParams().Get<bool>("use_synchrotron");
+        rad_opac.use_tops_table = packages.Get("opacity")->AllParams().Get<bool>("use_tops_table");
         if (packages.AllPackages().count("opacity")) {
             rad_opac.sing_opac =
                 packages.Get("opacity")->AllParams().Get<Microphysics::Opacities>(

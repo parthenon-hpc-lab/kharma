@@ -361,6 +361,9 @@ void RadM1::AddSourceImplicitly(
         rad_opac.const_kappa_sc = params.Get<Real>("const_kappa_sc");
         rad_opac.mean_molecular_weight = params.Get<Real>("mean_molecular_weight");
         rad_opac.regime = params.Get<RadOpac::FitType>("regime");
+        rad_opac.use_bremsstrahlung = pmb->packages.Get("opacity")->AllParams().Get<bool>("use_bremsstrahlung");
+        rad_opac.use_synchrotron = pmb->packages.Get("opacity")->AllParams().Get<bool>("use_synchrotron");
+        rad_opac.use_tops_table = pmb->packages.Get("opacity")->AllParams().Get<bool>("use_tops_table");
         rad_opac.units_cgs =
             pmb->packages.Get("Units")->AllParams().Get<Units::UnitConversions>(
                 "unit_conv");
