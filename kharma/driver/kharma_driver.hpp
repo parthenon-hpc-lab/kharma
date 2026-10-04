@@ -179,10 +179,9 @@ class KHARMADriver : public MultiStageDriver
      */
     static TaskStatus SyncAllBounds(std::shared_ptr<MeshData<Real>>& md);
 
-    template<typename MDType>
-    static TaskStatus WeightedSumData(const std::vector<MDType>& flags,
-        MeshData<Real>* in1, MeshData<Real>* in2, const Real w1, const Real w2,
-        MeshData<Real>* out)
+    template<typename TFlags, typename T>
+    static TaskStatus WeightedSumData(const TFlags& flags, T* in1, T* in2, const Real w1,
+        const Real w2, MeshData<Real>* out)
     {
         Kokkos::Profiling::pushRegion("Task_WeightedSumData");
         const auto& x = in1->PackVariables(flags);
@@ -201,7 +200,7 @@ class KHARMADriver : public MultiStageDriver
                         w1 * x(b, CC, l, k, j, i) + w2 * y(b, CC, l, k, j, i);
                 }
             });
-        Kokkos::Profiling::popRegion(); // Task_WeightedSumDataFace
+        Kokkos::Profiling::popRegion(); // Task_WeightedSumData
         return TaskStatus::complete;
     }
 
@@ -213,7 +212,7 @@ class KHARMADriver : public MultiStageDriver
     template<typename T>
     static TaskStatus Copy(std::vector<MetadataFlag> flags, T* source, T* dest)
     {
-        return Update::WeightedSumData<std::vector<MetadataFlag>, T>(
+        return WeightedSumData<std::vector<MetadataFlag>, T>(
             flags, source, source, 1., 0., dest);
     }
 
@@ -254,7 +253,7 @@ class KHARMADriver : public MultiStageDriver
     static TaskStatus Scale(
         std::vector<std::string> vars, MeshData<Real>* source, Real norm)
     {
-        return Update::WeightedSumData<std::vector<std::string>, MeshData<Real>>(
+        return WeightedSumData<std::vector<std::string>, MeshData<Real>>(
             vars, source, source, norm, 0., source);
     }
     static TaskStatus ScaleFace(
