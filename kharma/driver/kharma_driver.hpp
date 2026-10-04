@@ -179,6 +179,32 @@ class KHARMADriver : public MultiStageDriver
      */
     static TaskStatus SyncAllBounds(std::shared_ptr<MeshData<Real>>& md);
 
+    template<typename MDType>
+    static TaskStatus WeightedSumData(const std::vector<MDType>& flags,
+        MeshData<Real>* in1, MeshData<Real>* in2, const Real w1, const Real w2,
+        MeshData<Real>* out)
+    {
+        Kokkos::Profiling::pushRegion("Task_WeightedSumData");
+        const auto& x = in1->PackVariables(flags);
+        const auto& y = in2->PackVariables(flags);
+        const auto& z = out->PackVariables(flags);
+        parthenon::par_for(DEFAULT_LOOP_PATTERN, "WeightedSumData", DevExecSpace(), 0,
+            x.GetDim(5) - 1, 0, x.GetDim(4) - 1, 0, x.GetDim(3) - 1, 0, x.GetDim(2) - 1,
+            0, x.GetDim(1) - 1,
+            KOKKOS_LAMBDA(const int b, const int l, const int k, const int j, const int i)
+            {
+                // TOOD(someone) This is potentially dangerous and/or not intended
+                // behavior as we still may want to update (or populate) z if any of those
+                // vars are not allocated yet.
+                if (x.IsAllocated(b, l) && y.IsAllocated(b, l) && z.IsAllocated(b, l)) {
+                    z(b, CC, l, k, j, i) =
+                        w1 * x(b, CC, l, k, j, i) + w2 * y(b, CC, l, k, j, i);
+                }
+            });
+        Kokkos::Profiling::popRegion(); // Task_WeightedSumDataFace
+        return TaskStatus::complete;
+    }
+
     // TODO swapped versions of these
     /**
      * Copy variables matching 'flags' from 'source' to 'dest'.

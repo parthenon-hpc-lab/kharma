@@ -600,10 +600,10 @@ TaskID KHARMADriver::AddStateUpdate(TaskID& t_start, TaskList& tl,
     std::vector<MetadataFlag> flags_face = flags;
     flags_face.push_back(Metadata::Face);
     // TODO splitting this is stupid, but maybe the parallelization actually helps? Eh.
-    auto t_avg_data_c = tl.AddTask(t_start,
-        Update::WeightedSumData<std::vector<MetadataFlag>, MeshData<Real>>,
-        std::vector<MetadataFlag>(flags_cell), md_sub_step_init, md_full_step_init,
-        integrator->gam0[stage - 1], integrator->gam1[stage - 1], md_update);
+    auto t_avg_data_c =
+        tl.AddTask(t_start, WeightedSumData<std::vector<MetadataFlag>, MeshData<Real>>,
+            std::vector<MetadataFlag>(flags_cell), md_sub_step_init, md_full_step_init,
+            integrator->gam0[stage - 1], integrator->gam1[stage - 1], md_update);
     auto t_avg_data_f = t_avg_data_c;
     if (update_face) {
         t_avg_data_f = tl.AddTask(t_start, WeightedSumDataFace<MetadataFlag>,
@@ -612,7 +612,7 @@ TaskID KHARMADriver::AddStateUpdate(TaskID& t_start, TaskList& tl,
     }
     // apply du/dt to the result
     auto t_update_c = tl.AddTask(t_avg_data_c | t_avg_data_f,
-        Update::WeightedSumData<std::vector<MetadataFlag>, MeshData<Real>>,
+        WeightedSumData<std::vector<MetadataFlag>, MeshData<Real>>,
         std::vector<MetadataFlag>(flags_cell), md_update, md_flux_src, 1.0,
         integrator->beta[stage - 1] * integrator->dt, md_update);
     auto t_update_f = t_update_c;
@@ -657,10 +657,10 @@ TaskID KHARMADriver::AddStateUpdateIdealGuess(TaskID& t_start, TaskList& tl,
     std::vector<MetadataFlag> flags_face = flags;
     flags_face.push_back(Metadata::Face);
     // TODO splitting this is stupid, but maybe the parallelization actually helps? Eh.
-    auto t_avg_data_c = tl.AddTask(t_start,
-        Update::WeightedSumData<std::vector<MetadataFlag>, MeshData<Real>>,
-        std::vector<MetadataFlag>(flags_cell), md_sub_step_init, md_full_step_init,
-        integrator->gam0[stage - 1], integrator->gam1[stage - 1], md_update);
+    auto t_avg_data_c =
+        tl.AddTask(t_start, WeightedSumData<std::vector<MetadataFlag>, MeshData<Real>>,
+            std::vector<MetadataFlag>(flags_cell), md_sub_step_init, md_full_step_init,
+            integrator->gam0[stage - 1], integrator->gam1[stage - 1], md_update);
     auto t_avg_data_f = t_avg_data_c;
     if (update_face) {
         t_avg_data_f = tl.AddTask(t_start, WeightedSumDataFace<MetadataFlag>,
@@ -669,7 +669,7 @@ TaskID KHARMADriver::AddStateUpdateIdealGuess(TaskID& t_start, TaskList& tl,
     }
     // apply du/dt to the result
     auto t_update_c = tl.AddTask(t_avg_data_c | t_avg_data_f,
-        Update::WeightedSumData<std::vector<MetadataFlag>, MeshData<Real>>,
+        WeightedSumData<std::vector<MetadataFlag>, MeshData<Real>>,
         std::vector<MetadataFlag>(flags_cell), md_update, md_flux_src, 1.0,
         integrator->beta[stage - 1] * integrator->dt, md_update);
     auto t_update_f = t_update_c;
