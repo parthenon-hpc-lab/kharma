@@ -455,11 +455,13 @@ TaskID KHARMADriver::AddFOFC(TaskID& t_start, TaskList& tl, MeshData<Real>* md,
         t_guess_prims, Floors::DetermineGRMHDFloors, guess, IndexDomain::entire, floors);
     // Determine which cells are FOFC in our block, put that in a new flag
     auto t_mark_fofc = tl.AddTask(t_guess_prims, Flux::MarkFOFC, guess);
-    // And clear the flags, this step was fake
-    auto t_clear_floors = tl.AddTask(
-        t_mark_fofc, KHARMADriver::Scale, std::vector<std::string>{"fflag"}, md, 0.);
-    auto t_clear_flags = tl.AddTask(
-        t_mark_fofc, KHARMADriver::Scale, std::vector<std::string>{"pflag"}, md, 0.);
+    // And clear the flags, this step was fake.  Flags are shared between all containers!
+    auto t_clear_floors = tl.AddTask(t_mark_fofc,
+        Update::SetDataToConstant<std::vector<std::string>, MeshData<Real>>,
+        std::vector<std::string>{"fflag"}, md, 0.);
+    auto t_clear_flags = tl.AddTask(t_mark_fofc,
+        Update::SetDataToConstant<std::vector<std::string>, MeshData<Real>>,
+        std::vector<std::string>{"pflag"}, md, 0.);
     // Sync the FOFC flag with neighbors
     // TODO this shouldn't be necessary, eliminate ASAP
     // std::shared_ptr<MeshData<Real>> md_shr{md, [](MeshData<Real> *) {}/*No-Op
@@ -577,8 +579,9 @@ TaskID KHARMADriver::AddFOFC_PCP(TaskID& t_start, TaskList& tl, MeshData<Real>* 
         tl.AddTask(t_guess_Bp, Inverter::MeshUtoP, guess, IndexDomain::entire, false);
     // -> this gives Ptilde which we must KEEP to the next inverter call
     // And clear any inverter flags, this step was fake
-    auto t_clear_flags = tl.AddTask(
-        t_guess_prims, KHARMADriver::Scale, std::vector<std::string>{"pflag"}, md, 0.);
+    auto t_clear_flags = tl.AddTask(t_guess_prims,
+        Update::SetDataToConstant<std::vector<std::string>, MeshData<Real>>,
+        std::vector<std::string>{"pflag"}, md, 0.);
 
     // Revise the first order corrections according to new Bf^2 - Bc^2
     auto t_fofc_pcp = tl.AddTask(t_guess_prims, Flux::FOFC_PCP, md, guess,
