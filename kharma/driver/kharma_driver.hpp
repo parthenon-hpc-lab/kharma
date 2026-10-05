@@ -187,6 +187,7 @@ class KHARMADriver : public MultiStageDriver
         const auto& x = in1->PackVariables(flags);
         const auto& y = in2->PackVariables(flags);
         const auto& z = out->PackVariables(flags);
+
         parthenon::par_for(DEFAULT_LOOP_PATTERN, "WeightedSumData", DevExecSpace(), 0,
             x.GetDim(5) - 1, 0, x.GetDim(4) - 1, 0, x.GetDim(3) - 1, 0, x.GetDim(2) - 1,
             0, x.GetDim(1) - 1,

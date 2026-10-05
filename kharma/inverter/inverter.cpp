@@ -247,8 +247,8 @@ int Inverter::CountPFlags(MeshData<Real>* md)
 void Inverter::PreStepWork(Mesh* pmesh, ParameterInput* pin, const SimTime& tm)
 {
     // Clear all floor flags before each step
-    // auto md = pmesh->mesh_data.Get().get();
-    // KHARMADriver::Scale(std::vector<std::string>{"pflag"}, md, 0.);
+    auto md = pmesh->mesh_data.Get().get();
+    Update::SetDataToConstant(std::vector<std::string>{"pflag"}, md, 0.);
 }
 
 TaskStatus Inverter::PostStepDiagnostics(const SimTime& tm, MeshData<Real>* md)
