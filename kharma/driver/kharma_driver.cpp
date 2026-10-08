@@ -387,8 +387,6 @@ TaskID KHARMADriver::AddFOFC(TaskID& t_start, TaskList& tl, MeshData<Real>* md,
 
     // FixFlux for a fake update
     auto t_fix_guess = tl.AddTask(t_start, Packages::FixFlux, md);
-    // // TODO try a flux-CT step *even if we're using Face-CT* to avoid synchronization
-    // auto t_fix_flux_ct = tl.AddTask(t_fix_guess, B_FluxCT::FixFluxTask, md);
     // Calculate and sync EMF from first-order fluxes
     std::shared_ptr<MeshData<Real>> md_shr{md, [](MeshData<Real>*)
         {
@@ -413,7 +411,7 @@ TaskID KHARMADriver::AddFOFC(TaskID& t_start, TaskList& tl, MeshData<Real>* md,
     auto t_guess_divergence = tl.AddTask(t_guess_bounds, FluxDivergence, md, guess_src,
         std::vector<MetadataFlag>{
             Metadata::Independent, Metadata::Cell, Metadata::WithFluxes},
-        3);
+        0);
     // Add geometric source term to more accurately predict floor hits.
     // Could add everything here with Packages::AddSource but would be slower
     // also would need to deal with B_CT::AddSource == flux update, which we don't
@@ -456,12 +454,12 @@ TaskID KHARMADriver::AddFOFC(TaskID& t_start, TaskList& tl, MeshData<Real>* md,
     // Determine which cells are FOFC in our block, put that in a new flag
     auto t_mark_fofc = tl.AddTask(t_guess_prims, Flux::MarkFOFC, guess);
     // And clear the flags, this step was fake.  Flags are shared between all containers!
-    auto t_clear_floors = tl.AddTask(t_mark_fofc,
-        KHARMADriver::SetDataToConstant<std::vector<std::string>, MeshData<Real>>,
-        std::vector<std::string>{"fflag"}, md, 0.);
-    auto t_clear_flags = tl.AddTask(t_mark_fofc,
-        KHARMADriver::SetDataToConstant<std::vector<std::string>, MeshData<Real>>,
-        std::vector<std::string>{"pflag"}, md, 0.);
+    auto t_clear_floors =
+        tl.AddTask(t_mark_fofc, KHARMADriver::SetDataToConstant<std::vector<std::string>>,
+            std::vector<std::string>{"fflag"}, md, 0.);
+    auto t_clear_flags =
+        tl.AddTask(t_mark_fofc, KHARMADriver::SetDataToConstant<std::vector<std::string>>,
+            std::vector<std::string>{"pflag"}, md, 0.);
     // Sync the FOFC flag with neighbors
     // TODO this shouldn't be necessary, eliminate ASAP
     // std::shared_ptr<MeshData<Real>> md_shr{md, [](MeshData<Real> *) {}/*No-Op
@@ -580,7 +578,7 @@ TaskID KHARMADriver::AddFOFC_PCP(TaskID& t_start, TaskList& tl, MeshData<Real>* 
     // -> this gives Ptilde which we must KEEP to the next inverter call
     // And clear any inverter flags, this step was fake
     auto t_clear_flags = tl.AddTask(t_guess_prims,
-        KHARMADriver::SetDataToConstant<std::vector<std::string>, MeshData<Real>>,
+        KHARMADriver::SetDataToConstant<std::vector<std::string>>,
         std::vector<std::string>{"pflag"}, md, 0.);
 
     // Revise the first order corrections according to new Bf^2 - Bc^2
