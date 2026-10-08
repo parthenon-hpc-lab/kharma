@@ -149,9 +149,7 @@ jobs:
           KAGGLE_USERNAME: ${{ secrets.KAGGLE_USERNAME }}
           KAGGLE_API_TOKEN: ${{ secrets.KAGGLE_API_TOKEN }}
         run: |
-          cd .github/script/
-
-          kaggle kernels push -p .
+          kaggle kernels push -p .github/script/
 
           echo "Code sent to Kaggle. Waiting for GPU provisioning and tests..."
 
@@ -173,8 +171,16 @@ jobs:
             fi
             sleep 30
           done
-
-# TODO pull and upload test artifacts to github
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: ${{ matrix.test_name }}-artifacts
+          path: |
+            output/tests/${{ matrix.test_name }}
+            !*.phdf
+            !*.rhdf
+            !*.xdmf
+            !*.h5
 
   # Require all tests in a single status check we can mark req'd for merge
   tests-pass-nvidia:
