@@ -133,7 +133,7 @@ enum class InjectionFrame {
 class Prescription
 {
   public:
-    Real gamma_floor;
+    Real gamma1;
     // Constant sanity limits
     Real rho_min_const, u_min_const;
     // Purely geometric limits
@@ -155,14 +155,14 @@ class Prescription
 };
 
 inline Prescription MakePrescription(
-    parthenon::ParameterInput* pin, Real gamma_floor, std::string block = "floors")
+    parthenon::ParameterInput* pin, Real gamma1, std::string block = "floors")
 {
     Prescription p;
     // Floor parameters
 
     p.urad_floor = pin->GetOrAddReal(block, "urad_floor", 1.e-20);
 
-    p.gamma_floor = gamma_floor;
+    p.gamma1 = gamma1;
     if (pin->GetBoolean("coordinates", "spherical")) {
         // In spherical systems, floors drop as r^2, so set them higher by default
         p.rho_min_geom = pin->GetOrAddReal(block, "rho_min_geom", 1.e-6);
