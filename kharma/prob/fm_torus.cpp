@@ -146,9 +146,12 @@ TaskStatus InitializeFMTorus(
                 // Out of the package modification RADM1.
                 if (use_rad) {
                     uu_rad(k, j, i) = 0.0;
-                    uvec_rad(0, k, j, i) = u_prim[0];
-                    uvec_rad(1, k, j, i) = u_prim[1];
-                    uvec_rad(2, k, j, i) = u_prim[2];
+                    // uvec_rad(0, k, j, i) = u_prim[0];
+                    // uvec_rad(1, k, j, i) = u_prim[1];
+                    // uvec_rad(2, k, j, i) = u_prim[2];
+                    uvec_rad(0, k, j, i) = 0.0;
+                    uvec_rad(1, k, j, i) = 0.0;
+                    uvec_rad(2, k, j, i) = 0.0;
                 }
             }
         });
@@ -217,7 +220,8 @@ TaskStatus InitializeFMTorus(
             u(k, j, i) /= rho_max;
 
             if (use_rad) {
-                // Following Koral initialization for fishbone moncrief
+                // start to 0.1% the value of u, just to help solver in the first initial
+                // steps.
                 RadM1::initialize_radiation_pressure(u(k, j, i), uu_rad(k, j, i));
             }
         });
@@ -227,6 +231,10 @@ TaskStatus InitializeFMTorus(
     // done in *fluid frame*, even if NOF frame is chosen (iharm3d does the same iiuc)
     // This is probably not a huge issue, just good to state explicitly
     Floors::ApplyInitialFloors(pin, rc.get(), IndexDomain::interior);
+
+    if (use_rad) {
+        RadM1::ApplyRadM1Floors(rc.get(), IndexDomain::interior);
+    }
 
     return TaskStatus::complete;
 }

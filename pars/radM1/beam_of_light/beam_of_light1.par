@@ -38,6 +38,9 @@ cfl = 0.5
 gamma = 1.6666666666666667
 reconstruction = ppm
 
+<flux>
+reconstruction_fallback = false
+
 <eos>
 type = IdealGas
 Cv = 1.0
@@ -76,10 +79,6 @@ outer_x3 = periodic
 
 <floors>
 disable_floors = true
-
-<inverter>
-backstop = false
-fix_average_neighbors = true
 
 <radM1>
 on = true

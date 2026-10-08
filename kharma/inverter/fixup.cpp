@@ -39,6 +39,7 @@
 #include "floors_functions.hpp"
 #include "flux_functions.hpp"
 #include "pack.hpp"
+#include "radM1/radM1.hpp"
 
 // phoebus includes
 #include "microphysics/eos_kharma/eos_kharma.hpp"
@@ -161,6 +162,80 @@ TaskStatus Inverter::FixUtoP(MeshBlockData<Real>* rc)
             }
         });
 
+    if (pmb->packages.AllPackages().count("RadM1")) {
+        PackIndexMap rad_prims_map;
+        auto Prad = rc->PackVariables(
+            std::vector<std::string>{"prims.u_rad", "prims.uvec_rad"}, rad_prims_map);
+        const VarMap m_prad(rad_prims_map, false);
+
+        GridScalar rinvflag = rc->Get("rinvflag").data;
+        GridScalar rimplflag = rc->Get("rimplflag").data;
+
+        const auto& rad_params = pmb->packages.Get("RadM1")->AllParams();
+        const Real erad_floor = rad_params.Get<Real>("u_rad_floor");
+        const GReal r_hor = G.coords.get_horizon();
+
+        pmb->par_for("fix_radiation", b.ks, b.ke, b.js, b.je, b.is, b.ie,
+            KOKKOS_LAMBDA (const int &k, const int &j, const int &i)
+            {
+                GReal Xembed[GR_DIM];
+                G.coord_embed(k, j, i, Loci::center, Xembed);
+                const bool inside_horizon = r_hor > 0.0 && Xembed[1] < r_hor;
+
+                const bool bad =
+                    !inside_horizon &&
+                    (failed(rinvflag(0, k, j, i)) ||
+                        rimplflag(0, k, j, i) ==
+                            static_cast<int>(RadM1::StatusImplicitStep::failure));
+                if (bad) {
+                    double wsum = 0.;
+                    double sum[4] = {0.};
+                    for (int n = -1; n <= 1; n++) {
+                        for (int m = -1; m <= 1; m++) {
+                            for (int l = -1; l <= 1; l++) {
+                                int ii = i + l, jj = j + m, kk = k + n;
+                                if (KDomain::inside(kk, jj, ii, b)) {
+                                    GReal Xembed_n[GR_DIM];
+                                    G.coord_embed(kk, jj, ii, Loci::center, Xembed_n);
+                                    const bool n_inside_horizon =
+                                        r_hor > 0.0 && Xembed_n[1] < r_hor;
+                                    const bool nbad =
+                                        n_inside_horizon ||
+                                        failed(rinvflag(0, kk, jj, ii)) ||
+                                        rimplflag(0, kk, jj, ii) ==
+                                            static_cast<int>(
+                                                RadM1::StatusImplicitStep::failure);
+                                    if (!nbad) {
+                                        double w =
+                                            1. / (m::abs(l) + m::abs(m) + m::abs(n) + 1);
+                                        wsum += w;
+                                        sum[0] += w * Prad(m_prad.UU_RAD, kk, jj, ii);
+                                        sum[1] += w * Prad(m_prad.U1_RAD, kk, jj, ii);
+                                        sum[2] += w * Prad(m_prad.U2_RAD, kk, jj, ii);
+                                        sum[3] += w * Prad(m_prad.U3_RAD, kk, jj, ii);
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    if (wsum < 1.e-10) {
+                        Prad(m_prad.UU_RAD, k, j, i) = erad_floor;
+                        Prad(m_prad.U1_RAD, k, j, i) = 0.;
+                        Prad(m_prad.U2_RAD, k, j, i) = 0.;
+                        Prad(m_prad.U3_RAD, k, j, i) = 0.;
+                    } else {
+                        Prad(m_prad.UU_RAD, k, j, i) = sum[0] / wsum;
+                        Prad(m_prad.U1_RAD, k, j, i) = sum[1] / wsum;
+                        Prad(m_prad.U2_RAD, k, j, i) = sum[2] / wsum;
+                        Prad(m_prad.U3_RAD, k, j, i) = sum[3] / wsum;
+                    }
+                }
+            });
+
+        RadM1::BlockPtoU(rc, IndexDomain::entire);
+    }
+
     EndFlag();
     return TaskStatus::complete;
 }
@@ -218,12 +293,11 @@ TaskStatus Inverter::Backstop(MeshBlockData<Real>* rc)
             determine_geo_floors(G, P, m_p, k, j, i, floors, rhomin_geom, umin_geom);
 
             const Real umin =
-                (m_p.KTOT >= 0)
-                    ? m::max(P(m_p.KTOT, k, j, i) *
-                                 m::pow(P(m_p.RHO, k, j, i), floors.gamma_floor) /
-                                 (floors.gamma_floor - 1.),
-                          umin_geom)
-                    : umin_geom;
+                (m_p.KTOT >= 0) ? m::max(P(m_p.KTOT, k, j, i) *
+                                             m::pow(P(m_p.RHO, k, j, i), floors.gamma1) /
+                                             (floors.gamma1 - 1.),
+                                      umin_geom)
+                                : umin_geom;
 
             // Don't *trigger* on umin from KTOT, just use it if we need
             if ((failed(pflag(k, j, i)) || P(m_p.RHO, k, j, i) < rhomin_geom / 10. ||
