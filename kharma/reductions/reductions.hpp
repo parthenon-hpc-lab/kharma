@@ -122,6 +122,12 @@ Real Total(MeshData<Real>* md)
     return Reductions::DomainReduction<var, UserHistoryOperation::sum, Real>(md);
 }
 
+// Jet power through a shell at the EH, or at the radius set by reductions/jet_lum_r
+Real JetLumAtEH(MeshData<Real>* md);
+Real JetLumAtR(MeshData<Real>* md);
+// Luminosity proxy as defined in Porth et al 2019, integrated over the region given there
+Real EHTLumProxy(MeshData<Real>* md);
+
 // Values gained/lost through faces
 // TODO(CEP) SPHERICAL ONLY RIGHT NOW
 template<Var var>
