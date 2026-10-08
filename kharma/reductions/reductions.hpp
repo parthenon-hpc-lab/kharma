@@ -85,7 +85,7 @@ T ConeReduction(
     MeshData<Real>* md, GReal th, int channel = -1, bool plane_outward = false)
 {
     const GReal startx[3] = {-real_max, th, -real_max};
-    const GReal stopx[3] = {-real_max, th, real_max};
+    const GReal stopx[3] = {real_max, th, real_max};
     return DomainReduction<var, op, T>(md, startx, stopx, channel, plane_outward);
 }
 template<Var var, UserHistoryOperation op, typename T>
@@ -93,7 +93,7 @@ T PlaneReduction(
     MeshData<Real>* md, GReal phi, int channel = -1, bool plane_outward = false)
 {
     const GReal startx[3] = {-real_max, -real_max, phi};
-    const GReal stopx[3] = {-real_max, real_max, phi};
+    const GReal stopx[3] = {real_max, real_max, phi};
     return DomainReduction<var, op, T>(md, startx, stopx, channel, plane_outward);
 }
 // TODO(CEP) alternate names for XYZ?  Or just don't bother
