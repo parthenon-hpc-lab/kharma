@@ -246,9 +246,21 @@ int Inverter::CountPFlags(MeshData<Real>* md)
 
 void Inverter::PreStepWork(Mesh* pmesh, ParameterInput* pin, const SimTime& tm)
 {
+    PARTHENON_INSTRUMENT
     // Clear all floor flags before each step
     auto md = pmesh->mesh_data.Get().get();
-    KHARMADriver::Scale(std::vector<std::string>{"pflag"}, md, 0.);
+    auto pflag = md->PackVariables(std::vector<std::string>{"pflag"});
+
+    const IndexRange3 b = KDomain::GetRange(md, IndexDomain::entire, false);
+    const IndexRange block = IndexRange{0, pflag.GetDim(5) - 1};
+
+    // For some reason 'SetDataToConstant' and 'WeightedSum' don't
+    // play nice with CUDA 12.8, which we use for regression tests...
+    parthenon::par_for("ResetPflag", block.s, block.e, b.ks, b.ke, b.js, b.je, b.is, b.ie,
+        KOKKOS_LAMBDA (const int &bl, const int &k, const int &j, const int &i)
+        {
+            pflag(bl, 0, k, j, i) = 0.;
+        });
 }
 
 TaskStatus Inverter::PostStepDiagnostics(const SimTime& tm, MeshData<Real>* md)
