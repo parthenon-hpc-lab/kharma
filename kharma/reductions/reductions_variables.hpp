@@ -252,7 +252,10 @@ KOKKOS_INLINE_FUNCTION Real reduction_var<Var::mdot_flux>(REDUCE_FUNCTION_ARGS)
 template<>
 KOKKOS_INLINE_FUNCTION Real reduction_var<Var::edot_flux>(REDUCE_FUNCTION_ARGS)
 {
-    return (F.flux(X1DIR, m_u.UU, k, j, i) - F.flux(X1DIR, m_u.RHO, k, j, i));
+    // flux(UU) == (T^1_0 + rho*u^1) * gdet,
+    // so this is -T^1_0 * gdet,
+    // with the same sign convention as Var::edot above
+    return -(F.flux(X1DIR, m_u.UU, k, j, i) - F.flux(X1DIR, m_u.RHO, k, j, i));
 }
 template<>
 KOKKOS_INLINE_FUNCTION Real reduction_var<Var::ldot_flux>(REDUCE_FUNCTION_ARGS)
@@ -420,7 +423,10 @@ KOKKOS_INLINE_FUNCTION Real reduction_var<Var::Uflux3U3>(REDUCE_FUNCTION_ARGS)
     return F.flux(X3DIR, m_u.U3, k, j, i);
 }
 
-// Luminosity proxy from (for example) Porth et al 2019.
+// Luminosity proxy from Porth et al 2019 (eq. 18):
+// L == \int j * gdet * dx1 * dx2 * dx3, over r_eh < r < rmax, theta_min < th < theta_max
+// (see Reductions::EHTLumProxy)
+// j == rho^3 / p^2 * exp(-C * (rho^2 / (B * p^2))^(1/3))
 template<>
 KOKKOS_INLINE_FUNCTION Real reduction_var<Var::eht_lum>(REDUCE_FUNCTION_ARGS)
 {
@@ -433,11 +439,13 @@ KOKKOS_INLINE_FUNCTION Real reduction_var<Var::eht_lum>(REDUCE_FUNCTION_ARGS)
     Real Bmag = m::sqrt(dot(Dtmp.bcon, Dtmp.bcov));
     Real j_eht =
         rho * rho * rho / Pg / Pg * m::exp(-0.2 * m::cbrt(rho * rho / (Bmag * Pg * Pg)));
-    return j_eht;
+    return j_eht * G.gdet(Loci::center, j, i);
 }
 
-// Example of checking extra conditions before adding local results:
-// sums total jet power only at exactly r=radius, for areas with sig > 1
+// Jet power: zone's contribution to the outward energy flux, minus the rest-mass
+// energy flux, summed only over magnetically-dominated (sigma = b^2/rho > 1) zones.
+// Meant to be summed over a shell, see Reductions::JetLumAtEH/JetLumAtR
+// P_jet == \int (-T^1_0 - rho * u^1) * gdet * dx2 * dx3, for sigma > 1
 // TODO version w/E&M power only.  Needs "calc_tensor_EM"
 template<>
 KOKKOS_INLINE_FUNCTION Real reduction_var<Var::jet_lum>(REDUCE_FUNCTION_ARGS)
@@ -445,11 +453,11 @@ KOKKOS_INLINE_FUNCTION Real reduction_var<Var::jet_lum>(REDUCE_FUNCTION_ARGS)
     FourVectors Dtmp;
     Real T1[GR_DIM];
     GRMHD::calc_4vecs(G, P, m_p, k, j, i, Loci::center, Dtmp);
-    Flux::calc_tensor(P, m_p, Dtmp, emhd_params, eos, k, j, i, X1DIR, T1);
-    // If sigma > 1...
-    if ((dot(Dtmp.bcon, Dtmp.bcov) / P(m_p.RHO, k, j, i)) > 1.) {
-        // Energy flux, like at EH
-        return -T1[X0DIR];
+    const Real sigma = (dot(Dtmp.bcon, Dtmp.bcov) / P(m_p.RHO, k, j, i));
+    if (sigma > 1.) {
+        Flux::calc_tensor(P, m_p, Dtmp, emhd_params, eos, k, j, i, X1DIR, T1);
+        return (-T1[X0DIR] - P(m_p.RHO, k, j, i) * Dtmp.ucon[X1DIR]) *
+               G.gdet(Loci::center, j, i);
     } else {
         return 0.;
     }

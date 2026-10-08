@@ -247,12 +247,15 @@ std::shared_ptr<KHARMAPackage> Initialize(
         hst_vars.emplace_back(parthenon::HistoryOutputVar(UserHistoryOperation::sum,
             Reductions::Total<Reductions::Var::abs_mix_T03>, "AbsX3_Mom"));
     }
-    // TODO these are probably more useful at/within/without certain radii
-    if (do_all || KHARMA::FieldIsOutput(pin, "luminosities")) {
-        hst_vars.emplace_back(parthenon::HistoryOutputVar(UserHistoryOperation::sum,
-            Reductions::Total<Reductions::Var::eht_lum>, "EHT_Lum_Proxy"));
-        hst_vars.emplace_back(parthenon::HistoryOutputVar(UserHistoryOperation::sum,
-            Reductions::Total<Reductions::Var::jet_lum>, "Jet_Lum"));
+    // Luminosities are defined w.r.t. the BH, so require a domain around it
+    if (pin->GetBoolean("coordinates", "domain_intersects_eh") &&
+        (do_all || KHARMA::FieldIsOutput(pin, "luminosities"))) {
+        hst_vars.emplace_back(parthenon::HistoryOutputVar(
+            UserHistoryOperation::sum, Reductions::EHTLumProxy, "EHT_Lum_Proxy"));
+        hst_vars.emplace_back(parthenon::HistoryOutputVar(
+            UserHistoryOperation::sum, Reductions::JetLumAtEH, "Jet_Lum_EH"));
+        hst_vars.emplace_back(parthenon::HistoryOutputVar(
+            UserHistoryOperation::sum, Reductions::JetLumAtR, "Jet_Lum"));
     }
     // Event horizon fluxes
     if (pin->GetBoolean("coordinates", "domain_intersects_eh")) {

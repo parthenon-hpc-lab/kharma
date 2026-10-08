@@ -11,6 +11,7 @@ option(KHARMA_BUILD_TESTS "Build unit tests" OFF)
 # We follow Parthenon in requiring C++17 going forward
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CMAKE_CXX17_STANDARD_COMPILE_OPTION "-std=c++20")
 
 # Set the path to include cmake/ dir
