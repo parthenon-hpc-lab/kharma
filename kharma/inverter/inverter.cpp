@@ -248,7 +248,7 @@ void Inverter::PreStepWork(Mesh* pmesh, ParameterInput* pin, const SimTime& tm)
 {
     // Clear all floor flags before each step
     auto md = pmesh->mesh_data.Get().get();
-    Update::SetDataToConstant(std::vector<std::string>{"pflag"}, md, 0.);
+    KHARMADriver::SetDataToConstant(std::vector<std::string>{"pflag"}, md, 0.);
 }
 
 TaskStatus Inverter::PostStepDiagnostics(const SimTime& tm, MeshData<Real>* md)

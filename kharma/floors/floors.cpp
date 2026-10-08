@@ -411,7 +411,7 @@ void Floors::PreStepWork(Mesh* pmesh, ParameterInput* pin, const SimTime& tm)
 {
     // Clear all floor flags before each step
     auto md = pmesh->mesh_data.Get().get();
-    Update::SetDataToConstant(std::vector<std::string>{"fflag"}, md, 0.);
+    KHARMADriver::SetDataToConstant(std::vector<std::string>{"fflag"}, md, 0.);
 }
 
 TaskStatus Floors::PostStepDiagnostics(const SimTime& tm, MeshData<Real>* md)

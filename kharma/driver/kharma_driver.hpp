@@ -187,7 +187,11 @@ class KHARMADriver : public MultiStageDriver
         const auto& x = in1->PackVariables(flags);
         const auto& y = in2->PackVariables(flags);
         const auto& z = out->PackVariables(flags);
-
+        for (int i = 0; i < 6; i++) {
+            if (x.GetDim(i) < 1) return TaskStatus::complete;
+            if (y.GetDim(i) < 1) return TaskStatus::complete;
+            if (z.GetDim(i) < 1) return TaskStatus::complete;
+        }
         parthenon::par_for(DEFAULT_LOOP_PATTERN, "WeightedSumData", DevExecSpace(), 0,
             x.GetDim(5) - 1, 0, x.GetDim(4) - 1, 0, x.GetDim(3) - 1, 0, x.GetDim(2) - 1,
             0, x.GetDim(1) - 1,
@@ -226,6 +230,11 @@ class KHARMADriver : public MultiStageDriver
         const auto& x = in1->PackVariables(flags);
         const auto& y = in2->PackVariables(flags);
         const auto& z = out->PackVariables(flags);
+        for (int i = 0; i < 6; i++) {
+            if (x.GetDim(i) < 1) return TaskStatus::complete;
+            if (y.GetDim(i) < 1) return TaskStatus::complete;
+            if (z.GetDim(i) < 1) return TaskStatus::complete;
+        }
         parthenon::par_for(DEFAULT_LOOP_PATTERN, "WeightedSumDataFace", DevExecSpace(), 0,
             x.GetDim(5) - 1, 0, x.GetDim(4) - 1, 0, x.GetDim(3) - 1, 0, x.GetDim(2) - 1,
             0, x.GetDim(1) - 1,
@@ -261,6 +270,24 @@ class KHARMADriver : public MultiStageDriver
         std::vector<std::string> vars, MeshData<Real>* source, Real norm)
     {
         return WeightedSumDataFace(vars, source, source, norm, 0., source);
+    }
+
+    template<typename F, typename T>
+    static TaskStatus SetDataToConstant(const F& flags, T* data, const Real val)
+    {
+        PARTHENON_INSTRUMENT
+        const auto& x = data->PackVariables(flags);
+        for (int i = 0; i < 6; i++)
+            if (x.GetDim(i) < 1) return TaskStatus::complete;
+        parthenon::par_for(PARTHENON_AUTO_LABEL, 0, x.GetDim(5) - 1, 0, x.GetDim(4) - 1,
+            0, x.GetDim(3) - 1, 0, x.GetDim(2) - 1, 0, x.GetDim(1) - 1,
+            KOKKOS_LAMBDA(const int b, const int l, const int k, const int j, const int i)
+            {
+                if (x.IsAllocated(b, l)) {
+                    x(b, l, k, j, i) = val;
+                }
+            });
+        return TaskStatus::complete;
     }
 
     /**
