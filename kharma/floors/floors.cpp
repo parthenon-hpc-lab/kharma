@@ -413,9 +413,22 @@ int Floors::CountFFlags(MeshData<Real>* md)
 
 void Floors::PreStepWork(Mesh* pmesh, ParameterInput* pin, const SimTime& tm)
 {
+    PARTHENON_INSTRUMENT
     // Clear all floor flags before each step
     auto md = pmesh->mesh_data.Get().get();
-    KHARMADriver::Scale(std::vector<std::string>{"fflag"}, md, 0.);
+    auto fflag = md->PackVariables(std::vector<std::string>{"fflag"});
+
+    const IndexRange3 b = KDomain::GetRange(md, IndexDomain::entire, false);
+    const IndexRange block = IndexRange{0, fflag.GetDim(5) - 1};
+
+    // For some reason 'SetDataToConstant' and 'WeightedSum' don't
+    // play nice with CUDA 12.8, which we use for regression tests...
+    // TODO could still abstract with like a ResetFlag function or something?
+    parthenon::par_for("ResetFflag", block.s, block.e, b.ks, b.ke, b.js, b.je, b.is, b.ie,
+        KOKKOS_LAMBDA (const int &bl, const int &k, const int &j, const int &i)
+        {
+            fflag(bl, 0, k, j, i) = 0.;
+        });
 }
 
 TaskStatus Floors::PostStepDiagnostics(const SimTime& tm, MeshData<Real>* md)
