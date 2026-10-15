@@ -37,6 +37,7 @@
 #include "domain.hpp"
 #include "floors.hpp"
 #include "flux_functions.hpp"
+#include "kharma_constants.hpp"
 
 #define NFVAR_MAX 10
 
@@ -113,7 +114,7 @@ TaskStatus Implicit::FixSolve(MeshBlockData<Real>* mbd)
                     }
                 }
 
-                if (wsum < 1.e-10) {
+                if (wsum < Inverter::NEIGHBOR_WSUM_MIN) {
                     // TODO probably should crash here.
                     if (m_pi.RHO >= 0) P(m_pi.RHO, k, j, i) = floors.rho_min_geom;
                     if (m_pi.UU >= 0) P(m_pi.UU, k, j, i) = floors.u_min_geom;

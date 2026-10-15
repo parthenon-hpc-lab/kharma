@@ -36,6 +36,7 @@
 #include <parthenon/parthenon.hpp>
 
 #include "grmhd_functions.hpp"
+#include "kharma_constants.hpp"
 // phoebus includes
 #include "microphysics/eos_kharma/eos_kharma.hpp"
 #include "phoebus_utils/variables.hpp"
@@ -234,7 +235,7 @@ KOKKOS_INLINE_FUNCTION void set_parameters(const GRCoordinates& G, const Real& r
             const Real q_max = emhd_params.conduction_alpha * rho * cs2 * m::sqrt(cs2);
             const Real q_ratio = m::abs(q) / q_max;
             const Real inv_exp_g = m::exp(-(q_ratio - 1.) / lambda);
-            const Real f_fmin = inv_exp_g / (inv_exp_g + 1.) + 1.e-5;
+            const Real f_fmin = inv_exp_g / (inv_exp_g + 1.) + TAU_MIN_FRAC;
 
             tau = m::min(tau, f_fmin * tau_dyn);
         }
@@ -247,13 +248,14 @@ KOKKOS_INLINE_FUNCTION void set_parameters(const GRCoordinates& G, const Real& r
                     : dPtilde;
             const Real dP_comp_ratio = m::max(pg - 2. / 3. * dP, SMALL_NUM) /
                                        m::max(pg + 1. / 3. * dP, SMALL_NUM);
-            const Real dP_max = (dP > 0.)
-                                    ? m::min(0.5 * bsq * dP_comp_ratio, 1.49 * pg / 1.07)
-                                    : m::max(-bsq, -2.99 * pg / 1.07);
+            const Real dP_max =
+                (dP > 0.)
+                    ? m::min(0.5 * bsq * dP_comp_ratio, DP_MAX_OVER_P * pg / LIMIT_MARGIN)
+                    : m::max(-bsq, DP_MIN_OVER_P * pg / LIMIT_MARGIN);
 
             const Real dP_ratio = m::abs(dP) / (m::abs(dP_max) + SMALL_NUM);
             const Real inv_exp_g = m::exp((1. - dP_ratio) / lambda);
-            const Real f_fmin = inv_exp_g / (inv_exp_g + 1.) + 1.e-5;
+            const Real f_fmin = inv_exp_g / (inv_exp_g + 1.) + TAU_MIN_FRAC;
 
             tau = m::min(tau, f_fmin * tau_dyn);
         }

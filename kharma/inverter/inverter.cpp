@@ -38,6 +38,7 @@
 #include "domain.hpp"
 #include "floors_functions.hpp"
 #include "flux.hpp"
+#include "kharma_constants.hpp"
 #include "kharma_driver.hpp"
 #include "reductions.hpp"
 #include <stdexcept>
@@ -79,9 +80,11 @@ std::shared_ptr<KHARMAPackage> Inverter::Initialize(
     // Solver options
     // Any other Noble et al. implemented for fun should use lower tol/iter count, see
     // Noble+06
-    Real err_tol = pin->GetOrAddReal("inverter", "err_tol", (use_kastaun) ? 1e-14 : 1e-8);
+    Real err_tol = pin->GetOrAddReal(
+        "inverter", "err_tol", (use_kastaun) ? KASTAUN_ERR_TOL : ONEDW_ERR_TOL);
     params.Add("err_tol", err_tol);
-    int iter_max = pin->GetOrAddInteger("inverter", "iter_max", (use_kastaun) ? 25 : 8);
+    int iter_max = pin->GetOrAddInteger(
+        "inverter", "iter_max", (use_kastaun) ? KASTAUN_ITER_MAX : ONEDW_ITER_MAX);
     params.Add("iter_max", iter_max);
 
     // Fixup options
@@ -108,8 +111,13 @@ std::shared_ptr<KHARMAPackage> Inverter::Initialize(
     bool backstop_recover_u =
         pin->GetOrAddBoolean("inverter", "backstop_recover_u", false);
     params.Add("backstop_recover_u", backstop_recover_u);
-    int backstop_iter_max = pin->GetOrAddInteger("inverter", "backstop_iter_max", 100);
+    int backstop_iter_max =
+        pin->GetOrAddInteger("inverter", "backstop_iter_max", BACKSTOP_ITER_MAX);
     params.Add("backstop_iter_max", backstop_iter_max);
+
+    // Residual tolerance of the backstop solves.
+    Real backstop_tol = pin->GetOrAddReal("inverter", "backstop_tol", err_tol);
+    params.Add("backstop_tol", backstop_tol);
     if (backstop && backstop_recover_vel && backstop_recover_u) {
         throw std::runtime_error(
             "Inverter parameters error: cannot recover with backstop_recover_vel and "

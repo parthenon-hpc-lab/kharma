@@ -38,8 +38,10 @@
 #include "floors.hpp"
 #include "floors_functions.hpp"
 #include "flux_functions.hpp"
+#include "kharma_constants.hpp"
 #include "pack.hpp"
 #include "radM1/radM1.hpp"
+#include "roots.hpp"
 
 // phoebus includes
 #include "microphysics/eos_kharma/eos_kharma.hpp"
@@ -120,7 +122,7 @@ TaskStatus Inverter::FixUtoP(MeshBlockData<Real>* rc)
 
                 // Set to atmosphere/floors, zero velocity
                 // Fallback fix if we're averaging, only fix if not
-                if (wsum < 1.e-10) {
+                if (wsum < NEIGHBOR_WSUM_MIN) {
                     // We fill this with floor values below
                     PRIMLOOP P(p, k, j, i) = 0.;
                 } else {
@@ -219,7 +221,7 @@ TaskStatus Inverter::FixUtoP(MeshBlockData<Real>* rc)
                         }
                     }
 
-                    if (wsum < 1.e-10) {
+                    if (wsum < NEIGHBOR_WSUM_MIN) {
                         Prad(m_prad.UU_RAD, k, j, i) = erad_floor;
                         Prad(m_prad.U1_RAD, k, j, i) = 0.;
                         Prad(m_prad.U2_RAD, k, j, i) = 0.;
@@ -246,10 +248,10 @@ TaskStatus Inverter::Backstop(MeshBlockData<Real>* rc)
     auto pmb = rc->GetBlockPointer();
 
     auto& pars = pmb->packages.Get("Inverter")->AllParams();
-    const Real tol = pars.Get<Real>("err_tol");
+    const Real backstop_tol = pars.Get<Real>("backstop_tol");
     const bool backstop_recover_vel = pars.Get<bool>("backstop_recover_vel");
     const bool backstop_recover_u = pars.Get<bool>("backstop_recover_u");
-    const int iter_max = pars.Get<int>("backstop_iter_max");
+    const int backstop_iter_max = pars.Get<int>("backstop_iter_max");
 
     const auto& eos_params = pmb->packages.Get("eos")->AllParams();
     auto eos = eos_params.Get<Microphysics::EOS::EOS>("d.EOS");
@@ -324,7 +326,8 @@ TaskStatus Inverter::Backstop(MeshBlockData<Real>* rc)
                 // If we're below the at-rest energy (within tolerance),
                 // just bump it to that and kill all kinetic energy
                 // Also use this if v=0.
-                if ((Trest[0] - U(m_u.UU, k, j, i)) / U(m_u.UU, k, j, i) > -tol ||
+                if ((Trest[0] - U(m_u.UU, k, j, i)) / U(m_u.UU, k, j, i) >
+                        -backstop_tol ||
                     !(W > 1.0) || (!backstop_recover_vel && !backstop_recover_u)) {
                     // W = 1
                     P(m_p.RHO, k, j, i) = D;
@@ -348,27 +351,16 @@ TaskStatus Inverter::Backstop(MeshBlockData<Real>* rc)
 
                     // Rootfind for u that gives us T00
                     bool e_solve_failed = false;
-                    Real um = umin, up = 1.;
-                    Real uu;
-                    if (f(up) * f(um) > 0.) {
+                    Real uu = umin;
+                    // Bisect until the midpoint is within backstop_tol of both ends.
+                    const auto u_status = Roots::bisect<Roots::RootEval::Any>(uu, f, umin,
+                        (Real)1., backstop_tol, 2 * backstop_tol, backstop_iter_max);
+                    if (u_status == Roots::RootStatus::NotBracketed) {
                         e_solve_failed = true;
                         fflagl |= Floors::FFlag::FIXUP_U_RANGE;
                     } else {
-                        Real uc = (up + um) / 2.;
-                        for (int i = 0; i < 100; i++) {
-                            Real resv = m::abs(f(uc));
-                            if ((resv < tol) || (m::abs((up - um) / 2) < tol) || i > 90) {
-                                uu = uc;
-                                e_solve_failed = (resv > tol);
-                                break;
-                            }
-                            // Same sign as right side -> center now right side
-                            if (f(uc) * f(up) > 0.)
-                                up = uc;
-                            else // default to shifting window up -> slower
-                                um = uc;
-                            uc = (um + up) / 2.;
-                        }
+                        // Succeed only if the residual itself is within backstop_tol
+                        e_solve_failed = (m::abs(f(uu)) > backstop_tol);
                     }
 
                     if (!e_solve_failed) {
@@ -397,9 +389,9 @@ TaskStatus Inverter::Backstop(MeshBlockData<Real>* rc)
                     auto f = [&](Real iW)
                     {
                         // Rescale velocity
-                        Real gamma_fac = m::sqrt((SQR(1. / iW) - 1.) / (SQR(W) - 1.));
-                        const Real uv[NVEC] = {gamma_fac * uvec[0], gamma_fac * uvec[1],
-                            gamma_fac * uvec[2]};
+                        Real uvec_fac = m::sqrt((SQR(1. / iW) - 1.) / (SQR(W) - 1.));
+                        const Real uv[NVEC] = {
+                            uvec_fac * uvec[0], uvec_fac * uvec[1], uvec_fac * uvec[2]};
                         // Calculate tensor (we only need T0)
                         Real rho_ut, T[GR_DIM];
                         GRMHD::p_to_u_mhd(
@@ -410,34 +402,23 @@ TaskStatus Inverter::Backstop(MeshBlockData<Real>* rc)
 
                     // Rootfind for iW that would have produced the current T00
                     bool e_solve_failed = false;
-                    Real iWm = 1 / m::min(W, 50.), iWp = 1.;
-                    Real iW;
-                    if (f(iWp) * f(iWm) > 0.) {
+                    const Real iWm = 1 / m::min(W, (Real)Floors::LFAC_CAP);
+                    Real iW = 1.;
+                    // Bisect until the midpoint is within backstop_tol of both ends.
+                    const auto vel_status = Roots::bisect<Roots::RootEval::Any>(iW, f,
+                        iWm, (Real)1., backstop_tol, 2 * backstop_tol, backstop_iter_max);
+                    if (vel_status == Roots::RootStatus::NotBracketed) {
                         e_solve_failed = true;
                         fflagl |= Floors::FFlag::FIXUP_VEL_RANGE;
                     } else {
-                        Real iWc = (iWp + iWm) / 2.;
-                        for (int i = 0; i < 100; i++) {
-                            Real resv = m::abs(f(iWc));
-                            if ((resv < tol) || (m::abs((iWp - iWm) / 2) < tol) ||
-                                i > 90) {
-                                iW = iWc;
-                                e_solve_failed = (resv > tol);
-                                break;
-                            }
-                            // Same sign as right side -> center now right side
-                            if (f(iWc) * f(iWp) > 0.)
-                                iWp = iWc;
-                            else // default to shifting window up -> slower
-                                iWm = iWc;
-                            iWc = (iWm + iWp) / 2.;
-                        }
+                        // Succeed only if the residual itself is within backstop_tol
+                        e_solve_failed = (m::abs(f(iW)) > backstop_tol);
                     }
 
                     // Compute what we really need
-                    Real gamma_fac = m::sqrt((SQR(1. / iW) - 1.) / (SQR(W) - 1.));
-                    if (!(gamma_fac < 1) && !e_solve_failed) {
-                        fflagl |= Floors::FFlag::FIXUP_VEL_GAMMA;
+                    Real uvec_fac = m::sqrt((SQR(1. / iW) - 1.) / (SQR(W) - 1.));
+                    if (!(uvec_fac < 1) && !e_solve_failed) {
+                        fflagl |= Floors::FFlag::FIXUP_VEL_LFAC;
                         e_solve_failed = true;
                         // TO PRINT (for verifying this only happens via round-off error)
                         // Refresh initial T, we used it in solve
@@ -446,16 +427,16 @@ TaskStatus Inverter::Backstop(MeshBlockData<Real>* rc)
                         //                     uvec, B_P, gam, k, j, i, rho_ut, T);
                         // Compute T from solved vals to compare
                         // Real Tsolved[GR_DIM] = {0.};
-                        // const Real uvecr[NDIM] = {uvec[0]*gamma_fac, uvec[1]*gamma_fac,
-                        // uvec[2]*gamma_fac}; GRMHD::p_to_u_mhd(G, D * iW, umin, uvecr,
+                        // const Real uvecr[NDIM] = {uvec[0]*uvec_fac, uvec[1]*uvec_fac,
+                        // uvec[2]*uvec_fac}; GRMHD::p_to_u_mhd(G, D * iW, umin, uvecr,
                         // B_P, gam, k, j, i, rho_ut, Tsolved); printf("bad gamma
                         // recovery: total deficit %g rest deficit %g remaining deficit
-                        // %g\nfinal gamma_fac: %g rho %g u %g uvec %g %g %g B %g %g
+                        // %g\nfinal uvec_fac: %g rho %g u %g uvec %g %g %g B %g %g
                         // %g\n",
                         //         (T[0] - U(m_u.UU, k, j, i)) / U(m_u.UU, k, j, i),
                         //         (Trest[0] - U(m_u.UU, k, j, i)) / U(m_u.UU, k, j, i),
                         //         (Tsolved[0] - U(m_u.UU, k, j, i)) / U(m_u.UU, k, j, i),
-                        //         gamma_fac, D * iW, umin, uvecr[0], uvecr[1], uvecr[2],
+                        //         uvec_fac, D * iW, umin, uvecr[0], uvecr[1], uvecr[2],
                         //         B_P[0], B_P[1], B_P[2]);
                     }
                     if (!e_solve_failed) {
@@ -463,9 +444,9 @@ TaskStatus Inverter::Backstop(MeshBlockData<Real>* rc)
                         // TODO(CEP) still limit iW >= etc
                         P(m_p.RHO, k, j, i) = D * iW;
                         P(m_p.UU, k, j, i) = umin;
-                        P(m_p.U1, k, j, i) *= gamma_fac;
-                        P(m_p.U2, k, j, i) *= gamma_fac;
-                        P(m_p.U3, k, j, i) *= gamma_fac;
+                        P(m_p.U1, k, j, i) *= uvec_fac;
+                        P(m_p.U2, k, j, i) *= uvec_fac;
+                        P(m_p.U3, k, j, i) *= uvec_fac;
                         fflagl |= Floors::FFlag::FIXUP_VEL;
                     } else {
                         P(m_p.RHO, k, j, i) = D;

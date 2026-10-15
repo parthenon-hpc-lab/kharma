@@ -67,7 +67,7 @@ static constexpr int GEOM_U = ipow(2, 7);
 static constexpr int B_RHO = ipow(2, 8);
 static constexpr int B_U = ipow(2, 9);
 static constexpr int TEMP = ipow(2, 10);
-static constexpr int GAMMA = ipow(2, 11);
+static constexpr int LFAC = ipow(2, 11);
 static constexpr int KTOT = ipow(2, 12);
 // Separate flags for when the floors are applied after reconstruction.
 static constexpr int GEOM_RHO_FLUX = ipow(2, 13);
@@ -78,7 +78,7 @@ static constexpr int FIXUP_ENERGY = ipow(2, 15);
 // Attempting extra T00 -> velocity
 static constexpr int FIXUP_VEL = ipow(2, 16);
 static constexpr int FIXUP_VEL_FAILED = ipow(2, 17);
-static constexpr int FIXUP_VEL_GAMMA = ipow(2, 18);
+static constexpr int FIXUP_VEL_LFAC = ipow(2, 18);
 static constexpr int FIXUP_VEL_RANGE = ipow(2, 19);
 // Attempting extra T00 -> internal energy
 static constexpr int FIXUP_U = ipow(2, 20);
@@ -98,7 +98,7 @@ static const std::map<int, std::string> flag_names = {
     {GEOM_RHO, "GEOM_RHO: Geometric floor on density"},
     {GEOM_U, "GEOM_U: Geometric floor on internal energy"},
     {B_RHO, "B_RHO: Ceiling on plasma sigma"}, {B_U, "B_U: Ceiling on plasma beta"},
-    {GAMMA, "GAMMA: Direct limit on Lorentz factor"}, {TEMP, "TEMP: Temperature ceiling"},
+    {LFAC, "LFAC: Direct limit on Lorentz factor"}, {TEMP, "TEMP: Temperature ceiling"},
     {KTOT, "KTOT: Entropy ceiling"},
     {GEOM_RHO_FLUX,
         "GEOM_RHO_FLUX: Geometric rho floor at face or reconstruction fallback"},
@@ -106,7 +106,7 @@ static const std::map<int, std::string> flag_names = {
     {FIXUP_ENERGY, "FIXUP_ENERGY: Total energy backstop"},
     {FIXUP_VEL, "FIXUP_VEL: Internal energy backstop, recovered some velocity"},
     {FIXUP_VEL_FAILED, "FIXUP_VEL_FAILED: Velocity recovery failed"},
-    {FIXUP_VEL_GAMMA, "FIXUP_VEL_GAMMA:  Vel recovery failure: speed would increase"},
+    {FIXUP_VEL_LFAC, "FIXUP_VEL_LFAC:  Vel recovery failure: speed would increase"},
     {FIXUP_VEL_RANGE, "FIXUP_VEL_RANGE:  Vel recovery failure: solution out of range"},
     {FIXUP_U, "FIXUP_VEL: Internal energy backstop, recovered some internal energy"},
     {FIXUP_U_FAILED, "FIXUP_VEL_FAILED: Energy recovery failed"},
@@ -143,12 +143,12 @@ class Prescription
     // Limit entropy
     Real ktot_max;
     // Limit fluid Lorentz factor
-    Real gamma_max;
+    Real lfac_max;
     // floor radiation energy density
     Real urad_floor;
     // Floor options (frame was MOVED to templating)
     bool use_r_char, temp_adjust_u, adjust_k;
-    // Add density to respect the gamma ceiling?
+    // Add density to respect the Lorentz factor ceiling?
     bool use_rho_to_slow;
     // Minimum u based on no dissipation/entropy advection
     bool use_u_min_entropy;
@@ -206,8 +206,8 @@ inline Prescription MakePrescription(
     // internal energy, as in Ressler+ but not more recent implementations
     p.adjust_k = pin->GetOrAddBoolean(block, "adjust_k", true);
 
-    // Limit the fluid Lorentz factor gamma
-    p.gamma_max = pin->GetOrAddReal(block, "gamma_max", std::numeric_limits<Real>::max());
+    // Limit the fluid Lorentz factor
+    p.lfac_max = pin->GetOrAddReal(block, "gamma_max", std::numeric_limits<Real>::max());
 
     p.floors_switch_r = pin->GetOrAddReal("floors", "floors_switch_r", 50.);
 

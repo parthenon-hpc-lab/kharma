@@ -41,6 +41,7 @@
 
 #include "gr_coordinates.hpp"
 #include "grmhd_functions.hpp"
+#include "kharma_constants.hpp"
 #include "kharma_utils.hpp"
 #include "types.hpp"
 #include "units.hpp"
@@ -87,8 +88,8 @@ enum class RadLimiterType { BASIC, TYPE2 };
 enum class StatusRadiationInversion {
     success = 0,
     urad_negative,
-    negative_gamma,
-    maximum_gamma,
+    negative_lfac,
+    maximum_lfac,
     type2,
     not_finite,
 };
@@ -96,9 +97,9 @@ enum class StatusRadiationInversion {
 static const std::map<int, std::string> status_names_inversion = {
     {(int)StatusRadiationInversion::urad_negative,
         "RadM1 Radiation Inversion Failure: Negative Radiation Energy"},
-    {(int)StatusRadiationInversion::negative_gamma,
+    {(int)StatusRadiationInversion::negative_lfac,
         "RadM1 Radiation Inversion Failure: Negative Lorentz Factor"},
-    {(int)StatusRadiationInversion::maximum_gamma,
+    {(int)StatusRadiationInversion::maximum_lfac,
         "RadM1 Radiation Inversion Failure: Maximum Lorentz Factor"},
     {(int)StatusRadiationInversion::type2,
         "RadM1 Radiation Inversion Failure: Type2 Fallback"},
@@ -180,12 +181,12 @@ KOKKOS_INLINE_FUNCTION void calc_ucon_rad(const GRCoordinates& G, const Global& 
     const VarMap& m, const int& k, const int& j, const int& i, const Loci loc,
     Real ucon[GR_DIM])
 {
-    const Real gamma = lorentz_calc_rad(G, P, m, k, j, i, loc);
+    const Real lfac = lorentz_calc_rad(G, P, m, k, j, i, loc);
     const Real alpha = 1. / m::sqrt(-G.gcon(loc, j, i, 0, 0));
-    ucon[0] = gamma / alpha;
+    ucon[0] = lfac / alpha;
     VLOOP
         ucon[v + 1] =
-            P(m.U1_RAD + v, k, j, i) - gamma * alpha * G.gcon(loc, j, i, 0, v + 1);
+            P(m.U1_RAD + v, k, j, i) - lfac * alpha * G.gcon(loc, j, i, 0, v + 1);
 }
 
 KOKKOS_INLINE_FUNCTION Real lorentz_calc_rad(
@@ -204,11 +205,11 @@ KOKKOS_INLINE_FUNCTION Real lorentz_calc_rad(
 KOKKOS_INLINE_FUNCTION void calc_ucon_rad(const GRCoordinates& G, const Real P[4],
     const int& j, const int& i, Real ucon[GR_DIM])
 {
-    const Real gamma = lorentz_calc_rad(G, P, j, i);
+    const Real lfac = lorentz_calc_rad(G, P, j, i);
     const Real alpha = 1. / m::sqrt(-G.gcon(Loci::center, j, i, 0, 0));
-    ucon[0] = gamma / alpha;
+    ucon[0] = lfac / alpha;
     VLOOP
-        ucon[v + 1] = P[1 + v] - gamma * alpha * G.gcon(Loci::center, j, i, 0, v + 1);
+        ucon[v + 1] = P[1 + v] - lfac * alpha * G.gcon(Loci::center, j, i, 0, v + 1);
 }
 
 // M1 Tensor construction (Global)

@@ -64,7 +64,9 @@
 #include "coordinate_utils.hpp"
 // #include "floors_functions.hpp"
 #include "grmhd_functions.hpp"
+#include "kharma_constants.hpp"
 #include "kharma_utils.hpp"
+#include "roots.hpp"
 
 // phoebus includes
 #include "microphysics/eos_kharma/eos_kharma.hpp"
@@ -183,7 +185,7 @@ template<>
 KOKKOS_INLINE_FUNCTION int u_to_p<Type::kastaun>(const GRCoordinates& G,
     const VariablePack<Real>& U, const VarMap& m_u, const Microphysics::EOS::EOS& eos,
     const int& k, const int& j, const int& i, const VariablePack<Real>& P,
-    const VarMap& m_p, const Loci& loc, const int& max_iterations, const Real& tol)
+    const VarMap& m_p, const Loci& loc, const int max_iterations, const Real tol)
 {
     // Shouldn't need this, KHARMA should die on NaN
     // But it's here for debugging
@@ -267,93 +269,51 @@ KOKKOS_INLINE_FUNCTION int u_to_p<Type::kastaun>(const GRCoordinates& G,
     }
     // const Real zsq = rsq / h0sq_; // h0sq_ normalization set to 1 in Phoebus
     const Real zsq = rsq;
-    const Real v0sq = std::min(zsq / (1.0 + zsq), 1.0 - 1.0 / SQR(51.));
+    // Cap the solve just past LFAC_CAP, so capped solutions always fail the W check below
+    const Real v0sq = std::min(zsq / (1.0 + zsq), 1.0 - 1.0 / SQR(Floors::LFAC_CAP + 1.));
 
     // residual object. Caches most arguments/floors so calls are single-argument
     KastaunResidual res(D, q, bsq, bsq_rpsq, rsq, rbsq, v0sq, eos);
 
-    // SOLVE
-    // Need to find initial bracket. Requires separate solve
-    Real zm = 0.;
-    Real zp = 1.;
-
-    // Evaluate master function (eq 49) at bracket values
-    Real fm = res.aux_func(zm);
-    Real fp = res.aux_func(zp);
-
-    // For simplicity on the GPU, find roots using the false position method
-    int iterations = max_iterations;
-    // If bracket within tolerances, don't bother doing any iterations
-    if ((m::abs(zm - zp) < tol) || ((m::abs(fm) + m::abs(fp)) < 2.0 * tol)) {
-        iterations = -1;
-    }
-    Real z = 0.5 * (zm + zp);
-
-    int iter;
-    for (iter = 0; iter < iterations; ++iter) {
-        z = (zm * fp - zp * fm) / (fp - fm); // linear interpolation to point f(z)=0
-        Real f = res.aux_func(z);
-        // Quit if convergence reached
-        // NOTE(@ermost): both z and f are of order unity
-        if ((m::abs(zm - zp) < tol) || (m::abs(f) < tol)) {
-            break;
-        }
-        // assign zm-->zp if root bracketed by [z,zp]
-        if (f * fp < 0.0) {
-            zm = zp;
-            fm = fp;
-            zp = z;
-            fp = f;
-        } else { // assign zp-->z if root bracketed by [zm,z]
-            fm =
-                0.5 * fm; // 1/2 comes from "Illinois algorithm" to accelerate convergence
-            zp = z;
-            fp = f;
-        }
+    // SOLVE, using the false position method for simplicity on the GPU
+    // NOTE(@ermost): both z and f are of order unity, so the tolerances are absolute
+    // The root of the master function (eq 44) is mu = 1/(hW) <= 1. For r^2 >= 1, the root
+    // of the auxiliary function (eq 49) tightens that bound: its upper side keeps the
+    // master root in [0, mu_plus]
+    Real mu_plus = 1.;
+    if (rsq >= 1.) {
+        // RootEval::Positive gives aux_func(mu_plus) = 0+, so mu_plus is an upper bound
+        // for the master root (up to round-off, see the NotBracketed case below)
+        Roots::bisect_illinois<Roots::RootEval::Positive>(
+            mu_plus,
+            [&](const Real z)
+            {
+                return res.aux_func(z);
+            },
+            (Real)0., (Real)1., tol, tol, max_iterations);
     }
 
-    // Found brackets. Now find solution in bounded interval, again using the
-    // false position method
-    zm = 0.;
-    zp = z;
-
-    // Evaluate master function (eq 44) at bracket values
-    fm = res(zm);
-    fp = res(zp);
-
-    iterations = max_iterations;
-    if ((m::abs(zm - zp) < tol) || ((m::abs(fm) + m::abs(fp)) < 2.0 * tol)) {
-        iterations = -1;
-    }
-    z = 0.5 * (zm + zp);
-
-    for (iter = 0; iter < iterations; ++iter) {
-        z = (zm * fp - zp * fm) / (fp - fm); // linear interpolation to point f(z)=0
-        Real f = res(z);
-        // Quit if convergence reached
-        // NOTE: both z and f are of order unity
-        if ((m::abs(zm - zp) < tol) || (m::abs(f) < tol)) {
-            break;
-        }
-        // assign zm-->zp if root bracketed by [z,zp]
-        if (f * fp < 0.0) {
-            zm = zp;
-            fm = fp;
-            zp = z;
-            fp = f;
-        } else { // assign zp-->z if root bracketed by [zm,z]
-            fm =
-                0.5 * fm; // 1/2 comes from "Illinois algorithm" to accelerate convergence
-            zp = z;
-            fp = f;
-        }
+    // Now find the solution of the master function in [0, mu_plus]
+    Real mu = mu_plus;
+    Roots::RootStatus solve_status = Roots::bisect_illinois<Roots::RootEval::Any>(
+        mu,
+        [&](const Real z)
+        {
+            return res(z);
+        },
+        (Real)0., mu_plus, tol, tol, max_iterations);
+    if (solve_status == Roots::RootStatus::NotBracketed) {
+        // The master function is negative at mu_plus only by round-off, where the bound
+        // is exact (cold gas, ehat clamped to 0): the root sits at mu_plus
+        mu = mu_plus;
+        solve_status = Roots::RootStatus::Success;
     }
     // TODO(CEP) make sure we really don't want to set P for this case
     // is it filled with last step, or zero?
-    if (iter >= max_iterations) return static_cast<int>(Status::max_iter);
+    if (solve_status != Roots::RootStatus::Success)
+        return static_cast<int>(Status::max_iter);
 
     // Just unwrap everything into primitive vars as-is
-    const Real mu = z;
     const Real x = res.x_mu(mu);
     const Real rbarsq = res.rbarsq_mu(mu, x);
     const Real vsq = res.vhatsq_mu(mu, rbarsq);
@@ -400,8 +360,8 @@ KOKKOS_INLINE_FUNCTION int u_to_p<Type::kastaun>(const GRCoordinates& G,
         return static_cast<int>(Status::neg_rho);
     } else if (u <= 0.) {
         return static_cast<int>(Status::neg_u);
-    } else if (mag_vel < 0. || !(W < 50.)) {
-        return static_cast<int>(Status::bad_gamma);
+    } else if (mag_vel < 0. || !(W < Floors::LFAC_CAP)) {
+        return static_cast<int>(Status::bad_lfac);
     } else if (returncode) {
         return returncode;
     } else {

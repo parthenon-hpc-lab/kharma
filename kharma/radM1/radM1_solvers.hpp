@@ -37,6 +37,7 @@
 
 #include "entropy.hpp"
 #include "inverter.hpp"
+#include "kharma_constants.hpp"
 
 #define RAD_LARGE (0.1 * std::numeric_limits<Real>::max())
 #define RAD_SMALL (10.0 * std::numeric_limits<Real>::min())
@@ -45,10 +46,11 @@
 namespace RadM1
 {
 
-KOKKOS_INLINE_FUNCTION Real compute_y_max(const Real GAMMAMAX)
+KOKKOS_INLINE_FUNCTION Real compute_y_max(const Real lfac_cap)
 {
-    const Real target = GAMMAMAX * GAMMAMAX;
-    Real y_old = 0.9998;
+    const Real target = lfac_cap * lfac_cap;
+    // Initial guess: y_max ~ 1 - 1/(2 lfac_cap^2) for lfac_cap >> 1
+    Real y_old = 1.0 - 0.5 / target;
     Real E_old =
         target - (2.0 - y_old + m::sqrt(4.0 - 3.0 * y_old)) / (4.0 - 4.0 * y_old);
     for (int n = 0; n < 40; ++n) {
@@ -87,7 +89,7 @@ KOKKOS_INLINE_FUNCTION StatusRadiationInversion u_to_p_rad(const GRCoordinates& 
 
     if (!m::isfinite(Ucov_zamo[0]) || !m::isfinite(Ucov_zamo[1]) ||
         !m::isfinite(Ucov_zamo[2]) || !m::isfinite(Ucov_zamo[3])) {
-        P_rad[0] = 1.e-300;
+        P_rad[0] = ERAD_FALLBACK;
         P_rad[1] = 0.0;
         P_rad[2] = 0.0;
         P_rad[3] = 0.0;
@@ -122,19 +124,18 @@ KOKKOS_INLINE_FUNCTION StatusRadiationInversion u_to_p_rad(const GRCoordinates& 
         Utilde_con[3] = 0.0;
     }
 
-    const Real GAMMAMAX = 50.0;
-    const Real y_max = compute_y_max(GAMMAMAX);
+    const Real y_max = compute_y_max(Floors::LFAC_CAP);
 
     Real y = Utilde_sq / (U_dot_eta * U_dot_eta + 1.e-150);
-    Real gamma_rad_sq = (2.0 - y + m::sqrt(m::max(0.0, 4.0 - 3.0 * y))) / (4.0 - 4.0 * y);
+    Real lfac_rad_sq = (2.0 - y + m::sqrt(m::max(0.0, 4.0 - 3.0 * y))) / (4.0 - 4.0 * y);
 
-    Real p_rad = -U_dot_eta / (4.0 * gamma_rad_sq - 1.0);
+    Real p_rad = -U_dot_eta / (4.0 * lfac_rad_sq - 1.0);
     Real Erf = p_rad * 3.0;
 
     Real uvec_rad[4] = {0.0, 0.0, 0.0, 0.0};
     for (int mu = 1; mu < 4; ++mu)
         uvec_rad[mu] =
-            m::sqrt(gamma_rad_sq) * Utilde_con[mu] / (4.0 * p_rad * gamma_rad_sq);
+            m::sqrt(lfac_rad_sq) * Utilde_con[mu] / (4.0 * p_rad * lfac_rad_sq);
 
     bool failed = (y > y_max) || (y < 0.0) || !m::isfinite(U_dot_eta) ||
                   (U_dot_eta > 0.0) || !m::isfinite(uvec_rad[1]) ||
@@ -147,32 +148,32 @@ KOKKOS_INLINE_FUNCTION StatusRadiationInversion u_to_p_rad(const GRCoordinates& 
         if (type == RadLimiterType::BASIC) {
             if (U_dot_eta > 0.0) {
                 // Erad <= 0
-                P_rad[0] = 1.e-300;
+                P_rad[0] = ERAD_FALLBACK;
                 P_rad[1] = 0.0;
                 P_rad[2] = 0.0;
                 P_rad[3] = 0.0;
                 return StatusRadiationInversion::urad_negative;
             } else if (y < 0.0 && y > -RAD_EPS) {
                 // 0 > y > -m: zero the velocity only, leave Erf as already computed above
-                if (!m::isfinite(Erf)) Erf = 1.e-300;
+                if (!m::isfinite(Erf)) Erf = ERAD_FALLBACK;
                 P_rad[0] = Erf;
                 P_rad[1] = 0.0;
                 P_rad[2] = 0.0;
                 P_rad[3] = 0.0;
-                return StatusRadiationInversion::negative_gamma;
+                return StatusRadiationInversion::negative_lfac;
             } else {
                 // y > y_max: rescale directly to y = y_max with no intermediate
-                // Uabs/GAMMAMAX step
+                // Uabs/LFAC_CAP step
                 Real U_dot_eta_basic = -(1.e-30 + m::sqrt(m::abs(Utilde_sq) / y_max));
-                Real gamma_rad_sq_basic =
+                Real lfac_rad_sq_basic =
                     (2.0 - y_max + m::sqrt(4.0 - 3.0 * y_max)) / (4.0 - 4.0 * y_max);
-                Real p_rad_basic = -U_dot_eta_basic / (4.0 * gamma_rad_sq_basic - 1.0);
+                Real p_rad_basic = -U_dot_eta_basic / (4.0 * lfac_rad_sq_basic - 1.0);
                 Erf = p_rad_basic * 3.0;
                 for (int mu = 1; mu < 4; ++mu)
-                    uvec_rad[mu] = m::sqrt(gamma_rad_sq_basic) * Utilde_con[mu] /
-                                   (4.0 * p_rad_basic * gamma_rad_sq_basic);
+                    uvec_rad[mu] = m::sqrt(lfac_rad_sq_basic) * Utilde_con[mu] /
+                                   (4.0 * p_rad_basic * lfac_rad_sq_basic);
 
-                if (!m::isfinite(Erf)) Erf = 1.e-300;
+                if (!m::isfinite(Erf)) Erf = ERAD_FALLBACK;
                 if (!m::isfinite(uvec_rad[1])) uvec_rad[1] = 0.0;
                 if (!m::isfinite(uvec_rad[2])) uvec_rad[2] = 0.0;
                 if (!m::isfinite(uvec_rad[3])) uvec_rad[3] = 0.0;
@@ -181,13 +182,13 @@ KOKKOS_INLINE_FUNCTION StatusRadiationInversion u_to_p_rad(const GRCoordinates& 
                 P_rad[1] = uvec_rad[1];
                 P_rad[2] = uvec_rad[2];
                 P_rad[3] = uvec_rad[3];
-                return StatusRadiationInversion::maximum_gamma;
+                return StatusRadiationInversion::maximum_lfac;
             }
         } else {
             // Do TYPE2 fallback
             Real Uabs = 0.5 * (m::abs(U_dot_eta) + m::sqrt(m::abs(Utilde_sq)) + 1.e-150);
             for (int mu = 1; mu < 4; ++mu)
-                uvec_rad[mu] = GAMMAMAX * Utilde_con[mu] / Uabs;
+                uvec_rad[mu] = Floors::LFAC_CAP * Utilde_con[mu] / Uabs;
 
             Real qsq =
                 G.gcov(Loci::center, j, i, 1, 1) * uvec_rad[1] * uvec_rad[1] +
@@ -197,22 +198,22 @@ KOKKOS_INLINE_FUNCTION StatusRadiationInversion u_to_p_rad(const GRCoordinates& 
                 2.0 * G.gcov(Loci::center, j, i, 1, 3) * uvec_rad[1] * uvec_rad[3] +
                 2.0 * G.gcov(Loci::center, j, i, 2, 3) * uvec_rad[2] * uvec_rad[3];
             if (qsq < 0.0 || m::abs(qsq) < 1.e-10) qsq = 1.e-10;
-            Real gamma_rad_sq_fb = 1.0 + qsq;
+            Real lfac_rad_sq_fb = 1.0 + qsq;
 
-            Real f = m::sqrt((GAMMAMAX * GAMMAMAX - 1.0) / (gamma_rad_sq_fb - 1.0));
+            Real f = m::sqrt((SQR(Floors::LFAC_CAP) - 1.0) / (lfac_rad_sq_fb - 1.0));
             uvec_rad[1] *= f;
             uvec_rad[2] *= f;
             uvec_rad[3] *= f;
 
             Real U_dot_eta_tp2 = -(1.e-30 + m::sqrt(m::abs(Utilde_sq) / y_max));
-            Real gamma_rad_sq_tp2 =
+            Real lfac_rad_sq_tp2 =
                 (2.0 - y_max + m::sqrt(4.0 - 3.0 * y_max)) / (4.0 - 4.0 * y_max);
-            Real p_rad_tp2 = -U_dot_eta_tp2 / (4.0 * gamma_rad_sq_tp2 - 1.0);
+            Real p_rad_tp2 = -U_dot_eta_tp2 / (4.0 * lfac_rad_sq_tp2 - 1.0);
             Erf = p_rad_tp2 * 3.0;
             for (int mu = 1; mu < 4; ++mu)
-                uvec_rad[mu] = m::sqrt(gamma_rad_sq_tp2) * Utilde_con[mu] /
-                               (4.0 * p_rad_tp2 * gamma_rad_sq_tp2);
-            if (!m::isfinite(Erf)) Erf = 1.e-300;
+                uvec_rad[mu] = m::sqrt(lfac_rad_sq_tp2) * Utilde_con[mu] /
+                               (4.0 * p_rad_tp2 * lfac_rad_sq_tp2);
+            if (!m::isfinite(Erf)) Erf = ERAD_FALLBACK;
             if (!m::isfinite(uvec_rad[1])) uvec_rad[1] = 0.0;
             if (!m::isfinite(uvec_rad[2])) uvec_rad[2] = 0.0;
             if (!m::isfinite(uvec_rad[3])) uvec_rad[3] = 0.0;
@@ -224,7 +225,7 @@ KOKKOS_INLINE_FUNCTION StatusRadiationInversion u_to_p_rad(const GRCoordinates& 
         }
     }
 
-    if (!m::isfinite(Erf)) Erf = 1.e-300;
+    if (!m::isfinite(Erf)) Erf = ERAD_FALLBACK;
     if (!m::isfinite(uvec_rad[1])) uvec_rad[1] = 0.0;
     if (!m::isfinite(uvec_rad[2])) uvec_rad[2] = 0.0;
     if (!m::isfinite(uvec_rad[3])) uvec_rad[3] = 0.0;
@@ -262,14 +263,14 @@ KOKKOS_INLINE_FUNCTION void compute_covariant_fourforce(const GRCoordinates& G,
     RadM1::calc_ucon_rad(G, P_rad, j, i, ucon_rad);
     G.lower(ucon_rad, ucov_rad, k, j, i, Loci::center);
 
-    Real gamma_rel = -(ucon_rad[0] * ucov_mhd[0] + ucon_rad[1] * ucov_mhd[1] +
-                       ucon_rad[2] * ucov_mhd[2] + ucon_rad[3] * ucov_mhd[3]);
-    gamma_rel = m::max(gamma_rel, 1.0);
+    Real lfac_rel = -(ucon_rad[0] * ucov_mhd[0] + ucon_rad[1] * ucov_mhd[1] +
+                      ucon_rad[2] * ucov_mhd[2] + ucon_rad[3] * ucov_mhd[3]);
+    lfac_rel = m::max(lfac_rel, 1.0);
 
-    Real E_hat = Erf * ((4.0 / 3.0) * gamma_rel * gamma_rel - (1.0 / 3.0));
+    Real E_hat = Erf * ((4.0 / 3.0) * lfac_rel * lfac_rel - (1.0 / 3.0));
     Real F_hat_cov[4];
     for (int mu = 0; mu < 4; ++mu) {
-        F_hat_cov[mu] = (4.0 / 3.0) * Erf * gamma_rel * ucov_rad[mu] -
+        F_hat_cov[mu] = (4.0 / 3.0) * Erf * lfac_rel * ucov_rad[mu] -
                         ((1.0 / 3.0) * Erf + E_hat) * ucov_mhd[mu];
     }
 
@@ -1043,8 +1044,9 @@ KOKKOS_INLINE_FUNCTION int solve_4d_prad(const GRCoordinates& G,
             U_init(m_u.U1, k, j, i) = U_mhd_m[1];
             U_init(m_u.U2, k, j, i) = U_mhd_m[2];
             U_init(m_u.U3, k, j, i) = U_mhd_m[3];
-            auto mhd_inverter_status = Inverter::u_to_p<Inverter::Type::kastaun>(
-                G, U_init, m_u, eos, k, j, i, P_init, m_p, Loci::center, 25, 1e-12);
+            auto mhd_inverter_status = Inverter::u_to_p<Inverter::Type::kastaun>(G,
+                U_init, m_u, eos, k, j, i, P_init, m_p, Loci::center,
+                Inverter::KASTAUN_ITER_MAX, IMPLICIT_KASTAUN_ERR_TOL);
 
             P_mhd_m[0] = P_init(m_p.UU, k, j, i);
             P_mhd_m[1] = P_init(m_p.U1, k, j, i);
@@ -1079,8 +1081,9 @@ KOKKOS_INLINE_FUNCTION int solve_4d_prad(const GRCoordinates& G,
             U_init(m_u.U1, k, j, i) = U_mhd_p[1];
             U_init(m_u.U2, k, j, i) = U_mhd_p[2];
             U_init(m_u.U3, k, j, i) = U_mhd_p[3];
-            auto mhd_inverter_status_p = Inverter::u_to_p<Inverter::Type::kastaun>(
-                G, U_init, m_u, eos, k, j, i, P_init, m_p, Loci::center, 25, 1e-12);
+            auto mhd_inverter_status_p = Inverter::u_to_p<Inverter::Type::kastaun>(G,
+                U_init, m_u, eos, k, j, i, P_init, m_p, Loci::center,
+                Inverter::KASTAUN_ITER_MAX, IMPLICIT_KASTAUN_ERR_TOL);
 
             P_mhd_p[0] = P_init(m_p.UU, k, j, i);
             P_mhd_p[1] = P_init(m_p.U1, k, j, i);
@@ -1143,8 +1146,9 @@ KOKKOS_INLINE_FUNCTION int solve_4d_prad(const GRCoordinates& G,
                 U_init(m_u.U1, k, j, i) = U_mhd_p[1];
                 U_init(m_u.U2, k, j, i) = U_mhd_p[2];
                 U_init(m_u.U3, k, j, i) = U_mhd_p[3];
-                auto mhd_inverter_status = Inverter::u_to_p<Inverter::Type::kastaun>(
-                    G, U_init, m_u, eos, k, j, i, P_init, m_p, Loci::center, 25, 1e-12);
+                auto mhd_inverter_status = Inverter::u_to_p<Inverter::Type::kastaun>(G,
+                    U_init, m_u, eos, k, j, i, P_init, m_p, Loci::center,
+                    Inverter::KASTAUN_ITER_MAX, IMPLICIT_KASTAUN_ERR_TOL);
 
                 P_mhd_p[0] = P_init(m_p.UU, k, j, i);
                 P_mhd_p[1] = P_init(m_p.U1, k, j, i);
@@ -1201,8 +1205,9 @@ KOKKOS_INLINE_FUNCTION int solve_4d_prad(const GRCoordinates& G,
                 U_init(m_u.U1, k, j, i) = U_mhd_m[1];
                 U_init(m_u.U2, k, j, i) = U_mhd_m[2];
                 U_init(m_u.U3, k, j, i) = U_mhd_m[3];
-                auto mhd_inverter_status = Inverter::u_to_p<Inverter::Type::kastaun>(
-                    G, U_init, m_u, eos, k, j, i, P_init, m_p, Loci::center, 25, 1e-12);
+                auto mhd_inverter_status = Inverter::u_to_p<Inverter::Type::kastaun>(G,
+                    U_init, m_u, eos, k, j, i, P_init, m_p, Loci::center,
+                    Inverter::KASTAUN_ITER_MAX, IMPLICIT_KASTAUN_ERR_TOL);
                 P_mhd_m[0] = P_init(m_p.UU, k, j, i);
                 P_mhd_m[1] = P_init(m_p.U1, k, j, i);
                 P_mhd_m[2] = P_init(m_p.U2, k, j, i);
@@ -1263,8 +1268,9 @@ KOKKOS_INLINE_FUNCTION int solve_4d_prad(const GRCoordinates& G,
             U_init(m_u.U2, k, j, i) = U_mhd_guess[2];
             U_init(m_u.U3, k, j, i) = U_mhd_guess[3];
 
-            auto mhd_inverter_status = Inverter::u_to_p<Inverter::Type::kastaun>(
-                G, U_init, m_u, eos, k, j, i, P_init, m_p, Loci::center, 25, 1e-12);
+            auto mhd_inverter_status = Inverter::u_to_p<Inverter::Type::kastaun>(G,
+                U_init, m_u, eos, k, j, i, P_init, m_p, Loci::center,
+                Inverter::KASTAUN_ITER_MAX, IMPLICIT_KASTAUN_ERR_TOL);
 
             if (mhd_inverter_status != static_cast<int>(Inverter::Status::success)) {
                 scaling_factor /= 3.0;

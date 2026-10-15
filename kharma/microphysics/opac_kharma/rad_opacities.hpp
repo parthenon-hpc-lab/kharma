@@ -67,7 +67,7 @@ class RadOpac
                 return 0.0;
             case OpacityType::ThermalEquilibrium: {
                 const Real rho_cgs = rho * units_cgs.GetMassDensityCodeToCGS();
-                return 0.4 * rho_cgs * units_cgs.GetLengthCodeToCGS();
+                return Units::KAPPA_ES_CGS * rho_cgs * units_cgs.GetLengthCodeToCGS();
             }
             default: {
                 return sing_opac.PlanckMeanAbsorptionCoefficient(rho, Tg) +
@@ -88,7 +88,7 @@ class RadOpac
                 return 0.0;
             case OpacityType::Bondi: {
                 const Real rho_cgs = rho * units_cgs.GetMassDensityCodeToCGS();
-                const Real kappa_sc_cgs = 0.4 * rho_cgs;
+                const Real kappa_sc_cgs = Units::KAPPA_ES_CGS * rho_cgs;
                 return kappa_sc_cgs * units_cgs.GetLengthCodeToCGS();
             }
             case OpacityType::ThermalEquilibrium:
@@ -112,7 +112,7 @@ class RadOpac
                     units_cgs.GetEnergyCodeToCGS() /
                     m::pow(units_cgs.GetLengthCodeToCGS(), 3.0);
                 const Real sigma_rad =
-                    5.670374419e-5 / pc::c /
+                    Units::SIGMA_SB_CGS / pc::c /
                     (energy_density_cgs /
                         m::pow(units_cgs.GetTemperatureCodeToCGS(), 4.0));
                 return 4.0 * sigma_rad * (Tg * Tg * Tg * Tg);
@@ -140,7 +140,7 @@ class RadOpac
                     units_cgs.GetEnergyCodeToCGS() /
                     m::pow(units_cgs.GetLengthCodeToCGS(), 3.0);
                 const Real sigma_rad =
-                    5.670374419e-5 / pc::c /
+                    Units::SIGMA_SB_CGS / pc::c /
                     (energy_density_cgs /
                         m::pow(units_cgs.GetTemperatureCodeToCGS(), 4.0));
                 return m::pow(m::max(E_hat, 0.0) / (4.0 * sigma_rad), 0.25);

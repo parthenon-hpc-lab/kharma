@@ -225,9 +225,9 @@ void MeshUtoP(MeshData<Real>* md, IndexDomain domain, bool coarse)
     pmb->par_for("UtoP_EMHD", block.s, block.e, kb.s, kb.e, jb.s, jb.e, ib.s, ib.e,
                  KOKKOS_LAMBDA(const int& b, const int& k, const int& j, const int& i)
         {
-            const Real gamma = GRMHD::lorentz_calc(G, P(b), m_p, k, j, i, Loci::center);
+            const Real lfac = GRMHD::lorentz_calc(G, P(b), m_p, k, j, i, Loci::center);
             const Real inv_alpha = m::sqrt(-G.gcon(Loci::center, j, i, 0, 0));
-            const Real ucon0 = gamma * inv_alpha;
+            const Real ucon0 = lfac * inv_alpha;
 
             // Update the primitive EMHD fields
             if (m_p.Q >= 0)
@@ -263,9 +263,9 @@ void BlockUtoP(MeshBlockData<Real>* rc, IndexDomain domain, bool coarse)
     pmb->par_for("UtoP_EMHD", kb.s, kb.e, jb.s, jb.e, ib.s, ib.e,
                  KOKKOS_LAMBDA(const int& k, const int& j, const int& i)
         {
-            const Real gamma = GRMHD::lorentz_calc(G, P, m_p, k, j, i, Loci::center);
+            const Real lfac = GRMHD::lorentz_calc(G, P, m_p, k, j, i, Loci::center);
             const Real inv_alpha = m::sqrt(-G.gcon(Loci::center, j, i, 0, 0));
-            const Real ucon0 = gamma * inv_alpha;
+            const Real ucon0 = lfac * inv_alpha;
 
             // Update the primitive EMHD fields
             if (m_p.Q >= 0)
@@ -299,9 +299,9 @@ void BlockPtoU(MeshBlockData<Real>* rc, IndexDomain domain, bool coarse)
     pmb->par_for("PtoU_EMHD", kb.s, kb.e, jb.s, jb.e, ib.s, ib.e,
                  KOKKOS_LAMBDA(const int& k, const int& j, const int& i)
         {
-            const Real gamma = GRMHD::lorentz_calc(G, P, m_p, k, j, i, Loci::center);
+            const Real lfac = GRMHD::lorentz_calc(G, P, m_p, k, j, i, Loci::center);
             const Real inv_alpha = m::sqrt(-G.gcon(Loci::center, j, i, 0, 0));
-            const Real ucon0 = gamma * inv_alpha;
+            const Real ucon0 = lfac * inv_alpha;
 
             // Update the conserved EMHD fields
             if (m_p.Q >= 0)

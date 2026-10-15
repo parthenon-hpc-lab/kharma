@@ -2,6 +2,7 @@
 #include "floors.hpp"
 
 #include "boundaries.hpp"
+#include "kharma_constants.hpp"
 #include "radM1.hpp"
 
 #include <cmath>
@@ -25,19 +26,18 @@ void AddBeamOfLightParameters(ParameterInput* pin, Packages_t& packages)
     const Real rho_ambient = pin->GetOrAddReal("beam_of_light", "rho_ambient", 1.0);
 
     // The boost here is f_target
-    const Real gamma_beam = 1.0 / std::sqrt(1.0 - f_target * f_target);
+    const Real lfac_beam = 1.0 / std::sqrt(1.0 - f_target * f_target);
 
     // u^theta of the radiation in an orthonormal frame (we are firing the radiation in
     // the r-theta frame)
-    const Real u_theta_beam_ortho = gamma_beam * f_target;
+    const Real u_theta_beam_ortho = lfac_beam * f_target;
 
     // This block is actually not necessary. The units are arbitrary.
     const Units::UnitConversions unit_conv =
         packages.Get("Units")->AllParams().Get<Units::UnitConversions>("unit_conv");
     const Real energy_density_scale = unit_conv.GetEnergyCodeToCGS();
-    constexpr Real sigma_sb_cgs = 5.670374419e-5;
-    constexpr Real c_cgs = 2.99792458e10;
-    constexpr Real arad_cgs = 4.0 * sigma_sb_cgs / c_cgs;
+    constexpr Real c_cgs = pc::c;
+    constexpr Real arad_cgs = 4.0 * Units::SIGMA_SB_CGS / c_cgs;
 
     // Find out the beam temperature to set E, by using E = a * T^4.
     const Real T_beam_K = T_beam_over_Ta * T_ambient_K;
@@ -61,8 +61,8 @@ void AddBeamOfLightParameters(ParameterInput* pin, Packages_t& packages)
         packages.Get("GRMHD")->AddParam<Real>("beam_E_ambient", E_ambient);
     if (!packages.Get("GRMHD")->AllParams().hasKey("beam_E_beam"))
         packages.Get("GRMHD")->AddParam<Real>("beam_E_beam", E_beam);
-    if (!packages.Get("GRMHD")->AllParams().hasKey("beam_gamma"))
-        packages.Get("GRMHD")->AddParam<Real>("beam_gamma", gamma_beam);
+    if (!packages.Get("GRMHD")->AllParams().hasKey("beam_lfac"))
+        packages.Get("GRMHD")->AddParam<Real>("beam_lfac", lfac_beam);
     if (!packages.Get("GRMHD")->AllParams().hasKey("beam_u_theta_ortho"))
         packages.Get("GRMHD")->AddParam<Real>("beam_u_theta_ortho", u_theta_beam_ortho);
 }
@@ -107,13 +107,13 @@ TaskStatus SetBeamOfLightImpl(
     const Real T_ambient = pmb->packages.Get("GRMHD")->Param<Real>("beam_T_ambient");
     const Real E_ambient = pmb->packages.Get("GRMHD")->Param<Real>("beam_E_ambient");
     const Real E_beam = pmb->packages.Get("GRMHD")->Param<Real>("beam_E_beam");
-    const Real gamma_beam = pmb->packages.Get("GRMHD")->Param<Real>("beam_gamma");
+    const Real lfac_beam = pmb->packages.Get("GRMHD")->Param<Real>("beam_lfac");
     const Real u_theta_ortho =
         pmb->packages.Get("GRMHD")->Param<Real>("beam_u_theta_ortho");
     const Real r_beam = pmb->packages.Get("GRMHD")->Param<Real>("beam_r");
     const Real dr_beam = pmb->packages.Get("GRMHD")->Param<Real>("beam_dr");
 
-    const Real Erf_beam = E_beam / ((4.0 / 3.0) * gamma_beam * gamma_beam - (1.0 / 3.0));
+    const Real Erf_beam = E_beam / ((4.0 / 3.0) * lfac_beam * lfac_beam - (1.0 / 3.0));
     const bool inject_beam = (domain == IndexDomain::inner_x2);
 
     const GRCoordinates& G = pmb->coords;

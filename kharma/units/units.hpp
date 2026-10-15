@@ -144,8 +144,6 @@ class CodeConstants
     }
 };
 
-constexpr Real solar_mass = 1.989e33; // g
-
 std::shared_ptr<KHARMAPackage> Initialize(
     ParameterInput* pin, std::shared_ptr<Packages_t>& packages);
 

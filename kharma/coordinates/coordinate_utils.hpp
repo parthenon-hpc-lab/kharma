@@ -206,7 +206,7 @@ KOKKOS_INLINE_FUNCTION void fourvel_to_prim(
     const Real gcon[GR_DIM][GR_DIM], const Real ucon[GR_DIM], Real u_prim[NVEC])
 {
     Real alpha2 = -1.0 / gcon[0][0];
-    // Note gamma/alpha is ucon[0]
+    // Note lfac/alpha is ucon[0]
     u_prim[0] = ucon[1] + ucon[0] * alpha2 * gcon[0][1];
     u_prim[1] = ucon[2] + ucon[0] * alpha2 * gcon[0][2];
     u_prim[2] = ucon[3] + ucon[0] * alpha2 * gcon[0][3];

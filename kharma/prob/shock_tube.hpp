@@ -98,24 +98,24 @@ TaskStatus InitializeShockTube(
                 } else {
                     // Melon Fuksman & Mignone 2019 (PLUTO M1 module) IC
                     const Real u1_gas = (lhs) ? u1L : u1R;
-                    const Real gamma2_gas = 1.0 + u1_gas * u1_gas;
-                    const Real v_gas = u1_gas / m::sqrt(gamma2_gas);
+                    const Real lfac_sq_gas = 1.0 + u1_gas * u1_gas;
+                    const Real v_gas = u1_gas / m::sqrt(lfac_sq_gas);
                     const Real Fr0 = rad_seed_frac * E0;
 
                     const Real E_lab =
                         ((1.0 + (1.0 / 3.0) * v_gas * v_gas) * E0 + 2.0 * Fr0 * v_gas) *
-                        gamma2_gas;
+                        lfac_sq_gas;
                     const Real F_lab =
                         ((1.0 + v_gas * v_gas) * Fr0 + (4.0 / 3.0) * E0 * v_gas) *
-                        gamma2_gas;
+                        lfac_sq_gas;
 
                     const Real f = F_lab / E_lab;
                     const Real v_rad = 3.0 * f / (2.0 + m::sqrt(4.0 - 3.0 * f * f));
-                    const Real gamma_rad = 1.0 / m::sqrt(1.0 - v_rad * v_rad);
+                    const Real lfac_rad = 1.0 / m::sqrt(1.0 - v_rad * v_rad);
 
                     erad(k, j, i) =
-                        E_lab / ((4.0 / 3.0) * gamma_rad * gamma_rad - 1.0 / 3.0);
-                    uvec_rad(0, k, j, i) = gamma_rad * v_rad;
+                        E_lab / ((4.0 / 3.0) * lfac_rad * lfac_rad - 1.0 / 3.0);
+                    uvec_rad(0, k, j, i) = lfac_rad * v_rad;
                     uvec_rad(1, k, j, i) = 0.0;
                     uvec_rad(2, k, j, i) = 0.0;
                 }

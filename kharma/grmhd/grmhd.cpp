@@ -49,6 +49,7 @@
 #include "grmhd_functions.hpp"
 #include "inverter.hpp"
 #include "kharma.hpp"
+#include "kharma_constants.hpp"
 #include "kharma_driver.hpp"
 
 // phoebus includes
@@ -684,6 +685,9 @@ void CancelBoundaryU3(MeshBlockData<Real>* rc, IndexDomain domain, bool coarse)
     IndexRange3 b = KDomain::GetRange(rc, domain, coarse);
     IndexRange3 bi = KDomain::GetRange(rc, IndexDomain::interior, coarse);
     const int jf = (binner) ? bi.js : bi.je; // j index of last zone next to pole
+    // These inversions always use Kastaun: follow its settings when it is the inverter
+    const Inverter::SolverSettings solve =
+        Inverter::GetSolverSettings(pmb->packages, Inverter::Type::kastaun);
     parthenon::par_for_outer(DEFAULT_OUTER_LOOP_PATTERN, "reduce_U3_" + bname,
         pmb->exec_space, 0, 1, b.is, b.ie,
         KOKKOS_LAMBDA(parthenon::team_mbr_t member, const int& i)
@@ -693,8 +697,8 @@ void CancelBoundaryU3(MeshBlockData<Real>* rc, IndexDomain domain, bool coarse)
                 parthenon::par_for_inner(member, bi.ks, bi.ke,
                     [&](const int& k)
                     {
-                        Inverter::u_to_p<Inverter::Type::kastaun>(
-                            G, U, m_u, eos, k, jf, i, P, m_p, Loci::center, 25, 1e-14);
+                        Inverter::u_to_p<Inverter::Type::kastaun>(G, U, m_u, eos, k, jf,
+                            i, P, m_p, Loci::center, solve.iter_max, solve.err_tol);
                     });
             }
             member.team_barrier();
@@ -768,6 +772,9 @@ void CancelBoundaryT3(MeshBlockData<Real>* rc, IndexDomain domain, bool coarse)
     IndexRange3 b = KDomain::GetRange(rc, domain, coarse);
     IndexRange3 bi = KDomain::GetRange(rc, IndexDomain::interior, coarse);
     const int jf = (binner) ? bi.js : bi.je; // j index of last zone next to pole
+    // These inversions always use Kastaun: follow its settings when it is the inverter
+    const Inverter::SolverSettings solve =
+        Inverter::GetSolverSettings(pmb->packages, Inverter::Type::kastaun);
     parthenon::par_for_outer(DEFAULT_OUTER_LOOP_PATTERN, "reduce_T3_" + bname,
         pmb->exec_space, 0, 1, b.is, b.ie,
         KOKKOS_LAMBDA(parthenon::team_mbr_t member, const int& i)
@@ -801,8 +808,8 @@ void CancelBoundaryT3(MeshBlockData<Real>* rc, IndexDomain domain, bool coarse)
                 {
                     U(m_u.U3, k, jf, i) -= T3_avg;
                     // Recover primitive GRMHD variables from our modified U
-                    Inverter::u_to_p<Inverter::Type::kastaun>(
-                        G, U, m_u, eos, k, jf, i, P, m_p, Loci::center, 25, 1e-14);
+                    Inverter::u_to_p<Inverter::Type::kastaun>(G, U, m_u, eos, k, jf, i, P,
+                        m_p, Loci::center, solve.iter_max, solve.err_tol);
                     // Floor them
                     int fflag = Floors::apply_geo_floors(
                         G, P, m_p, k, jf, i, floors, Loci::center);

@@ -60,8 +60,8 @@ TaskStatus InitializeNoh(std::shared_ptr<MeshBlockData<Real>>& rc, ParameterInpu
     const GReal center = (x1min + x1max) / 2.;
 
     // Given Mach and knowing that v = 1e-3 and rho = 1, we calculate u
-    double cs2 = m::pow(v0, 2) / m::pow(mach, 2);
-    double gamma = 1. / m::sqrt(1. - m::pow(v0, 2)); // Since we are in flat space
+    double cs2 = SQR(v0 / mach);
+    double lfac = 1. / m::sqrt(1. - m::pow(v0, 2)); // Since we are in flat space
     const Real P = (zero_ug) ? 0. : rho0 * cs2 / (gam * (gam - 1) - cs2 * gam);
 
     if (set_tlim) {
@@ -88,14 +88,14 @@ TaskStatus InitializeNoh(std::shared_ptr<MeshBlockData<Real>>& rc, ParameterInpu
                 Real X[GR_DIM];
                 G.coord_embed(k, j, i, Loci::center, X);
                 const bool lhs = X[1] < center;
-                uvec(0, k, j, i) = ((lhs) ? v0 : -v0) * gamma;
+                uvec(0, k, j, i) = ((lhs) ? v0 : -v0) * lfac;
             });
     } else {
         pmb->par_for("noh_left", kb.s, kb.e, jb.s, jb.e, ib.s, ib.e,
                      KOKKOS_LAMBDA(const int& k, const int& j, const int& i)
             {
                 u(k, j, i) = P / (gam - 1.);
-                uvec(0, k, j, i) = -v0 * gamma;
+                uvec(0, k, j, i) = -v0 * lfac;
             });
     }
 

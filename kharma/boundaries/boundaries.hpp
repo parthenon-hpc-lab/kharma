@@ -38,6 +38,7 @@
 #include "boundary_types.hpp"
 #include "dirichlet.hpp"
 #include "grmhd_functions.hpp"
+#include "kharma_constants.hpp"
 #include "one_block_transmit.hpp"
 
 /**
@@ -116,17 +117,17 @@ KOKKOS_INLINE_FUNCTION void check_inflow(const GRCoordinates& G,
 
     if (((ucon[1] > 0.) && (domain == IndexDomain::inner_x1)) ||
         ((ucon[1] < 0.) && (domain == IndexDomain::outer_x1))) {
-        // Find gamma and remove it from primitive velocity
-        double gamma = GRMHD::lorentz_calc(G, uvec, k, j, i, Loci::center);
+        // Find the Lorentz factor and remove it from primitive velocity
+        double lfac = GRMHD::lorentz_calc(G, uvec, k, j, i, Loci::center);
         VLOOP
-            uvec[v] /= gamma;
+            uvec[v] /= lfac;
 
         // Reset radial velocity so radial 4-velocity is zero
         Real alpha = 1. / m::sqrt(-G.gcon(Loci::center, j, i, 0, 0));
         Real beta1 = G.gcon(Loci::center, j, i, 0, 1) * alpha * alpha;
         uvec[V1] = beta1 / alpha;
 
-        // Now find new gamma and put it back in
+        // Now find the new Lorentz factor and put it back in
         Real vsq = G.gcov(Loci::center, j, i, 1, 1) * uvec[V1] * uvec[V1] +
                    G.gcov(Loci::center, j, i, 2, 2) * uvec[V2] * uvec[V2] +
                    G.gcov(Loci::center, j, i, 3, 3) * uvec[V3] * uvec[V3] +
@@ -134,12 +135,12 @@ KOKKOS_INLINE_FUNCTION void check_inflow(const GRCoordinates& G,
                             G.gcov(Loci::center, j, i, 1, 3) * uvec[V1] * uvec[V3] +
                             G.gcov(Loci::center, j, i, 2, 3) * uvec[V2] * uvec[V3]);
 
-        vsq = clip(vsq, 1.e-13, 1. - 1. / (50. * 50.));
+        vsq = clip(vsq, 1.e-13, 1. - 1. / SQR(Floors::LFAC_CAP));
 
-        gamma = 1. / m::sqrt(1. - vsq);
+        lfac = 1. / m::sqrt(1. - vsq);
 
         VLOOP
-            uvec[v] *= gamma;
+            uvec[v] *= lfac;
         VLOOP
             P(index_u1 + v, k, j, i) = uvec[v];
     }

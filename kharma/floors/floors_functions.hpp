@@ -34,6 +34,8 @@
 #pragma once
 
 #include "floors.hpp"
+#include "kharma_constants.hpp"
+#include "roots.hpp"
 // For template specializations since inverter needs floors too
 #include "kastaun.hpp"
 #include "onedw.hpp"
@@ -62,21 +64,21 @@ KOKKOS_INLINE_FUNCTION void apply_ceilings(const GRCoordinates& G,
     const VarMap& m_u, const Loci loc = Loci::center)
 {
     // Compute max values for ceilings
-    Real gamma = GRMHD::lorentz_calc(G, P, m_p, k, j, i, loc);
+    Real lfac = GRMHD::lorentz_calc(G, P, m_p, k, j, i, loc);
     Real ktot = (floors.gamma1 - 1.) * P(m_p.UU, k, j, i) /
                 m::pow(P(m_p.RHO, k, j, i), floors.gamma1);
     Real u_over_rho = P(m_p.UU, k, j, i) / P(m_p.RHO, k, j, i);
 
-    // 1. Limit gamma with respect to normal observer
+    // 1. Limit the Lorentz factor with respect to normal observer
     // TODO ADJUST RHO
-    if (gamma > floors.gamma_max) {
-        Real f = m::sqrt((SQR(floors.gamma_max) - 1.) / (SQR(gamma) - 1.));
+    if (lfac > floors.lfac_max) {
+        Real f = m::sqrt((SQR(floors.lfac_max) - 1.) / (SQR(lfac) - 1.));
         VLOOP
             P(m_p.U1 + v, k, j, i) *= f;
         // This should be here even though it will be checked & possibly replaced.
         // TODO recalculate direct?  This should preserve existing D...
-        P(m_p.RHO, k, j, i) *= gamma / floors.gamma_max;
-        P(m_p.UU, k, j, i) *= gamma / floors.gamma_max;
+        P(m_p.RHO, k, j, i) *= lfac / floors.lfac_max;
+        P(m_p.UU, k, j, i) *= lfac / floors.lfac_max;
     }
 
     // 2. Limit the entropy by controlling u, to avoid anomalous cooling from funnel wall
@@ -165,8 +167,8 @@ KOKKOS_INLINE_FUNCTION int determine_floors(const GRCoordinates& G,
     }
 
     // Then ceilings, need to record these for FOFC. See real implementation for details
-    if (GRMHD::lorentz_calc(G, P, m_p, k, j, i, Loci::center) > floors.gamma_max)
-        fflag |= FFlag::GAMMA;
+    if (GRMHD::lorentz_calc(G, P, m_p, k, j, i, Loci::center) > floors.lfac_max)
+        fflag |= FFlag::LFAC;
 
     if ((floors.gamma1 - 1.) * P(m_p.UU, k, j, i) /
             m::pow(P(m_p.RHO, k, j, i), floors.gamma1) >
@@ -184,7 +186,8 @@ KOKKOS_INLINE_FUNCTION int determine_floors(const GRCoordinates& G,
     const GRCoordinates &G, const VariablePack<Real>&P, const VarMap &m_p,               \
         const Microphysics::EOS::EOS &eos, const Real gam, const int &k, const int &j,   \
         const int &i, const Real &rhoflr_max, const Real &uflr_max,                      \
-        const VariablePack<Real>&U, const VarMap &m_u
+        const VariablePack<Real>&U, const VarMap &m_u,                                   \
+        const Inverter::SolverSettings &solve
 
 /**
  * Apply floors of several types in determining how to add mass and internal energy to
@@ -320,7 +323,7 @@ KOKKOS_INLINE_FUNCTION int apply_floors<InjectionFrame::normal_onedw>(FLOOR_ONE_
 
     // Recover primitive variables from conserved versions
     return Inverter::u_to_p<Inverter::Type::onedw>(
-        G, U, m_u, eos, k, j, i, P, m_p, Loci::center, 8, 1e-8);
+        G, U, m_u, eos, k, j, i, P, m_p, Loci::center, solve.iter_max, solve.err_tol);
 }
 
 template<>
@@ -351,7 +354,7 @@ KOKKOS_INLINE_FUNCTION int apply_floors<InjectionFrame::normal_kastaun>(FLOOR_ON
 
     // Recover new primitive variables
     return Inverter::u_to_p<Inverter::Type::kastaun>(
-        G, U, m_u, eos, k, j, i, P, m_p, Loci::center, 25, 1e-14);
+        G, U, m_u, eos, k, j, i, P, m_p, Loci::center, solve.iter_max, solve.err_tol);
 }
 
 template<>
@@ -380,14 +383,14 @@ KOKKOS_INLINE_FUNCTION int apply_floors<InjectionFrame::normal_kastaun_eenough>(
     // If the velocity is a guess because the solve failed...
     if (P(m_p.RHO, k, j, i) <= 0. || P(m_p.UU, k, j, i) <= 0.) {
         // 1a. What velocity conserves momentum?  Calculate it.
-        const Real tol = 1e-14;
+        const Real tol = solve.backstop_tol;
         const Real W = GRMHD::lorentz_calc(G, uvec, k, j, i, Loci::center);
         auto f = [&](Real iW)
         {
             // Rescale velocity
-            Real gamma_fac = m::sqrt((SQR(1. / iW) - 1.) / (SQR(W) - 1.));
+            Real uvec_fac = m::sqrt((SQR(1. / iW) - 1.) / (SQR(W) - 1.));
             const Real uv[NVEC] = {
-                gamma_fac * uvec[0], gamma_fac * uvec[1], gamma_fac * uvec[2]};
+                uvec_fac * uvec[0], uvec_fac * uvec[1], uvec_fac * uvec[2]};
             // Calculate tensor (we only need T1)
             Real rho_ut, T[GR_DIM];
             GRMHD::p_to_u_mhd(G, rho, u, uv, B, eos, k, j, i, rho_ut, T);
@@ -397,32 +400,24 @@ KOKKOS_INLINE_FUNCTION int apply_floors<InjectionFrame::normal_kastaun_eenough>(
 
         // Rootfind for iW that would have produced the current T01
         bool e_solve_failed = false;
-        Real iWm = 1 / m::min(W, 50.), iWp = 1.;
-        Real iW;
-        if (f(iWp) * f(iWm) > 0.) {
+
+        // Making a temporary copy with (Real)LFAC_CAP
+        // because nvcc rejects const& to static constexpr variables.
+        const Real iWm = 1 / m::min(W, (Real)LFAC_CAP);
+        Real iW = 1.;
+        // Bisect until the midpoint is within tol of both ends.
+        if (Roots::bisect<Roots::RootEval::Any>(iW, f, iWm, (Real)1., tol, 2 * tol,
+                solve.backstop_iter_max) == Roots::RootStatus::NotBracketed) {
             e_solve_failed = true;
         } else {
-            Real iWc = (iWp + iWm) / 2.;
-            for (int i = 0; i < 100; i++) {
-                Real resv = m::abs(f(iWc));
-                if ((resv < tol) || (m::abs((iWp - iWm) / 2) < tol) || i > 90) {
-                    iW = iWc;
-                    e_solve_failed = (resv > tol);
-                    break;
-                }
-                // Same sign as right side -> center now right side
-                if (f(iWc) * f(iWp) > 0.)
-                    iWp = iWc;
-                else // default to shifting window up -> slower
-                    iWm = iWc;
-                iWc = (iWm + iWp) / 2.;
-            }
+            // Succeed only if the residual itself is within tol
+            e_solve_failed = (m::abs(f(iW)) > tol);
         }
         if (!e_solve_failed) {
-            const Real gamma_fac = m::sqrt((SQR(1. / iW) - 1.) / (SQR(W) - 1.));
-            uvec[0] *= gamma_fac;
-            uvec[1] *= gamma_fac;
-            uvec[2] *= gamma_fac;
+            const Real uvec_fac = m::sqrt((SQR(1. / iW) - 1.) / (SQR(W) - 1.));
+            uvec[0] *= uvec_fac;
+            uvec[1] *= uvec_fac;
+            uvec[2] *= uvec_fac;
         } // otherwise we just leave it.  TODO zero?
     }
 
@@ -437,7 +432,7 @@ KOKKOS_INLINE_FUNCTION int apply_floors<InjectionFrame::normal_kastaun_eenough>(
 
     // 4. Attempt to recover new primitive variables
     return Inverter::u_to_p<Inverter::Type::kastaun>(
-        G, U, m_u, eos, k, j, i, P, m_p, Loci::center, 25, 1e-14);
+        G, U, m_u, eos, k, j, i, P, m_p, Loci::center, solve.iter_max, solve.err_tol);
 }
 
 // These are implemented as special cases in the kernel in floors_impl.hpp
@@ -457,8 +452,8 @@ KOKKOS_INLINE_FUNCTION int apply_floors<InjectionFrame::mixed_normal_drift>(
 
 // KOKKOS_INLINE_FUNCTION rho_to_slow()
 // {
-//     const Real rhoh_denom_max = SQR(floors.gamma_max) *
-//                                 m::sqrt(1 - 1 / SQR(floors.gamma_max));
+//     const Real rhoh_denom_max = SQR(floors.lfac_max) *
+//                                 m::sqrt(1 - 1 / SQR(floors.lfac_max));
 
 //     //const Real rho = std::max(P(m_p.RHO, k, j, i), rhoflr_max);
 //     //const Real u = std::max(P(m_p.UU, k, j, i), uflr_max);
@@ -516,7 +511,7 @@ KOKKOS_INLINE_FUNCTION int apply_floors<InjectionFrame::mixed_normal_drift>(
 //         };
 
 //         Real zm = 1.;
-//         Real zp = floors.gamma_max;
+//         Real zp = floors.lfac_max;
 //         Real z = 0.5*(zm + zp);
 
 //         Real fm = func_W(zm);

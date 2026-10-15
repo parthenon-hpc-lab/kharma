@@ -273,7 +273,7 @@ TaskStatus RadM1::BlockPtoU(MeshBlockData<Real>* rc, IndexDomain domain, bool co
             Real Erf = P(m_p.UU_RAD, k, j, i);
             Real uvec_radframe[4] = {0, P(m_p.U1_RAD, k, j, i), P(m_p.U2_RAD, k, j, i),
                 P(m_p.U3_RAD, k, j, i)};
-            const Real gamma =
+            const Real lfac =
                 GRMHD::lorentz_calc(G, uvec_radframe, k, j, i, Loci::center);
             Real ucon_rad[GR_DIM];
             // GRMHD::calc_ucon(G, uvec_radframe, k, j, i, Loci::center, ucon_rad);

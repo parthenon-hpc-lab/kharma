@@ -33,6 +33,7 @@
  */
 
 #include "units.hpp"
+#include "kharma_constants.hpp"
 
 namespace Units
 {
@@ -81,7 +82,7 @@ UnitConversions::UnitConversions(ParameterInput* pin)
         }
 
         if (geom_mass_msun_exists) {
-            Real geom_mass_ = pin->GetReal("units", "geom_mass_msun") * solar_mass;
+            Real geom_mass_ = pin->GetReal("units", "geom_mass_msun") * MSUN_CGS;
             length_ = pc.g_newt * geom_mass_ / pow(pc.c, 2);
         }
 

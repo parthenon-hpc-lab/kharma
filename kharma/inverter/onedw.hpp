@@ -38,6 +38,7 @@
 #include "invert_template.hpp"
 
 #include "grmhd_functions.hpp"
+#include "kharma_constants.hpp"
 #include "kharma_utils.hpp"
 
 // phoebus includes
@@ -49,7 +50,7 @@ namespace Inverter
 
 // Could put support fns in their own namespace, but I'm lazy
 /**
- * Fluid relativistic factor gamma in terms of inversion state variables of the Noble 1D_W
+ * Fluid Lorentz factor in terms of inversion state variables of the Noble 1D_W
  * inverter
  */
 KOKKOS_INLINE_FUNCTION Real lorentz_calc_w(
@@ -65,8 +66,8 @@ KOKKOS_INLINE_FUNCTION Real lorentz_calc_w(
         -((W + WB) * QdBsq + W2 * Qtsq) / (QdBsq * (W + WB) + W2 * (Qtsq - WB * WB));
 
     // Catch utsq < 0 and YELL
-    // Latter number should be about ~1e3*GAMMAMAX^2, but obvs doesn't need to be precise
-    if (utsq < -1.e-15 || utsq > 1.e7) {
+    // Latter number should be about ~1e3*LFAC_CAP^2, but obvs doesn't need to be precise
+    if (utsq < -1.e-15 || utsq > 4.e3 * SQR(Floors::LFAC_CAP)) {
         return -1.; // This will trigger caller to return an error immediately
     } else {
         return m::sqrt(1. + m::abs(utsq));
@@ -80,10 +81,10 @@ KOKKOS_INLINE_FUNCTION Real err_eqn(const Real& gam, const Real& Bsq, const Real
     const Real& Ep, const Real& QdB, const Real& Qtsq, const Real& Wp, Status& eflag)
 {
     const Real W = Wp + D;
-    const Real gamma = lorentz_calc_w(Bsq, D, QdB, Qtsq, Wp);
-    if (gamma < 1) eflag = Status::bad_ut;
-    const Real w = W / (gamma * gamma);
-    const Real rho = D / gamma;
+    const Real lfac = lorentz_calc_w(Bsq, D, QdB, Qtsq, Wp);
+    if (lfac < 1) eflag = Status::bad_ut;
+    const Real w = W / (lfac * lfac);
+    const Real rho = D / lfac;
     const Real p = (w - rho) * (gam - 1) / gam;
 
     return -Ep + Wp - p + 0.5 * Bsq + 0.5 * (Bsq * Qtsq - QdB * QdB) / SQR(Bsq + W);
@@ -96,7 +97,7 @@ template<>
 KOKKOS_INLINE_FUNCTION int u_to_p<Type::onedw>(const GRCoordinates& G,
     const VariablePack<Real>& U, const VarMap& m_u, const Microphysics::EOS::EOS& eos,
     const int& k, const int& j, const int& i, const VariablePack<Real>& P,
-    const VarMap& m_p, const Loci& loc, const int& max_iterations, const Real& tol)
+    const VarMap& m_p, const Loci& loc, const int max_iterations, const Real tol)
 {
     // TODO try inline floors in the old 1Dw?  Probably not relevant anymore
     // Catch negative density
@@ -155,15 +156,15 @@ KOKKOS_INLINE_FUNCTION int u_to_p<Type::onedw>(const GRCoordinates& G,
     // Initial guess from primitives:
     Real Wp, err, gam;
     {
-        const Real gamma = GRMHD::lorentz_calc(G, P, m_p, k, j, i, loc);
-        if (gamma < 1) return static_cast<int>(Status::bad_ut);
+        const Real lfac = GRMHD::lorentz_calc(G, P, m_p, k, j, i, loc);
+        if (lfac < 1) return static_cast<int>(Status::bad_ut);
         const Real rho = P(m_p.RHO, k, j, i), u = P(m_p.UU, k, j, i);
 
         const Real sie = u / rho;
         const Real pg = eos.PressureFromDensityInternalEnergy(rho, sie);
         gam = eos.BulkModulusFromDensityInternalEnergy(rho, sie) / pg;
 
-        Wp = (rho + u + pg) * gamma * gamma - rho * gamma;
+        Wp = (rho + u + pg) * lfac * lfac - rho * lfac;
         err = err_eqn(gam, Bsq, D, Ep, QdB, Qtsq, Wp, eflag);
     }
 
@@ -211,14 +212,14 @@ KOKKOS_INLINE_FUNCTION int u_to_p<Type::onedw>(const GRCoordinates& G,
     // Return failure to converge
     if (iter == max_iterations) return static_cast<int>(Status::max_iter);
 
-    // Find utsq, gamma, rho from Wp
+    // Find utsq, lfac, rho from Wp
     // Note we only throw an error if *this* velocity calculation is bad
-    const Real gamma = lorentz_calc_w(Bsq, D, QdB, Qtsq, Wp);
-    if (gamma < 1) return static_cast<int>(Status::bad_ut);
+    const Real lfac = lorentz_calc_w(Bsq, D, QdB, Qtsq, Wp);
+    if (lfac < 1) return static_cast<int>(Status::bad_ut);
 
-    const Real rho = D / gamma;
+    const Real rho = D / lfac;
     const Real W = Wp + D;
-    const Real w = W / (gamma * gamma);
+    const Real w = W / (lfac * lfac);
     const Real p = (w - rho) * (gam - 1) / gam;
     const Real u = w - (rho + p);
 
@@ -235,7 +236,7 @@ KOKKOS_INLINE_FUNCTION int u_to_p<Type::onedw>(const GRCoordinates& G,
     P(m_p.UU, k, j, i) = u;
 
     // Find u(tilde); Eqn. 31 of Noble et al.
-    const Real pre = (gamma / (W + Bsq));
+    const Real pre = (lfac / (W + Bsq));
     P(m_p.U1, k, j, i) = pre * (Qtcon[1] + QdB * Bcon[1] / W);
     P(m_p.U2, k, j, i) = pre * (Qtcon[2] + QdB * Bcon[2] / W);
     P(m_p.U3, k, j, i) = pre * (Qtcon[3] + QdB * Bcon[3] / W);
