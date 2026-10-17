@@ -408,7 +408,7 @@ Real EstimateTimestep(MeshData<Real>* md)
     // TODO distinguish polar from other ISMR if more modes are added
     const bool ismr_poles = pmesh->packages.AllPackages().count("ISMR");
     const uint ismr_nlevels =
-        (ismr_poles) ? pmesh->packages.Get("ISMR")->Param<uint>("nlevels") : 0;
+        (ismr_poles) ? pmesh->packages.Get("ISMR")->Param<int>("nlevels") : 0;
 
     // TODO version preserving location, with switch to keep this fast one
     // TODO maybe split normal vs funky/additional timesteps (ISMR, excised polar)?

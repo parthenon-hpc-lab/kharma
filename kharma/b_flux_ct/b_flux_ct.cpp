@@ -116,6 +116,7 @@ std::shared_ptr<KHARMAPackage> Initialize(
     // Flags for B fields
     // We always mark conserved B to be sync'd for consistency, since it's strictly
     // required for B_CT/AMR
+    // TODO(CEP) phrase these in terms of driver's cons_flags/prims_flags
     std::vector<MetadataFlag> flags_prim = {Metadata::Real, Metadata::Derived,
         Metadata::GetUserFlag("Primitive"), Metadata::Cell, Metadata::GetUserFlag("MHD"),
         areWeImplicit, Metadata::Vector};

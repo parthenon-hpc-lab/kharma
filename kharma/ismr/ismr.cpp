@@ -46,7 +46,7 @@ std::shared_ptr<KHARMAPackage> ISMR::Initialize(
 
     // Parameters
     // TODO add "poles" specifically if we ever support other areas
-    uint nlevels = (uint)pin->GetOrAddInteger("ismr", "nlevels", 1);
+    int nlevels = pin->GetOrAddInteger("ismr", "nlevels", 1);
     params.Add("nlevels", nlevels);
     if (nlevels < 1)
         throw std::runtime_error("Internal SMR requires a positive number of levels!");
@@ -87,14 +87,18 @@ TaskStatus ISMR::DerefinePoles(MeshData<Real>* md, std::vector<MetadataFlag> fla
     Flag("ISMR_DerefinePoles");
     // TODO this routine only applies to polar boundaries for now.
     auto pmesh = md->GetMeshPointer();
-    const uint nlevels = pmesh->packages.Get("ISMR")->Param<uint>("nlevels");
+    const int nlevels = pmesh->packages.Get("ISMR")->Param<int>("nlevels");
 
     // Figure out indices
     int ng = Globals::nghost;
     for (int iblock = 0; iblock < md->NumBlocks(); iblock++) {
         auto& rc = md->GetBlockData(iblock);
         auto pmb = rc->GetBlockPointer();
-        auto vars = rc->PackVariables(flags);
+        using FC = Metadata::FlagCollection;
+        auto flags_nob = FC(flags) - FC({Metadata::GetUserFlag("B_CT"),
+                                            Metadata::GetUserFlag("StartupOnly")},
+                                         true);
+        auto vars = rc->PackVariables(flags_nob);
         auto vars_avg = rc->PackVariables(std::vector<std::string>{"ismr.vars_avg"});
 
         const int nvar = vars.GetDim(4);
@@ -116,8 +120,8 @@ TaskStatus ISMR::DerefinePoles(MeshData<Real>* md, std::vector<MetadataFlag> fla
 
                 // TODO the following could be done in 1 kernel w/nested parallelism
                 // fluid variables average
-                pmb->par_for("DerefinePoles_avg_fluid", 0, nvar - 1, bCC.ks, bCC.ke,
-                    j_p.s, j_p.e, bCC.is, bCC.ie,
+                pmb->par_for("DerefinePoles_avg", 0, nvar - 1, bCC.ks, bCC.ke, j_p.s,
+                    j_p.e, bCC.is, bCC.ie,
                     KOKKOS_LAMBDA (const int &v, const int &k, const int &j, const int &i)
                     {
                         const int coarse_cell_len =
@@ -139,8 +143,8 @@ TaskStatus ISMR::DerefinePoles(MeshData<Real>* md, std::vector<MetadataFlag> fla
                         vars_avg(v, k, j_c, i) = avg;
                     });
                 // fluid variables write
-                pmb->par_for("DerefinePoles_write_fluid", 0, nvar - 1, bCC.ks, bCC.ke,
-                    j_p.s, j_p.e, bCC.is, bCC.ie,
+                pmb->par_for("DerefinePoles_write", 0, nvar - 1, bCC.ks, bCC.ke, j_p.s,
+                    j_p.e, bCC.is, bCC.ie,
                     KOKKOS_LAMBDA (const int &v, const int &k, const int &j, const int &i)
                     {
                         const int j_c = j + ((binner) ? 0 : -1); // cell center

@@ -113,6 +113,8 @@ std::shared_ptr<KHARMAPackage> B_CT::Initialize(
     // Cell-centered versions.  Needed for BS, not for other schemes.
     // Probably will want to keep primitives for e.g. correct PtoU of MHD vars, but cons
     // maybe can go
+    // TODO(CEP) Cell B is really not conserved in the code sense, does it need to be
+    // marked so?
     std::vector<MetadataFlag> flags_prim = {Metadata::Real, Metadata::Cell,
         Metadata::Derived, Metadata::GetUserFlag("Primitive"),
         Metadata::GetUserFlag("MHD"), Metadata::GetUserFlag("Explicit"),
@@ -246,6 +248,72 @@ TaskStatus B_CT::BlockUtoP(MeshBlockData<Real>* rc, IndexDomain domain, bool coa
                                  2
                            : B_Uf(F3, 0, k, j, i) / G.gdet(Loci::face3, j, i);
         });
+
+    // We want identical U & P across averaged cells, but we fudged B3 on faces.
+    // Compute the coarse cell-averaged B3, not whatever we would have gotten.
+    auto pmesh = rc->GetMeshPointer();
+    if (pmesh->packages.AllPackages().count("ISMR")) {
+        const int nlevels = pmesh->packages.Get("ISMR")->Param<int>("nlevels");
+
+        // Figure out indices
+        int ng = Globals::nghost;
+        for (int i = 0; i < BOUNDARY_NFACES; i++) {
+            BoundaryFace bface = (BoundaryFace)i;
+            auto bname = KBoundaries::BoundaryName(bface);
+            auto bdir = KBoundaries::BoundaryDirection(bface);
+            auto domain = KBoundaries::BoundaryDomain(bface);
+            auto binner = KBoundaries::BoundaryIsInner(bface);
+            if (bdir == X2DIR && KBoundaries::IsPhysicalBoundary(pmb, bface)) {
+                // indices
+                // TODO also get ranges in cells from the beginning rather than using j_p
+                // & calculating j_c
+                IndexRange3 bCC = KDomain::GetRange(rc, IndexDomain::interior, CC);
+                // Note these are invalid in X2! We use them only for X1/X3 directions
+                IndexRange3 bF1 = KDomain::GetRange(rc, domain, F1, ng, -ng);
+                IndexRange3 bF3 = KDomain::GetRange(rc, domain, F3, ng, -ng);
+                const int j_f = (binner) ? bCC.js : bCC.je + 1; // last physical face
+                const int jps =
+                    (binner) ? j_f + (nlevels - 1)
+                             : j_f - (nlevels -
+                                         1); // start of the lowest level of derefinement
+                const IndexRange j_p = IndexRange{(binner) ? j_f : jps,
+                    (binner) ? jps : j_f}; // Range of x2 to be de-refined
+                const int offset =
+                    (binner) ? 1 : -1; // offset to read the physical face values
+                const int point_out =
+                    offset; // if F2 B field at j_f + offset face is positive when
+                            // pointing out of the cell, +1.
+
+                // F3 average
+                pmb->par_for("B_CT_derefine_poles_avg_F3", bF3.ks, bF3.ke, j_p.s, j_p.e,
+                    bCC.is, bCC.ie,
+                    KOKKOS_LAMBDA(const int& k, const int& j, const int& i)
+                    {
+                        // the current level of derefinement at given j
+                        const int current_lv = ((binner) ? jps - j : j - jps);
+                        // half of the coarse cell's length
+                        const int c_half = m::pow(2, current_lv);
+                        const int coarse_cell_len = 2 * c_half;
+                        // cell center
+                        const int j_c = j + ((binner) ? 0 : -1);
+                        // this fine cell's k-index within the coarse cell
+                        const int k_fine = (k - ng) % coarse_cell_len;
+                        // starting k-index of the coarse cell
+                        const int k_start = k - k_fine;
+                        // end k-index of the coarse cell
+                        const int k_end = k_start + coarse_cell_len;
+
+                        // ISMR is only used in 3D, so we don't need a gate on ndim
+                        B_P(V3, k, j, i) =
+                            (B_Uf(F3, 0, k_start, j_c, i) / G.gdet(Loci::face3, j_c, i) +
+                                B_Uf(F3, 0, k_end, j_c, i) /
+                                    G.gdet(Loci::face3, j_c, i)) /
+                            2;
+                    });
+            }
+        }
+    }
+
     // Recover conserved B at centers
     pmb->par_for("UtoP_B_centerPtoU", 0, NVEC - 1, bc.ks, bc.ke, bc.js, bc.je, bc.is,
         bc.ie,

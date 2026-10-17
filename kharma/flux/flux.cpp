@@ -134,7 +134,7 @@ std::shared_ptr<KHARMAPackage> Flux::Initialize(
         params.Add("recon", KReconstruction::Type::mp5);
         stencil = 5;
     } // we only allow these options
-    // Warn if using less than 3 ghost zones w/WENO etc, 2 w/Linear, etc.
+    // Warn if using less than 4 zones (TODO: fix flux code so we can check stencil here)
     // SMR/AMR independently requires an even number of zones, so we usually use 4
     if (Globals::nghost < 4) {
         throw std::runtime_error(
@@ -271,10 +271,19 @@ std::shared_ptr<KHARMAPackage> Flux::Initialize(
             // Real fofc_pcp_umin = pin->GetOrAddReal("fofc", "pcp_umin", 1e-10);
             // params.Add("fofc_pcp_umin", fofc_pcp_umin);
 
+            // Whether to apply PCP fix for all components of T, according to their own
+            // differences from B.  Same proportions, i.e. u - umin from neighbors
+            bool fofc_pcp_all = pin->GetOrAddBoolean("fofc", "pcp_all_components", true);
+            params.Add("fofc_pcp_all", fofc_pcp_all);
+
+            std::vector<int> s_vector({GR_DIM});
             // Cache for PCP corrections
             Metadata m = Metadata(
-                {Metadata::Real, Metadata::Cell, Metadata::Derived, Metadata::OneCopy});
+                {Metadata::Real, Metadata::Cell, Metadata::Derived, Metadata::OneCopy},
+                s_vector);
             pkg->AddField("Flux.fofc_pcp_alpha", m);
+            m = Metadata(
+                {Metadata::Real, Metadata::Cell, Metadata::Derived, Metadata::OneCopy});
             pkg->AddField("Flux.fofc_pcp_wsum", m);
         }
 

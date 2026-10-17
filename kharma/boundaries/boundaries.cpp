@@ -625,8 +625,9 @@ void KBoundaries::ApplyBoundary(
                                 : (bdir == 2 ? bounds.GetBoundsJ(IndexDomain::interior)
                                              : bounds.GetBoundsK(IndexDomain::interior));
         const int ref = binner ? range.s : range.e;
-        pmb->par_for_bndry("outflow_EMHD", IndexRange{0, EMHDg.GetDim(4) - 1}, domain, CC,
-            coarse, false,
+        auto b = KDomain::GetBoundaryRange(rc, domain, CC, coarse);
+        pmb->par_for("outflow_EMHD", 0, EMHDg.GetDim(4) - 1, b.ks, b.ke, b.js, b.je, b.is,
+            b.ie,
             KOKKOS_LAMBDA(const int& v, const int& k, const int& j, const int& i)
             {
                 EMHDg(v, k, j, i) = EMHDg(v, (bdir == 3) ? ref : k, (bdir == 2) ? ref : j,
