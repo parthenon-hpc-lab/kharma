@@ -1,0 +1,85 @@
+# Chakrabarti torus (based on AthenaK implementation)
+# courtesy G. N. Wong.
+# b_field/type must be 'vertical_chakrabarti' (since there's a preexisting 'vertical' field type)
+# setup details
+
+<parthenon/job>
+archive_parameters_timestamp = true
+problem_id = torus
+torus_type = chakrabarti
+
+<parthenon/mesh>
+refinement = none
+numlevel = 1
+nx1 = 256
+nx2 = 128
+nx3 = 128
+
+<parthenon/meshblock>
+nx1 = 128
+nx2 = 128
+nx3 = 64
+
+<coordinates>
+base       = spherical_ks
+transform  = fmks
+r_out      = 1000
+a          = 0.9375
+hslope     = 0.3
+mks_smooth = 0.5
+poly_xt    = 0.82
+poly_alpha = 14.0
+
+<parthenon/time>
+tlim = 10000.0
+
+<GRMHD>
+cfl            = 0.7
+gamma          = 1.666667
+reconstruction = weno5
+
+<driver>
+type     = imex
+two_sync = true
+
+<torus>
+rin  = 20.0
+rmax = 41.0
+
+<perturbation>
+u_jitter = 0.1
+
+<b_field>
+type     = vertical_chakrabarti
+beta_min = 100.
+
+<floors>
+rho_min_geom     = 1e-6
+u_min_geom       = 1e-8
+bsq_over_rho_max = 100
+u_over_rho_max   = 2
+
+<debug>
+verbose      = 1
+extra_checks = 1
+flag_verbose = 0
+
+<wind>
+on = false
+ne = 1.e-4
+Tp = 10
+
+<parthenon/output0>
+file_type = hdf5
+dt = 5.0
+single_precision_output = true
+variables = prims.rho, prims.u, prims.uvec, prims.B, jcon, fflag, pflag
+
+<parthenon/output1>
+file_type = rst
+dt = 100.0
+ghost_zones = true
+
+<parthenon/output2>
+file_type = hst
+dt = 0.1

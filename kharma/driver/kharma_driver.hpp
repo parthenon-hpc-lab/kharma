@@ -124,7 +124,8 @@ class KHARMADriver : public MultiStageDriver
      */
     TaskID AddFOFC(TaskID& t_start, TaskList& tl, MeshData<Real>* md,
         MeshData<Real>* md_full_step_init, MeshData<Real>* md_sub_step_init,
-        MeshData<Real>* guess_src, MeshData<Real>* guess, int stage);
+        MeshData<Real>* guess_src, MeshData<Real>* guess, int stage,
+        std::vector<std::string> sync_vars);
 
     /**
      * Add first-order flux corrections.  This is split out because it needs an additional
