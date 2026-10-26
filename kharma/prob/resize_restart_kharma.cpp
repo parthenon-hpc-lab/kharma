@@ -126,12 +126,13 @@ void ReadKharmaRestartHeader(std::string fname, ParameterInput* pin)
 
     auto eos_type = fpinput->GetOrAddString("eos", "type", "IdealGas");
     if (eos_type == "IdealGas") {
-        if (pin->DoesParameterExist("GRMHD", "gamma")) {
+        if (fpinput->DoesParameterExist("GRMHD", "gamma")) {
             gam = fpinput->GetReal("GRMHD", std::string("gamma"));
         } else {
             gam = fpinput->GetReal("eos", std::string("gamma"));
         }
-        pin->SetReal("eos", "gm1", gam - 1.0);
+        pin->SetReal("eos", "gamma", gam);
+        pin->SetReal("GRMHD", "gamma", gam);
     }
 
     tNow = restartReader->GetAttr<Real>("Info", "Time");

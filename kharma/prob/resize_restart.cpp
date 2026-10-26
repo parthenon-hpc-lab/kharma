@@ -222,7 +222,8 @@ void ReadIharmRestartHeader(std::string fname, ParameterInput* pin)
     }
     // Boundary conditions will be set based on coordinate system in kharma.cpp
 
-    // We should always use the restart's fluid gamma & current time
+    // We should always use the restart's fluid gamma & current time.
+    pin->SetReal("eos", "gamma", gam);
     pin->SetReal("GRMHD", "gamma", gam);
     pin->SetReal("parthenon/time", "start_time", t);
     // Set the original simulation's end time, if we wanted that
