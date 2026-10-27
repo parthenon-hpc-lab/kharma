@@ -126,9 +126,9 @@ inline TaskStatus GetFlux(MeshData<Real>* md)
         (use_rad) ? md->PackVariables(std::vector<std::string>{"Flux.cmax_rad"}) : cmax;
     const auto& cmin_rad =
         (use_rad) ? md->PackVariables(std::vector<std::string>{"Flux.cmin_rad"}) : cmin;
-    // Cell-centered opacity of the cell each face state was reconstructed from
-    const auto& rad_kappa =
-        (use_rad) ? md->PackVariables(std::vector<std::string>{"rad_kappa"}) : cmax;
+    // Opacity model, to compute the opacity of each face state for its signal speeds
+    const RadM1::RadOpac rad_opac =
+        (use_rad) ? RadM1::GetRadOpac(packages) : RadM1::RadOpac();
 
     const auto& P_all = md->PackVariables(
         std::vector<MetadataFlag>{Metadata::GetUserFlag("Primitive"), Metadata::Cell},
@@ -414,8 +414,11 @@ inline TaskStatus GetFlux(MeshData<Real>* md)
             // characteristic speeds.
             if (use_rad) {
                 Real cmaxL_rad, cminL_rad;
-                const Real kap_l =
-                    rad_kappa(bl, 0, k - (dir == 3), j - (dir == 2), i - (dir == 1));
+                // No optical-depth reduction at faces inside the horizon
+                const Real kap_l = RadM1::inside_horizon(G, k, j, i, loc)
+                                       ? 0.
+                                       : RadM1::calc_kappa_tot(G, Pl_all(bl), m_p, Dtmp,
+                                             eos, rad_opac, k, j, i, loc);
                 Flux::vchar_rad(
                     G, Pl_all(bl), m_p, kap_l, k, j, i, loc, dir, cmaxL_rad, cminL_rad);
                 cmax_rad(bl, dir - 1, k, j, i) = m::max(0., cmaxL_rad);
@@ -457,8 +460,12 @@ inline TaskStatus GetFlux(MeshData<Real>* md)
             // speeds.
             if (use_rad) {
                 Real cmaxR_rad, cminR_rad;
-                Flux::vchar_rad(G, Pr_all(bl), m_p, rad_kappa(bl, 0, k, j, i), k, j, i,
-                    loc, dir, cmaxR_rad, cminR_rad);
+                const Real kap_r = RadM1::inside_horizon(G, k, j, i, loc)
+                                       ? 0.
+                                       : RadM1::calc_kappa_tot(G, Pr_all(bl), m_p, Dtmp,
+                                             eos, rad_opac, k, j, i, loc);
+                Flux::vchar_rad(
+                    G, Pr_all(bl), m_p, kap_r, k, j, i, loc, dir, cmaxR_rad, cminR_rad);
                 cmax_rad(bl, dir - 1, k, j, i) =
                     m::max(cmax_rad(bl, dir - 1, k, j, i), cmaxR_rad);
                 cmin_rad(bl, dir - 1, k, j, i) =

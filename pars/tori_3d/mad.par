@@ -13,7 +13,7 @@ nx2 = 128
 nx3 = 128
 
 <parthenon/meshblock>
-nx1 = 96
+nx1 = 32
 nx2 = 64
 # Many boundary options are incompatible with multiple phi blocks
 nx3 = 128

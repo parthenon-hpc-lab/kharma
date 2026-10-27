@@ -73,7 +73,7 @@ class RadOpac
             default: {
                 Real kappa = 0.0;
                 if (use_tops_table) {
-                    kappa += tops_absorption(rho, Tg);
+                    kappa += tops_absorption(rho, Tg, Trad);
                 } else if (use_bremsstrahlung) {
                     kappa += sing_opac.PlanckMeanAbsorptionCoefficient(rho, Tg);
                 }
@@ -83,8 +83,9 @@ class RadOpac
         }
     }
 
-    // Absorption with phi at Trad (k_rad) and at Tg (k_gas, Kirchhoff emission): only
-    // synchrotron depends on Trad, so the rest (a table lookup) is evaluated once
+    // Absorption of the radiation at Trad (k_rad) and Kirchhoff emission at Tg (k_gas).
+    // Trad enters through synchrotron and, above the TOPS table, the bremsstrahlung fit;
+    // within the table the lookup is evaluated once
     KOKKOS_INLINE_FUNCTION
     void kappa_a_rad_gas(
         Real rho, Real Tg, Real bsq, Real Trad, Real& k_rad, Real& k_gas) const
@@ -92,7 +93,7 @@ class RadOpac
         const bool sync = use_synchrotron &&
                           static_cast<OpacityType>(opacity_type) == OpacityType::Default;
         k_rad = kappa_a(rho, Tg, sync ? 0.0 : bsq, Trad); // synchrotron is 0 at bsq = 0
-        k_gas = k_rad;
+        k_gas = above_tops_table(Tg) ? kappa_a(rho, Tg, sync ? 0.0 : bsq, Tg) : k_rad;
         if (sync) {
             k_rad += synchrotron(rho, Tg, Trad, bsq);
             k_gas += synchrotron(rho, Tg, Tg, bsq);
@@ -100,7 +101,7 @@ class RadOpac
     }
 
     KOKKOS_INLINE_FUNCTION
-    Real kappa_sc(Real rho, Real Tg, Real bsq) const
+    Real kappa_sc(Real rho, Real Tg, Real bsq, Real Trad) const
     {
         switch (static_cast<OpacityType>(opacity_type)) {
             case OpacityType::Constant:
@@ -117,7 +118,7 @@ class RadOpac
             case OpacityType::ThermalEquilibrium:
                 return 0.0;
             default: {
-                if (sing_opac.UseTopsScattering()) return tops_scattering(rho, Tg);
+                if (sing_opac.UseTopsScattering()) return tops_scattering(rho, Tg, Trad);
                 return sing_opac.RosselandMeanScatteringCoefficient(rho, Tg);
             }
         }
@@ -186,22 +187,36 @@ class RadOpac
     // Spiner extrapolates log(kappa) linearly from the edge cells of a table, which
     // can give unphysical opacities elsewhere. So the TOPS lookups are clamped to the
     // table, and outside it:
-    //  - T > T_max: absorption from the McKinney et al. 2017 free-free fit.
+    //  - T > T_max: absorption from the McKinney et al. 2017 free-free fit, at
+    //    zeta = Trad/Tg (zeta = 1 for the emission).
     //  - T < T_min: hold the T_min value.
     //  - rho > rho_max: hold kappa = alpha/rho at the edge,
     //  - rho < rho_min: absorption kappa ~ rho (free-free, as gas only gets more
     //    ionized), scattering kappa held at the edge (stays below Thomson).
+    // The scattering's Klein-Nishina reduction is taken at Trad: the table holds the LTE
+    // value at the gas temperature, a reduction that cold radiation in hot gas does not
+    // have.
 
-    // TOPS Planck-mean absorption coefficient (code units)
+    // Gas hotter than the TOPS absorption table (bremsstrahlung fit)
     KOKKOS_INLINE_FUNCTION
-    Real tops_absorption(const Real rho, const Real Tg) const
+    bool above_tops_table(const Real Tg) const
+    {
+        return static_cast<OpacityType>(opacity_type) == OpacityType::Default &&
+               use_tops_table &&
+               m::abs(Tg) > sing_opac.TopsAbsorptionBounds().T_max /
+                                units_cgs.GetTemperatureCodeToCGS();
+    }
+
+    // TOPS Planck-mean absorption coefficient (code units) of radiation at Trad
+    KOKKOS_INLINE_FUNCTION
+    Real tops_absorption(const Real rho, const Real Tg, const Real Trad) const
     {
         const Microphysics::TableBounds bounds = sing_opac.TopsAbsorptionBounds();
         const Real rho_unit = units_cgs.GetMassDensityCodeToCGS();
         const Real T_unit = units_cgs.GetTemperatureCodeToCGS();
         const Real T_max = bounds.T_max / T_unit;
         const Real T = m::abs(Tg);
-        if (T > T_max) return bremsstrahlung(rho, T, T);
+        if (T > T_max) return bremsstrahlung(rho, T, isfinite(Trad) ? Trad : T);
 
         const Real rho_min = bounds.rho_min / rho_unit;
         const Real rho_q = m::min(m::max(rho, rho_min), bounds.rho_max / rho_unit);
@@ -212,9 +227,9 @@ class RadOpac
         return fac * sing_opac.TopsTableAbsorptionCoefficient(rho_q, T_q);
     }
 
-    // TOPS Rosseland-mean scattering coefficient (code units)
+    // TOPS Rosseland-mean scattering coefficient (code units) of radiation at Trad
     KOKKOS_INLINE_FUNCTION
-    Real tops_scattering(const Real rho, const Real Tg) const
+    Real tops_scattering(const Real rho, const Real Tg, const Real Trad) const
     {
         const Microphysics::TableBounds bounds = sing_opac.TopsScatteringBounds();
         const Real rho_unit = units_cgs.GetMassDensityCodeToCGS();
@@ -225,8 +240,10 @@ class RadOpac
             m::min(m::max(rho, bounds.rho_min / rho_unit), bounds.rho_max / rho_unit);
         const Real T_q = m::min(m::max(T, bounds.T_min / T_unit), T_max);
 
-        Real fac = rho / rho_q;
-        if (T > T_max) fac *= klein_nishina(T * T_unit) / klein_nishina(bounds.T_max);
+        // Klein-Nishina at the photon temperature in place of the table's at T_q
+        const Real T_ph = isfinite(Trad) ? m::abs(Trad) : T;
+        const Real fac = rho / rho_q * klein_nishina(T_ph * T_unit) /
+                         klein_nishina(T_q * T_unit);
         return fac * sing_opac.RosselandMeanScatteringCoefficient(rho_q, T_q);
     }
 
@@ -288,7 +305,7 @@ class RadOpac
         // is evolved, so the radiation is Planck
         const bool agn = (regime == FitType::AGN);
         const Real a = agn ? 0.2065 : 1.2699999769, b = agn ? 2.58977 : 1.0339;
-        const Real c = agn ? 3.44 : 0.000763, d = agn ? 9.3 : 0.6;
+        const Real c = agn ? 3.44 : 0.000763, d = agn ? 9.3 : 0.616;
         const Real e = agn ? 3.095 : 2.917;
 
         Real kappa_cgs =
