@@ -608,25 +608,27 @@ KOKKOS_INLINE_FUNCTION int solve_4d_pmhd(const GRCoordinates& G,
         P_init(m_p.U1, k, j, i), P_init(m_p.U2, k, j, i), P_init(m_p.U3, k, j, i)};
     const Real D_rho = rho_init / rho_from_D(G, 1.0, uvec, k, j, i);
     const Real gdet = G.gdet(Loci::center, j, i);
-    // Check if radiation inversion reached maximum gamma. 
+    // Check if radiation inversion reached maximum gamma.
     const bool beam_ok = static_cast<int>(rinvflag(0, k, j, i)) ==
                          static_cast<int>(StatusRadiationInversion::maximum_gamma);
 
     // Iteration 0
     Real U_mhd_guess[4] = {U_mhd_0[0], U_mhd_0[1], U_mhd_0[2], U_mhd_0[3]};
 
-    // A star-repair guess doesn't invert U_mhd_0, so use its own U. So we replace U_mhd_guess. 
+    // A star-repair guess doesn't invert U_mhd_0, so use its own U. So we replace
+    // U_mhd_guess.
     if (star_guess) {
         Real rho_ut;
         GRMHD::p_to_u_mhd(G, rho_init, P_mhd_guess[0], uvec, B_P, eos, k, j, i, rho_ut,
             U_mhd_guess, Loci::center);
     }
     Real dS_guess[4];
-    
+
     // Opacities at the current iterate, frozen in the Jacobian columns
     Real kap_guess[3];
 
-    // If the inversion took different branches, can we trust the guess? This is what this variable represents.
+    // If the inversion took different branches, can we trust the guess? This is what this
+    // variable represents.
     bool used_normal_guess = true;
 
     // Only E_rad of the radiation primitives is needed after the loop
@@ -634,8 +636,9 @@ KOKKOS_INLINE_FUNCTION int solve_4d_pmhd(const GRCoordinates& G,
     Real tol_eff;
 
     // Measuring what is the effective tolerance for the iteration.
-    // You see, very stiff flows will have very large dS. Such that the truncation error can be larger than the tolerance.
-    // So we scale the tolerance by the magnitude of dS, and the time step.
+    // You see, very stiff flows will have very large dS. Such that the truncation error
+    // can be larger than the tolerance. So we scale the tolerance by the magnitude of dS,
+    // and the time step.
     {
         Real P_rad_guess[4], U_rad_e[4];
         for (int n = 0; n < 4; n++)
@@ -705,7 +708,8 @@ KOKKOS_INLINE_FUNCTION int solve_4d_pmhd(const GRCoordinates& G,
             }
         }
 
-        // One-sided differences. We try forward,however if the forward support point is invalid, we try backward. If both are invalid, we give up and return failure.
+        // One-sided differences. We try forward,however if the forward support point is
+        // invalid, we try backward. If both are invalid, we give up and return failure.
         for (int m = 0; m < 4 && fresh_jac && !bad_guess; m++) {
             const Real fd_step = m::max(src_rootfind_eps * P_mhd_mag_min,
                 src_rootfind_eps * m::abs(P_mhd_guess[m]));
@@ -732,7 +736,8 @@ KOKKOS_INLINE_FUNCTION int solve_4d_pmhd(const GRCoordinates& G,
                 ok = (st_p == StatusRadiationInversion::success ||
                          (beam_ok && st_p == StatusRadiationInversion::type2)) &&
                      used_normal_p == used_normal_guess;
-                // if it fails, try the other side. If both fail, we give up and return failure.
+                // if it fails, try the other side. If both fail, we give up and return
+                // failure.
                 if (!ok) continue;
                 compute_covariant_fourforce(G, P_mhd_p, P_rad_p, rho_p, B_P, eos,
                     rad_opac, k, j, i, dS_p, nullptr, nullptr, kap_guess, true);
@@ -755,9 +760,10 @@ KOKKOS_INLINE_FUNCTION int solve_4d_pmhd(const GRCoordinates& G,
             }
         }
 
-        // Here, we do a damped Newton step, which means that, we take the full step, and if it violates any of the checks
-        // below, shrink it by 3 and retry, at most 15 times or to scaling_factor 1.e-8, these hardcoded numbers came from Koral.
-        // PNM: Change hardcoded values?
+        // Here, we do a damped Newton step, which means that, we take the full step, and
+        // if it violates any of the checks below, shrink it by 3 and retry, at most 15
+        // times or to scaling_factor 1.e-8, these hardcoded numbers came from Koral. PNM:
+        // Change hardcoded values?
         Real P_mhd_pre[4] = {
             P_mhd_guess[0], P_mhd_guess[1], P_mhd_guess[2], P_mhd_guess[3]};
         Real scaling_factor = 1.0;
@@ -771,7 +777,8 @@ KOKKOS_INLINE_FUNCTION int solve_4d_pmhd(const GRCoordinates& G,
             if (P_mhd_guess[0] <= 0.0) {
                 scaling_factor /= 3.0;
                 track++;
-                // But, if we have tried 15 times, or the scaling factor is too small, we give up and return failure.
+                // But, if we have tried 15 times, or the scaling factor is too small, we
+                // give up and return failure.
                 if (track > 15 || scaling_factor < 1.e-8) break;
                 continue;
             }
@@ -883,7 +890,6 @@ KOKKOS_INLINE_FUNCTION int solve_4d_pmhd(const GRCoordinates& G,
     return static_cast<int>(StatusImplicitStep::success);
 }
 
-
 KOKKOS_INLINE_FUNCTION Real u_equilibrium(const GRCoordinates& G, const Real P_mhd[4],
     const Real P_rad[4], const Real rho, const Microphysics::EOS::EOS& eos,
     const RadOpac& rad_opac, const int k, const int j, const int i)
@@ -931,8 +937,12 @@ KOKKOS_INLINE_FUNCTION int solve_4d_pmhd_ff(const GRCoordinates& G,
     Real x[4] = {u_star, P_init(m_p.U1, k, j, i), P_init(m_p.U2, k, j, i),
         P_init(m_p.U3, k, j, i)};
 
-    // If the initial guess (reconstructed in the implicit solver function) has already a negative energy, let's bounce off of here already.
-    if (!(u_star > 0.)) { if (why_out != nullptr) *why_out = 1; return static_cast<int>(StatusImplicitStep::failure); }
+    // If the initial guess (reconstructed in the implicit solver function) has already a
+    // negative energy, let's bounce off of here already.
+    if (!(u_star > 0.)) {
+        if (why_out != nullptr) *why_out = 1;
+        return static_cast<int>(StatusImplicitStep::failure);
+    }
 
     const Real D_rho = P_init(m_p.RHO, k, j, i) / rho_from_D(G, 1.0, &x[1], k, j, i);
     const Real U_mhd_0[4] = {U_entry[0], U_entry[1], U_entry[2], U_entry[3]};
@@ -943,9 +953,10 @@ KOKKOS_INLINE_FUNCTION int solve_4d_pmhd_ff(const GRCoordinates& G,
         1.e-8 / m::sqrt(G.gcov(Loci::center, j, i, 2, 2)),
         1.e-8 / m::sqrt(G.gcov(Loci::center, j, i, 3, 3))};
 
-    // We are constructing a lambda evaluation function within this function. That will basically get rid of redundant code
-    // and since this will not be called from any other function, I think it's fine.
-    // From the current guess, compute the residuals and the error metrics err and errm.
+    // We are constructing a lambda evaluation function within this function. That will
+    // basically get rid of redundant code and since this will not be called from any
+    // other function, I think it's fine. From the current guess, compute the residuals
+    // and the error metrics err and errm.
     auto eval = [&](const Real xx[4], Real f[4], Real& err, Real& errm, Real& rho,
                     Real P_rad[4], Real dS[4], Real& Gu)
     {
@@ -988,14 +999,18 @@ KOKKOS_INLINE_FUNCTION int solve_4d_pmhd_ff(const GRCoordinates& G,
     };
 
     Real f[4], err, errm, rho, P_rad[4], dS[4], Gu;
-    // if the first evaluation already produces a non-finite error, we return failure. This is a check for the initial guess.
-    if (!eval(x, f, err, errm, rho, P_rad, dS, Gu))
-        { if (why_out != nullptr) *why_out = 2; return static_cast<int>(StatusImplicitStep::failure); }
+    // if the first evaluation already produces a non-finite error, we return failure.
+    // This is a check for the initial guess.
+    if (!eval(x, f, err, errm, rho, P_rad, dS, Gu)) {
+        if (why_out != nullptr) *why_out = 2;
+        return static_cast<int>(StatusImplicitStep::failure);
+    }
     bool converged = err <= src_rootfind_tol;
 
-    // If you choose to try equilibrium guess first, 
-    // It gives the FF solver a second starting point before Newton begins, and keeps whichever start is better
-    // Given the energy of the plasma and the energy of the radiation, it computes the equilibrium T for optically thick flows.
+    // If you choose to try equilibrium guess first,
+    // It gives the FF solver a second starting point before Newton begins, and keeps
+    // whichever start is better Given the energy of the plasma and the energy of the
+    // radiation, it computes the equilibrium T for optically thick flows.
     if (eq_guess && !converged) {
         Real xe[4] = {
             u_equilibrium(G, x, P_rad, rho, eos, rad_opac, k, j, i), x[1], x[2], x[3]};
@@ -1016,7 +1031,8 @@ KOKKOS_INLINE_FUNCTION int solve_4d_pmhd_ff(const GRCoordinates& G,
     }
     // Best valid state so far. If the solve then fails but this reached accept_tol, it is
     // accepted (relaxed_success), with the exchange computed as for a converged solve
-    Real x_best[4] = {x[0], x[1], x[2], x[3]}, rho_best = rho, Gu_best = Gu, err_best = err;
+    Real x_best[4] = {x[0], x[1], x[2], x[3]}, rho_best = rho, Gu_best = Gu,
+         err_best = err;
 
     // Lambda function to compare states and keep the best one.
     auto keep_best = [&]()
@@ -1027,10 +1043,12 @@ KOKKOS_INLINE_FUNCTION int solve_4d_pmhd_ff(const GRCoordinates& G,
         Gu_best = Gu;
         err_best = err;
     };
-    // Exit of a failed solve that had a valid state, it decides if that state is accepted if it reaches accept_tol
+    // Exit of a failed solve that had a valid state, it decides if that state is accepted
+    // if it reaches accept_tol
     auto fail_or_accept = [&]() -> int
     {
-        if (!(err_best <= accept_tol)) return static_cast<int>(StatusImplicitStep::failure);
+        if (!(err_best <= accept_tol))
+            return static_cast<int>(StatusImplicitStep::failure);
         Real uvec_b[NVEC] = {x_best[1], x_best[2], x_best[3]}, rho_ut_b, U_mhd_b[4];
         GRMHD::p_to_u_mhd(
             G, rho_best, x_best[0], uvec_b, B_P, eos, k, j, i, rho_ut_b, U_mhd_b);
@@ -1039,29 +1057,36 @@ KOKKOS_INLINE_FUNCTION int solve_4d_pmhd_ff(const GRCoordinates& G,
         return static_cast<int>(StatusImplicitStep::relaxed_success);
     };
 
-
-    // Here we do a bisection in ug. so basically, If Newton's ug would leave the interval [u_lo, u_hi], just the u part of the step is
-    // replaced by bisection. The velocity part keeps its Newton value.
+    // Here we do a bisection in ug. so basically, If Newton's ug would leave the interval
+    // [u_lo, u_hi], just the u part of the step is replaced by bisection. The velocity
+    // part keeps its Newton value.
     Real u_lo = (f[0] < 0.) ? x[0] : 0., u_hi = (f[0] >= 0.) ? x[0] : 0.;
     for (int nb = 0; nb < 30 && !converged && !(u_lo > 0. && u_hi > 0.); nb++) {
         Real xb[4] = {(u_hi > 0.) ? 0.1 * u_hi : 10. * u_lo, x[1], x[2], x[3]};
         Real fb[4], eb, emb, rb, Pb[4], dSb[4], Gb;
-        if (!eval(xb, fb, eb, emb, rb, Pb, dSb, Gb))
-            { if (why_out != nullptr) *why_out = 3; return fail_or_accept(); }
+        if (!eval(xb, fb, eb, emb, rb, Pb, dSb, Gb)) {
+            if (why_out != nullptr) *why_out = 3;
+            return fail_or_accept();
+        }
         if (fb[0] >= 0.)
             u_hi = xb[0];
         else
             u_lo = xb[0];
     }
-    // if the bracket did not converge after 30 tries, or if it is not positive, the solve fails.
-    if (!converged && !(u_lo > 0. && u_hi > 0.))
-        { if (why_out != nullptr) *why_out = 4; return fail_or_accept(); }
+    // if the bracket did not converge after 30 tries, or if it is not positive, the solve
+    // fails.
+    if (!converged && !(u_lo > 0. && u_hi > 0.)) {
+        if (why_out != nullptr) *why_out = 4;
+        return fail_or_accept();
+    }
 
     // Restart from the bracket end nearest u*, so damped steps stay inside the bracket
     if (!converged && (x[0] < u_lo || x[0] > u_hi)) {
         x[0] = (x[0] > u_hi) ? u_hi : u_lo;
-        if (!eval(x, f, err, errm, rho, P_rad, dS, Gu))
-            { if (why_out != nullptr) *why_out = 5; return fail_or_accept(); }
+        if (!eval(x, f, err, errm, rho, P_rad, dS, Gu)) {
+            if (why_out != nullptr) *why_out = 5;
+            return fail_or_accept();
+        }
         converged = err <= src_rootfind_tol;
         keep_best();
     }
@@ -1085,20 +1110,26 @@ KOKKOS_INLINE_FUNCTION int solve_4d_pmhd_ff(const GRCoordinates& G,
                     for (int n = 0; n < 4; n++)
                         jac[n][m] = (fp[n] - f[n]) / (xp[m] - x[m]);
             }
-            if (!ok) { if (why_out != nullptr) *why_out = 6; return fail_or_accept(); }
+            if (!ok) {
+                if (why_out != nullptr) *why_out = 6;
+                return fail_or_accept();
+            }
         }
         const Real det = invert(&jac[0][0], &jacinv[0][0]);
-        if (!m::isfinite(det) || det == 0.)
-            { if (why_out != nullptr) *why_out = 7; return fail_or_accept(); }
+        if (!m::isfinite(det) || det == 0.) {
+            if (why_out != nullptr) *why_out = 7;
+            return fail_or_accept();
+        }
         Real dx[4];
         for (int m = 0; m < 4; m++) {
             dx[m] = 0.;
             for (int n = 0; n < 4; n++) dx[m] -= jacinv[m][n] * f[n];
         }
-        // The u bracket was found at earlier velocities, and moving them moves the root of
-        // f0(u). If Newton leaves the bracket, check that f0 still changes sign across it
-        // at the current velocities; if not, rebuild it around u by x10 steps, as at the
-        // start, before deciding to bisect. This has shown some improvements in the runs I tested in Aurora.
+        // The u bracket was found at earlier velocities, and moving them moves the root
+        // of f0(u). If Newton leaves the bracket, check that f0 still changes sign across
+        // it at the current velocities; if not, rebuild it around u by x10 steps, as at
+        // the start, before deciding to bisect. This has shown some improvements in the
+        // runs I tested in Aurora.
         if (!(x[0] + dx[0] > u_lo && x[0] + dx[0] < u_hi)) {
             Real fb[4], eb, emb, rb, Pb[4], dSb[4], Gb;
             const Real xlo[4] = {u_lo, x[1], x[2], x[3]};
@@ -1139,7 +1170,10 @@ KOKKOS_INLINE_FUNCTION int solve_4d_pmhd_ff(const GRCoordinates& G,
             const Real Er = P_radn[0] / P_rad[0];
             step_ok = Tr > 0.1 && Tr < 10. && Er > 0.1 && Er < 10.;
         }
-        if (!step_ok) { if (why_out != nullptr) *why_out = 8; return fail_or_accept(); }
+        if (!step_ok) {
+            if (why_out != nullptr) *why_out = 8;
+            return fail_or_accept();
+        }
         if (fn[0] >= 0.)
             u_hi = m::min(u_hi, xn[0]);
         else
@@ -1164,7 +1198,10 @@ KOKKOS_INLINE_FUNCTION int solve_4d_pmhd_ff(const GRCoordinates& G,
         converged = err <= src_rootfind_tol || (relchange < 1.e-6 && err <= 1.e-5) ||
                     (u_hi - u_lo <= 1.e-10 * u_hi && errm <= src_rootfind_tol);
     }
-    if (!converged) { if (why_out != nullptr) *why_out = 9; return fail_or_accept(); }
+    if (!converged) {
+        if (why_out != nullptr) *why_out = 9;
+        return fail_or_accept();
+    }
 
     // Exchange exactly the solved change, so the updated gas is the solved state
     Real uvec[NVEC] = {x[1], x[2], x[3]}, rho_ut, U_mhd[4];

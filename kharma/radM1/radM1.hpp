@@ -228,7 +228,8 @@ KOKKOS_INLINE_FUNCTION void calc_ucon_rad(const GRCoordinates& G, const Global& 
 }
 
 // Inside the horizon the radiation does not interact (AddSourceImplicitly skips it), so
-// its signal speeds get no optical-depth reduction there. If there is no horizon, r_hor = 0
+// its signal speeds get no optical-depth reduction there. If there is no horizon, r_hor =
+// 0
 KOKKOS_INLINE_FUNCTION bool inside_horizon(
     const GRCoordinates& G, const int& k, const int& j, const int& i, const Loci loc)
 {

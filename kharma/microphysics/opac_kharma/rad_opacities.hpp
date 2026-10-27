@@ -242,8 +242,8 @@ class RadOpac
 
         // Klein-Nishina at the photon temperature in place of the table's at T_q
         const Real T_ph = isfinite(Trad) ? m::abs(Trad) : T;
-        const Real fac = rho / rho_q * klein_nishina(T_ph * T_unit) /
-                         klein_nishina(T_q * T_unit);
+        const Real fac =
+            rho / rho_q * klein_nishina(T_ph * T_unit) / klein_nishina(T_q * T_unit);
         return fac * sing_opac.RosselandMeanScatteringCoefficient(rho_q, T_q);
     }
 
