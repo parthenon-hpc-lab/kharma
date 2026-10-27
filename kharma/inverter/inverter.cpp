@@ -184,8 +184,15 @@ inline void BlockPerformInversion(
     auto pmb = rc->GetBlockPointer();
 
     PackIndexMap prims_map, cons_map;
-    auto U = GRMHD::PackMHDCons(rc, cons_map);
-    auto P = GRMHD::PackMHDPrims(rc, prims_map);
+    // TODO (JWM): We need to decide whether to use the GRMHD::PackMHDCons/Prims functions
+    // auto U = GRMHD::PackMHDCons(rc, cons_map);
+    // auto P = GRMHD::PackMHDPrims(rc, prims_map);
+    auto U = rc->PackVariables(
+        std::vector<MetadataFlag>{Metadata::Conserved, Metadata::Cell}, cons_map);
+    auto P = rc->PackVariables(
+        std::vector<MetadataFlag>{Metadata::GetUserFlag("Primitive"), Metadata::Cell},
+        prims_map);
+
     const VarMap m_u(cons_map, true), m_p(prims_map, false);
 
     // auto fflag = rc->PackVariables(std::vector<std::string>{"fflag"});
@@ -246,9 +253,21 @@ int Inverter::CountPFlags(MeshData<Real>* md)
 
 void Inverter::PreStepWork(Mesh* pmesh, ParameterInput* pin, const SimTime& tm)
 {
+    PARTHENON_INSTRUMENT
     // Clear all floor flags before each step
     auto md = pmesh->mesh_data.Get().get();
-    KHARMADriver::Scale(std::vector<std::string>{"pflag"}, md, 0.);
+    auto pflag = md->PackVariables(std::vector<std::string>{"pflag"});
+
+    const IndexRange3 b = KDomain::GetRange(md, IndexDomain::entire, false);
+    const IndexRange block = IndexRange{0, pflag.GetDim(5) - 1};
+
+    // For some reason 'SetDataToConstant' and 'WeightedSum' don't
+    // play nice with CUDA 12.8, which we use for regression tests...
+    parthenon::par_for("ResetPflag", block.s, block.e, b.ks, b.ke, b.js, b.je, b.is, b.ie,
+        KOKKOS_LAMBDA (const int &bl, const int &k, const int &j, const int &i)
+        {
+            pflag(bl, 0, k, j, i) = 0.;
+        });
 }
 
 TaskStatus Inverter::PostStepDiagnostics(const SimTime& tm, MeshData<Real>* md)

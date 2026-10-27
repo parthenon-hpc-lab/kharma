@@ -42,6 +42,8 @@
 #include "kharma_driver.hpp"
 #include "pack.hpp"
 
+#include <singularity-eos/eos/eos_ideal.hpp>
+
 // Floors.  Apply limits to fluid values to maintain integrable state
 
 std::shared_ptr<KHARMAPackage> Floors::Initialize(
@@ -49,9 +51,10 @@ std::shared_ptr<KHARMAPackage> Floors::Initialize(
 {
     auto pkg = std::make_shared<KHARMAPackage>("Floors");
     Params& params = pkg->AllParams();
-
-    Real gamma1 = pin->GetOrAddReal(
-        "floors", "gamma1", packages->Get("eos")->AllParams().Get<Real>("gm1") + 1);
+    const bool is_ideal =
+        pin->GetString("eos", "type") == singularity::IdealGas::EosType();
+    // TODO(CEP) Still don't love the hard-code of 5/3 here but it's toothless right now
+    Real gamma1 = is_ideal ? packages->Get("eos")->Param<Real>("gm1") + 1. : 5. / 3.;
     // Parse all the particular floor values into a nice struct we can pass device-side
     params.Add("prescription", MakePrescription(pin, gamma1));
 
@@ -413,9 +416,22 @@ int Floors::CountFFlags(MeshData<Real>* md)
 
 void Floors::PreStepWork(Mesh* pmesh, ParameterInput* pin, const SimTime& tm)
 {
+    PARTHENON_INSTRUMENT
     // Clear all floor flags before each step
     auto md = pmesh->mesh_data.Get().get();
-    KHARMADriver::Scale(std::vector<std::string>{"fflag"}, md, 0.);
+    auto fflag = md->PackVariables(std::vector<std::string>{"fflag"});
+
+    const IndexRange3 b = KDomain::GetRange(md, IndexDomain::entire, false);
+    const IndexRange block = IndexRange{0, fflag.GetDim(5) - 1};
+
+    // For some reason 'SetDataToConstant' and 'WeightedSum' don't
+    // play nice with CUDA 12.8, which we use for regression tests...
+    // TODO could still abstract with like a ResetFlag function or something?
+    parthenon::par_for("ResetFflag", block.s, block.e, b.ks, b.ke, b.js, b.je, b.is, b.ie,
+        KOKKOS_LAMBDA (const int &bl, const int &k, const int &j, const int &i)
+        {
+            fflag(bl, 0, k, j, i) = 0.;
+        });
 }
 
 TaskStatus Floors::PostStepDiagnostics(const SimTime& tm, MeshData<Real>* md)

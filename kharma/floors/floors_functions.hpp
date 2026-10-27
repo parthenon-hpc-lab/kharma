@@ -35,6 +35,7 @@
 
 #include "floors.hpp"
 // For template specializations since inverter needs floors too
+#include "entropy.hpp"
 #include "kastaun.hpp"
 #include "onedw.hpp"
 
@@ -63,8 +64,8 @@ KOKKOS_INLINE_FUNCTION void apply_ceilings(const GRCoordinates& G,
 {
     // Compute max values for ceilings
     Real gamma = GRMHD::lorentz_calc(G, P, m_p, k, j, i, loc);
-    Real ktot = (floors.gamma1 - 1.) * P(m_p.UU, k, j, i) /
-                m::pow(P(m_p.RHO, k, j, i), floors.gamma1);
+    Real ktot =
+        Entropy::CalcIdealEntropy(P(m_p.RHO, k, j, i), P(m_p.UU, k, j, i), floors.gamma1);
     Real u_over_rho = P(m_p.UU, k, j, i) / P(m_p.RHO, k, j, i);
 
     // 1. Limit gamma with respect to normal observer
@@ -94,7 +95,8 @@ KOKKOS_INLINE_FUNCTION void apply_ceilings(const GRCoordinates& G,
         P(m_p.UU, k, j, i) = floors.u_over_rho_max * P(m_p.RHO, k, j, i);
     }
 }
-
+// TODO(JWM): I don't think that we need the eos object anymore.  gamma1 is now in
+// Floors::Prescription via gamma1.
 KOKKOS_INLINE_FUNCTION int determine_floors(const GRCoordinates& G,
     const VariablePack<Real>& P, const VarMap& m_p, const int& k, const int& j,
     const int& i, const Floors::Prescription& floors, Real& rhoflr_max, Real& uflr_max)
@@ -221,8 +223,9 @@ KOKKOS_INLINE_FUNCTION int apply_floors<InjectionFrame::drift>(FLOOR_ONE_ARGS)
     // Fluid quantities (four velocities have been computed above)
     const Real rho = P(m_p.RHO, k, j, i);
     const Real uu = P(m_p.UU, k, j, i);
-
-    const Real pg = eos.PressureFromDensityInternalEnergy(rho, uu / rho);
+    Real lambda[2];
+    fill_eos_lambda(P, m_p, k, j, i, lambda);
+    const Real pg = eos.PressureFromDensityInternalEnergy(rho, uu / rho, lambda);
     const Real w_old = m::max(rho + uu + pg, SMALL_NUM);
 
     // Normal observer magnetic field
@@ -267,8 +270,9 @@ KOKKOS_INLINE_FUNCTION int apply_floors<InjectionFrame::drift>(FLOOR_ONE_ARGS)
     // Update rho, uu and compute new enthalpy
     P(m_p.RHO, k, j, i) = m::max(rho, rhoflr_max);
     P(m_p.UU, k, j, i) = m::max(uu, uflr_max);
+    fill_eos_lambda(P, m_p, k, j, i, lambda);
     const Real pg_new = eos.PressureFromDensityInternalEnergy(
-        P(m_p.RHO, k, j, i), P(m_p.UU, k, j, i) / P(m_p.RHO, k, j, i));
+        P(m_p.RHO, k, j, i), P(m_p.UU, k, j, i) / P(m_p.RHO, k, j, i), lambda);
     const Real w_new = P(m_p.RHO, k, j, i) + P(m_p.UU, k, j, i) + pg_new;
 
     // New parallel velocity (refer R17 Eqn B14)
@@ -309,11 +313,15 @@ KOKKOS_INLINE_FUNCTION int apply_floors<InjectionFrame::normal_onedw>(FLOOR_ONE_
     // 2. Calculate the increase in conserved mass/energy corresponding to the new
     // material.
     Real rho_ut, T[GR_DIM];
-    GRMHD::p_to_u_mhd(G, rho_add, u_add, uvec, B, eos, k, j, i, rho_ut, T, Loci::center);
+    Real lambda[2];
+    fill_eos_lambda(P, m_p, k, j, i, lambda);
+    GRMHD::p_to_u_mhd(
+        G, rho_add, u_add, uvec, B, eos, lambda, k, j, i, rho_ut, T, Loci::center);
 
     // 3. Add new conserved mass/energy to the current "conserved" state.
     U(m_u.RHO, k, j, i) += rho_ut;
     U(m_u.UU, k, j, i) += T[0]; // Actually T^0_0 + rho u^t
+    if (m_u.YE >= 0) U(m_u.YE, k, j, i) += rho_ut * lambda[0];
     // Also add to the local primitives to produce a better guess
     P(m_p.RHO, k, j, i) += rho_add;
     P(m_p.UU, k, j, i) += u_add;
@@ -342,12 +350,16 @@ KOKKOS_INLINE_FUNCTION int apply_floors<InjectionFrame::normal_kastaun>(FLOOR_ON
     // 2. Calculate the increase in conserved mass/energy corresponding to the new
     // material.
     Real rho_ut, T[GR_DIM];
-    GRMHD::p_to_u_mhd(G, rho_add, u_add, uvec, B, eos, k, j, i, rho_ut, T, Loci::center);
+    Real lambda[2];
+    fill_eos_lambda(P, m_p, k, j, i, lambda);
+    GRMHD::p_to_u_mhd(
+        G, rho_add, u_add, uvec, B, eos, lambda, k, j, i, rho_ut, T, Loci::center);
 
     // 3. Add new conserved mass/energy to the current "conserved" state.
     // (no need to modify the guess for Kastaun, esp once we sync mu)
     U(m_u.RHO, k, j, i) += rho_ut;
     U(m_u.UU, k, j, i) += T[0]; // Actually T^0_0 + rho u^t
+    if (m_u.YE >= 0) U(m_u.YE, k, j, i) += rho_ut * lambda[0];
 
     // Recover new primitive variables
     return Inverter::u_to_p<Inverter::Type::kastaun>(
@@ -361,6 +373,8 @@ KOKKOS_INLINE_FUNCTION int apply_floors<InjectionFrame::normal_kastaun_eenough>(
     // Add the material in the normal observer frame.
     // 1. Calculate our minimum viable primitive variable state
     const Real rho = m::max(rhoflr_max, P(m_p.RHO, k, j, i));
+    Real lambda[2];
+    fill_eos_lambda(P, m_p, k, j, i, lambda);
 
     // If entropy is present & u dips below a floor, use it as a minimum in addition to
     // the floor
@@ -390,7 +404,7 @@ KOKKOS_INLINE_FUNCTION int apply_floors<InjectionFrame::normal_kastaun_eenough>(
                 gamma_fac * uvec[0], gamma_fac * uvec[1], gamma_fac * uvec[2]};
             // Calculate tensor (we only need T1)
             Real rho_ut, T[GR_DIM];
-            GRMHD::p_to_u_mhd(G, rho, u, uv, B, eos, k, j, i, rho_ut, T);
+            GRMHD::p_to_u_mhd(G, rho, u, uv, B, eos, lambda, k, j, i, rho_ut, T);
             // Check that it matches
             return (T[1] - U(m_u.U1, k, j, i)) / U(m_u.U1, k, j, i);
         };
@@ -428,7 +442,7 @@ KOKKOS_INLINE_FUNCTION int apply_floors<InjectionFrame::normal_kastaun_eenough>(
 
     // 2. Calculate the corresponding conserved state
     Real rho_ut, T[GR_DIM];
-    GRMHD::p_to_u_mhd(G, rho, u, uvec, B, eos, k, j, i, rho_ut, T, Loci::center);
+    GRMHD::p_to_u_mhd(G, rho, u, uvec, B, eos, lambda, k, j, i, rho_ut, T, Loci::center);
 
     // 3. Add new conserved mass/energy to the current "conserved" state.
     // (no need to modify the guess for Kastaun, esp once we sync mu)

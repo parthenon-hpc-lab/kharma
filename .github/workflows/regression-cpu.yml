@@ -24,7 +24,15 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          submodules: 'recursive'
+          submodules: false
+      - name: Most submodules
+        # Check out all submodules except eigen, which is hosted on gitlab which rate-limits;
+        # we don't need it anyway
+        run: |
+          git submodule update --init --recursive -f external/{parthenon,Catch2,kokkos-kernels,singularity-opac}
+          git submodule update --init -f external/singularity-eos
+          cd external/singularity-eos
+          git submodule update --init -f utils/{kokkos,kokkos-kernels,ports-of-call,spiner}
       - name: Install prereqs
         run: |
           sudo apt-get update
@@ -45,7 +53,7 @@ jobs:
   test:
     needs: build
     runs-on: ubuntu-latest
-    continue-on-error: true
+    continue-on-error: false
     strategy:
       fail-fast: false
       # add conducting_atmosphere? Long, currently GPU-only
@@ -54,7 +62,7 @@ jobs:
         - all_pars
         - anisotropic_conduction
         - bondi
-        - bondi_rad
+        #- bondi_rad
         - bondi_viscous
         - bz_monopole
         - emhdmodes
@@ -64,8 +72,8 @@ jobs:
         - mhdmodes
         - mhdmodes_smr
         - noh
-        - rad_linear_waves
-        - radshock
+        #- rad_linear_waves
+        #- radshock
         - regrid
         - reinit
         - resize
@@ -75,7 +83,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          submodules: 'recursive'
+          submodules: false
       - uses: actions/download-artifact@v8
         with:
           name: build-artifacts

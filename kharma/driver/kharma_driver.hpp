@@ -136,7 +136,8 @@ class KHARMADriver : public MultiStageDriver
      */
     TaskID AddFOFC(TaskID& t_start, TaskList& tl, MeshData<Real>* md,
         MeshData<Real>* md_full_step_init, MeshData<Real>* md_sub_step_init,
-        MeshData<Real>* guess_src, MeshData<Real>* guess, int stage);
+        MeshData<Real>* guess_src, MeshData<Real>* guess, int stage,
+        std::vector<std::string> sync_vars);
 
     /**
      * Add first-order flux corrections.  This is split out because it needs an additional
@@ -191,6 +192,36 @@ class KHARMADriver : public MultiStageDriver
      */
     static TaskStatus SyncAllBounds(std::shared_ptr<MeshData<Real>>& md);
 
+    template<typename TFlags, typename T>
+    static TaskStatus WeightedSumData(const TFlags& flags, T* in1, T* in2, const Real w1,
+        const Real w2, MeshData<Real>* out)
+    {
+        Kokkos::Profiling::pushRegion("Task_WeightedSumData");
+        const auto& x = in1->PackVariables(flags);
+        const auto& y = in2->PackVariables(flags);
+        const auto& z = out->PackVariables(flags);
+        for (int i = 1; i < 6; i++) {
+            if (x.GetDim(i) < 1) return TaskStatus::complete;
+            if (y.GetDim(i) < 1) return TaskStatus::complete;
+            if (z.GetDim(i) < 1) return TaskStatus::complete;
+        }
+        parthenon::par_for(DEFAULT_LOOP_PATTERN, "WeightedSumData", DevExecSpace(), 0,
+            x.GetDim(5) - 1, 0, x.GetDim(4) - 1, 0, x.GetDim(3) - 1, 0, x.GetDim(2) - 1,
+            0, x.GetDim(1) - 1,
+            KOKKOS_LAMBDA(const int b, const int l, const int k, const int j, const int i)
+            {
+                // TODO(someone) This is potentially dangerous and/or not intended
+                // behavior as we still may want to update (or populate) z if any of those
+                // vars are not allocated yet.
+                if (x.IsAllocated(b, l) && y.IsAllocated(b, l) && z.IsAllocated(b, l)) {
+                    z(b, CC, l, k, j, i) =
+                        w1 * x(b, CC, l, k, j, i) + w2 * y(b, CC, l, k, j, i);
+                }
+            });
+        Kokkos::Profiling::popRegion(); // Task_WeightedSumData
+        return TaskStatus::complete;
+    }
+
     // TODO swapped versions of these
     /**
      * Copy variables matching 'flags' from 'source' to 'dest'.
@@ -199,7 +230,7 @@ class KHARMADriver : public MultiStageDriver
     template<typename T>
     static TaskStatus Copy(std::vector<MetadataFlag> flags, T* source, T* dest)
     {
-        return Update::WeightedSumData<std::vector<MetadataFlag>, T>(
+        return WeightedSumData<std::vector<MetadataFlag>, T>(
             flags, source, source, 1., 0., dest);
     }
 
@@ -212,6 +243,11 @@ class KHARMADriver : public MultiStageDriver
         const auto& x = in1->PackVariables(flags);
         const auto& y = in2->PackVariables(flags);
         const auto& z = out->PackVariables(flags);
+        for (int i = 1; i < 6; i++) {
+            if (x.GetDim(i) < 1) return TaskStatus::complete;
+            if (y.GetDim(i) < 1) return TaskStatus::complete;
+            if (z.GetDim(i) < 1) return TaskStatus::complete;
+        }
         parthenon::par_for(DEFAULT_LOOP_PATTERN, "WeightedSumDataFace", DevExecSpace(), 0,
             x.GetDim(5) - 1, 0, x.GetDim(4) - 1, 0, x.GetDim(3) - 1, 0, x.GetDim(2) - 1,
             0, x.GetDim(1) - 1,
@@ -240,13 +276,32 @@ class KHARMADriver : public MultiStageDriver
     static TaskStatus Scale(
         std::vector<std::string> vars, MeshData<Real>* source, Real norm)
     {
-        return Update::WeightedSumData<std::vector<std::string>, MeshData<Real>>(
+        return WeightedSumData<std::vector<std::string>, MeshData<Real>>(
             vars, source, source, norm, 0., source);
     }
     static TaskStatus ScaleFace(
         std::vector<std::string> vars, MeshData<Real>* source, Real norm)
     {
         return WeightedSumDataFace(vars, source, source, norm, 0., source);
+    }
+
+    template<typename F>
+    static TaskStatus SetDataToConstant(
+        const F& flags, MeshData<Real>* data, const Real val)
+    {
+        PARTHENON_INSTRUMENT
+        const auto& x = data->PackVariables(flags);
+        for (int i = 1; i < 6; i++)
+            if (x.GetDim(i) < 1) return TaskStatus::complete;
+        parthenon::par_for(PARTHENON_AUTO_LABEL, 0, x.GetDim(5) - 1, 0, x.GetDim(4) - 1,
+            0, x.GetDim(3) - 1, 0, x.GetDim(2) - 1, 0, x.GetDim(1) - 1,
+            KOKKOS_LAMBDA(const int b, const int l, const int k, const int j, const int i)
+            {
+                if (x.IsAllocated(b, l)) {
+                    x(b, l, k, j, i) = val;
+                }
+            });
+        return TaskStatus::complete;
     }
 
     /**

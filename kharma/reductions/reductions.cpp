@@ -71,13 +71,36 @@ std::shared_ptr<KHARMAPackage> Reductions::Initialize(
         params.Add("domain_r_in", (GReal)pin->GetReal("coordinates", "r_in"));
         params.Add("domain_r_eh", (GReal)pin->GetReal("coordinates", "r_eh"));
         params.Add("domain_r_out", (GReal)pin->GetReal("coordinates", "r_out"));
+        // Radius of the shell for the "Jet_Lum" history variable
+        params.Add("jet_lum_r", (GReal)pin->GetOrAddReal("reductions", "jet_lum_r", 50.));
     } else {
         params.Add("domain_r_in", 0.);
         params.Add("domain_r_eh", 0.);
         params.Add("domain_r_out", 0.);
+        params.Add("jet_lum_r", 0.);
     }
 
     return pkg;
+}
+
+Real Reductions::JetLumAtEH(MeshData<Real>* md)
+{
+    return ShellReduction<Var::jet_lum, UserHistoryOperation::sum, Real>(md,
+        md->GetMeshPointer()->packages.Get("Reductions")->Param<GReal>("domain_r_eh"));
+}
+Real Reductions::JetLumAtR(MeshData<Real>* md)
+{
+    return ShellReduction<Var::jet_lum, UserHistoryOperation::sum, Real>(
+        md, md->GetMeshPointer()->packages.Get("Reductions")->Param<GReal>("jet_lum_r"));
+}
+Real Reductions::EHTLumProxy(MeshData<Real>* md)
+{
+    const GReal r_eh =
+        md->GetMeshPointer()->packages.Get("Reductions")->Param<GReal>("domain_r_eh");
+    const GReal startx[3] = {r_eh, M_PI / 3., -real_max};
+    const GReal stopx[3] = {50., 2. * M_PI / 3., real_max};
+    return DomainReduction<Var::eht_lum, UserHistoryOperation::sum, Real>(
+        md, startx, stopx);
 }
 
 // Flag reductions: local

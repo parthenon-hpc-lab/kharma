@@ -44,6 +44,9 @@
 #include "microphysics/eos_kharma/eos_kharma.hpp"
 #include "phoebus_utils/variables.hpp"
 
+// Needed for std::is_integral
+#include <type_traits>
+
 template<typename T, bool all_reduce>
 inline std::string GetPoolName()
 {
@@ -200,10 +203,15 @@ T Reductions::DomainReduction(MeshData<Real>* md, const GReal startx[3],
                         }
                     }
                     if (INSIDE) {
-                        local_result += reduction_var<var>(REDUCE_FUNCTION_CALL) *
-                                        ((trivial3) ? 1. : G.Dxc<3>(k)) *
+                        // Coordinate volume element (or area for shells)
+                        const Real dV = ((trivial3) ? 1. : G.Dxc<3>(k)) *
                                         ((trivial2) ? 1. : G.Dxc<2>(j)) *
                                         ((trivial1) ? 1. : G.Dxc<1>(i));
+
+                        // Integer reductions are counts of zones, so are not weighted.
+                        const Real dV_eff = std::is_integral<T>::value ? 1. : dV;
+
+                        local_result += reduction_var<var>(REDUCE_FUNCTION_CALL) * dV_eff;
                     }
                 },
                 sum_reducer);
@@ -231,10 +239,11 @@ T Reductions::DomainReduction(MeshData<Real>* md, const GReal startx[3],
                         }
                     }
                     if (INSIDE) {
-                        const Real val = reduction_var<var>(REDUCE_FUNCTION_CALL) *
-                                         ((trivial3) ? 1. : G.Dxc<3>(k)) *
-                                         ((trivial2) ? 1. : G.Dxc<2>(j)) *
-                                         ((trivial1) ? 1. : G.Dxc<1>(i));
+                        // Extrema of the variable itself, not weighted by zone size
+                        // Otherwise, the result would be value*volume rather than
+                        // the value, and could be biased towards e.g. coarser
+                        // refinement levels
+                        const Real val = reduction_var<var>(REDUCE_FUNCTION_CALL);
                         if (val > local_result) local_result = val;
                     }
                 },
@@ -263,10 +272,9 @@ T Reductions::DomainReduction(MeshData<Real>* md, const GReal startx[3],
                         }
                     }
                     if (INSIDE) {
-                        const Real val = reduction_var<var>(REDUCE_FUNCTION_CALL) *
-                                         ((trivial3) ? 1. : G.Dxc<3>(k)) *
-                                         ((trivial2) ? 1. : G.Dxc<2>(j)) *
-                                         ((trivial1) ? 1. : G.Dxc<1>(i));
+                        // Extrema of the variable itself, not weighted by zone size
+                        // Same reasoning as in the ::max case
+                        const Real val = reduction_var<var>(REDUCE_FUNCTION_CALL);
                         if (val < local_result) local_result = val;
                     }
                 },

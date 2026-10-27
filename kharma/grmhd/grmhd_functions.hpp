@@ -277,8 +277,10 @@ KOKKOS_INLINE_FUNCTION void p_to_u(const GRCoordinates& G, const Global& P,
     // Particle number flux
     U(m_u.RHO, k, j, i) = P(m_p.RHO, k, j, i) * Dtmp.ucon[0] * gdet;
 
+    Real lambda[2];
+    fill_eos_lambda(P, m_p, k, j, i, lambda);
     Real pg = eos.PressureFromDensityInternalEnergy(
-        P(m_p.RHO, k, j, i), P(m_p.UU, k, j, i) / P(m_p.RHO, k, j, i));
+        P(m_p.RHO, k, j, i), P(m_p.UU, k, j, i) / P(m_p.RHO, k, j, i), lambda);
     if (m_u.B1 >= 0) {
         // MHD stress-energy tensor w/ first index up, second index down
         Real mhd[GR_DIM];
@@ -303,8 +305,8 @@ KOKKOS_INLINE_FUNCTION void p_to_u(const GRCoordinates& G, const Global& P,
  */
 KOKKOS_INLINE_FUNCTION void p_to_u_mhd(const GRCoordinates& G, const Real& rho,
     const Real& u, const Real uvec[NVEC], const Real B_P[NVEC],
-    const Microphysics::EOS::EOS& eos, const int& k, const int& j, const int& i,
-    Real& rho_ut, Real T[GR_DIM], const Loci loc = Loci::center)
+    const Microphysics::EOS::EOS& eos, Real lambda[2], const int& k, const int& j,
+    const int& i, Real& rho_ut, Real T[GR_DIM], const Loci loc = Loci::center)
 {
     Real gdet = G.gdet(loc, j, i);
 
@@ -316,7 +318,7 @@ KOKKOS_INLINE_FUNCTION void p_to_u_mhd(const GRCoordinates& G, const Real& rho,
 
     // MHD stress-energy tensor w/ first index up, second index down
     Real mhd[GR_DIM];
-    Real pg = eos.PressureFromDensityInternalEnergy(rho, u / rho);
+    Real pg = eos.PressureFromDensityInternalEnergy(rho, u / rho, lambda);
     calc_tensor(rho, u, pg, Dtmp, 0, mhd);
 
     T[0] = mhd[0] * gdet + rho_ut;

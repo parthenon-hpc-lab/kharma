@@ -417,7 +417,7 @@ TaskStatus B_CT::DerefinePoles(MeshData<Real>* md)
     // HYERIN (01/17/24) this routine is not general yet and only applies to polar
     // boundaries for now.
     auto pmesh = md->GetMeshPointer();
-    const uint nlevels = pmesh->packages.Get("ISMR")->Param<uint>("nlevels");
+    const int nlevels = pmesh->packages.Get("ISMR")->Param<int>("nlevels");
 
     // Figure out indices
     int ng = Globals::nghost;

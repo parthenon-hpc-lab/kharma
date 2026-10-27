@@ -52,11 +52,17 @@ std::shared_ptr<KHARMAPackage> Initialize(
     const std::string block_name = "eos";
 
     Units::UnitConversions unit_conv(pin);
-    const Real time_unit = unit_conv.GetTimeCodeToCGS();
-    const Real mass_unit = unit_conv.GetMassCodeToCGS();
-    const Real length_unit = unit_conv.GetLengthCodeToCGS();
-    const Real temp_unit =
-        pow(unit_conv.GetLengthCodeToCGS() / unit_conv.GetTimeCodeToCGS(), 2.);
+    // singularity-eos's LengthTimeUnitsInit inverts the base-unit factors internally
+    // (since singularity PR #639, commit 6ae74f49): pass CGS->code, not code->CGS.
+    const Real time_unit = unit_conv.GetTimeCGSToCode();
+    const Real mass_unit = unit_conv.GetMassCGSToCode();
+    const Real length_unit = unit_conv.GetLengthCGSToCode();
+    const Real temp_unit = unit_conv.GetTemperatureCGSToCode();
+    // const Real time_unit = unit_conv.GetTimeCodeToCGS();
+    // const Real mass_unit = unit_conv.GetMassCodeToCGS();
+    // const Real length_unit = unit_conv.GetLengthCodeToCGS();
+    // const Real temp_unit = unit_conv.GetTemperatureCodeToCGS();
+
     // If using StellarCollapse, we need additional variables.
     // We also need table max and min values, regardless of the EOS.
     // These can be used for floors/ceilings or for root find bounds
@@ -96,8 +102,7 @@ std::shared_ptr<KHARMAPackage> Initialize(
         }
 
         const Real gm1 = gamma1 - 1.0;
-        // const Real Cv = pin->GetOrAddReal(block_name, "Cv", 1.0);
-        const Real Cv = 1. / (gm1);
+        const Real Cv = pin->GetOrAddReal(block_name, "Cv", 1.0);
         params.Add("gm1", gm1);
         params.Add("Cv", Cv);
 
@@ -125,10 +130,6 @@ std::shared_ptr<KHARMAPackage> Initialize(
         // We request that Ye and temperature exist, but do not provide them.
         Metadata m = Metadata({Metadata::Cell, Metadata::Intensive, Metadata::Derived,
             Metadata::OneCopy, Metadata::Requires});
-
-        // TODO: prob fix this later when we start using nuclear eos
-        // pkg->AddField(fluid_prim::ye::name(), m);
-        // pkg->AddField(fluid_prim::temperature::name(), m);
 
         const std::string filename = pin->GetString(block_name, "filename");
         const bool use_sp5 = pin->GetOrAddBoolean(block_name, "use_sp5", true);

@@ -367,7 +367,8 @@ TaskID KHARMADriver::AddFluxCalculations(
 
 TaskID KHARMADriver::AddFOFC(TaskID& t_start, TaskList& tl, MeshData<Real>* md,
     MeshData<Real>* md_full_step_init, MeshData<Real>* md_sub_step_init,
-    MeshData<Real>* guess_src, MeshData<Real>* guess, int stage)
+    MeshData<Real>* guess_src, MeshData<Real>* guess, int stage,
+    std::vector<std::string> sync_vars)
 {
     Flag("AddFOFC");
     // Pull reconstruction option to simplify use. TODO shorten?
@@ -388,8 +389,6 @@ TaskID KHARMADriver::AddFOFC(TaskID& t_start, TaskList& tl, MeshData<Real>* md,
 
     // FixFlux for a fake update
     auto t_fix_guess = tl.AddTask(t_start, Packages::FixFlux, md);
-    // // TODO try a flux-CT step *even if we're using Face-CT* to avoid synchronization
-    // auto t_fix_flux_ct = tl.AddTask(t_fix_guess, B_FluxCT::FixFluxTask, md);
     // Calculate and sync EMF from first-order fluxes
     std::shared_ptr<MeshData<Real>> md_shr{md, [](MeshData<Real>*)
         {
@@ -415,10 +414,7 @@ TaskID KHARMADriver::AddFOFC(TaskID& t_start, TaskList& tl, MeshData<Real>* md,
         std::vector<MetadataFlag>{
             Metadata::Independent, Metadata::Cell, Metadata::WithFluxes},
         3);
-    // Add geometric source term to more accurately predict floor hits.
-    // Could add everything here with Packages::AddSource but would be slower
-    // also would need to deal with B_CT::AddSource == flux update, which we don't
-    // want/need
+    // Add all source terms so we can accurately predict floor hits
     auto t_guess_sources = tl.AddTask(
         t_guess_divergence, Packages::AddSource, md, guess_src, IndexDomain::entire);
 
@@ -435,41 +431,61 @@ TaskID KHARMADriver::AddFOFC(TaskID& t_start, TaskList& tl, MeshData<Real>* md,
 
     auto t_derefine = t_reconnect;
     if (use_ismr) {
-        if (pkgs.at("ISMR")->Param<uint>("nlevels") > 0) {
+        if (pkgs.at("ISMR")->Param<int>("nlevels") > 0) {
             auto t_derefine_b = t_reconnect;
             if (use_b_ct)
                 t_derefine_b = tl.AddTask(t_reconnect, B_CT::DerefinePoles, guess);
             t_derefine = tl.AddTask(t_derefine_b, ISMR::DerefinePoles, guess,
-                std::vector<MetadataFlag>{Metadata::WithFluxes});
+                std::vector<MetadataFlag>{Metadata::WithFluxes, Metadata::Independent});
         }
     }
 
-    // END FAKE STEP: RESULT IN 'GUESS'
+    // Sync, now we have conserved guess state in zones and neighbors
+    std::shared_ptr<MeshData<Real>> guess_shr{guess, [](MeshData<Real>*)
+        {
+        } /*No-Op Deleter*/};
+    auto& guess_sync = pmesh->mesh_data.AddShallow(
+        "gsync" + integrator->stage_name[stage] + std::to_string(0), guess_shr,
+        sync_vars);
+    auto t_start_recv_bound = tl.AddTask(t_start,
+        parthenon::StartReceiveBoundBufs<parthenon::BoundaryType::any>, guess_sync);
+    auto t_guess_sync =
+        KHARMADriver::AddBoundarySync(t_derefine | t_start_recv_bound, tl, guess_sync);
 
     // Recover primitive variables of the guess From faces
     auto t_guess_Bp =
         tl.AddTask(t_derefine, B_CT::MeshUtoP, guess, IndexDomain::entire, false);
     auto t_guess_prims =
         tl.AddTask(t_guess_Bp, Inverter::MeshUtoP, guess, IndexDomain::entire, false);
+
+    auto t_derefinep = t_guess_prims;
+    if (use_ismr) {
+        t_derefinep = tl.AddTask(t_guess_prims, ISMR::DerefinePoles, guess,
+            std::vector<MetadataFlag>{Metadata::GetUserFlag("Primitive")});
+    }
+
+    // END FAKE STEP: RESULT IN 'GUESS'
+
     // Check and mark floors
     auto t_mark_floors = tl.AddTask(
-        t_guess_prims, Floors::DetermineGRMHDFloors, guess, IndexDomain::entire, floors);
+        t_derefinep, Floors::DetermineGRMHDFloors, guess, IndexDomain::entire, floors);
     // Determine which cells are FOFC in our block, put that in a new flag
     auto t_mark_fofc = tl.AddTask(t_guess_prims, Flux::MarkFOFC, guess);
-    // And clear the flags, this step was fake
-    auto t_clear_floors = tl.AddTask(
-        t_mark_fofc, KHARMADriver::Scale, std::vector<std::string>{"fflag"}, md, 0.);
-    auto t_clear_flags = tl.AddTask(
-        t_mark_fofc, KHARMADriver::Scale, std::vector<std::string>{"pflag"}, md, 0.);
+    // And clear the flags, this step was fake.  Flags are shared between all containers!
+    auto t_clear_floors =
+        tl.AddTask(t_mark_fofc, KHARMADriver::SetDataToConstant<std::vector<std::string>>,
+            std::vector<std::string>{"fflag"}, md, 0.);
+    auto t_clear_flags =
+        tl.AddTask(t_mark_fofc, KHARMADriver::SetDataToConstant<std::vector<std::string>>,
+            std::vector<std::string>{"pflag"}, md, 0.);
     // Sync the FOFC flag with neighbors
     // TODO this shouldn't be necessary, eliminate ASAP
-    // std::shared_ptr<MeshData<Real>> md_shr{md, [](MeshData<Real> *) {}/*No-Op
-    // Deleter*/};
-    auto& md_fofc =
-        pmesh->mesh_data.AddShallow("FOFC", md_shr, std::vector<std::string>{"fofcflag"});
-    auto t_sync_fofc = KHARMADriver::AddBoundarySync(t_mark_fofc, tl, md_fofc);
+    // auto& md_fofc =
+    //     pmesh->mesh_data.AddShallow("FOFC", md_shr,
+    //     std::vector<std::string>{"fofcflag"});
+    // auto t_sync_fofc = KHARMADriver::AddBoundarySync(t_mark_fofc, tl, md_fofc);
     // Finally, replace any fluxes bordering marked zones with donor-cell/LLF versions
-    auto t_fofc = tl.AddTask(t_sync_fofc, Flux::FOFC, md, guess);
+    auto t_fofc = tl.AddTask(t_mark_fofc, Flux::FOFC, md, guess);
 
     EndFlag();
     return t_fofc;
@@ -484,7 +500,8 @@ TaskID KHARMADriver::AddFOFC_PCP(TaskID& t_start, TaskList& tl, MeshData<Real>* 
     auto pmb0 = md->GetBlockData(0)->GetBlockPointer();
     auto& pkgs = pmb0->packages.AllPackages();
     const bool use_b_ct = pkgs.count("B_CT");
-    const bool use_ismr = pkgs.count("ISMR");
+    const bool use_ismr =
+        (pkgs.count("ISMR")) ? pkgs.at("ISMR")->Param<int>("nlevels") > 0 : false;
     bool reconnect_b3 = false;
     if (use_b_ct) {
         reconnect_b3 = pkgs.at("Boundaries")->Param<bool>("reconnect_B3_inner_x2");
@@ -548,12 +565,12 @@ TaskID KHARMADriver::AddFOFC_PCP(TaskID& t_start, TaskList& tl, MeshData<Real>* 
 
     auto t_derefine = t_reconnect;
     if (use_ismr) {
-        if (pkgs.at("ISMR")->Param<uint>("nlevels") > 0) {
+        if (pkgs.at("ISMR")->Param<int>("nlevels") > 0) {
             auto t_derefine_b = t_reconnect;
             if (use_b_ct)
                 t_derefine_b = tl.AddTask(t_reconnect, B_CT::DerefinePoles, guess);
             t_derefine = tl.AddTask(t_derefine_b, ISMR::DerefinePoles, guess,
-                std::vector<MetadataFlag>{Metadata::WithFluxes});
+                std::vector<MetadataFlag>{Metadata::WithFluxes, Metadata::Independent});
         }
     }
 
@@ -578,11 +595,18 @@ TaskID KHARMADriver::AddFOFC_PCP(TaskID& t_start, TaskList& tl, MeshData<Real>* 
         tl.AddTask(t_guess_Bp, Inverter::MeshUtoP, guess, IndexDomain::entire, false);
     // -> this gives Ptilde which we must KEEP to the next inverter call
     // And clear any inverter flags, this step was fake
-    auto t_clear_flags = tl.AddTask(
-        t_guess_prims, KHARMADriver::Scale, std::vector<std::string>{"pflag"}, md, 0.);
+    auto t_clear_flags = tl.AddTask(t_guess_prims,
+        KHARMADriver::SetDataToConstant<std::vector<std::string>>,
+        std::vector<std::string>{"pflag"}, md, 0.);
+
+    auto t_derefinep = t_guess_prims;
+    if (use_ismr) {
+        t_derefinep = tl.AddTask(t_guess_prims, ISMR::DerefinePoles, guess,
+            std::vector<MetadataFlag>{Metadata::GetUserFlag("Primitive")});
+    }
 
     // Revise the first order corrections according to new Bf^2 - Bc^2
-    auto t_fofc_pcp = tl.AddTask(t_guess_prims, Flux::FOFC_PCP, md, guess,
+    auto t_fofc_pcp = tl.AddTask(t_derefinep, Flux::FOFC_PCP, md, guess,
         integrator->beta[stage - 1] * integrator->dt);
 
     EndFlag();
@@ -601,10 +625,10 @@ TaskID KHARMADriver::AddStateUpdate(TaskID& t_start, TaskList& tl,
     std::vector<MetadataFlag> flags_face = flags;
     flags_face.push_back(Metadata::Face);
     // TODO splitting this is stupid, but maybe the parallelization actually helps? Eh.
-    auto t_avg_data_c = tl.AddTask(t_start,
-        Update::WeightedSumData<std::vector<MetadataFlag>, MeshData<Real>>,
-        std::vector<MetadataFlag>(flags_cell), md_sub_step_init, md_full_step_init,
-        integrator->gam0[stage - 1], integrator->gam1[stage - 1], md_update);
+    auto t_avg_data_c =
+        tl.AddTask(t_start, WeightedSumData<std::vector<MetadataFlag>, MeshData<Real>>,
+            std::vector<MetadataFlag>(flags_cell), md_sub_step_init, md_full_step_init,
+            integrator->gam0[stage - 1], integrator->gam1[stage - 1], md_update);
     auto t_avg_data_f = t_avg_data_c;
     if (update_face) {
         t_avg_data_f = tl.AddTask(t_start, WeightedSumDataFace<MetadataFlag>,
@@ -613,7 +637,7 @@ TaskID KHARMADriver::AddStateUpdate(TaskID& t_start, TaskList& tl,
     }
     // apply du/dt to the result
     auto t_update_c = tl.AddTask(t_avg_data_c | t_avg_data_f,
-        Update::WeightedSumData<std::vector<MetadataFlag>, MeshData<Real>>,
+        WeightedSumData<std::vector<MetadataFlag>, MeshData<Real>>,
         std::vector<MetadataFlag>(flags_cell), md_update, md_flux_src, 1.0,
         integrator->beta[stage - 1] * integrator->dt, md_update);
     auto t_update_f = t_update_c;
@@ -658,10 +682,10 @@ TaskID KHARMADriver::AddStateUpdateIdealGuess(TaskID& t_start, TaskList& tl,
     std::vector<MetadataFlag> flags_face = flags;
     flags_face.push_back(Metadata::Face);
     // TODO splitting this is stupid, but maybe the parallelization actually helps? Eh.
-    auto t_avg_data_c = tl.AddTask(t_start,
-        Update::WeightedSumData<std::vector<MetadataFlag>, MeshData<Real>>,
-        std::vector<MetadataFlag>(flags_cell), md_sub_step_init, md_full_step_init,
-        integrator->gam0[stage - 1], integrator->gam1[stage - 1], md_update);
+    auto t_avg_data_c =
+        tl.AddTask(t_start, WeightedSumData<std::vector<MetadataFlag>, MeshData<Real>>,
+            std::vector<MetadataFlag>(flags_cell), md_sub_step_init, md_full_step_init,
+            integrator->gam0[stage - 1], integrator->gam1[stage - 1], md_update);
     auto t_avg_data_f = t_avg_data_c;
     if (update_face) {
         t_avg_data_f = tl.AddTask(t_start, WeightedSumDataFace<MetadataFlag>,
@@ -670,7 +694,7 @@ TaskID KHARMADriver::AddStateUpdateIdealGuess(TaskID& t_start, TaskList& tl,
     }
     // apply du/dt to the result
     auto t_update_c = tl.AddTask(t_avg_data_c | t_avg_data_f,
-        Update::WeightedSumData<std::vector<MetadataFlag>, MeshData<Real>>,
+        WeightedSumData<std::vector<MetadataFlag>, MeshData<Real>>,
         std::vector<MetadataFlag>(flags_cell), md_update, md_flux_src, 1.0,
         integrator->beta[stage - 1] * integrator->dt, md_update);
     auto t_update_f = t_update_c;

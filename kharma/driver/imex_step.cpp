@@ -46,6 +46,7 @@
 #include "inverter.hpp"
 #include "ismr.hpp"
 #include "radM1.hpp"
+#include "temperature.hpp"
 #include "wind.hpp"
 // Other headers
 #include "boundaries.hpp"
@@ -73,9 +74,11 @@ TaskCollection KHARMADriver::MakeImExTaskCollection(BlockList_t& blocks, int sta
     auto& flux_pkg = pkgs.at("Fluxes")->AllParams();
     const bool use_b_cleanup = pkgs.count("B_Cleanup");
     const bool use_b_ct = pkgs.count("B_CT");
-    const bool use_ismr = pkgs.count("ISMR");
+    const bool use_ismr =
+        (pkgs.count("ISMR")) ? pkgs.at("ISMR")->Param<int>("nlevels") > 0 : false;
     const bool use_electrons = pkgs.count("Electrons");
     const bool use_entropy = pkgs.count("Entropy");
+    const bool use_temperature = pkgs.count("Temperature");
     // Whether anything needs the Strang-split primitive-source half-steps at all
     const bool use_prim_source = Packages::AnyPrimSource(pmesh);
     const bool use_fofc = flux_pkg.Get<bool>("use_fofc");
@@ -246,7 +249,7 @@ TaskCollection KHARMADriver::MakeImExTaskCollection(BlockList_t& blocks, int sta
             auto& guess = pmesh->mesh_data.GetOrAdd("fofc_guess", i);
             t_fluxes = KHARMADriver::AddFOFC(t_flux_calc, tl, md_sub_step_init.get(),
                 md_full_step_init.get(), md_sub_step_init.get(), guess_src.get(),
-                guess.get(), stage);
+                guess.get(), stage, sync_vars);
             if (use_fofc_pcp) {
                 t_fluxes = KHARMADriver::AddFOFC_PCP(t_fluxes, tl, md_sub_step_init.get(),
                     md_full_step_init.get(), md_sub_step_init.get(), guess_src.get(),
@@ -371,14 +374,12 @@ TaskCollection KHARMADriver::MakeImExTaskCollection(BlockList_t& blocks, int sta
 
         auto t_derefine = t_reconnect;
         if (use_ismr) {
-            if (pkgs.at("ISMR")->Param<uint>("nlevels") > 0) {
-                auto t_derefine_b = t_reconnect;
-                if (use_b_ct)
-                    t_derefine_b =
-                        tl.AddTask(t_reconnect, B_CT::DerefinePoles, md_solver.get());
-                t_derefine = tl.AddTask(t_derefine_b, ISMR::DerefinePoles,
-                    md_solver.get(), std::vector<MetadataFlag>{Metadata::WithFluxes});
-            }
+            auto t_derefine_b = t_reconnect;
+            if (use_b_ct)
+                t_derefine_b =
+                    tl.AddTask(t_reconnect, B_CT::DerefinePoles, md_solver.get());
+            t_derefine = tl.AddTask(t_derefine_b, ISMR::DerefinePoles, md_solver.get(),
+                std::vector<MetadataFlag>{Metadata::WithFluxes, Metadata::Independent});
         }
 
         // Make sure the primitive values of *explicitly-evolved* variables are updated.
@@ -491,13 +492,21 @@ TaskCollection KHARMADriver::MakeImExTaskCollection(BlockList_t& blocks, int sta
         auto t_set_bc = tl.AddTask(t_fix_solve,
             parthenon::ApplyBoundaryConditionsOnCoarseOrFineMD, md_sync, false);
 
+        // Recompute cached temperature from the final floored, fixed-up, boundary-filled
+        // primitives. Its lT_guess seeds the next substep's EOS root-finds.
+        auto t_temperature = t_set_bc;
+        if (use_temperature) {
+            t_temperature = tl.AddTask(
+                t_set_bc, Temperature::MeshUpdateTemperature, md_sub_step_final.get());
+        }
+
         // Strang splitting, second half: the sources advance the transported state over
         // the remaining dt/2.  Only after the last stage, so that the pair straddles the
         // whole transport step symmetrically. That symmetry is what cancels the
         // leading splitting error and keeps the composition 2nd order.
-        auto t_prim_source = t_set_bc;
+        auto t_prim_source = t_temperature;
         if (stage == integrator->nstages) {
-            t_prim_source = tl.AddTask(t_set_bc, Packages::MeshApplyPrimSource,
+            t_prim_source = tl.AddTask(t_temperature, Packages::MeshApplyPrimSource,
                 md_sub_step_final.get(), tm.time + 0.5 * integrator->dt,
                 0.5 * integrator->dt);
         }
@@ -518,8 +527,15 @@ TaskCollection KHARMADriver::MakeImExTaskCollection(BlockList_t& blocks, int sta
                 t_heat_electrons, Entropy::MeshUpdateEntropy, md_sub_step_final.get());
         }
 
+        auto t_derefinep = t_entropy;
+        if (use_ismr) {
+            t_derefinep =
+                tl.AddTask(t_entropy, ISMR::DerefinePoles, md_sub_step_final.get(),
+                    std::vector<MetadataFlag>{Metadata::GetUserFlag("Primitive")});
+        }
+
         // Make sure *all* conserved vars are synchronized at step end
-        auto t_ptou = tl.AddTask(t_entropy, Flux::MeshPtoU, md_sub_step_final.get(),
+        auto t_ptou = tl.AddTask(t_derefinep, Flux::MeshPtoU, md_sub_step_final.get(),
             IndexDomain::entire, false);
 
         auto t_step_done = t_ptou;
