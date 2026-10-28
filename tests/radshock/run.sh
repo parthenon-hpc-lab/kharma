@@ -13,7 +13,7 @@ rad_shocktube_test() {
     for res in 400 600 900
     do
         $KHARMADIR/run.sh -i $parfile debug/verbose=1 parthenon/output0/dt=300 \
-                            parthenon/mesh/nx1=$res parthenon/meshblock/nx1=$((res / 2)) \
+                            parthenon/mesh/nx1=$res parthenon/meshblock/nx1=$((res / 4)) \
                             >shock_test${test_num}_${res}.log 2>&1
 
         cp dumps_kharma/shock.out0.final.phdf shock_test${test_num}.out0.final.res${res}.phdf

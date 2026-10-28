@@ -1,0 +1,24 @@
+#!/bin/bash -l
+#PBS -A agn_spin
+#PBS -N KHARMA
+#PBS -l select=1
+#PBS -l walltime=168:00:00
+#PBS -l filesystems=flare
+#PBS -k doe
+#PBS -l place=scatter
+#PBS -q capacity
+#PBS -j oe
+
+# What the actual hell, PBS.  Just start in the submit dir
+cd ${PBS_O_WORKDIR}
+
+# List nodes, because PBS also doesn't do that
+
+cat $PBS_NODEFILE
+
+# 12 is hard-coded in machines/aurora.sh right now
+NNODES=`wc -l < $PBS_NODEFILE`
+NRANKS=12
+NTOTRANKS=$(( $NNODES * $NRANKS ))
+
+$HOME/Code/kharma/run.sh -n $NTOTRANKS -t 167:50:00 # YOUR ARGUMENTS HERE, PBS DOESN'T TAKE ARGS

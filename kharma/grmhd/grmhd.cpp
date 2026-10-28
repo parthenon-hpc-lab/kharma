@@ -423,20 +423,21 @@ Real EstimateTimestep(MeshData<Real>* md)
         const bool is_outer_x2 =
             KBoundaries::IsPhysicalBoundary(pmb, BoundaryFace::outer_x2);
 
-        const auto& cmax_mhd = rc->PackVariables(std::vector<std::string>{"Flux.cmax"});
-        const auto& cmin_mhd = rc->PackVariables(std::vector<std::string>{"Flux.cmin"});
+        const auto& cmax = rc->PackVariables(std::vector<std::string>{"Flux.cmax"});
+        const auto& cmin = rc->PackVariables(std::vector<std::string>{"Flux.cmin"});
 
         // Out of the Package modification RADM1.
-        // If radiation package is present, use radiation cmax and cmin for timestep
-        // calculation instead of MHD cmax and cmin
+        // With radiation, the step must satisfy the CFL condition of both the MHD and
+        // the radiation fluxes, so we gotta be careful since in optically thick zones the
+        // radiation speeds can be below the fast magnetosonic speed.
         const bool use_rad = pmesh->packages.AllPackages().count("RadM1");
 
-        const auto& cmax =
+        const auto& cmax_rad =
             (use_rad) ? rc->PackVariables(std::vector<std::string>{"Flux.cmax_rad"})
-                      : cmax_mhd;
-        const auto& cmin =
+                      : cmax;
+        const auto& cmin_rad =
             (use_rad) ? rc->PackVariables(std::vector<std::string>{"Flux.cmin_rad"})
-                      : cmin_mhd;
+                      : cmin;
 
         auto& boundaries = pmesh->packages.Get<KHARMAPackage>("Boundaries")->AllParams();
         const bool excise_inner_x2 = boundaries.Get<bool>("excise_flux_inner_x2");
@@ -466,13 +467,17 @@ Real EstimateTimestep(MeshData<Real>* md)
                     excise_factor = 0.5;
                 }
 
+                const Real c1 = m::max(m::max(cmax(V1, k, j, i), cmin(V1, k, j, i)),
+                    m::max(cmax_rad(V1, k, j, i), cmin_rad(V1, k, j, i)));
+                const Real c2 = m::max(m::max(cmax(V2, k, j, i), cmin(V2, k, j, i)),
+                    m::max(cmax_rad(V2, k, j, i), cmin_rad(V2, k, j, i)));
+                const Real c3 = m::max(m::max(cmax(V3, k, j, i), cmin(V3, k, j, i)),
+                    m::max(cmax_rad(V3, k, j, i), cmin_rad(V3, k, j, i)));
+
                 double ndt_zone =
                     courant_limit /
-                    ((m::max(cmax(V1, k, j, i), cmin(V1, k, j, i)) / G.Dxc<1>(i)) +
-                        (m::max(cmax(V2, k, j, i), cmin(V2, k, j, i)) /
-                            (G.Dxc<2>(j) * excise_factor)) +
-                        (m::max(cmax(V3, k, j, i), cmin(V3, k, j, i)) /
-                            (G.Dxc<3>(k) * ismr_factor)));
+                    ((c1 / G.Dxc<1>(i)) + (c2 / (G.Dxc<2>(j) * excise_factor)) +
+                        (c3 / (G.Dxc<3>(k) * ismr_factor)));
 
                 if (!m::isnan(ndt_zone) && (ndt_zone < local_result)) {
                     local_result = ndt_zone;

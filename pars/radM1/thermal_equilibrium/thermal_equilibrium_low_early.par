@@ -47,7 +47,6 @@ reconstruction = weno5
 
 <eos>
 type = IdealGas
-Cv = 1.0
 
 <thermal_equilibrium>
 rho_cgs = 1.e-7

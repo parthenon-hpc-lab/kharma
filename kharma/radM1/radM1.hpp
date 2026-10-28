@@ -64,7 +64,21 @@ enum class StatusImplicitStep {
     radsolve,
     bothsolve,
     failure,
-    onedfallback_failure
+    onedfallback_failure,
+    starfix_success,
+    ufluid_success,
+    // Every solver failed, but the best state reached radM1/accept_tol: accepted
+    relaxed_success,
+    // Internal to AddSourceImplicitly, never left in rimplflag after it
+    // Used to split it into the different kernels. I think this might be the best way to
+    // do i
+    pending_pmhd,
+    pending_prad,
+    pending_prad_starfix,
+    pending_ff,
+    // pending_pmhd with the short budget pmhd_maxiter_after_ff: the fluid-frame solver
+    // took this cell in the last implicit call
+    pending_pmhd_short
 };
 
 static const std::map<int, std::string> status_names_implicit = {
@@ -80,6 +94,12 @@ static const std::map<int, std::string> status_names_implicit = {
     {(int)StatusImplicitStep::mhdfinalsolve,
         "PMHD solver converged but UtoP failed. Sending it to fixup."},
     {(int)StatusImplicitStep::failure, "RadM1 implicit step update failure."},
+    {(int)StatusImplicitStep::starfix_success,
+        "RadM1 star state repaired from entropy and solve succeeded"},
+    {(int)StatusImplicitStep::ufluid_success,
+        "RadM1 4D Solver Fell Back to energy in fluid frame and succeeded"},
+    {(int)StatusImplicitStep::relaxed_success,
+        "RadM1 every solver failed, accepted with the relaxed tolerance (accept_tol)"},
 };
 
 enum class RadLimiterType { BASIC, TYPE2 };
@@ -107,6 +127,14 @@ static const std::map<int, std::string> status_names_inversion = {
 
 };
 
+// maximum_gamma leaves a usable state, so only these count as failures
+KOKKOS_INLINE_FUNCTION bool rad_inversion_failed(const Real flag)
+{
+    const int f = static_cast<int>(flag);
+    return f == static_cast<int>(StatusRadiationInversion::urad_negative) ||
+           f == static_cast<int>(StatusRadiationInversion::not_finite);
+}
+
 TaskStatus BlockPtoU(MeshBlockData<Real>* rc, IndexDomain domain, bool coarse = false);
 /**
  * Initialize the radM1 package with several options from the input deck
@@ -125,6 +153,11 @@ void AddSourceImplicitly(
  * Convert from conserved to primitive variables for the radiation field.
  */
 TaskStatus BlockUtoP(MeshBlockData<Real>* rc, IndexDomain domain, bool coarse = false);
+
+/**
+ * Fix radiation primitives where the inversion or the implicit solve failed.
+ */
+TaskStatus FixRadiation(MeshBlockData<Real>* rc);
 
 /**
  * Apply floors to the radiation energy variables.
@@ -147,6 +180,12 @@ enum class OpacityType : int {
 };
 #include "microphysics/opac_kharma/rad_opacities.hpp"
 
+// Opacity parameters from the RadM1, opacity and Units packages
+RadOpac GetRadOpac(Packages_t& packages);
+// Cell-centered total opacity "rad_kappa". Not used: GetFlux computes the opacity of
+// each face state (calc_kappa_tot) for the radiation signal speeds
+TaskStatus CalcKappa(MeshData<Real>* md);
+
 KOKKOS_INLINE_FUNCTION Real calc_kabs(
     Real rho, Real T, Real Trad, Real bsq, const RadOpac& rad_opac)
 {
@@ -154,9 +193,9 @@ KOKKOS_INLINE_FUNCTION Real calc_kabs(
 }
 
 KOKKOS_INLINE_FUNCTION Real calc_kscattering(
-    Real rho, Real T, Real bsq, const RadOpac& rad_opac)
+    Real rho, Real T, Real Trad, Real bsq, const RadOpac& rad_opac)
 {
-    return rad_opac.kappa_sc(rho, T, bsq);
+    return rad_opac.kappa_sc(rho, T, bsq, Trad);
 }
 
 // Global Lorentz Factor for Radiation
@@ -186,6 +225,38 @@ KOKKOS_INLINE_FUNCTION void calc_ucon_rad(const GRCoordinates& G, const Global& 
     VLOOP
         ucon[v + 1] =
             P(m.U1_RAD + v, k, j, i) - gamma * alpha * G.gcon(loc, j, i, 0, v + 1);
+}
+
+// Inside the horizon the radiation does not interact (AddSourceImplicitly skips it), so
+// its signal speeds get no optical-depth reduction there. If there is no horizon, r_hor =
+// 0
+KOKKOS_INLINE_FUNCTION bool inside_horizon(
+    const GRCoordinates& G, const int& k, const int& j, const int& i, const Loci loc)
+{
+    GReal Xembed[GR_DIM];
+    G.coord_embed(k, j, i, loc, Xembed);
+    const GReal r_hor = G.coords.get_horizon();
+    return r_hor > 0.0 && Xembed[1] < r_hor;
+}
+
+// Total opacity of the state P at (k, j, i, loc), for the radiation signal speeds
+template<typename Global>
+KOKKOS_INLINE_FUNCTION Real calc_kappa_tot(const GRCoordinates& G, const Global& P,
+    const VarMap& m_p, const FourVectors& D, const Microphysics::EOS::EOS& eos,
+    const RadOpac& rad_opac, const int& k, const int& j, const int& i, const Loci loc)
+{
+    const Real rho = P(m_p.RHO, k, j, i);
+    const Real Tg =
+        eos.TemperatureFromDensityInternalEnergy(rho, P(m_p.UU, k, j, i) / rho);
+    const Real bsq = dot(D.bcon, D.bcov);
+    Real ucon_rad[GR_DIM];
+    calc_ucon_rad(G, P, m_p, k, j, i, loc, ucon_rad);
+    const Real gamma_rel = m::max(-dot(ucon_rad, D.ucov), 1.0);
+    const Real E_hat =
+        P(m_p.UU_RAD, k, j, i) * ((4.0 / 3.0) * gamma_rel * gamma_rel - (1.0 / 3.0));
+    const Real Trad = rad_opac.Trad(E_hat, rho, bsq);
+    return calc_kabs(rho, Tg, Trad, bsq, rad_opac) +
+           calc_kscattering(rho, Tg, Trad, bsq, rad_opac);
 }
 
 KOKKOS_INLINE_FUNCTION Real lorentz_calc_rad(

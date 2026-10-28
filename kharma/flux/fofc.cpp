@@ -162,6 +162,11 @@ TaskStatus Flux::FOFC(MeshData<Real>* md, MeshData<Real>* guess)
     // I assume we should update cmax/cmin. Else we should use the old ones, so
     const auto& cmax = md->PackVariables(std::vector<std::string>{"Flux.cmax"});
     const auto& cmin = md->PackVariables(std::vector<std::string>{"Flux.cmin"});
+    const bool use_rad = packages.AllPackages().count("RadM1");
+    const auto& cmax_rad =
+        use_rad ? md->PackVariables(std::vector<std::string>{"Flux.cmax_rad"}) : cmax;
+    const auto& cmin_rad =
+        use_rad ? md->PackVariables(std::vector<std::string>{"Flux.cmin_rad"}) : cmin;
 
     // TODO this does NOT necessarily leave Flux.xyz vars in a matching state with GetFlux
     // It will be filled according to m_u/cons_map, which does not contain B
@@ -260,11 +265,20 @@ TaskStatus Flux::FOFC(MeshData<Real>* md, MeshData<Real>* guess)
                     // Use LLF flux. Note we replace fluxes of all variables
                     // (including B!) This is for a consistent scheme, i.e. all
                     // cells FOFC == using DC+LLF
-                    PLOOP
+                    PLOOP {
+                        const bool rad = (ip == m_u.UU_RAD || ip == m_u.U1_RAD ||
+                                          ip == m_u.U2_RAD || ip == m_u.U3_RAD);
+                        // Radiation needs its own (faster) signal speeds
+                        const Real cmx = rad ? m::max(cmax_rad(b, dir - 1, k, j, i),
+                                                   cmax(b, dir - 1, k, j, i))
+                                             : cmax(b, dir - 1, k, j, i);
+                        const Real cmn = rad ? m::max(cmin_rad(b, dir - 1, k, j, i),
+                                                   cmin(b, dir - 1, k, j, i))
+                                             : cmin(b, dir - 1, k, j, i);
                         U_all(b).flux(dir, ip, k, j, i) =
-                            llf(Fl_all(b, ip, k, j, i), Fr_all(b, ip, k, j, i),
-                                cmax(b, dir - 1, k, j, i), cmin(b, dir - 1, k, j, i),
+                            llf(Fl_all(b, ip, k, j, i), Fr_all(b, ip, k, j, i), cmx, cmn,
                                 Ul_all(b, ip, k, j, i), Ur_all(b, ip, k, j, i));
+                    }
                 }
             });
     }

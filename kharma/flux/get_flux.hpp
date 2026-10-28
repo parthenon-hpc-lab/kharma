@@ -89,24 +89,6 @@ inline TaskStatus GetFlux(MeshData<Real>* md)
     // Out of the Package modification RADM1.
     const bool use_rad = packages.AllPackages().count("RadM1");
 
-    RadM1::RadOpac rad_opac{};
-    if (use_rad) {
-        const auto& rad_pars = packages.Get("RadM1")->AllParams();
-        rad_opac.opacity_type = rad_pars.Get<int>("opacity_type");
-        rad_opac.const_sigma = rad_pars.Get<Real>("const_sigma");
-        rad_opac.const_kappa_a = rad_pars.Get<Real>("const_kappa_a");
-        rad_opac.const_kappa_sc = rad_pars.Get<Real>("const_kappa_sc");
-        rad_opac.units_cgs =
-            packages.Get("Units")->AllParams().Get<Units::UnitConversions>("unit_conv");
-        rad_opac.mean_molecular_weight = rad_pars.Get<Real>("mean_molecular_weight");
-        rad_opac.regime = rad_pars.Get<RadM1::RadOpac::FitType>("regime");
-        if (packages.AllPackages().count("opacity")) {
-            rad_opac.sing_opac =
-                packages.Get("opacity")->AllParams().Get<Microphysics::Opacities>(
-                    "opacities");
-        }
-    }
-
     const bool reconstruction_floors = pars.Get<bool>("reconstruction_floors");
     const bool reconstruction_fallback = pars.Get<bool>("reconstruction_fallback");
     Floors::Prescription floors_temp =
@@ -144,6 +126,9 @@ inline TaskStatus GetFlux(MeshData<Real>* md)
         (use_rad) ? md->PackVariables(std::vector<std::string>{"Flux.cmax_rad"}) : cmax;
     const auto& cmin_rad =
         (use_rad) ? md->PackVariables(std::vector<std::string>{"Flux.cmin_rad"}) : cmin;
+    // Opacity model, to compute the opacity of each face state for its signal speeds
+    const RadM1::RadOpac rad_opac =
+        (use_rad) ? RadM1::GetRadOpac(packages) : RadM1::RadOpac();
 
     const auto& P_all = md->PackVariables(
         std::vector<MetadataFlag>{Metadata::GetUserFlag("Primitive"), Metadata::Cell},
@@ -410,8 +395,13 @@ inline TaskStatus GetFlux(MeshData<Real>* md)
             // characteristic speeds.
             if (use_rad) {
                 Real cmaxL_rad, cminL_rad;
-                Flux::vchar_rad(G, Pl_all(bl), m_p, Dtmp, eos, emhd_params, rad_opac, k,
-                    j, i, loc, dir, cmaxL_rad, cminL_rad);
+                // No optical-depth reduction at faces inside the horizon
+                const Real kap_l = RadM1::inside_horizon(G, k, j, i, loc)
+                                       ? 0.
+                                       : RadM1::calc_kappa_tot(G, Pl_all(bl), m_p, Dtmp,
+                                             eos, rad_opac, k, j, i, loc);
+                Flux::vchar_rad(
+                    G, Pl_all(bl), m_p, kap_l, k, j, i, loc, dir, cmaxL_rad, cminL_rad);
                 cmax_rad(bl, dir - 1, k, j, i) = m::max(0., cmaxL_rad);
                 cmin_rad(bl, dir - 1, k, j, i) = m::min(0., cminL_rad);
             }
@@ -449,8 +439,12 @@ inline TaskStatus GetFlux(MeshData<Real>* md)
             // speeds.
             if (use_rad) {
                 Real cmaxR_rad, cminR_rad;
-                Flux::vchar_rad(G, Pr_all(bl), m_p, Dtmp, eos, emhd_params, rad_opac, k,
-                    j, i, loc, dir, cmaxR_rad, cminR_rad);
+                const Real kap_r = RadM1::inside_horizon(G, k, j, i, loc)
+                                       ? 0.
+                                       : RadM1::calc_kappa_tot(G, Pr_all(bl), m_p, Dtmp,
+                                             eos, rad_opac, k, j, i, loc);
+                Flux::vchar_rad(
+                    G, Pr_all(bl), m_p, kap_r, k, j, i, loc, dir, cmaxR_rad, cminR_rad);
                 cmax_rad(bl, dir - 1, k, j, i) =
                     m::max(cmax_rad(bl, dir - 1, k, j, i), cmaxR_rad);
                 cmin_rad(bl, dir - 1, k, j, i) =
