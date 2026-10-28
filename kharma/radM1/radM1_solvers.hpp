@@ -319,15 +319,15 @@ KOKKOS_INLINE_FUNCTION void compute_covariant_fourforce(const GRCoordinates& G,
 KOKKOS_INLINE_FUNCTION Real calculate_energy_residual(const GRCoordinates& G,
     const Real u_trial, const Real uvec_frozen[NVEC], const Real B_P[NVEC],
     const Real U_mhd_0[4], const Real U_rad_0[4], const Real rho,
-    const Microphysics::EOS::EOS& eos, const RadOpac& rad_opac, const Real dt,
-    const Real gdet, const int k, const int j, const int i, Real U_mhd_trial_out[4],
-    Real U_rad_trial_out[4], Real P_rad_trial_out[4], Real dS_trial_out[4],
-    bool& rad_recovery_ok)
+    const Microphysics::EOS::EOS& eos, Real lambda[2], const RadOpac& rad_opac,
+    const Real dt, const Real gdet, const int k, const int j, const int i,
+    Real U_mhd_trial_out[4], Real U_rad_trial_out[4], Real P_rad_trial_out[4],
+    Real dS_trial_out[4], bool& rad_recovery_ok)
 {
     Real uvec[NVEC] = {uvec_frozen[0], uvec_frozen[1], uvec_frozen[2]};
     Real rho_new;
-    GRMHD::p_to_u_mhd(
-        G, rho, u_trial, uvec, B_P, eos, k, j, i, rho_new, U_mhd_trial_out, Loci::center);
+    GRMHD::p_to_u_mhd(G, rho, u_trial, uvec, B_P, eos, lambda, k, j, i, rho_new,
+        U_mhd_trial_out, Loci::center);
 
     for (int n = 0; n < 4; n++) {
         U_rad_trial_out[n] = U_rad_0[n] - (U_mhd_trial_out[n] - U_mhd_0[n]);
@@ -360,6 +360,8 @@ KOKKOS_INLINE_FUNCTION StatusImplicitStep solve_radiation_1d(const GRCoordinates
 {
 
     const Real gdet = G.gdet(Loci::center, j, i);
+    Real lambda[2];
+    fill_eos_lambda(P_init, m_p, k, j, i, lambda);
     const Real uvec_frozen[NVEC] = {
         P_init(m_p.U1, k, j, i), P_init(m_p.U2, k, j, i), P_init(m_p.U3, k, j, i)};
     Real B_P[NVEC] = {0.};
@@ -379,11 +381,11 @@ KOKKOS_INLINE_FUNCTION StatusImplicitStep solve_radiation_1d(const GRCoordinates
     Real u_lo = 1.e-2 * u_init;
     Real u_hi = 1.e2 * u_init;
     Real f_lo = calculate_energy_residual(G, u_lo, uvec_frozen, B_P, U_mhd_0, U_rad_0,
-        rho_init, eos, rad_opac, dt, gdet, k, j, i, U_mhd_trial, U_rad_trial, P_rad_trial,
-        dS_trial, rad_ok);
+        rho_init, eos, lambda, rad_opac, dt, gdet, k, j, i, U_mhd_trial, U_rad_trial,
+        P_rad_trial, dS_trial, rad_ok);
     Real f_hi = calculate_energy_residual(G, u_hi, uvec_frozen, B_P, U_mhd_0, U_rad_0,
-        rho_init, eos, rad_opac, dt, gdet, k, j, i, U_mhd_trial, U_rad_trial, P_rad_trial,
-        dS_trial, rad_ok);
+        rho_init, eos, lambda, rad_opac, dt, gdet, k, j, i, U_mhd_trial, U_rad_trial,
+        P_rad_trial, dS_trial, rad_ok);
 
     bool bracketed = (f_lo * f_hi < 0.0);
     Real rebracket_fac = 10.0;
@@ -393,10 +395,10 @@ KOKKOS_INLINE_FUNCTION StatusImplicitStep solve_radiation_1d(const GRCoordinates
         u_lo = (1.e-1 / rebracket_fac) * u_init;
         u_hi = (1.e1 * rebracket_fac) * u_init;
         f_lo = calculate_energy_residual(G, u_lo, uvec_frozen, B_P, U_mhd_0, U_rad_0,
-            rho_init, eos, rad_opac, dt, gdet, k, j, i, U_mhd_trial, U_rad_trial,
+            rho_init, eos, lambda, rad_opac, dt, gdet, k, j, i, U_mhd_trial, U_rad_trial,
             P_rad_trial, dS_trial, rad_ok);
         f_hi = calculate_energy_residual(G, u_hi, uvec_frozen, B_P, U_mhd_0, U_rad_0,
-            rho_init, eos, rad_opac, dt, gdet, k, j, i, U_mhd_trial, U_rad_trial,
+            rho_init, eos, lambda, rad_opac, dt, gdet, k, j, i, U_mhd_trial, U_rad_trial,
             P_rad_trial, dS_trial, rad_ok);
         bracketed = (f_lo * f_hi < 0.0);
         rebracket_fac *= 10.0;
@@ -413,8 +415,8 @@ KOKKOS_INLINE_FUNCTION StatusImplicitStep solve_radiation_1d(const GRCoordinates
     for (int iter = 0; iter < maxiter; iter++) {
         u_root = (u_lo * f_hi - u_hi * f_lo) / (f_hi - f_lo);
         Real f_root = calculate_energy_residual(G, u_root, uvec_frozen, B_P, U_mhd_0,
-            U_rad_0, rho_init, eos, rad_opac, dt, gdet, k, j, i, U_mhd_trial, U_rad_trial,
-            P_rad_trial, dS_trial, rad_ok);
+            U_rad_0, rho_init, eos, lambda, rad_opac, dt, gdet, k, j, i, U_mhd_trial,
+            U_rad_trial, P_rad_trial, dS_trial, rad_ok);
 
         if (!rad_ok) {
             if (f_root * f_lo > 0.0) {
@@ -462,8 +464,8 @@ KOKKOS_INLINE_FUNCTION StatusImplicitStep solve_radiation_1d(const GRCoordinates
     }
 
     calculate_energy_residual(G, u_root, uvec_frozen, B_P, U_mhd_0, U_rad_0, rho_init,
-        eos, rad_opac, dt, gdet, k, j, i, U_mhd_trial, U_rad_trial, P_rad_trial, dS_trial,
-        rad_ok);
+        eos, lambda, rad_opac, dt, gdet, k, j, i, U_mhd_trial, U_rad_trial, P_rad_trial,
+        dS_trial, rad_ok);
     if (!rad_ok) {
         return StatusImplicitStep::onedfallback_failure;
     }
@@ -594,6 +596,8 @@ KOKKOS_INLINE_FUNCTION int solve_4d_pmhd(const GRCoordinates& G,
     const Real* U_rad_0 = U_entry + 4;
 
     const Real rho_init = P_init(m_p.RHO, k, j, i);
+    Real lambda[2];
+    fill_eos_lambda(P_init, m_p, k, j, i, lambda);
 
     Real B_P[NVEC] = {0.};
     if (m_p.B1 >= 0) {
@@ -619,8 +623,8 @@ KOKKOS_INLINE_FUNCTION int solve_4d_pmhd(const GRCoordinates& G,
     // U_mhd_guess.
     if (star_guess) {
         Real rho_ut;
-        GRMHD::p_to_u_mhd(G, rho_init, P_mhd_guess[0], uvec, B_P, eos, k, j, i, rho_ut,
-            U_mhd_guess, Loci::center);
+        GRMHD::p_to_u_mhd(G, rho_init, P_mhd_guess[0], uvec, B_P, eos, lambda, k, j, i,
+            rho_ut, U_mhd_guess, Loci::center);
     }
     Real dS_guess[4];
 
@@ -725,8 +729,8 @@ KOKKOS_INLINE_FUNCTION int solve_4d_pmhd(const GRCoordinates& G,
                 uvec[2] = P_mhd_p[3];
                 const Real rho_p = rho_from_D(G, D_rho, uvec, k, j, i);
                 Real rho_ut, U_mhd_p[4], U_rad_p[4], P_rad_p[4], dS_p[4];
-                GRMHD::p_to_u_mhd(G, rho_p, P_mhd_p[0], uvec, B_P, eos, k, j, i, rho_ut,
-                    U_mhd_p, Loci::center);
+                GRMHD::p_to_u_mhd(G, rho_p, P_mhd_p[0], uvec, B_P, eos, lambda, k, j, i,
+                    rho_ut, U_mhd_p, Loci::center);
                 // Conservation law: Delta U_rad = - Delta U_mhd
                 for (int n = 0; n < 4; n++)
                     U_rad_p[n] = U_rad_0[n] - (U_mhd_p[n] - U_mhd_0[n]);
@@ -789,8 +793,8 @@ KOKKOS_INLINE_FUNCTION int solve_4d_pmhd(const GRCoordinates& G,
             uvec[2] = P_mhd_guess[3];
             const Real rho_iter_next = rho_from_D(G, D_rho, uvec, k, j, i);
             Real rho_ut;
-            GRMHD::p_to_u_mhd(G, rho_iter_next, P_mhd_guess[0], uvec, B_P, eos, k, j, i,
-                rho_ut, U_mhd_guess, Loci::center);
+            GRMHD::p_to_u_mhd(G, rho_iter_next, P_mhd_guess[0], uvec, B_P, eos, lambda, k,
+                j, i, rho_ut, U_mhd_guess, Loci::center);
 
             Real U_rad_guess[4], P_rad_guess[4];
             for (int n = 0; n < 4; n++) {
@@ -929,6 +933,8 @@ KOKKOS_INLINE_FUNCTION int solve_4d_pmhd_ff(const GRCoordinates& G,
     const Real accept_tol = 0.)
 {
     const Real gdet = G.gdet(Loci::center, j, i);
+    Real lambda[2];
+    fill_eos_lambda(P_init, m_p, k, j, i, lambda);
     Real B_P[NVEC] = {0.};
     if (m_p.B1 >= 0)
         for (int v = 0; v < NVEC; v++) B_P[v] = P_init(m_p.B1 + v, k, j, i);
@@ -964,7 +970,7 @@ KOKKOS_INLINE_FUNCTION int solve_4d_pmhd_ff(const GRCoordinates& G,
         Real uvec[NVEC] = {xx[1], xx[2], xx[3]};
         rho = rho_from_D(G, D_rho, uvec, k, j, i);
         Real rho_ut, U_mhd[4], U_rad[4];
-        GRMHD::p_to_u_mhd(G, rho, xx[0], uvec, B_P, eos, k, j, i, rho_ut, U_mhd);
+        GRMHD::p_to_u_mhd(G, rho, xx[0], uvec, B_P, eos, lambda, k, j, i, rho_ut, U_mhd);
 
         // do delta R = delta U
         for (int n = 0; n < 4; n++) U_rad[n] = U_rad_0[n] - (U_mhd[n] - U_mhd_0[n]);
@@ -1051,7 +1057,7 @@ KOKKOS_INLINE_FUNCTION int solve_4d_pmhd_ff(const GRCoordinates& G,
             return static_cast<int>(StatusImplicitStep::failure);
         Real uvec_b[NVEC] = {x_best[1], x_best[2], x_best[3]}, rho_ut_b, U_mhd_b[4];
         GRMHD::p_to_u_mhd(
-            G, rho_best, x_best[0], uvec_b, B_P, eos, k, j, i, rho_ut_b, U_mhd_b);
+            G, rho_best, x_best[0], uvec_b, B_P, eos, lambda, k, j, i, rho_ut_b, U_mhd_b);
         for (int n = 0; n < 4; n++) dS_final[n] = -(U_mhd_b[n] - U_mhd_0[n]) / dt;
         dS_final[4] = Gu_best;
         return static_cast<int>(StatusImplicitStep::relaxed_success);
@@ -1205,7 +1211,7 @@ KOKKOS_INLINE_FUNCTION int solve_4d_pmhd_ff(const GRCoordinates& G,
 
     // Exchange exactly the solved change, so the updated gas is the solved state
     Real uvec[NVEC] = {x[1], x[2], x[3]}, rho_ut, U_mhd[4];
-    GRMHD::p_to_u_mhd(G, rho, x[0], uvec, B_P, eos, k, j, i, rho_ut, U_mhd);
+    GRMHD::p_to_u_mhd(G, rho, x[0], uvec, B_P, eos, lambda, k, j, i, rho_ut, U_mhd);
     for (int n = 0; n < 4; n++) dS_final[n] = -(U_mhd[n] - U_mhd_0[n]) / dt;
     dS_final[4] = Gu;
     return static_cast<int>(StatusImplicitStep::success);
