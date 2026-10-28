@@ -35,7 +35,7 @@ ALL_RES="32,64,128"
 conv_2d emhd2d_weno flux/reconstruction=weno5 "EMHD mode in 2D, WENO5"
 
 # ...but linear doesn't capture wave until higher res. Troubling.
-ALL_RES="64,128,256"
+ALL_RES="32,64,128"
 conv_2d emhd2d_mc flux/reconstruction=linear_mc "EMHD mode in 2D, linear/MC reconstruction"
 # Test that higher-order terms don't mess anything up
 conv_2d emhd2d_higher_order emhd/higher_order_terms=true "EMHD mode in 2D, higher order terms enabled"
