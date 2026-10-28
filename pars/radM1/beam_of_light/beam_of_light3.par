@@ -39,7 +39,6 @@ reconstruction = donor_cell
 
 <eos>
 type = IdealGas
-Cv = 1.0
 
 <beam_of_light>
 r_beam = 16.0

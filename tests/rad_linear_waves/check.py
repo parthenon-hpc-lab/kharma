@@ -130,7 +130,7 @@ if __name__ == '__main__':
         ax.grid(True, which='both', alpha=0.3)
 
     handles, _ = axes[0].get_legend_handles_labels()
-    fig.legend(handles[:3], ['sonic', 'fast', 'slow'],
+    fig.legend(handles[:3], WAVETYPES,
                loc='lower center', ncol=3, bbox_to_anchor=(0.5, -0.01))
 
     axes[0].set_ylabel(r'L$_1$ norm', fontsize=12)

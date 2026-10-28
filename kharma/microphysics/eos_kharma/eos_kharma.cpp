@@ -102,7 +102,8 @@ std::shared_ptr<KHARMAPackage> Initialize(
         }
 
         const Real gm1 = gamma1 - 1.0;
-        const Real Cv = pin->GetOrAddReal(block_name, "Cv", 1.0);
+        const Real Cv =
+            pin->GetOrAddReal(block_name, "Cv", unit_conv.GetEntropyCodeToCGS() / gm1);
         params.Add("gm1", gm1);
         params.Add("Cv", Cv);
 

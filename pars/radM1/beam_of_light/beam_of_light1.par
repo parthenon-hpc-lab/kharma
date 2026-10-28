@@ -43,7 +43,6 @@ reconstruction_fallback = false
 
 <eos>
 type = IdealGas
-Cv = 1.0
 
 <beam_of_light>
 r_beam = 3.0
