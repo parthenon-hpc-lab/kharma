@@ -43,7 +43,6 @@
 #include "kharma.hpp"
 
 #include "microphysics/eos_kharma/eos_kharma.hpp"
-#include "phoebus_utils/variables.hpp"
 
 void B_CT::ZeroBoundaryEMF(MeshBlockData<Real>* rc, IndexDomain domain,
     const VariablePack<Real>& emfpack, bool coarse)

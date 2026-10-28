@@ -39,7 +39,6 @@
 
 // phoebus includes
 #include "microphysics/eos_kharma/eos_kharma.hpp"
-#include "phoebus_utils/variables.hpp"
 
 using namespace std::literals::complex_literals;
 using namespace parthenon;

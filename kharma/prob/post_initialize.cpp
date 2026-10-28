@@ -34,7 +34,6 @@
 
 #include "post_initialize.hpp"
 
-#include "b_cd.hpp"
 #include "b_cleanup.hpp"
 #include "b_ct.hpp"
 #include "b_flux_ct.hpp"
@@ -160,8 +159,6 @@ void KHARMA::PostInitialize(ParameterInput* pin, Mesh* pmesh, bool is_restart)
             B_FluxCT::PrintGlobalMaxDivB(md.get());
         } else if (pkgs.count("B_CT")) {
             B_CT::PrintGlobalMaxDivB(md.get());
-        } else if (pkgs.count("B_CD")) {
-            // B_CD::PrintGlobalMaxDivB(md.get());
         }
     }
 

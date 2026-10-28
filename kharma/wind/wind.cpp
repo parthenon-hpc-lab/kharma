@@ -35,7 +35,6 @@
 
 // phoebus includes
 #include "microphysics/eos_kharma/eos_kharma.hpp"
-#include "phoebus_utils/variables.hpp"
 
 std::shared_ptr<KHARMAPackage> Wind::Initialize(
     ParameterInput* pin, std::shared_ptr<Packages_t>& packages)

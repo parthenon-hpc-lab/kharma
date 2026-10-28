@@ -150,10 +150,14 @@ class VarMap
     int8_t PSI, Q, DP;
     // Added material
     int8_t RHOADD, T0ADD, T1ADD, T2ADD, T3ADD;
-    // Total struct size ~20 bytes, < 1 vector of 4 doubles
-    int8_t UU_RAD, U1_RAD, U2_RAD, U3_RAD;
+
     // RAD_M1 variables. Out of the package modification RADM1.
-    VarMap(parthenon::PackIndexMap& name_map, bool is_cons)
+    int8_t UU_RAD, U1_RAD, U2_RAD, U3_RAD;
+
+    // Total struct size ~20 bytes, < 1 vector of 4 doubles
+
+    template<typename T>
+    VarMap(T& name_map, bool is_cons)
     {
         if (is_cons) {
             // HD

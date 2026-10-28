@@ -167,7 +167,9 @@ inline IndexerMesh GetIndexer(MeshData<Real>* rc)
     return IndexerMesh(coords);
 }
 
-template<typename System, typename Indexer>
+// template<typename System, typename Indexer>
+//  class Analytic : public CoordinatesBase<Analytic<System, Indexer>> {
+
 class Analytic
 {
   public:

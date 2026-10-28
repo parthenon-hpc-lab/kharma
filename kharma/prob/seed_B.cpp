@@ -199,7 +199,7 @@ TaskStatus SeedBFieldType(MeshBlockData<Real>* rc, ParameterInput* pin,
                 });
             // We still need to update conserved flux values, but then we're done
             B_FluxCT::BlockPtoU(rc, domain);
-        } // TODO B_CD!!
+        }
         return TaskStatus::complete;
     } else { // Seed with vector potential A otherwise
         // Require and load what we need if necessary
