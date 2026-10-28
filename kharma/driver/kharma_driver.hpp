@@ -60,7 +60,19 @@ class KHARMADriver : public MultiStageDriver
   public:
     KHARMADriver(ParameterInput* pin, ApplicationInput* app_in, Mesh* pm)
         : MultiStageDriver(pin, app_in, pm)
-    {}
+    {
+        if (pin->GetOrAddBoolean("radM1", "on", false) &&
+            pin->GetOrAddString("driver", "type", "kharma") == "imex") {
+            PARTHENON_REQUIRE(integrator->nstages == 2,
+                "Radiation IMEX (ARS(2,2,2)) requires a 2-stage integrator (rk2 or vl2)");
+            const Real g = 1.0 - 1.0 / std::sqrt(2.0);
+            const Real d = 1.0 - 1.0 / (2.0 * g);
+            integrator->gam0 = {0.0, 0.0};
+            integrator->gam1 = {1.0, 1.0};
+            integrator->beta = {g, 1.0 - d};
+            integrator->c = {0.0, g};
+        }
+    }
 
     static std::shared_ptr<KHARMAPackage> Initialize(
         ParameterInput* pin, std::shared_ptr<Packages_t>& packages);

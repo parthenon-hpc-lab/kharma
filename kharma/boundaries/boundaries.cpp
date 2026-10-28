@@ -720,6 +720,18 @@ void KBoundaries::CheckInflow(
         {
             KBoundaries::check_inflow(G, P, domain, m_p.U1, k, j, i);
         });
+    if (pmb->packages.AllPackages().count("RadM1")) {
+        PackIndexMap rad_map;
+        auto Prad = rc->PackVariables(
+            std::vector<std::string>{"prims.uvec_rad"}, rad_map, coarse);
+        const int iu1_rad = rad_map["prims.uvec_rad"].first;
+        pmb->par_for_bndry("check_inflow_rad", IndexRange{0, 0}, domain, CC, coarse,
+            false,
+            KOKKOS_LAMBDA(const int& p, const int& k, const int& j, const int& i)
+            {
+                KBoundaries::check_inflow(G, Prad, domain, iu1_rad, k, j, i);
+            });
+    }
 }
 
 TaskStatus KBoundaries::FixFlux(MeshData<Real>* md)

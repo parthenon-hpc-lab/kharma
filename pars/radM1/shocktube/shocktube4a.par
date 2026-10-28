@@ -40,7 +40,7 @@ two_sync = false
 <GRMHD>
 cfl = 0.5
 gamma = 1.666667
-reconstruction = ppm
+reconstruction = weno5
 
 
 <eos>
@@ -50,7 +50,7 @@ gamma = 1.666667
 solver = none
 
 <boundaries>
-inner_x1 = outflow
+inner_x1 = dirichlet
 outer_x1 = outflow
 inner_x2 = outflow
 outer_x2 = outflow
