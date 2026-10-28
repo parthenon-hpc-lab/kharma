@@ -8,9 +8,9 @@ exit_code=0
 rad_shocktube_test() {
     local test_num=$1
     local parfile=$KHARMADIR/pars/radM1/bondi_rad/bondi_rad${test_num}.par
-    local all_res="16,32,64"
+    local all_res="32,48,64"
 
-    for res in 16 32 64
+    for res in 32 48 64
     do
         $KHARMADIR/run.sh -i $parfile debug/verbose=1 parthenon/output0/dt=25000 \
                             parthenon/mesh/nx1=$res parthenon/meshblock/nx1=$((res / 4)) \
