@@ -1,14 +1,38 @@
 name: Regression tests (CPU)
 
+# Generated with assistance from generative AI
+# This is KHARMA's CPU regression workflow. The same jobs run for its
+# own PRs/pushes and when Parthenon calls them as downstream integration tests.
 on:
-  # Oh push to stable/dev incl. automated merge after branch tests
   push:
-    branches: [ stable, dev ]
-  # On every push of pull requests to stable/dev. Frequent!
+    branches: [stable, dev]
   pull_request:
-    branches: [ stable, dev ]
-  # when triggered manually
+    branches: [stable, dev]
   workflow_dispatch:
+  workflow_call:
+    inputs:
+      kharma_ref:
+        description: 'KHARMA revision (e.g. dev)'
+        type: string
+        required: false
+        default: ''
+      parthenon_ref:
+        description: 'Optional Parthenon override (e.g. refs/pull/123/merge)'
+        type: string
+        required: false
+        default: ''
+      run_only:
+        description: 'Skip build matrix'
+        type: boolean
+        required: false
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: kharma-cpu-ci-${{ github.repository }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 env:
   NPROC: 4
@@ -20,19 +44,41 @@ env:
 jobs:
   # Job 1: Compilation
   build:
+    if: ${{ !inputs.run_only }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
         with:
+          repository: ${{ github.repository }}
+          ref: ${{ inputs.kharma_ref || github.ref }}
           submodules: false
+          persist-credentials: false
       - name: Most submodules
         # Check out all submodules except eigen, which is hosted on gitlab which rate-limits;
         # we don't need it anyway
+        env:
+          PARTHENON_REF: ${{ inputs.parthenon_ref }}
         run: |
-          git submodule update --init --recursive -f external/{parthenon,Catch2,kokkos-kernels,singularity-opac}
+          git submodule update --init --recursive -f external/{Catch2,kokkos-kernels,singularity-opac}
           git submodule update --init -f external/singularity-eos
           cd external/singularity-eos
           git submodule update --init -f utils/{kokkos,kokkos-kernels,ports-of-call,spiner}
+          if [ -z "$PARTHENON_REF" ]; then
+            git submodule update --init --recursive -f external/parthenon
+          fi
+      - name: Checkout candidate Parthenon
+        if: ${{ inputs.parthenon_ref != '' }}
+        uses: actions/checkout@v7
+        with:
+          repository: parthenon-hpc-lab/parthenon
+          ref: ${{ inputs.parthenon_ref }}
+          path: external/parthenon
+          submodules: recursive
+          persist-credentials: false
+      - name: Show exact revisions
+        run: |
+          echo "KHARMA: $(git rev-parse HEAD)"
+          echo "Parthenon: $(git -C external/parthenon rev-parse HEAD)"
       - name: Install prereqs
         run: |
           sudo apt-get update
@@ -83,10 +129,37 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
+          repository: ${{ github.repository }}
+          ref: ${{ inputs.kharma_ref || github.ref }}
           submodules: false
+          persist-credentials: false
       - uses: actions/download-artifact@v8
         with:
           name: build-artifacts
+      - name: Most submodules
+        env:
+          PARTHENON_REF: ${{ inputs.parthenon_ref }}
+        run: |
+          git submodule update --init --recursive -f external/{Catch2,kokkos-kernels,singularity-opac}
+          git submodule update --init -f external/singularity-eos
+          cd external/singularity-eos
+          git submodule update --init -f utils/{kokkos,kokkos-kernels,ports-of-call,spiner}
+          if [ -z "$PARTHENON_REF" ]; then
+            git submodule update --init --recursive -f external/parthenon
+          fi
+      - name: Checkout candidate Parthenon
+        if: ${{ inputs.parthenon_ref != '' }}
+        uses: actions/checkout@v7
+        with:
+          repository: parthenon-hpc-lab/parthenon
+          ref: ${{ inputs.parthenon_ref }}
+          path: external/parthenon
+          submodules: recursive
+          persist-credentials: false
+      - name: Show exact revisions
+        run: |
+          echo "KHARMA: $(git rev-parse HEAD)"
+          echo "Parthenon: $(git -C external/parthenon rev-parse HEAD)"
       - name: Install prereqs
         run: |
           sudo apt-get update
@@ -113,4 +186,3 @@ jobs:
     needs: test
     steps:
       - run: exit 0
-
