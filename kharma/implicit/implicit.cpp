@@ -462,6 +462,11 @@ TaskStatus Implicit::Step(MeshData<Real>* md_full_step_init,
                             auto delta_prim =
                                 Kokkos::subview(delta_prim_s, i, Kokkos::ALL(), 0);
 
+                            // The LU path solves in-place: delta_prim must start as b
+                            for (int ip = 0; ip < nfvar; ++ip) {
+                                delta_prim(ip) = rhs_s(i, ip);
+                            }
+
                             if (solve_fail_all(b, 0, k, j, i) != SolverStatusR::fail) {
                                 KokkosBatched::SerialLU<
                                     KokkosBatched::Algo::LU::Unblocked>::invoke(jacobian,
