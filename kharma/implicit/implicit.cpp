@@ -61,13 +61,12 @@ TaskStatus Implicit::Step(MeshData<Real>* md_full_step_init,
 #else
 
 // Implicit nonlinear solve requires several linear solves per-zone
-// Use Kokkos-kernels QR decomposition & triangular solve, they're fast.
-// #include <batched/dense/src/KokkosBatched_ApplyPivot_Decl.hpp>
-#include <batched/dense/src/KokkosBatched_ApplyQ_Decl.hpp>
+// QR decomposition & solve come from Parthenon's batched linear algebra
+// (parthenon::batched_linear_algebra::QRDecomposition). The LU fallback
+// (implicit/use_qr=false) still uses Kokkos-kernels; it is debug-only.
 #include <batched/dense/src/KokkosBatched_LU_Decl.hpp>
-// #include <batched/dense/src/KokkosBatched_QR_Decl.hpp>
-#include "KokkosKernels_PivotedQR.hpp"
 #include <batched/dense/src/KokkosBatched_Trsv_Decl.hpp>
+#include "batched_linear_algebra/qr_decomposition.hpp"
 
 std::vector<std::string> Implicit::GetOrderedNames(
     MeshBlockData<Real>* rc, const MetadataFlag& flag, bool only_implicit)
@@ -115,8 +114,8 @@ std::shared_ptr<KHARMAPackage> Implicit::Initialize(
     params.Add("min_nonlinear_iter", min_nonlinear_iter);
     int max_nonlinear_iter = pin->GetOrAddInteger("implicit", "max_nonlinear_iter", 3);
     params.Add("max_nonlinear_iter", max_nonlinear_iter);
-    // The QR decomposition bundled with KHARMA has column pivoting for stability.
-    // The alternative LU decomposition does not, and should mostly be used for debugging.
+    // The QR decomposition is Parthenon's batched Householder QR (no column
+    // pivoting). The alternative LU decomposition is mostly for debugging.
     bool use_qr = pin->GetOrAddBoolean("implicit", "use_qr", true);
     params.Add("use_qr", use_qr);
 
@@ -310,17 +309,23 @@ TaskStatus Implicit::Step(MeshData<Real>* md_full_step_init,
     const IndexRange block = IndexRange{0, nblock - 1};
 
     // Allocate scratch space
-    // Only needed for the Kokkos-kernels solve, anymore
+    // Only needed for the linear solve, anymore
     // Otherwise we pull a bad hack and allocate constant temporaries
     const int scratch_level = 1; // 0 is actual scratch (tiny); 1 is HBM
+    using QRDecomposition = parthenon::batched_linear_algebra::QRDecomposition;
+    // R (computed in-place from the Jacobian) and Q, each n1 x nfvar x nfvar
     const size_t tensor_size_in_bytes =
         parthenon::ScratchPad3D<Real>::shmem_size(n1, nfvar, nfvar);
     const size_t fvar_size_in_bytes =
         parthenon::ScratchPad2D<Real>::shmem_size(n1, nfvar);
-    const size_t fvar_int_size_in_bytes =
-        parthenon::ScratchPad2D<int>::shmem_size(n1, nfvar);
-    const size_t total_scratch_bytes =
-        tensor_size_in_bytes + 4 * fvar_size_in_bytes + fvar_int_size_in_bytes;
+    const size_t delta_size_in_bytes =
+        parthenon::ScratchPad3D<Real>::shmem_size(n1, nfvar, 1);
+    // Householder scratch for QRDecomposition: double_scratch_size doubles per i
+    const size_t qr_dss = QRDecomposition::double_scratch_size(nfvar);
+    const size_t qr_scratch_size_in_bytes =
+        parthenon::ScratchPad1D<double>::shmem_size(n1 * qr_dss);
+    const size_t total_scratch_bytes = 2 * tensor_size_in_bytes + fvar_size_in_bytes +
+        delta_size_in_bytes + qr_scratch_size_in_bytes;
 
     // Iterate.  This loop is outside the kokkos kernel in order to print max_norm
     // There are generally a low and similar number of iterations between
@@ -395,60 +400,56 @@ TaskStatus Implicit::Step(MeshData<Real>* md_full_step_init,
 #endif
                 const auto& G = U_full_step_init_all.GetCoords(b);
                 // Scratchpads for implicit vars
+                // jacobian_s holds A on input, then the R factor; q_s holds Q
                 ScratchPad3D<Real> jacobian_s(
+                    member.team_scratch(scratch_level), n1, nfvar, nfvar);
+                ScratchPad3D<Real> q_s(
                     member.team_scratch(scratch_level), n1, nfvar, nfvar);
                 ScratchPad3D<Real> delta_prim_s(
                     member.team_scratch(scratch_level), n1, nfvar, 1);
-                ScratchPad2D<Real> trans_s(member.team_scratch(scratch_level), n1, nfvar);
-                ScratchPad2D<Real> work_s(
-                    member.team_scratch(scratch_level), n1, 2 * nfvar);
-                ScratchPad2D<int> pivot_s(member.team_scratch(scratch_level), n1, nfvar);
+                ScratchPad2D<Real> rhs_s(member.team_scratch(scratch_level), n1, nfvar);
+                // Householder scratch for QRDecomposition, qr_dss doubles per i
+                ScratchPad1D<double> qr_scratch_s(
+                    member.team_scratch(scratch_level), n1 * qr_dss);
 
-                // Copy in to scratchpads
+                // Copy in to scratchpads. The linear system solved is
+                // J delta_prim = -residual, so rhs b = -residual and x = delta_prim
                 parthenon::par_for_inner(member, 0, nfvar - 1, 0, nfvar - 1, 0, n1 - 1,
                     [&](const int& ip, const int& jp, const int& i)
                     {
                         if (jp == 0)
-                            delta_prim_s(i, ip, 0) = -residual_all(b, ip, k, j, i);
+                            rhs_s(i, ip) = -residual_all(b, ip, k, j, i);
                         jacobian_s(i, ip, jp) = jacobian_all(b, ip * nfvar + jp, k, j, i);
                     });
 
                 member.team_barrier();
 
-                // TODO(CEP) even still worth keeping non-QR version?  Much less stable
                 if (use_qr) {
                     parthenon::par_for_inner(member, ib.s, ib.e,
                         [&](const int& i)
                         {
-                            // Solver variables
-                            auto jacobian = Kokkos::subview(
+                            // Solver variables. jacobian_s is overwritten in-place
+                            // with the R factor; q_s receives the Q factor.
+                            // Note rhs (b) and delta_prim (x) must not alias.
+                            auto R = Kokkos::subview(
                                 jacobian_s, i, Kokkos::ALL(), Kokkos::ALL());
-                            auto delta_prim = Kokkos::subview(
-                                delta_prim_s, i, Kokkos::ALL(), Kokkos::ALL());
-                            auto delta_prim_one =
+                            auto Q = Kokkos::subview(
+                                q_s, i, Kokkos::ALL(), Kokkos::ALL());
+                            auto rhs = Kokkos::subview(rhs_s, i, Kokkos::ALL());
+                            auto delta_prim =
                                 Kokkos::subview(delta_prim_s, i, Kokkos::ALL(), 0);
-                            auto pivot = Kokkos::subview(pivot_s, i, Kokkos::ALL());
-                            auto trans = Kokkos::subview(trans_s, i, Kokkos::ALL());
-                            auto work = Kokkos::subview(work_s, i, Kokkos::ALL());
+                            double* qr_scratch = qr_scratch_s.data() + i * qr_dss;
 
                             if (solve_fail_all(b, 0, k, j, i) != SolverStatusR::fail) {
-                                // Linear solve by QR decomposition
-                                KokkosBatched::SerialPivotedQR<
-                                    KokkosBatched::Algo::QR::Unblocked>::invoke(jacobian,
-                                    trans, pivot, work);
-                                KokkosBatched::SerialApplyQ<KokkosBatched::Side::Left,
-                                    KokkosBatched::Trans::Transpose,
-                                    KokkosBatched::Algo::ApplyQ::Unblocked>::
-                                    invoke(jacobian, trans, delta_prim, work);
-                                KokkosBatched::SerialTrsv<KokkosBatched::Uplo::Upper,
-                                    KokkosBatched::Trans::NoTranspose,
-                                    KokkosBatched::Diag::NonUnit,
-                                    KokkosBatched::Algo::Trsv::Unblocked>::invoke(alpha,
-                                    jacobian, delta_prim_one);
-                                // Linear solve by QR decomposition
-                                KokkosBatched::SerialApplyPivot<KokkosBatched::Side::Left,
-                                    KokkosBatched::Direct::Backward>::invoke(pivot,
-                                    delta_prim_one);
+                                // Linear solve via Parthenon's batched QR:
+                                // factor A = Q R, then x = R^{-1} Q^T b
+                                int status = QRDecomposition::execute(&R, &Q, qr_scratch);
+                                status += QRDecomposition::solve(R, Q, rhs, delta_prim);
+                                if (status != 0) {
+                                    // Singular/ill-conditioned Jacobian. Mark the zone
+                                    // failed so FixSolve can repair it.
+                                    solve_fail_all(b, 0, k, j, i) = SolverStatusR::fail;
+                                }
                             }
                         });
                 } else {
