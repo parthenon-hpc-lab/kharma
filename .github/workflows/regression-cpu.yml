@@ -21,11 +21,6 @@ on:
         type: string
         required: false
         default: ''
-      run_only:
-        description: 'Skip build matrix'
-        type: boolean
-        required: false
-        default: false
 
 permissions:
   contents: read
@@ -44,7 +39,6 @@ env:
 jobs:
   # Job 1: Compilation
   build:
-    if: ${{ !inputs.run_only }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -63,6 +57,7 @@ jobs:
           git submodule update --init -f external/singularity-eos
           cd external/singularity-eos
           git submodule update --init -f utils/{kokkos,kokkos-kernels,ports-of-call,spiner}
+          cd ../..
           if [ -z "$PARTHENON_REF" ]; then
             git submodule update --init --recursive -f external/parthenon
           fi
@@ -144,6 +139,7 @@ jobs:
           git submodule update --init -f external/singularity-eos
           cd external/singularity-eos
           git submodule update --init -f utils/{kokkos,kokkos-kernels,ports-of-call,spiner}
+          cd ../..
           if [ -z "$PARTHENON_REF" ]; then
             git submodule update --init --recursive -f external/parthenon
           fi
