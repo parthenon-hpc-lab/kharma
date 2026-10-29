@@ -45,6 +45,10 @@ using namespace parthenon;
 
 using parthenon::MeshBlockData;
 
+// Parthenon's ApplicationInput, set once in main(). Parthenon's Outputs
+// constructor requires it (since the "user output" support, PR #1362)
+extern ApplicationInput *kharma_app_input;
+
 /**
  * Types, macros, and convenience functions
  *
@@ -308,7 +312,7 @@ inline void OutputNow(Mesh* pmesh, std::string name)
 {
     auto tm = SimTime(0., 0., 0, 0, 0, 0, 0.);
     ParameterInput* pin = pmesh->packages.Get("Globals")->Param<ParameterInput*>("pin");
-    auto pouts = std::make_unique<Outputs>(pmesh, pin, &tm);
+    auto pouts = std::make_unique<Outputs>(pmesh, pin, kharma_app_input, &tm);
     pouts->MakeOutputs(pmesh, pin, &tm, SignalHandler::OutputSignal::now);
     // TODO: find most recently written "now" files and move them to "name"
 }

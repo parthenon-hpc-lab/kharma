@@ -171,7 +171,7 @@ void KHARMA::PostInitialize(ParameterInput* pin, Mesh* pmesh, bool is_restart)
     if (pkgs.count("B_Cleanup") || pkgs.count("B_Cleanup")) {
         if (pin->GetOrAddBoolean("b_cleanup", "output_before_cleanup", false)) {
             auto tm = SimTime(0., 0., 0, 0, 0, 0, 0.);
-            auto pouts = std::make_unique<Outputs>(pmesh, pin, &tm);
+            auto pouts = std::make_unique<Outputs>(pmesh, pin, kharma_app_input, &tm);
             pouts->MakeOutputs(pmesh, pin, &tm, SignalHandler::OutputSignal::now);
         }
 
@@ -183,7 +183,7 @@ void KHARMA::PostInitialize(ParameterInput* pin, Mesh* pmesh, bool is_restart)
 
         if (pin->GetOrAddBoolean("b_cleanup", "output_after_cleanup", false)) {
             auto tm = SimTime(0., 0., 0, 0, 0, 0, 0.);
-            auto pouts = std::make_unique<Outputs>(pmesh, pin, &tm);
+            auto pouts = std::make_unique<Outputs>(pmesh, pin, kharma_app_input, &tm);
             pouts->MakeOutputs(pmesh, pin, &tm, SignalHandler::OutputSignal::now);
         }
     }

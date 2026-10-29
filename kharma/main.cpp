@@ -93,9 +93,15 @@ using namespace parthenon;
  * Most physics functionality is in the `KHARMADriver` class, over
  * in the `driver/` folder.
  */
+// Definition of the global declared in types.hpp
+ApplicationInput *kharma_app_input = nullptr;
+
 int main(int argc, char* argv[])
 {
     ParthenonManager pman;
+    // Make the manager's ApplicationInput available to ad-hoc Outputs
+    // constructions elsewhere in KHARMA (see types.hpp)
+    kharma_app_input = pman.app_input.get();
 
     // A couple of callbacks are KHARMA-wide single functions
     pman.app_input->ProcessPackages = KHARMA::ProcessPackages;
