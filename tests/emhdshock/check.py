@@ -45,7 +45,8 @@ if __name__=='__main__':
 
 		t   = dfile['t'][()]
 		gam = dfile['header/gam'][()]
-		higher_order_terms = dfile['header/higher_order_terms'][()].decode('UTF-8')
+		hot = dfile['header/higher_order_terms'][()]
+		higher_order_terms = hot.decode('UTF-8') if isinstance(hot, bytes) else ("TRUE" if bool(hot) else "FALSE")
 		conduction_alpha = dfile['header/conduction_alpha'][()]
 		viscosity_alpha  = dfile['header/viscosity_alpha'][()]
 		dfile.close()
@@ -77,6 +78,10 @@ if __name__=='__main__':
 			L1_norm[r,4] = np.mean(np.fabs(dP-dP_analytic))
 		else:
 			L1_norm[r,3] = np.mean(np.fabs(dP-dP_analytic))
+
+	print("L1 norms vs resolution (%s):" % ",".join(VARS))
+	for r_i, res in enumerate(RES):
+		print(res, " ".join("%.3e" % v for v in L1_norm[r_i]))
 
 	# plotting parameters
 	mpl.rcParams['figure.dpi'] = 300
