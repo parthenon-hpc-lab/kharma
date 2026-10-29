@@ -370,8 +370,8 @@ TaskStatus Implicit::Step(MeshData<Real>* md_full_step_init,
 #endif
                 if (solve_fail != SolverStatusR::fail) {
                     // Linear solve via Parthenon's batched QR, operating on
-                    // per-zone slices. The Jacobian is overwritten in-place with the R factor,
-                    // Q lands in qr_factor, the rhs b is a *negated view* of the
+                    // per-zone slices. The Jacobian is overwritten in-place with the R
+                    // factor, Q lands in qr_factor, the rhs b is a *negated view* of the
                     // residual, and the solution x is written into delta_prim.
                     // Note rhs (b) and delta_prim (x) must not be aliased.
                     auto R = Slices::pack_matrix(jacobian_all, b, k, j, i, nfvar);

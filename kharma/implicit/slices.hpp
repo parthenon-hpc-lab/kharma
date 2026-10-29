@@ -36,7 +36,7 @@
 // Components must be packed row-major: component index = row*nvars + col.
 namespace Slices
 {
-template <typename pack_t>
+template<typename pack_t>
 struct PackMatrix
 {
     pack_t pack;
@@ -50,19 +50,19 @@ struct PackMatrix
         return pack(b, r * n + c, k, j, i);
     }
 };
-template <typename pack_t>
+template<typename pack_t>
 KOKKOS_FORCEINLINE_FUNCTION int GetNrows(const PackMatrix<pack_t>& m)
 {
     return m.n;
 }
-template <typename pack_t>
+template<typename pack_t>
 KOKKOS_FORCEINLINE_FUNCTION int GetNcols(const PackMatrix<pack_t>& m)
 {
     return m.n;
 }
 
 // Per-zone vector view: component c at zone (b,k,j,i) of the pack
-template <typename pack_t>
+template<typename pack_t>
 struct PackVector
 {
     pack_t pack;
@@ -72,7 +72,7 @@ struct PackVector
 
 // View evaluating to the *negated* pack components, so the solve's right-hand
 // side b = -residual requires no copy or in-place negation
-template <typename pack_t>
+template<typename pack_t>
 struct NegatedPackVector
 {
     pack_t pack;
@@ -80,18 +80,19 @@ struct NegatedPackVector
     KOKKOS_INLINE_FUNCTION Real operator[](int c) const { return -pack(b, c, k, j, i); }
 };
 
-template <typename pack_t>
+template<typename pack_t>
 KOKKOS_INLINE_FUNCTION PackMatrix<pack_t> pack_matrix(
     pack_t pack, int b, int k, int j, int i, int n)
 {
     return PackMatrix<pack_t>{pack, b, k, j, i, n};
 }
-template <typename pack_t>
-KOKKOS_INLINE_FUNCTION PackVector<pack_t> pack_vector(pack_t pack, int b, int k, int j, int i)
+template<typename pack_t>
+KOKKOS_INLINE_FUNCTION PackVector<pack_t> pack_vector(
+    pack_t pack, int b, int k, int j, int i)
 {
     return PackVector<pack_t>{pack, b, k, j, i};
 }
-template <typename pack_t>
+template<typename pack_t>
 KOKKOS_INLINE_FUNCTION NegatedPackVector<pack_t> negated_pack_vector(
     pack_t pack, int b, int k, int j, int i)
 {

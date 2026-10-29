@@ -47,7 +47,7 @@ using parthenon::MeshBlockData;
 
 // Parthenon's ApplicationInput, set once in main(). Parthenon's Outputs
 // constructor requires it (since the "user output" support, PR #1362)
-extern ApplicationInput *kharma_app_input;
+extern ApplicationInput* kharma_app_input;
 
 /**
  * Types, macros, and convenience functions

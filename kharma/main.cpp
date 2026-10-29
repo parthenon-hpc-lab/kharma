@@ -94,7 +94,7 @@ using namespace parthenon;
  * in the `driver/` folder.
  */
 // Definition of the global declared in types.hpp
-ApplicationInput *kharma_app_input = nullptr;
+ApplicationInput* kharma_app_input = nullptr;
 
 int main(int argc, char* argv[])
 {
