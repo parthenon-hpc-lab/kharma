@@ -110,6 +110,4 @@ to `stable` or `dev` branches.
 ## Licenses
 KHARMA is made available under the BSD 3-clause license included in each file and in the file LICENSE at the root of this repository.
 
-This repository also carries a substantial portion of the [Kokkos Kernels](https://github.com/kokkos/kokkos-kernels), in the directory `external/kokkos-kernels`, which is provided under the license included in that directory.
-
 Submodules of this repository are subject to their own licenses -- universally BSD-style permissive terms.

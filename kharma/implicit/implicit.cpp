@@ -60,13 +60,9 @@ TaskStatus Implicit::Step(MeshData<Real>* md_full_step_init,
 
 #else
 
-// Implicit nonlinear solve requires several linear solves per-zone
-// QR decomposition & solve come from Parthenon's batched linear algebra
-// (parthenon::batched_linear_algebra::QRDecomposition). The LU fallback
-// (implicit/use_qr=false) still uses Kokkos-kernels; it is debug-only.
-#include <batched/dense/src/KokkosBatched_LU_Decl.hpp>
-#include <batched/dense/src/KokkosBatched_Trsv_Decl.hpp>
+// Parthenon's batched QR and solve.  No more kokkos-kernels!
 #include "batched_linear_algebra/qr_decomposition.hpp"
+#include "slices.hpp"
 
 std::vector<std::string> Implicit::GetOrderedNames(
     MeshBlockData<Real>* rc, const MetadataFlag& flag, bool only_implicit)
@@ -114,10 +110,9 @@ std::shared_ptr<KHARMAPackage> Implicit::Initialize(
     params.Add("min_nonlinear_iter", min_nonlinear_iter);
     int max_nonlinear_iter = pin->GetOrAddInteger("implicit", "max_nonlinear_iter", 3);
     params.Add("max_nonlinear_iter", max_nonlinear_iter);
-    // The QR decomposition is Parthenon's batched Householder QR (no column
-    // pivoting). The alternative LU decomposition is mostly for debugging.
-    bool use_qr = pin->GetOrAddBoolean("implicit", "use_qr", true);
-    params.Add("use_qr", use_qr);
+    // QR decomposition/solve from Parthenon's batched linear algebra
+    // (Householder QR, no column pivoting), executed directly on the solver's
+    // global fields. Per-zone temporaries are sized by MAX_VARS.
 
     bool linesearch = pin->GetOrAddBoolean("implicit", "linesearch", true);
     params.Add("linesearch", linesearch);
@@ -135,10 +130,17 @@ std::shared_ptr<KHARMAPackage> Implicit::Initialize(
     std::vector<int> s_vars_implicit({nvars_implicit});
     std::vector<int> s_jac_implicit({nvars_implicit, nvars_implicit});
     std::vector<int> s_vars_all({nvars_implicit + nvars_explicit});
+    // Per-zone solver temporaries (residual/P saves, Householder scratch) are
+    // fixed-size arrays of MAX_VARS components
+    PARTHENON_REQUIRE(nvars_implicit <= MAX_VARS,
+        "Too many implicitly-evolved variables for the implicit solver!");
     Metadata m =
         Metadata({Metadata::Real, Metadata::Cell, Metadata::Derived, Metadata::OneCopy},
             s_jac_implicit);
     pkg->AddField("Implicit.jacobian", m);
+    // Q factor of the QR decomposition.  A field rather than scratch so the
+    // decomposition can slice the global arrays directly
+    pkg->AddField("Implicit.qr_factor", m);
     m = Metadata({Metadata::Real, Metadata::Cell, Metadata::Derived, Metadata::OneCopy},
         s_vars_implicit);
     pkg->AddField("Implicit.residual", m);
@@ -195,7 +197,6 @@ TaskStatus Implicit::Step(MeshData<Real>* md_full_step_init,
     const int iter_max = implicit_par.Get<int>("max_nonlinear_iter");
     const Real delta = implicit_par.Get<Real>("jacobian_delta");
     const Real rootfind_tol = implicit_par.Get<Real>("rootfind_tol");
-    const bool use_qr = implicit_par.Get<bool>("use_qr");
     const auto& globals = pmb_full_step_init->packages.Get("Globals")->AllParams();
     const int verbose = globals.Get<int>("verbose");
     const int flag_verbose = globals.Get<int>("flag_verbose");
@@ -210,7 +211,6 @@ TaskStatus Implicit::Step(MeshData<Real>* md_full_step_init,
 
     // Misc other constants for inside the kernel
     const bool am_rank0 = MPIRank0();
-    const Real tiny(SMALL_NUM), alpha(1.0);
 
     // We need two sets of emhd_params because we need the relaxation scale
     // at the same state in the implicit source terms
@@ -279,6 +279,8 @@ TaskStatus Implicit::Step(MeshData<Real>* md_full_step_init,
 
     auto& jacobian_all =
         md_solver->PackVariables(std::vector<std::string>{"Implicit.jacobian"});
+    auto& qr_factor_all =
+        md_solver->PackVariables(std::vector<std::string>{"Implicit.qr_factor"});
     auto& delta_prim_all =
         md_solver->PackVariables(std::vector<std::string>{"Implicit.delta_prim"});
     auto& residual_all =
@@ -287,9 +289,6 @@ TaskStatus Implicit::Step(MeshData<Real>* md_full_step_init,
         md_solver->PackVariables(std::vector<std::string>{"Implicit.dU_implicit"});
 
     auto bounds = pmb_sub_step_init->cellbounds;
-    const int n1 = bounds.ncellsi(IndexDomain::entire);
-    const int n2 = bounds.ncellsj(IndexDomain::entire);
-    const int n3 = bounds.ncellsk(IndexDomain::entire);
 
     // RETURN if there aren't any implicit variables to evolve
     // TODO(CEP) probably redundant with not loading package, see kharma.cpp
@@ -308,24 +307,7 @@ TaskStatus Implicit::Step(MeshData<Real>* md_full_step_init,
     const IndexRange kb = bounds.GetBoundsK(domain);
     const IndexRange block = IndexRange{0, nblock - 1};
 
-    // Allocate scratch space
-    // Only needed for the linear solve, anymore
-    // Otherwise we pull a bad hack and allocate constant temporaries
-    const int scratch_level = 1; // 0 is actual scratch (tiny); 1 is HBM
     using QRDecomposition = parthenon::batched_linear_algebra::QRDecomposition;
-    // R (computed in-place from the Jacobian) and Q, each n1 x nfvar x nfvar
-    const size_t tensor_size_in_bytes =
-        parthenon::ScratchPad3D<Real>::shmem_size(n1, nfvar, nfvar);
-    const size_t fvar_size_in_bytes =
-        parthenon::ScratchPad2D<Real>::shmem_size(n1, nfvar);
-    const size_t delta_size_in_bytes =
-        parthenon::ScratchPad3D<Real>::shmem_size(n1, nfvar, 1);
-    // Householder scratch for QRDecomposition: double_scratch_size doubles per i
-    const size_t qr_dss = QRDecomposition::double_scratch_size(nfvar);
-    const size_t qr_scratch_size_in_bytes =
-        parthenon::ScratchPad1D<double>::shmem_size(n1 * qr_dss);
-    const size_t total_scratch_bytes = 2 * tensor_size_in_bytes + fvar_size_in_bytes +
-        delta_size_in_bytes + qr_scratch_size_in_bytes;
 
     // Iterate.  This loop is outside the kokkos kernel in order to print max_norm
     // There are generally a low and similar number of iterations between
@@ -334,22 +316,11 @@ TaskStatus Implicit::Step(MeshData<Real>* md_full_step_init,
         // Flags per iter, since debugging here will be rampant
         Flag("ImplicitIteration_" + std::to_string(iter));
 
-#if SPLIT_IMPLICIT_SOLVE
+        // Phase 1: Jacobian + residual calculation (and source terms)
         pmb_solver->par_for(
             "implicit_jacobian", block.s, block.e, kb.s, kb.e, jb.s, jb.e, ib.s, ib.e,
             KOKKOS_LAMBDA(const int& b, const int& k, const int& j, const int& i)
             {
-#else
-        parthenon::par_for_outer(
-            DEFAULT_OUTER_LOOP_PATTERN, "implicit_solve", pmb_sub_step_init->exec_space,
-            total_scratch_bytes, scratch_level, block.s, block.e, kb.s, kb.e, jb.s, jb.e,
-            KOKKOS_LAMBDA(
-                parthenon::team_mbr_t member, const int& b, const int& k, const int& j)
-            {
-                parthenon::par_for_inner(member, ib.s, ib.e,
-                    [&](const int& i)
-                    {
-#endif
                 const auto& G = U_full_step_init_all.GetCoords(b);
 
                 // Solver performance diagnostics.
@@ -389,124 +360,51 @@ TaskStatus Implicit::Step(MeshData<Real>* md_full_step_init,
             } // End lambda
         ); // End par_for
 
-        parthenon::par_for_outer(
-            DEFAULT_OUTER_LOOP_PATTERN, "implicit_solve", pmb_sub_step_init->exec_space,
-            total_scratch_bytes, scratch_level, block.s, block.e, kb.s, kb.e, jb.s, jb.e,
-            KOKKOS_LAMBDA(parthenon::team_mbr_t member, const int& b, const int& k, const int& j)
+        // Phase 2: Linear solve via Parthenon's batched QR
+        // Operates directly on global fields (no scratchpad copies needed)
+        pmb_solver->par_for(
+            "implicit_solve", block.s, block.e, kb.s, kb.e, jb.s, jb.e, ib.s, ib.e,
+            KOKKOS_LAMBDA(const int& b, const int& k, const int& j, const int& i)
             {
-#else
-                    }); // End par_for_inner
-                member.team_barrier();
+                Real& solve_fail = solve_fail_all(b, 0, k, j, i);
 #endif
-                const auto& G = U_full_step_init_all.GetCoords(b);
-                // Scratchpads for implicit vars
-                // jacobian_s holds A on input, then the R factor; q_s holds Q
-                ScratchPad3D<Real> jacobian_s(
-                    member.team_scratch(scratch_level), n1, nfvar, nfvar);
-                ScratchPad3D<Real> q_s(
-                    member.team_scratch(scratch_level), n1, nfvar, nfvar);
-                ScratchPad3D<Real> delta_prim_s(
-                    member.team_scratch(scratch_level), n1, nfvar, 1);
-                ScratchPad2D<Real> rhs_s(member.team_scratch(scratch_level), n1, nfvar);
-                // Householder scratch for QRDecomposition, qr_dss doubles per i
-                ScratchPad1D<double> qr_scratch_s(
-                    member.team_scratch(scratch_level), n1 * qr_dss);
-
-                // Copy in to scratchpads. The linear system solved is
-                // J delta_prim = -residual, so rhs b = -residual and x = delta_prim
-                parthenon::par_for_inner(member, 0, nfvar - 1, 0, nfvar - 1, 0, n1 - 1,
-                    [&](const int& ip, const int& jp, const int& i)
-                    {
-                        if (jp == 0)
-                            rhs_s(i, ip) = -residual_all(b, ip, k, j, i);
-                        jacobian_s(i, ip, jp) = jacobian_all(b, ip * nfvar + jp, k, j, i);
-                    });
-
-                member.team_barrier();
-
-                if (use_qr) {
-                    parthenon::par_for_inner(member, ib.s, ib.e,
-                        [&](const int& i)
-                        {
-                            // Solver variables. jacobian_s is overwritten in-place
-                            // with the R factor; q_s receives the Q factor.
-                            // Note rhs (b) and delta_prim (x) must not alias.
-                            auto R = Kokkos::subview(
-                                jacobian_s, i, Kokkos::ALL(), Kokkos::ALL());
-                            auto Q = Kokkos::subview(
-                                q_s, i, Kokkos::ALL(), Kokkos::ALL());
-                            auto rhs = Kokkos::subview(rhs_s, i, Kokkos::ALL());
-                            auto delta_prim =
-                                Kokkos::subview(delta_prim_s, i, Kokkos::ALL(), 0);
-                            double* qr_scratch = qr_scratch_s.data() + i * qr_dss;
-
-                            if (solve_fail_all(b, 0, k, j, i) != SolverStatusR::fail) {
-                                // Linear solve via Parthenon's batched QR:
-                                // factor A = Q R, then x = R^{-1} Q^T b
-                                int status = QRDecomposition::execute(&R, &Q, qr_scratch);
-                                status += QRDecomposition::solve(R, Q, rhs, delta_prim);
-                                if (status != 0) {
-                                    // Singular/ill-conditioned Jacobian. Mark the zone
-                                    // failed so FixSolve can repair it.
-                                    solve_fail_all(b, 0, k, j, i) = SolverStatusR::fail;
-                                }
-                            }
-                        });
-                } else {
-                    parthenon::par_for_inner(member, ib.s, ib.e,
-                        [&](const int& i)
-                        {
-                            // Solver variables
-                            auto jacobian = Kokkos::subview(
-                                jacobian_s, i, Kokkos::ALL(), Kokkos::ALL());
-                            auto delta_prim =
-                                Kokkos::subview(delta_prim_s, i, Kokkos::ALL(), 0);
-
-                            // The LU path solves in-place: delta_prim must start as b
-                            for (int ip = 0; ip < nfvar; ++ip) {
-                                delta_prim(ip) = rhs_s(i, ip);
-                            }
-
-                            if (solve_fail_all(b, 0, k, j, i) != SolverStatusR::fail) {
-                                KokkosBatched::SerialLU<
-                                    KokkosBatched::Algo::LU::Unblocked>::invoke(jacobian,
-                                    tiny);
-                                // TODO(CEP) does Kokkos Trsv need separate Ly=b Ux=y?
-                                KokkosBatched::SerialTrsv<KokkosBatched::Uplo::Upper,
-                                    KokkosBatched::Trans::NoTranspose,
-                                    KokkosBatched::Diag::NonUnit,
-                                    KokkosBatched::Algo::Trsv::Unblocked>::invoke(alpha,
-                                    jacobian, delta_prim);
-                            }
-                        });
+                if (solve_fail != SolverStatusR::fail) {
+                    // Linear solve via Parthenon's batched QR, operating on
+                    // per-zone slices. The Jacobian is overwritten in-place with the R factor,
+                    // Q lands in qr_factor, the rhs b is a *negated view* of the
+                    // residual, and the solution x is written into delta_prim.
+                    // Note rhs (b) and delta_prim (x) must not be aliased.
+                    auto R = Slices::pack_matrix(jacobian_all, b, k, j, i, nfvar);
+                    auto Q = Slices::pack_matrix(qr_factor_all, b, k, j, i, nfvar);
+                    auto rhs = Slices::negated_pack_vector(residual_all, b, k, j, i);
+                    auto delta_prim = Slices::pack_vector(delta_prim_all, b, k, j, i);
+                    // Per-zone Householder scratch: double_scratch_size(nfvar) =
+                    // 3*nfvar doubles. nfvar <= MAX_VARS enforced at Initialize
+                    double qr_scratch[3 * MAX_VARS];
+                    // factor A = Q R, then x = R^{-1} Q^T b
+                    int status = QRDecomposition::execute(&R, &Q, qr_scratch);
+                    status += QRDecomposition::solve(R, Q, rhs, delta_prim);
+                    if (status != 0) {
+                        // Singular/ill-conditioned Jacobian. Mark the zone failed so
+                        // FixSolve can repair it.
+                        solve_fail = SolverStatusR::fail;
+                    }
                 }
-                member.team_barrier();
 
-                // Copy out delta_prim
-                parthenon::par_for_inner(member, 0, nfvar - 1, ib.s, ib.e,
-                    [&](const int& ip, const int& i)
-                    {
-                        delta_prim_all(b)(ip, k, j, i) = delta_prim_s(i, ip, 0);
-                    });
 #if SPLIT_IMPLICIT_SOLVE
             } // End lambda
         ); // End par_for
 
+        // Phase 3: Backtracking / linesearch / step update
         pmb_solver->par_for(
             "implicit_set_step", block.s, block.e, kb.s, kb.e, jb.s, jb.e, ib.s, ib.e,
             KOKKOS_LAMBDA(const int& b, const int& k, const int& j, const int& i)
             {
-#else
-                member.team_barrier();
-                parthenon::par_for_inner(member, ib.s, ib.e,
-                    [&](const int& i)
-                    {
-#endif
                 const auto& G = U_full_step_init_all.GetCoords(b);
-
+                Real& solve_fail = solve_fail_all(b, 0, k, j, i);
+#endif
                 // Solver performance diagnostics
                 Real& solve_norm = solve_norm_all(b, 0, k, j, i);
-                Real& solve_fail = solve_fail_all(b, 0, k, j, i);
 
                 if (solve_fail == SolverStatusR::fail) return;
 
@@ -612,14 +510,9 @@ TaskStatus Implicit::Step(MeshData<Real>* md_full_step_init,
                     solve_fail =
                         SolverStatusR::beyond_tol; // TODO was changed from +=. Valid?
                 }
-#if SPLIT_IMPLICIT_SOLVE
             } // End lambda
         ); // End par_for
-#else
-                    }); // End par_for_inner
-            } // End lambda
-        ); // End par_for
-#endif
+
         // If we need to print or exit on the max norm...
         if (iter >= iter_min || verbose >= 1) {
             // Take the maximum L2 norm on this rank

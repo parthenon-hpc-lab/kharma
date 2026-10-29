@@ -44,6 +44,5 @@ conv_2d emhd2d_face_ct b_field/solver=face_ct "EMHD mode in 2D w/Face CT"
 # Test if it works with ideal solution as guess
 conv_2d emhd2d_ideal_guess emhd/ideal_guess=true "EMHD mode in 2D, Ideal guess"
 # Test with old LU solver
-conv_2d emhd2d_lu_decomp implicit/use_qr=false "EMHD mode in 2D, LU Decomposition"
 
 exit $exit_code
