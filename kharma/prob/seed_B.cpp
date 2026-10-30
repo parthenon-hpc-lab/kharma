@@ -373,28 +373,29 @@ TaskStatus SeedBFieldType(MeshBlockData<Real>* rc, ParameterInput* pin,
                                 rho(kk - 1, jj, ii - 1) + rho(kk - 1, jj - 1, ii) +
                                 rho(kk - 1, jj - 1, ii - 1)) /
                             8;
-                        u_av =
-                            (u(kk, jj, ii) + u(kk, jj, ii - 1) + u(kk, jj - 1, ii) +
-                                u(kk, jj - 1, ii - 1) + u(kk - 1, jj, ii) +
-                                u(kk - 1, jj, ii - 1) + u(kk - 1, jj - 1, ii) +
-                                u(kk - 1, jj - 1, ii - 1)) /
-                            8;
+                        u_av = (u(kk, jj, ii) + u(kk, jj, ii - 1) + u(kk, jj - 1, ii) +
+                                   u(kk, jj - 1, ii - 1) + u(kk - 1, jj, ii) +
+                                   u(kk - 1, jj, ii - 1) + u(kk - 1, jj - 1, ii) +
+                                   u(kk - 1, jj - 1, ii - 1)) /
+                               8;
                     } else {
                         rho_av = (rho(kk, jj, ii) + rho(kk, jj, ii - 1) +
                                      rho(kk, jj - 1, ii) + rho(kk, jj - 1, ii - 1)) /
                                  4;
-                        u_av = (u(kk, jj, ii) + u(kk, jj, ii - 1) +
-                                     u(kk, jj - 1, ii) + u(kk, jj - 1, ii - 1)) /
-                                 4;
+                        u_av = (u(kk, jj, ii) + u(kk, jj, ii - 1) + u(kk, jj - 1, ii) +
+                                   u(kk, jj - 1, ii - 1)) /
+                               4;
                     }
                 }
 
-                // Compute gas pressure from internal energy (ideal gas EOS: p = (gamma-1) * u)
+                // Compute gas pressure from internal energy (ideal gas EOS: p = (gamma-1)
+                // * u)
                 Real pgas_av = gm1 * u_av;
 
                 Real Aphi = seed_a<Seed>(Xmidplane, dxc, rho_av, rin, min_A, A0, arg1, rb,
                     in_torus, rho_max, potential_rho_pow, potential_falloff,
-                    potential_r_pow, pgas_av, pgas_min, Nr, Nth, rmin, rmax_w, thmin, thmax);
+                    potential_r_pow, pgas_av, pgas_min, Nr, Nth, rmin, rmax_w, thmin,
+                    thmax);
 
                 if (tilt != 0.0) {
                     // This is *covariant* A_mu of an untilted disk

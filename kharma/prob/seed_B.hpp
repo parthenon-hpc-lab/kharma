@@ -80,9 +80,8 @@ enum BSeedType {
 #define SEEDA_ARGS                                                                       \
     GReal *x, const GReal *dxc, double rho, double rin, double min_A, double A0,         \
         double arg1, double rb, bool in_torus, double rho_max, double potential_rho_pow, \
-        double potential_falloff, double potential_r_pow,                                \
-        double pgas, double pgas_min, int Nr, int Nth, double rmin, double rmax,        \
-        double thmin, double thmax
+        double potential_falloff, double potential_r_pow, double pgas, double pgas_min,  \
+        int Nr, int Nth, double rmin, double rmax, double thmin, double thmax
 
 // This will also act as the default implementation for unspecified types,
 // which should all be filled as B field by seed_b below.
