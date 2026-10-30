@@ -131,37 +131,8 @@ jobs:
       - uses: actions/download-artifact@v8
         with:
           name: build-artifacts
-      - name: Most submodules
-        env:
-          PARTHENON_REF: ${{ inputs.parthenon_ref }}
-        run: |
-          git submodule update --init --recursive -f external/{Catch2,kokkos-kernels,singularity-opac}
-          git submodule update --init -f external/singularity-eos
-          cd external/singularity-eos
-          git submodule update --init -f utils/{kokkos,kokkos-kernels,ports-of-call,spiner}
-          cd ../..
-          if [ -z "$PARTHENON_REF" ]; then
-            git submodule update --init --recursive -f external/parthenon
-          fi
-      - name: Checkout candidate Parthenon
-        if: ${{ inputs.parthenon_ref != '' }}
-        uses: actions/checkout@v7
-        with:
-          repository: parthenon-hpc-lab/parthenon
-          ref: ${{ inputs.parthenon_ref }}
-          path: external/parthenon
-          submodules: recursive
-          persist-credentials: false
-      - name: Show exact revisions
-        run: |
-          echo "KHARMA: $(git rev-parse HEAD)"
-          echo "Parthenon: $(git -C external/parthenon rev-parse HEAD)"
-      - name: Install prereqs
-        run: |
-          sudo apt-get update
-          sudo apt-get install libopenmpi-dev libhdf5-openmpi-dev libfftw3-dev
-          sudo apt-get install hdf5-tools
-          pip install git+https://github.com/c-prather/pyharm@dev
+      - name: Install pyharm
+        run: pip install git+https://github.com/c-prather/pyharm@dev
       - name: Run ${{ matrix.test_name }}
         working-directory: tests/${{ matrix.test_name }}
         run: bash -i ./run.sh
