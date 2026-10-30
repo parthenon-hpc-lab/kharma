@@ -70,18 +70,6 @@ include_directories(external/parthenon/src)
 # variant is header only, don't build anything
 include_directories(external/singularity-eos/utils/ports-of-call)
 
-# Inherit pristine kokkos-kernels
-include_directories(external/kokkos-kernels)
-# kokkos-kernels want to import from their own directories
-include_directories(external/kokkos-kernels/batched)
-include_directories(external/kokkos-kernels/batched/dense)
-include_directories(external/kokkos-kernels/batched/dense/src)
-include_directories(external/kokkos-kernels/batched/dense/impl)
-include_directories(external/kokkos-kernels/blas/src)
-include_directories(external/kokkos-kernels/blas/impl)
-include_directories(external/kokkos-kernels/common/src)
-# We do NOT build kokkos-kernels, we only need device-side functions
-
 # Singularity-eos options
 set(SINGULARITY_USE_SPINER ON CACHE BOOL "" FORCE)
 set(SINGULARITY_USE_KOKKOS ON CACHE BOOL "" FORCE)

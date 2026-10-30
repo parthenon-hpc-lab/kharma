@@ -55,10 +55,10 @@ index 5e7f3f8f7..f8d5a180a 100644
  
  // Given a topological element, ownership array of the sending block, and offset indices
 diff --git a/src/mesh/mesh-gmg.cpp b/src/mesh/mesh-gmg.cpp
-index e0b9680ef..eed285480 100644
+index d34667e5c..9b6156636 100644
 --- a/src/mesh/mesh-gmg.cpp
 +++ b/src/mesh/mesh-gmg.cpp
-@@ -62,6 +62,21 @@ void SetMeshBlockNeighbors(Mesh *pmesh, GridIdentifier grid_id, BlockList_t &blo
+@@ -65,6 +65,21 @@ void SetMeshBlockNeighbors(Mesh *pmesh, GridIdentifier grid_id, BlockList_t &blo
                      {ndim > 2 ? -1 : 0, ndim > 2 ? 1 : 0});
    BufferID buffer_id(ndim, multilevel);
  
@@ -80,7 +80,7 @@ index e0b9680ef..eed285480 100644
    for (auto &pmb : block_list) {
      std::vector<NeighborBlock> all_neighbors;
      const auto &loc = pmb->loc;
-@@ -91,7 +106,7 @@ void SetMeshBlockNeighbors(Mesh *pmesh, GridIdentifier grid_id, BlockList_t &blo
+@@ -94,7 +109,7 @@ void SetMeshBlockNeighbors(Mesh *pmesh, GridIdentifier grid_id, BlockList_t &blo
        auto neighbor_neighbors = forest.FindNeighbors(nloc.global_loc, grid_id);
  
        nb.ownership =
@@ -89,3 +89,12 @@ index e0b9680ef..eed285480 100644
        nb.ownership.initialized = true;
  
        // Set logical coordinate transformation from this block to the neighbor
+@@ -109,7 +124,7 @@ void SetMeshBlockNeighbors(Mesh *pmesh, GridIdentifier grid_id, BlockList_t &blo
+       }
+       // Store this block's own ownership of shared topological elements (in its own
+       // logical frame), computed exactly as for a neighbor but for the block itself.
+-      pmb->ownership = DetermineOwnership(loc, neighbors, newly_refined);
++      pmb->ownership = DetermineOwnership(loc, neighbors, self_border_block, newly_refined);
+       pmb->ownership.initialized = true;
+     } else if (grid_id.type() == GridType::two_level_composite &&
+                pmb->loc.level() == grid_id.logical_level()) {

@@ -122,9 +122,9 @@ endif()
 # These are almost universally performance trade-offs,
 # or disabling features that need dependencies.
 # TODO is there any way to make compile options less painful in CMake?
-option(KHARMA_SPLIT_IMPLICIT_SOLVE "Split the implicit solver kernel into three. Only faster on Frontier, so far" OFF)
+option(KHARMA_SPLIT_IMPLICIT_SOLVE "Split up the implicit solver kernel into three. Generally faster on GPU." ON)
 option(FAST_CARTESIAN "Break operation in curved spacetimes to make Cartesian Minkowski space computations faster" OFF)
-option(KHARMA_DISABLE_IMPLICIT "Disable the implicit solver, which requires bundled kokkos-kernels. Default false" OFF)
+option(KHARMA_DISABLE_IMPLICIT "Disable the implicit solver. Default false" OFF)
 option(KHARMA_DISABLE_CLEANUP "Disable the magnetic field cleanup module, which requires recent Parthenon. Default false" OFF)
 option(KHARMA_DISABLE_RADM1 "Disable the M1 Closure radiation implementation.  Default false" OFF)
 option(KHARMA_TRACE "Compile with tracing: print entry and exit of important functions. Default false" OFF)
@@ -158,7 +158,6 @@ if(KHARMA_DISABLE_RADM1)
 else()
     target_compile_definitions(${EXE_NAME} PUBLIC DISABLE_RADM1=0)
 endif()
-# Tracing can be added in the command-line make.sh call: "./make.sh [OPTIONS] trace"
 if(KHARMA_TRACE)
     message("Compiling with code tracing (prints 'Flag' calls)")
     target_compile_definitions(${EXE_NAME} PUBLIC TRACE=1)
@@ -193,10 +192,10 @@ if (Kokkos_ENABLE_HWLOC)
     target_link_libraries(${EXE_NAME} PUBLIC hwloc)
 endif()
 
-target_link_libraries(${EXE_NAME} 
+target_link_libraries(${EXE_NAME}
 PUBLIC
     singularity-eos::singularity-eos
-    singularity-opac::flags    
+    singularity-opac::flags
 )
 
 # Installation

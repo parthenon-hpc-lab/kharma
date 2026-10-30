@@ -32,7 +32,7 @@ jobs:
         # Check out all submodules except eigen, which is hosted on gitlab which rate-limits;
         # we don't need it anyway
         run: |
-          git submodule update --init --recursive -f external/{parthenon,Catch2,kokkos-kernels,singularity-opac}
+          git submodule update --init --recursive -f external/{parthenon,Catch2,singularity-opac}
           git submodule update --init -f external/singularity-eos
           cd external/singularity-eos
           git submodule update --init -f utils/{kokkos,kokkos-kernels,ports-of-call,spiner}
