@@ -124,15 +124,15 @@ jobs:
           ref: ${{ inputs.kharma_ref || github.ref }}
           submodules: false
           persist-credentials: false
-      - name: Install prereqs
-        run: |
-          sudo apt-get update
-          sudo apt-get install libopenmpi libhdf5-openmpi libfftw3 hdf5-tools
       - uses: actions/download-artifact@v8
         with:
           name: build-artifacts
-      - name: Install pyharm
-        run: pip install git+https://github.com/c-prather/pyharm@dev
+      - name: Install prereqs
+        run: |
+          sudo apt-get update
+          sudo apt-get install libopenmpi-dev libhdf5-openmpi-dev libfftw3-dev
+          sudo apt-get install hdf5-tools
+          pip install git+https://github.com/c-prather/pyharm@dev
       - name: Run ${{ matrix.test_name }}
         working-directory: tests/${{ matrix.test_name }}
         run: bash -i ./run.sh
