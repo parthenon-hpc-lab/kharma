@@ -202,10 +202,11 @@ KOKKOS_INLINE_FUNCTION Real seed_a<BSeedType::vertical_chakrabarti>(SEEDA_ARGS)
     Real rcyl_falloff = potential_falloff;
 
     Real Aphi = m::pow(cyl_radius / rcyl_in, potential_r_pow);
+    Real Aphi_offset = 0.0;
     if (potential_falloff != 0) {
         Aphi *= m::exp(-cyl_radius / rcyl_falloff);
+        Aphi_offset = exp(-rcyl_in / rcyl_falloff);
     }
-    Real Aphi_offset = exp(-rcyl_in / rcyl_falloff);
     if (cyl_radius < rcyl_in) {
         Aphi = 0.0;
     } else {
