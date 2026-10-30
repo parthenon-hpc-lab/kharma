@@ -50,8 +50,16 @@ rmax = 41.0
 u_jitter = 0.1
 
 <b_field>
-type     = vertical_chakrabarti
+type     = white2020
 beta_min = 100.
+# White et al. 2020 parameters (ApJ 891, 141, equations 2-3)
+pgas_min = 1e-8
+Nr       = 6
+Nth      = 4
+rmin     = 30.0
+rmax     = 1000.0
+thmin    = 0.5235987755982988  # pi/6
+thmax    = 2.6179938779914944  # 5pi/6
 
 <floors>
 rho_min_geom     = 1e-6
