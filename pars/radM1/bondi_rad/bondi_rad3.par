@@ -38,7 +38,6 @@ reconstruction = ppm
 <eos>
 type = IdealGas
 gamma = 1.6665866858620597
-Cv = 1.0
 
 <bondi_rad>
 mdot = 10.0

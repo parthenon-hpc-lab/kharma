@@ -235,7 +235,18 @@ TaskStatus InitializeFMTorus(
     Floors::ApplyInitialFloors(pin, rc.get(), IndexDomain::interior);
 
     if (use_rad) {
+        const Real u_rad_floor = pmb->packages.Get("RadM1")->Param<Real>("u_rad_floor");
+        pmb->par_for("fm_torus_rad_after_floors", ks, ke, js, je, is, ie,
+                     KOKKOS_LAMBDA(const int& k, const int& j, const int& i)
+            {
+                if (uu_rad(k, j, i) <= u_rad_floor) {
+                    Real uu_rad_init;
+                    RadM1::initialize_radiation_pressure(u(k, j, i), uu_rad_init);
+                    uu_rad(k, j, i) = m::max(uu_rad_init, u_rad_floor);
+                }
+            });
         RadM1::ApplyRadM1Floors(rc.get(), IndexDomain::interior);
+        RadM1::BlockPtoU(rc.get(), IndexDomain::interior, false);
     }
 
     return TaskStatus::complete;

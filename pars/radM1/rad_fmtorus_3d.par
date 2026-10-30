@@ -52,7 +52,7 @@ type = llf
 reconstruction = ppm
 
 <driver>
-type = kharma
+type = imex
 # Second sync at the end of each step
 # Can skip this with the robust inverter & face_ct B fields
 two_sync = false
@@ -103,15 +103,16 @@ u_rad_floor = 1e-12
 on = true
 scale_free = false
 geom_mass_msun = 10
-fluid_density_cgs = 1.e-6
+fluid_density_cgs = 1.e-3
 
 <opac>
 # type here sets if you wanna handle the opacities yourself or give it to singularity opac
 # default, you handle it, other types can be seen in radM1.hpp: OpacityType.
 type = default
-opac_kind = bremsstrahlung
-s_opac_kind = thomson
-
+opac_kind = synchrotron, tops_table
+s_opac_kind = tops_table
+tops_table_file = opac_table/solar_opac.sp5
+tops_table_material = solar
 
 <debug>
 verbose = 1

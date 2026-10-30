@@ -107,6 +107,7 @@ TaskCollection KHARMADriver::MakeImExTaskCollection(BlockList_t& blocks, int sta
         auto& base = pmesh->mesh_data.Get("base");
         // Fluxes
         pmesh->mesh_data.Add("dUdt", base);
+        if (use_radm1) pmesh->mesh_data.Add("dUdt_s1", base);
         for (int i = 1; i < integrator->nstages; i++)
             pmesh->mesh_data.Add(integrator->stage_name[i], base);
 
@@ -293,18 +294,61 @@ TaskCollection KHARMADriver::MakeImExTaskCollection(BlockList_t& blocks, int sta
         if (use_radm1) {
             blocks[0]->packages.Get("RadM1")->UpdateParam(
                 "current_stage_dt", integrator->beta[stage - 1] * integrator->dt);
+            blocks[0]->packages.Get("RadM1")->UpdateParam(
+                "current_stage_gam0", integrator->gam0[stage - 1]);
+            blocks[0]->packages.Get("RadM1")->UpdateParam(
+                "current_stage_gam1", integrator->gam1[stage - 1]);
+            blocks[0]->packages.Get("RadM1")->UpdateParam("current_stage", stage);
+            blocks[0]->packages.Get("RadM1")->UpdateParam(
+                "current_dt_full", integrator->dt);
         }
         // Add any source terms: geometric \Gamma * T, wind, damping, etc etc
         auto t_sources = tl.AddTask(t_flux_div, Packages::AddSource,
             md_sub_step_init.get(), md_flux_src.get(), IndexDomain::interior);
 
+        auto t_sources_done = t_sources;
+        if (use_radm1 && stage == 1) {
+            auto& md_dU1 = pmesh->mesh_data.GetOrAdd("dUdt_s1", i);
+            auto t_s1_c = tl.AddTask(t_sources,
+                Update::WeightedSumData<std::vector<MetadataFlag>, MeshData<Real>>,
+                std::vector<MetadataFlag>{Metadata::GetUserFlag("Explicit"),
+                    Metadata::Independent, Metadata::Cell},
+                md_flux_src.get(), md_flux_src.get(), 1.0, 0.0, md_dU1.get());
+            auto t_s1_f = t_s1_c;
+            if (use_b_ct)
+                t_s1_f = tl.AddTask(t_sources, WeightedSumDataFace<MetadataFlag>,
+                    std::vector<MetadataFlag>{Metadata::GetUserFlag("Explicit"),
+                        Metadata::Independent, Metadata::Face},
+                    md_flux_src.get(), md_flux_src.get(), 1.0, 0.0, md_dU1.get());
+            t_sources_done = t_s1_c | t_s1_f;
+        }
+
         // Update explicit state with the explicit fluxes/sources
         auto t_update =
-            KHARMADriver::AddStateUpdate(t_sources, tl, md_full_step_init.get(),
+            KHARMADriver::AddStateUpdate(t_sources_done, tl, md_full_step_init.get(),
                 md_sub_step_init.get(), md_flux_src.get(), md_solver.get(),
                 std::vector<MetadataFlag>{
                     Metadata::GetUserFlag("Explicit"), Metadata::Independent},
                 use_b_ct, stage);
+        if (use_radm1 && stage == 2) {
+            const Real ars_g = 1.0 - 1.0 / std::sqrt(2.0);
+            const Real ars_d = 1.0 - 1.0 / (2.0 * ars_g);
+            auto& md_dU1 = pmesh->mesh_data.GetOrAdd("dUdt_s1", i);
+            auto t_d1_c = tl.AddTask(t_update,
+                Update::WeightedSumData<std::vector<MetadataFlag>, MeshData<Real>>,
+                std::vector<MetadataFlag>{Metadata::GetUserFlag("Explicit"),
+                    Metadata::Independent, Metadata::Cell},
+                md_solver.get(), md_dU1.get(), 1.0, ars_d * integrator->dt,
+                md_solver.get());
+            auto t_d1_f = t_d1_c;
+            if (use_b_ct)
+                t_d1_f = tl.AddTask(t_update, WeightedSumDataFace<MetadataFlag>,
+                    std::vector<MetadataFlag>{Metadata::GetUserFlag("Explicit"),
+                        Metadata::Independent, Metadata::Face},
+                    md_solver.get(), md_dU1.get(), 1.0, ars_d * integrator->dt,
+                    md_solver.get());
+            t_update = t_d1_c | t_d1_f;
+        }
 
         // Update ideal HD variables so that they can be used as a guess for the solver.
         // Only used if emhd/ideal_guess is enabled.

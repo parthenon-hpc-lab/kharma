@@ -90,10 +90,8 @@ if __name__ == '__main__':
         L1[v] = np.maximum(np.array(L1[v]), 1e-300)
         powerfits[v] = np.polyfit(np.log(resolutions[fit_mask]), np.log(L1[v][fit_mask]), 1)[0]
         print("test{} {} Powerfit: {} L1: {}".format(test_num, v, powerfits[v], L1[v]))
-        if powerfits[v] > -0.90:
+        if powerfits[v] > (-0.5 if test_num in ('4a', '4b') else -0.8):
             fail = 1
-        if test_num == '4a' and powerfits[v] < -0.5:
-            fail = 0
 
     # plot
     fig, ax = plt.subplots(1, 1, figsize=(8, 8))

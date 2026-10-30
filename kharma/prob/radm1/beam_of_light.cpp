@@ -160,12 +160,6 @@ TaskStatus SetBeamOfLightImpl(
                 // Since the boost was defined in the orthornormal frame, this will
                 // convert the boost into u^theta as a coordinate component.
                 const Real u1_th = u_theta_ortho / m::sqrt(gcov_22);
-
-                // Now, we want the 4-velocity component u^r to be zero (movement only in
-                // the theta direction) Since g_tr is not 0, we have radial shift, when
-                // calculating u^mu from the primitive eulerian velocities This is given
-                // by u_rad^r = uvec_rad[0] − γ·α·g^{tr} so just normalize it to be 0, by
-                // setting uvec_rad[0] = γ·α·g^{tr}
                 const Real qsq_th = gcov_22 * u1_th * u1_th;
                 const Real C = alpha * gcon_tr;
                 const Real u0_r = C * m::sqrt((1. + qsq_th) / (1. - C * C * gcov_11));
