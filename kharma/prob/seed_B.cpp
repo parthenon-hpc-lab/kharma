@@ -91,6 +91,7 @@ TaskStatus SeedBFieldType(MeshBlockData<Real>* rc, ParameterInput* pin,
 
     // Fields
     GridScalar rho = rc->Get("prims.rho").data;
+    GridScalar u = rc->Get("prims.u").data;
     const auto& G = pmb->coords;
 
     // Parameters
@@ -226,6 +227,10 @@ TaskStatus SeedBFieldType(MeshBlockData<Real>* rc, ParameterInput* pin,
         Real gm1, lnh_in, lnh_peak, pgas_over_rho_peak, rho_peak;
         GReal cc, nn;
         Real potential_rho_pow, potential_falloff, potential_r_pow;
+        // White2020-specific variables
+        Real pgas_min;
+        int Nr, Nth;
+        Real rmin, rmax_w, thmin, thmax;
         switch (Seed) {
             case BSeedType::sane:
             case BSeedType::mad:
@@ -268,6 +273,20 @@ TaskStatus SeedBFieldType(MeshBlockData<Real>* rc, ParameterInput* pin,
                 lnh_peak = lnh_calc(a, rin, rmax, 1.0, cc, nn) - lnh_in;
                 pgas_over_rho_peak = gm1 / gam * (m::exp(lnh_peak) - 1.0);
                 rho_peak = m::pow(pgas_over_rho_peak, 1.0 / gm1) / rho_max;
+                break;
+            case BSeedType::white2020:
+                // White et al. 2020 field initialization
+                // Fluid parameters
+                gam = pmb->packages.Get("GRMHD")->Param<Real>("gamma");
+                // Field init parameters (from paper: pgas_min=1e-8, rmin=30, rmax=1000,
+                // thmin=pi/6, thmax=5pi/6, Nr=6, Nth=4)
+                pgas_min = pin->GetOrAddReal("b_field", "pgas_min", 1e-8);
+                int Nr = pin->GetOrAddInteger("b_field", "Nr", 6);
+                int Nth = pin->GetOrAddInteger("b_field", "Nth", 4);
+                rmin = pin->GetOrAddReal("b_field", "rmin", 30.0);
+                rmax = pin->GetOrAddReal("b_field", "rmax", 1000.0);
+                thmin = pin->GetOrAddReal("b_field", "thmin", M_PI / 6.0);
+                thmax = pin->GetOrAddReal("b_field", "thmax", 5.0 * M_PI / 6.0);
                 break;
             case BSeedType::orszag_tang_a:
                 A0 = pin->GetReal("orszag_tang", "tscale");
@@ -317,18 +336,21 @@ TaskStatus SeedBFieldType(MeshBlockData<Real>* rc, ParameterInput* pin,
                 // than a bunch of averaging in a meaningful way.  Just use the average if
                 // not.
                 Real rho_av;
+                Real u_av;
                 bool in_torus = false;
                 if (is_torus) {
                     if (is_fm) {
                         // Find rho at corner directly for torii
                         rho_av = fm_torus_rho(a, rin, rmax, gam, kappa, r, th) / rho_norm;
+                        // For FM torus, we don't have an analytic u, so we'll need to average
                     } else if (is_chakrabarti) {
-                        // Find rho
+                        // Find rho and u
                         const Real lnh = lnh_calc(a, rin, r, sth, cc, nn);
                         if (lnh >= 0.0) {
                             in_torus = true;
                             Real pg_over_rho = gm1 / gam * (m::exp(lnh) - 1.0);
                             rho_av = m::pow(pg_over_rho, 1. / gm1) / rho_peak;
+                            u_av = (pg_over_rho * rho_av) / gm1;
                         }
                     }
                 } else {
@@ -345,16 +367,28 @@ TaskStatus SeedBFieldType(MeshBlockData<Real>* rc, ParameterInput* pin,
                                 rho(kk - 1, jj, ii - 1) + rho(kk - 1, jj - 1, ii) +
                                 rho(kk - 1, jj - 1, ii - 1)) /
                             8;
+                        u_av =
+                            (u(kk, jj, ii) + u(kk, jj, ii - 1) + u(kk, jj - 1, ii) +
+                                u(kk, jj - 1, ii - 1) + u(kk - 1, jj, ii) +
+                                u(kk - 1, jj, ii - 1) + u(kk - 1, jj - 1, ii) +
+                                u(kk - 1, jj - 1, ii - 1)) /
+                            8;
                     } else {
                         rho_av = (rho(kk, jj, ii) + rho(kk, jj, ii - 1) +
                                      rho(kk, jj - 1, ii) + rho(kk, jj - 1, ii - 1)) /
                                  4;
+                        u_av = (u(kk, jj, ii) + u(kk, jj, ii - 1) +
+                                     u(kk, jj - 1, ii) + u(kk, jj - 1, ii - 1)) /
+                                 4;
                     }
                 }
 
+                // Compute gas pressure from internal energy (ideal gas EOS: p = (gamma-1) * u)
+                Real pgas_av = gm1 * u_av;
+
                 Real Aphi = seed_a<Seed>(Xmidplane, dxc, rho_av, rin, min_A, A0, arg1, rb,
                     in_torus, rho_max, potential_rho_pow, potential_falloff,
-                    potential_r_pow);
+                    potential_r_pow, pgas_av, pgas_min, Nr, Nth, rmin, rmax_w, thmin, thmax);
 
                 if (tilt != 0.0) {
                     // This is *covariant* A_mu of an untilted disk
@@ -509,6 +543,8 @@ TaskStatus SeedBField(MeshData<Real>* md, ParameterInput* pin)
             status = SeedBFieldType<BSeedType::vertical>(rc, pin);
         } else if (b_field_type == "vertical_chakrabarti") {
             status = SeedBFieldType<BSeedType::vertical_chakrabarti>(rc, pin);
+        } else if (b_field_type == "white2020") {
+            status = SeedBFieldType<BSeedType::white2020>(rc, pin);
         } else if (b_field_type == "r1s2") {
             status = SeedBFieldType<BSeedType::r1s2>(rc, pin);
         } else if (b_field_type == "orszag_tang") {
