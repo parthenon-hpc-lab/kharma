@@ -53,11 +53,7 @@ jobs:
         env:
           PARTHENON_REF: ${{ inputs.parthenon_ref }}
         run: |
-          git submodule update --init --recursive -f external/{Catch2,kokkos-kernels,singularity-opac}
-          git submodule update --init -f external/singularity-eos
-          cd external/singularity-eos
-          git submodule update --init -f utils/{kokkos,kokkos-kernels,ports-of-call,spiner}
-          cd ../..
+          git submodule update --init --recursive -f external/{Catch2,kokkos-kernels,singularity-opac,singularity-eos}
           if [ -z "$PARTHENON_REF" ]; then
             git submodule update --init --recursive -f external/parthenon
           fi
@@ -128,6 +124,10 @@ jobs:
           ref: ${{ inputs.kharma_ref || github.ref }}
           submodules: false
           persist-credentials: false
+      - name: Install prereqs
+        run: |
+          sudo apt-get update
+          sudo apt-get install libopenmpi libhdf5-openmpi libfftw3 hdf5-tools
       - uses: actions/download-artifact@v8
         with:
           name: build-artifacts
