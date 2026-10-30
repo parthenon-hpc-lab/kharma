@@ -1,14 +1,33 @@
 name: Regression tests (CPU)
 
+# Generated with assistance from generative AI
+# This is KHARMA's CPU regression workflow. The same jobs run for its
+# own PRs/pushes and when Parthenon calls them as downstream integration tests.
 on:
-  # Oh push to stable/dev incl. automated merge after branch tests
   push:
-    branches: [ stable, dev ]
-  # On every push of pull requests to stable/dev. Frequent!
+    branches: [stable, dev]
   pull_request:
-    branches: [ stable, dev ]
-  # when triggered manually
+    branches: [stable, dev]
   workflow_dispatch:
+  workflow_call:
+    inputs:
+      kharma_ref:
+        description: 'KHARMA revision (e.g. dev)'
+        type: string
+        required: false
+        default: ''
+      parthenon_ref:
+        description: 'Optional Parthenon override (e.g. refs/pull/123/merge)'
+        type: string
+        required: false
+        default: ''
+
+permissions:
+  contents: read
+
+concurrency:
+  group: kharma-cpu-ci-${{ github.repository }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 env:
   NPROC: 4
@@ -24,15 +43,33 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
+          repository: ${{ github.repository }}
+          ref: ${{ inputs.kharma_ref || github.ref }}
           submodules: false
+          persist-credentials: false
       - name: Most submodules
         # Check out all submodules except eigen, which is hosted on gitlab which rate-limits;
         # we don't need it anyway
+        env:
+          PARTHENON_REF: ${{ inputs.parthenon_ref }}
         run: |
-          git submodule update --init --recursive -f external/{parthenon,Catch2,kokkos-kernels,singularity-opac}
-          git submodule update --init -f external/singularity-eos
-          cd external/singularity-eos
-          git submodule update --init -f utils/{kokkos,kokkos-kernels,ports-of-call,spiner}
+          git submodule update --init --recursive -f external/{Catch2,kokkos-kernels,singularity-opac,singularity-eos}
+          if [ -z "$PARTHENON_REF" ]; then
+            git submodule update --init --recursive -f external/parthenon
+          fi
+      - name: Checkout candidate Parthenon
+        if: ${{ inputs.parthenon_ref != '' }}
+        uses: actions/checkout@v7
+        with:
+          repository: parthenon-hpc-lab/parthenon
+          ref: ${{ inputs.parthenon_ref }}
+          path: external/parthenon
+          submodules: recursive
+          persist-credentials: false
+      - name: Show exact revisions
+        run: |
+          echo "KHARMA: $(git rev-parse HEAD)"
+          echo "Parthenon: $(git -C external/parthenon rev-parse HEAD)"
       - name: Install prereqs
         run: |
           sudo apt-get update
@@ -83,16 +120,19 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
+          repository: ${{ github.repository }}
+          ref: ${{ inputs.kharma_ref || github.ref }}
           submodules: false
-      - uses: actions/download-artifact@v8
-        with:
-          name: build-artifacts
+          persist-credentials: false
       - name: Install prereqs
         run: |
           sudo apt-get update
-          sudo apt-get install libopenmpi-dev libhdf5-openmpi-dev libfftw3-dev
-          sudo apt-get install hdf5-tools
-          pip install git+https://github.com/c-prather/pyharm@dev
+          sudo apt-get install libopenmpi libhdf5-openmpi libfftw3 hdf5-tools
+      - uses: actions/download-artifact@v8
+        with:
+          name: build-artifacts
+      - name: Install pyharm
+        run: pip install git+https://github.com/c-prather/pyharm@dev
       - name: Run ${{ matrix.test_name }}
         working-directory: tests/${{ matrix.test_name }}
         run: bash -i ./run.sh
@@ -113,4 +153,3 @@ jobs:
     needs: test
     steps:
       - run: exit 0
-
