@@ -43,7 +43,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          repository: ${{ github.repository }}
+          repository: parthenon-hpc-lab/kharma
           ref: ${{ inputs.kharma_ref || github.ref }}
           submodules: false
           persist-credentials: false
@@ -120,7 +120,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          repository: ${{ github.repository }}
+          repository: parthenon-hpc-lab/kharma
           ref: ${{ inputs.kharma_ref || github.ref }}
           submodules: false
           persist-credentials: false
