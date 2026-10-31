@@ -466,21 +466,24 @@ void FluxDivergenceB(MeshData<Real>* md, MeshData<Real>* dudt_obj)
             const auto& G = B_F.GetCoords(bl);
             const auto& F = B_F(bl);
             const auto& E = emf_pack(bl);
-            double du = static_cast<double>(G.FaceArea<X1DIR>(k, j, i + 1)) *
+            const double dx1 = G.Dxc<1>(i), dx2 = G.Dxc<2>(j), dx3 = G.Dxc<3>(k);
+            const double a1 = dx2 * dx3, a2 = dx1 * dx3, a3 = dx1 * dx2;
+            const double vol = dx1 * dx2 * dx3;
+            double du = a1 *
                             ct_flux(E, F, X1DIR, v, k, j, i + 1, ndim, use_emf) -
-                        static_cast<double>(G.FaceArea<X1DIR>(k, j, i)) *
+                        a1 *
                             ct_flux(E, F, X1DIR, v, k, j, i, ndim, use_emf);
             if (ndim >= 2)
-                du += static_cast<double>(G.FaceArea<X2DIR>(k, j + 1, i)) *
+                du += a2 *
                           ct_flux(E, F, X2DIR, v, k, j + 1, i, ndim, use_emf) -
-                      static_cast<double>(G.FaceArea<X2DIR>(k, j, i)) *
+                      a2 *
                           ct_flux(E, F, X2DIR, v, k, j, i, ndim, use_emf);
             if (ndim == 3)
-                du += static_cast<double>(G.FaceArea<X3DIR>(k + 1, j, i)) *
+                du += a3 *
                           ct_flux(E, F, X3DIR, v, k + 1, j, i, ndim, use_emf) -
-                      static_cast<double>(G.FaceArea<X3DIR>(k, j, i)) *
+                      a3 *
                           ct_flux(E, F, X3DIR, v, k, j, i, ndim, use_emf);
-            dB.Set(-du / G.CellVolume(k, j, i), bl, v, k, j, i);
+            dB.Set(-du / vol, bl, v, k, j, i);
         });
 }
 

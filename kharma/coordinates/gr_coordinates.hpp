@@ -75,6 +75,9 @@ class GRCoordinates : public parthenon::UniformCartesian
     // Store the block size, since UniformCartesian doesn't
     int n1, n2, n3;
 
+    GReal xmin_d[3] = {0., 0., 0.};
+    GReal dx_d[3] = {1., 1., 1.};
+
     // Points to average (one side of a square, odd) when calculating the connections,
     // and metric determinants on faces
     int connection_average_points = 1;
@@ -110,6 +113,10 @@ class GRCoordinates : public parthenon::UniformCartesian
         , connection_average_points(src.connection_average_points)
         , correct_connections(src.correct_connections)
     {
+        for (int d = 0; d < 3; d++) {
+            xmin_d[d] = src.xmin_d[d];
+            dx_d[d] = src.dx_d[d];
+        }
         // std::cerr << "Calling copy constructor size " << src.n1 << " " << src.n2 <<
         // std::endl;
 #if !FAST_CARTESIAN && !NO_CACHE
@@ -133,6 +140,10 @@ class GRCoordinates : public parthenon::UniformCartesian
         n3 = src.n3;
         connection_average_points = src.connection_average_points;
         correct_connections = src.correct_connections;
+        for (int d = 0; d < 3; d++) {
+            xmin_d[d] = src.xmin_d[d];
+            dx_d[d] = src.dx_d[d];
+        }
 #if !FAST_CARTESIAN && !NO_CACHE
         gcon_direct = src.gcon_direct;
         gcov_direct = src.gcov_direct;
@@ -197,6 +208,25 @@ class GRCoordinates : public parthenon::UniformCartesian
         const int& k, const int& j, const int& i, const Loci& loc = Loci::center) const;
 
     // Transformations using the cached geometry
+    template<int dir>
+    KOKKOS_FORCEINLINE_FUNCTION GReal XfG(const int idx) const
+    {
+#if SINGLE_PRECISION_ENABLED
+        return xmin_d[dir - 1] + idx * dx_d[dir - 1];
+#else
+        return Xf<dir>(idx);
+#endif
+    }
+    template<int dir>
+    KOKKOS_FORCEINLINE_FUNCTION GReal XcG(const int idx) const
+    {
+#if SINGLE_PRECISION_ENABLED
+        return xmin_d[dir - 1] + (idx + 0.5) * dx_d[dir - 1];
+#else
+        return Xc<dir>(idx);
+#endif
+    }
+
     KOKKOS_INLINE_FUNCTION void lower(const Real vcon[GR_DIM], Real vcov[GR_DIM],
         const int& k, const int& j, const int& i, const Loci loc) const;
     KOKKOS_INLINE_FUNCTION void raise(const Real vcov[GR_DIM], Real vcon[GR_DIM],
@@ -212,39 +242,39 @@ KOKKOS_INLINE_FUNCTION void GRCoordinates::coord(
     X[0] = 0;
     switch (loc) {
         case Loci::face1:
-            X[1] = Xf<1>(i);
-            X[2] = Xc<2>(j);
-            X[3] = Xc<3>(k);
+            X[1] = XfG<1>(i);
+            X[2] = XcG<2>(j);
+            X[3] = XcG<3>(k);
             break;
         case Loci::face2:
-            X[1] = Xc<1>(i);
-            X[2] = Xf<2>(j);
-            X[3] = Xc<3>(k);
+            X[1] = XcG<1>(i);
+            X[2] = XfG<2>(j);
+            X[3] = XcG<3>(k);
             break;
         case Loci::face3:
-            X[1] = Xc<1>(i);
-            X[2] = Xc<2>(j);
-            X[3] = Xf<3>(k);
+            X[1] = XcG<1>(i);
+            X[2] = XcG<2>(j);
+            X[3] = XfG<3>(k);
             break;
         case Loci::center:
-            X[1] = Xc<1>(i);
-            X[2] = Xc<2>(j);
-            X[3] = Xc<3>(k);
+            X[1] = XcG<1>(i);
+            X[2] = XcG<2>(j);
+            X[3] = XcG<3>(k);
             break;
         case Loci::corner:
-            X[1] = Xf<1>(i);
-            X[2] = Xf<2>(j);
-            X[3] = Xf<3>(k);
+            X[1] = XfG<1>(i);
+            X[2] = XfG<2>(j);
+            X[3] = XfG<3>(k);
             break;
         case Loci::outer_half:
-            X[1] = Xc<1>(i);
-            X[2] = (Xc<2>(j) + Xf<2>(j + 1)) / 2;
-            X[3] = Xc<3>(k);
+            X[1] = XcG<1>(i);
+            X[2] = (XcG<2>(j) + XfG<2>(j + 1)) / 2;
+            X[3] = XcG<3>(k);
             break;
         case Loci::inner_half:
-            X[1] = Xc<1>(i);
-            X[2] = (Xc<2>(j) + Xf<2>(j)) / 2;
-            X[3] = Xc<3>(k);
+            X[1] = XcG<1>(i);
+            X[2] = (XcG<2>(j) + XfG<2>(j)) / 2;
+            X[3] = XcG<3>(k);
             break;
     }
 }

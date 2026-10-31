@@ -33,6 +33,8 @@
  */
 #include "b_ct.hpp"
 
+#include "b_double.hpp"
+
 #include "decs.hpp"
 #include "domain.hpp"
 #include "floors.hpp"
@@ -218,6 +220,10 @@ void B_CT::DestructiveBoundaryClean(MeshBlockData<Real>* rc, IndexDomain domain,
     // Need the coordinates for this boundary, uniquely
     auto G = pmb->coords;
     const int ndim = pmb->pmy_mesh->ndim;
+    const auto fB = BDouble::Pack(rc, "cons.fB");
+    const double a1 = static_cast<double>(G.Dxc<2>(0)) * G.Dxc<3>(0);
+    const double a2 = static_cast<double>(G.Dxc<1>(0)) * G.Dxc<3>(0);
+    const double a3 = static_cast<double>(G.Dxc<1>(0)) * G.Dxc<2>(0);
     if (bdir == X1DIR) {
         const int i_face = (binner) ? b.ie : b.is;
         for (int iadd = 0; iadd <= (b.ie - b.is); iadd++) {
@@ -232,20 +238,19 @@ void B_CT::DestructiveBoundaryClean(MeshBlockData<Real>* rc, IndexDomain domain,
                     // Subtract off their contributions to find ours. Note our partner
                     // face contributes differently, depending on whether we're the i+1
                     // "outward" face, or the i "innward" face
-                    Real new_face = -(-outward_sign) * fpack(F1, 0, k, j, last_rank_f) *
-                                        G.Volume<F1>(k, j, last_rank_f) -
-                                    (fpack(F2, 0, k, j + 1, last_rank_c) *
-                                            G.Volume<F2>(k, j + 1, last_rank_c) -
-                                        fpack(F2, 0, k, j, last_rank_c) *
-                                            G.Volume<F2>(k, j, last_rank_c));
+                    double new_face = -(-outward_sign) * fB(F1, 0, k, j, last_rank_f) *
+                                        a1 -
+                                    (fB(F2, 0, k, j + 1, last_rank_c) *
+                                            a2 -
+                                        fB(F2, 0, k, j, last_rank_c) *
+                                            a2);
                     if (ndim > 2)
-                        new_face -= fpack(F3, 0, k + 1, j, last_rank_c) *
-                                        G.Volume<F3>(k + 1, j, last_rank_c) -
-                                    fpack(F3, 0, k, j, last_rank_c) *
-                                        G.Volume<F3>(k, j, last_rank_c);
+                        new_face -= fB(F3, 0, k + 1, j, last_rank_c) *
+                                        a3 -
+                                    fB(F3, 0, k, j, last_rank_c) *
+                                        a3;
 
-                    fpack(F1, 0, k, j, i) =
-                        outward_sign * new_face / G.Volume<F1>(k, j, i);
+                    fB.Set(outward_sign * new_face / a1, F1, 0, k, j, i);
                 });
         }
     } else if (bdir == X2DIR) {
@@ -258,20 +263,19 @@ void B_CT::DestructiveBoundaryClean(MeshBlockData<Real>* rc, IndexDomain domain,
             pmb->par_for("correct_face_vector_" + bname, b.ks, b.ke, j, j, b.is, b.ie,
                 KOKKOS_LAMBDA (const int &k, const int &j, const int &i)
                 {
-                    Real new_face = -(-outward_sign) * fpack(F2, 0, k, last_rank_f, i) *
-                                        G.Volume<F2>(k, last_rank_f, i) -
-                                    (fpack(F1, 0, k, last_rank_c, i + 1) *
-                                            G.Volume<F1>(k, last_rank_c, i + 1) -
-                                        fpack(F1, 0, k, last_rank_c, i) *
-                                            G.Volume<F1>(k, last_rank_c, i));
+                    double new_face = -(-outward_sign) * fB(F2, 0, k, last_rank_f, i) *
+                                        a2 -
+                                    (fB(F1, 0, k, last_rank_c, i + 1) *
+                                            a1 -
+                                        fB(F1, 0, k, last_rank_c, i) *
+                                            a1);
                     if (ndim > 2)
-                        new_face -= fpack(F3, 0, k + 1, last_rank_c, i) *
-                                        G.Volume<F3>(k + 1, last_rank_c, i) -
-                                    fpack(F3, 0, k, last_rank_c, i) *
-                                        G.Volume<F3>(k, last_rank_c, i);
+                        new_face -= fB(F3, 0, k + 1, last_rank_c, i) *
+                                        a3 -
+                                    fB(F3, 0, k, last_rank_c, i) *
+                                        a3;
 
-                    fpack(F2, 0, k, j, i) =
-                        outward_sign * new_face / G.Volume<F2>(k, j, i);
+                    fB.Set(outward_sign * new_face / a2, F2, 0, k, j, i);
                 });
         }
     } else {
@@ -284,19 +288,18 @@ void B_CT::DestructiveBoundaryClean(MeshBlockData<Real>* rc, IndexDomain domain,
             pmb->par_for("correct_face_vector_" + bname, k, k, b.js, b.je, b.is, b.ie,
                 KOKKOS_LAMBDA (const int &k, const int &j, const int &i)
                 {
-                    Real new_face = -(-outward_sign) * fpack(F3, 0, last_rank_f, j, i) *
-                                        G.Volume<F3>(last_rank_f, j, i) -
-                                    (fpack(F1, 0, last_rank_c, j, i + 1) *
-                                            G.Volume<F1>(last_rank_c, j, i + 1) -
-                                        fpack(F1, 0, last_rank_c, j, i) *
-                                            G.Volume<F1>(last_rank_c, j, i)) -
-                                    (fpack(F2, 0, last_rank_c, j + 1, i) *
-                                            G.Volume<F2>(last_rank_c, j + 1, i) -
-                                        fpack(F2, 0, last_rank_c, j, i) *
-                                            G.Volume<F2>(last_rank_c, j, i));
+                    double new_face = -(-outward_sign) * fB(F3, 0, last_rank_f, j, i) *
+                                        a3 -
+                                    (fB(F1, 0, last_rank_c, j, i + 1) *
+                                            a1 -
+                                        fB(F1, 0, last_rank_c, j, i) *
+                                            a1) -
+                                    (fB(F2, 0, last_rank_c, j + 1, i) *
+                                            a2 -
+                                        fB(F2, 0, last_rank_c, j, i) *
+                                            a2);
 
-                    fpack(F3, 0, k, j, i) =
-                        outward_sign * new_face / G.Volume<F3>(k, j, i);
+                    fB.Set(outward_sign * new_face / a3, F3, 0, k, j, i);
                 });
         }
     }

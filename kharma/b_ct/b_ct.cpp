@@ -755,16 +755,16 @@ TaskStatus B_CT::AddSource(MeshData<Real>* md, MeshData<Real>* mdudt, IndexDomai
         {
             const auto& G = dB_Uf_dt.hi.GetCoords(bl);
             double dB =
-                (-static_cast<double>(G.Volume<E3>(k, j + 1, i)) *
+                (-static_cast<double>(G.Dxc<3>(k)) *
                         emf_pack(bl, E3, 0, k, j + 1, i) +
-                    static_cast<double>(G.Volume<E3>(k, j, i)) *
+                    static_cast<double>(G.Dxc<3>(k)) *
                         emf_pack(bl, E3, 0, k, j, i));
             if (ndim > 2)
-                dB += (static_cast<double>(G.Volume<E2>(k + 1, j, i)) *
+                dB += (static_cast<double>(G.Dxc<2>(j)) *
                            emf_pack(bl, E2, 0, k + 1, j, i) -
-                       static_cast<double>(G.Volume<E2>(k, j, i)) *
+                       static_cast<double>(G.Dxc<2>(j)) *
                            emf_pack(bl, E2, 0, k, j, i));
-            dB_Uf_dt.Set(dB / G.Volume<F1>(k, j, i), bl, F1, 0, k, j, i);
+            dB_Uf_dt.Set(dB / (static_cast<double>(G.Dxc<2>(j)) * G.Dxc<3>(k)), bl, F1, 0, k, j, i);
         });
     const IndexRange3 bf2 = KDomain::GetRange(md, domain, F2);
     pmb0->par_for("B_CT_Circ_2", block.s, block.e, bf2.ks, bf2.ke, bf2.js, bf2.je, bf2.is,
@@ -772,16 +772,16 @@ TaskStatus B_CT::AddSource(MeshData<Real>* md, MeshData<Real>* mdudt, IndexDomai
         KOKKOS_LAMBDA(const int& bl, const int& k, const int& j, const int& i)
         {
             const auto& G = dB_Uf_dt.hi.GetCoords(bl);
-            double dB = (static_cast<double>(G.Volume<E3>(k, j, i + 1)) *
+            double dB = (static_cast<double>(G.Dxc<3>(k)) *
                              emf_pack(bl, E3, 0, k, j, i + 1) -
-                         static_cast<double>(G.Volume<E3>(k, j, i)) *
+                         static_cast<double>(G.Dxc<3>(k)) *
                              emf_pack(bl, E3, 0, k, j, i));
             if (ndim > 2)
-                dB += (-static_cast<double>(G.Volume<E1>(k + 1, j, i)) *
+                dB += (-static_cast<double>(G.Dxc<1>(i)) *
                            emf_pack(bl, E1, 0, k + 1, j, i) +
-                       static_cast<double>(G.Volume<E1>(k, j, i)) *
+                       static_cast<double>(G.Dxc<1>(i)) *
                            emf_pack(bl, E1, 0, k, j, i));
-            dB_Uf_dt.Set(dB / G.Volume<F2>(k, j, i), bl, F2, 0, k, j, i);
+            dB_Uf_dt.Set(dB / (static_cast<double>(G.Dxc<1>(i)) * G.Dxc<3>(k)), bl, F2, 0, k, j, i);
         });
     const IndexRange3 bf3 = KDomain::GetRange(md, domain, F3);
     pmb0->par_for("B_CT_Circ_3", block.s, block.e, bf3.ks, bf3.ke, bf3.js, bf3.je, bf3.is,
@@ -789,15 +789,15 @@ TaskStatus B_CT::AddSource(MeshData<Real>* md, MeshData<Real>* mdudt, IndexDomai
                   KOKKOS_LAMBDA(const int& bl, const int& k, const int& j, const int& i)
         {
             const auto& G = dB_Uf_dt.hi.GetCoords(bl);
-            const double dB = (-static_cast<double>(G.Volume<E2>(k, j, i + 1)) *
+            const double dB = (-static_cast<double>(G.Dxc<2>(j)) *
                                       emf_pack(bl, E2, 0, k, j, i + 1) +
-                                  static_cast<double>(G.Volume<E2>(k, j, i)) *
+                                  static_cast<double>(G.Dxc<2>(j)) *
                                       emf_pack(bl, E2, 0, k, j, i) +
-                                  static_cast<double>(G.Volume<E1>(k, j + 1, i)) *
+                                  static_cast<double>(G.Dxc<1>(i)) *
                                       emf_pack(bl, E1, 0, k, j + 1, i) -
-                                  static_cast<double>(G.Volume<E1>(k, j, i)) *
+                                  static_cast<double>(G.Dxc<1>(i)) *
                                       emf_pack(bl, E1, 0, k, j, i)) /
-                              G.Volume<F3>(k, j, i);
+                              (static_cast<double>(G.Dxc<1>(i)) * G.Dxc<2>(j));
             dB_Uf_dt.Set(dB, bl, F3, 0, k, j, i);
         });
 

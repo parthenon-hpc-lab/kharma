@@ -369,6 +369,14 @@ if option "clean"; then
   cd external/singularity-opac
   git apply --quiet ../patches/singularity-opac-single-precision.patch 2>/dev/null || true
   cd -
+  if option "sycl"; then
+    cd external/singularity-eos
+    git apply --quiet ../patches/singularity-eos-sycl.patch 2>/dev/null || true
+    cd -
+    cd external/singularity-eos/utils/ports-of-call
+    git apply --quiet ../../../patches/ports-of-call-sycl.patch 2>/dev/null || true
+    cd -
+  fi
 
   # Patches for ports-of-call
   #cd external/singularity-eos/utils/ports-of-call

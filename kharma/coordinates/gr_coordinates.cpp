@@ -48,6 +48,37 @@ using Kokkos::Rank;
 // Stepsize for numerical derivatives of the metric
 #define DELTA 1.e-8
 
+void init_double_coords(GRCoordinates& G, const RegionSize& rs, ParameterInput* pin)
+{
+    for (int idir = 1; idir <= 3; idir++) {
+        const auto dir = static_cast<CoordinateDirection>(idir);
+        const std::string d = std::to_string(idir);
+        const GReal xmin_mesh = pin->GetReal("parthenon/mesh", "x" + d + "min");
+        const GReal xmax_mesh = pin->GetReal("parthenon/mesh", "x" + d + "max");
+        const int nx_mesh = pin->GetInteger("parthenon/mesh", "nx" + d);
+        const GReal dx_mesh = (xmax_mesh - xmin_mesh) / nx_mesh;
+        const GReal dx_block =
+            (static_cast<GReal>(rs.xmax(dir)) - rs.xmin(dir)) / rs.nx(dir);
+        const GReal ratio = std::exp2(std::round(std::log2(dx_mesh / dx_block)));
+        const GReal dx = dx_mesh / ratio;
+        const long long offset = std::llround((rs.xmin(dir) - xmin_mesh) / dx);
+        const int istart = (!rs.symmetry(dir) ? Globals::nghost : 0);
+        G.dx_d[idir - 1] = dx;
+        G.xmin_d[idir - 1] = xmin_mesh + (offset - istart) * dx;
+    }
+}
+void coarsen_double_coords(GRCoordinates& G, const GRCoordinates& src, int coarsen)
+{
+    const auto& istart = src.GetStartIndex();
+    for (int d = 0; d < 3; d++) {
+        G.dx_d[d] = src.dx_d[d];
+        G.xmin_d[d] = src.xmin_d[d] + istart[d] * src.dx_d[d] * (1 - coarsen);
+    }
+    G.dx_d[0] *= coarsen;
+    G.dx_d[1] *= (istart[1] > 0 ? coarsen : 1);
+    G.dx_d[2] *= (istart[2] > 0 ? coarsen : 1);
+}
+
 #if FAST_CARTESIAN
 /**
  * Fast Cartesian GRCoordinates objects just use the underlying UniformCartesian object
@@ -55,10 +86,14 @@ using Kokkos::Rank;
  */
 GRCoordinates::GRCoordinates(const RegionSize& rs, ParameterInput* pin)
     : UniformCartesian(rs, pin)
-{}
+{
+    init_double_coords(*this, rs, pin);
+}
 GRCoordinates::GRCoordinates(const GRCoordinates& src, int coarsen)
     : UniformCartesian(src, coarsen)
-{}
+{
+    coarsen_double_coords(*this, src, coarsen);
+}
 #else
 // Internal function for initializing cache
 void init_GRCoordinates(GRCoordinates& G);
@@ -85,6 +120,7 @@ GRCoordinates::GRCoordinates(const RegionSize& rs, ParameterInput* pin)
     correct_connections =
         pin->GetOrAddBoolean("coordinates", "correct_connections", false);
 
+    init_double_coords(*this, rs, pin);
     init_GRCoordinates(*this);
 }
 
@@ -98,6 +134,7 @@ GRCoordinates::GRCoordinates(const GRCoordinates& src, int coarsen)
     , correct_connections(src.correct_connections)
 {
     // std::cerr << "Calling coarsen constructor" << std::endl;
+    coarsen_double_coords(*this, src, coarsen);
     init_GRCoordinates(*this);
 }
 
