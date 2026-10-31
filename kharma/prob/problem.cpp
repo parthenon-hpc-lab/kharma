@@ -47,6 +47,7 @@
 
 // Problem initialization headers
 #include "bondi.hpp"
+#include "chakrabarti_torus.hpp"
 #include "entropy_wave.hpp"
 #include "explosion.hpp"
 #include "fm_torus.hpp"
@@ -83,11 +84,20 @@ void KHARMA::ProblemGenerator(MeshBlock* pmb, ParameterInput* pin)
     auto rc = pmb->meshblock_data.Get("base");
     auto prob = pin->GetString("parthenon/job", "problem_id"); // Required parameter
     Flag("ProblemGenerator_" + prob);
+
+    // auto torus_type = pin->GetOrAddString("parthenon/job", "torus_type",
+    // "fishbone_moncrief");
+
     // Also just print this, it's important
     if (MPIRank0()) {
         // We have no way of tracking whether this is the first block we're initializing
         static bool printed_msg = false;
-        if (!printed_msg) std::cout << "Initializing problem: " << prob << std::endl;
+        if (!printed_msg) {
+            std::cout << "Initializing problem: " << prob << std::endl;
+            // if (prob == "torus") {
+            //     std::cout << "Torus type: " << torus_type << std::endl;
+            // }
+        }
         printed_msg = true;
     }
 
@@ -139,7 +149,12 @@ void KHARMA::ProblemGenerator(MeshBlock* pmb, ParameterInput* pin)
         status = InitializeRadMHDModes(rc, pin);
         // Everything
     } else if (prob == "torus") {
-        status = InitializeFMTorus(rc, pin);
+        auto torus_type = pin->GetOrAddString("torus", "type", "fishbone_moncrief");
+        if (torus_type == "fishbone_moncrief") {
+            status = InitializeFMTorus(rc, pin);
+        } else if (torus_type == "chakrabarti") {
+            status = InitializeChakrabartiTorus(rc, pin);
+        }
     } else if (prob == "resize_restart") {
         status = ReadIharmRestart(rc, pin);
     } else if (prob == "resize_restart_kharma") {

@@ -13,6 +13,9 @@
 TaskStatus InitializeFMTorus(
     std::shared_ptr<MeshBlockData<Real>>& rc, ParameterInput* pin);
 
+namespace FMTorus
+{
+
 /**
  * Torus solution for ln h, See Fishbone and Moncrief eqn. 3.6.
  */
@@ -96,3 +99,20 @@ KOKKOS_INLINE_FUNCTION Real fm_torus_rho(const GReal a, const GReal rin, const G
         return 0;
     }
 }
+
+KOKKOS_INLINE_FUNCTION Real fm_torus_u(const GReal a, const GReal rin, const GReal rmax,
+    const Real gam, const Real kappa, const GReal r, const GReal th)
+{
+    Real l = lfish_calc(a, rmax);
+    Real lnh = lnh_calc(a, l, rin, r, th);
+    if (lnh >= 0. && r >= rin) {
+        // Calculate rho
+        Real hm1 = m::exp(lnh) - 1.;
+        Real rho_l = m::pow(hm1 * (gam - 1.) / (kappa * gam), 1. / (gam - 1.));
+        return kappa * m::pow(rho_l, gam) / (gam - 1.);
+    } else {
+        return 0;
+    }
+}
+
+} // FMTorus

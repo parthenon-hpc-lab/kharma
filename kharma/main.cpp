@@ -226,7 +226,7 @@ int main(int argc, char* argv[])
     }
 
     Flag("PostInitialize");
-    KHARMA::PostInitialize(pin, pmesh, is_restart);
+    KHARMA::PostInitialize(pin, papp, pmesh, is_restart);
     EndFlag();
 
     // TODO output parsed parameters *here*, now we have everything including any problem

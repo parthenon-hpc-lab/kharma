@@ -40,6 +40,8 @@
 
 #include "radM1.hpp"
 
+using namespace FMTorus;
+
 TaskStatus InitializeFMTorus(
     std::shared_ptr<MeshBlockData<Real>>& rc, ParameterInput* pin)
 {
