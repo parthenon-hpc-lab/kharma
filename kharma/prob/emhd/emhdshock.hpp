@@ -131,11 +131,17 @@ TaskStatus InitializeEMHDShock(
                     G.coord_embed(k, j, i, Loci::center, X);
 
                     // First initialize primitives that are read from .txt files
-                    fscanf(fp_rho, "%lf", &(rho_host(k, j, i)));
-                    fscanf(fp_u, "%lf", &(u_host(k, j, i)));
-                    fscanf(fp_u1, "%lf", &(uvec_host(0, k, j, i)));
-                    fscanf(fp_q, "%lf", &(q_host(k, j, i)));
-                    fscanf(fp_dP, "%lf", &(dP_host(k, j, i)));
+                    double rho_temp, u_temp, u1_temp, q_temp, dP_temp;
+                    fscanf(fp_rho, "%lf", &rho_temp);
+                    fscanf(fp_u, "%lf", &u_temp);
+                    fscanf(fp_u1, "%lf", &u1_temp);
+                    fscanf(fp_q, "%lf", &q_temp);
+                    fscanf(fp_dP, "%lf", &dP_temp);
+                    rho_host(k, j, i) = rho_temp;
+                    u_host(k, j, i) = u_temp;
+                    uvec_host(0, k, j, i) = u1_temp;
+                    q_host(k, j, i) = q_temp;
+                    dP_host(k, j, i) = dP_temp;
 
                     // Now the remaining primitives
                     uvec_host(1, k, j, i) = 0.;

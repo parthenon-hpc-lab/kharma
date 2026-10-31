@@ -75,7 +75,7 @@ class KHARMADriver : public MultiStageDriver
             const Real d = 1.0 - 1.0 / (2.0 * g);
             integrator->gam0 = {0.0, 0.0};
             integrator->gam1 = {1.0, 1.0};
-            integrator->beta = {g, 1.0 - d};
+            integrator->beta = {g, static_cast<Real>(1.0 - d)};
             integrator->c = {0.0, g};
         }
     }
