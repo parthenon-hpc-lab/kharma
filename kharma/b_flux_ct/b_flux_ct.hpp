@@ -87,6 +87,8 @@ void FixFlux(MeshData<Real>* md);
  */
 void FluxCT(MeshData<Real>* md);
 
+void FluxDivergenceB(MeshData<Real>* md, MeshData<Real>* dudt);
+
 /**
  * Modify the B field fluxes just beyond the polar (or radial) boundary so as to
  * ensure no flux through the boundary after applying FluxCT

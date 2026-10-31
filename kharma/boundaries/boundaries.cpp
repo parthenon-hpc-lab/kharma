@@ -524,6 +524,20 @@ void KBoundaries::ApplyBoundary(
         EndFlag();
     }
 
+#if SPLIT_B
+    auto lo_c = rc->PackVariables(
+        std::vector<MetadataFlag>{Metadata::GetOrAddFlag("BLo"), Metadata::Cell});
+    if (lo_c.GetDim(4) > 0) {
+        const IndexRange3 bc = KDomain::GetRange(rc.get(), domain, coarse);
+        pmb->par_for("zero_B_lo_ghosts", 0, lo_c.GetDim(4) - 1, bc.ks, bc.ke, bc.js, bc.je,
+            bc.is, bc.ie,
+            KOKKOS_LAMBDA(const int& v, const int& k, const int& j, const int& i)
+            {
+                lo_c(v, k, j, i) = 0.;
+            });
+    }
+#endif
+
     // Then a bunch of common boundary "touchups"
     // Nothing below is designed, nor necessary, for coarse buffers
     if (coarse) {

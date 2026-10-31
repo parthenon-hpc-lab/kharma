@@ -137,7 +137,7 @@ TaskStatus SetHubbleImpl(
         pmb->par_for("hubble_init", kb.s, kb.e, jb.s, jb.e, ib.s, ib.e,
                      KOKKOS_LAMBDA(const int& k, const int& j, const int& i)
             {
-                Real X[GR_DIM];
+                GReal X[GR_DIM];
                 G.coord_embed(k, j, i, Loci::center, X);
                 rho(k, j, i) = toberho;
                 u(k, j, i) = tobeu;
@@ -186,7 +186,7 @@ TaskStatus SetHubbleImpl(
         else
             context_index = ib.s - 1;
 
-        Real context_X[GR_DIM];
+        GReal context_X[GR_DIM];
         G.coord_embed(0, 0, context_index, Loci::center, context_X);
         Real context_t = (v0 * context_X[1] - uvec(0, 0, 0, context_index)) /
                          (uvec(0, 0, 0, context_index) * v0);
@@ -194,7 +194,7 @@ TaskStatus SetHubbleImpl(
         pmb->par_for("hubble_init", kb.s, kb.e, jb.s, jb.e, ib.s, ib.e,
                      KOKKOS_LAMBDA(const int& k, const int& j, const int& i)
             {
-                Real X[GR_DIM];
+                GReal X[GR_DIM];
                 G.coord_embed(k, j, i, Loci::center, X);
                 rho(k, j, i) = rho(k, j, context_index);
                 u(k, j, i) = u(k, j, context_index);

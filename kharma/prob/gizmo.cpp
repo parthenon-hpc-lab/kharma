@@ -108,11 +108,11 @@ TaskStatus SetGIZMO(
     // Read the gizmo data file
     FILE* fptr = fopen(datfn.c_str(), "r");
     const int datlen = 100000;
-    Real* rarr = new double[datlen];
-    Real* rhoarr = new double[datlen];
-    Real* Tarr = new double[datlen];
-    Real* vrarr = new double[datlen];
-    Real* Mencarr = new double[datlen];
+    double* rarr = new double[datlen];
+    double* rhoarr = new double[datlen];
+    double* Tarr = new double[datlen];
+    double* vrarr = new double[datlen];
+    double* Mencarr = new double[datlen];
     int length = 0, itemp = 0;
     while (fscanf(fptr, "%lf %lf %lf %lf %lf\n", &(rarr[itemp]), &(rhoarr[itemp]),
                &(Tarr[itemp]), &(vrarr[itemp]),

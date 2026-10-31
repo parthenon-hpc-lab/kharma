@@ -85,7 +85,7 @@ TaskStatus InitializeNoh(std::shared_ptr<MeshBlockData<Real>>& rc, ParameterInpu
         pmb->par_for("noh_cent", kb.s, kb.e, jb.s, jb.e, ib.s, ib.e,
                      KOKKOS_LAMBDA(const int& k, const int& j, const int& i)
             {
-                Real X[GR_DIM];
+                GReal X[GR_DIM];
                 G.coord_embed(k, j, i, Loci::center, X);
                 const bool lhs = X[1] < center;
                 uvec(0, k, j, i) = ((lhs) ? v0 : -v0) * gamma;

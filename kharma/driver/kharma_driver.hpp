@@ -33,6 +33,7 @@
  */
 #pragma once
 
+#include "b_double.hpp"
 #include "decs.hpp"
 #include "domain.hpp"
 #include "types.hpp"
@@ -40,6 +41,11 @@
 #include "flux/reconstruction.hpp"
 
 using namespace parthenon;
+
+namespace B_FluxCT
+{
+void FluxDivergenceB(MeshData<Real>* md, MeshData<Real>* dudt);
+}
 
 // See Initialize()
 enum class DriverType { kharma, imex, simple };
@@ -192,24 +198,101 @@ class KHARMADriver : public MultiStageDriver
      */
     static TaskStatus SyncAllBounds(std::shared_ptr<MeshData<Real>>& md);
 
+    template<typename T>
+    static void WeightedSumB(const std::string& name, T* in1, T* in2, const Real w1,
+        const Real w2, MeshData<Real>* out)
+    {
+        const auto x = BDouble::Pack(in1, name);
+        const auto y = BDouble::Pack(in2, name);
+        const auto z = BDouble::Pack(out, name);
+        parthenon::par_for(DEFAULT_LOOP_PATTERN, "WeightedSumB", DevExecSpace(), 0,
+            x.GetDim(5) - 1, 0, x.GetDim(4) - 1, 0, x.GetDim(3) - 1, 0, x.GetDim(2) - 1,
+            0, x.GetDim(1) - 1,
+            KOKKOS_LAMBDA(const int b, const int l, const int k, const int j, const int i)
+            {
+                z.Set(static_cast<BReal>(w1) * x(b, l, k, j, i) +
+                          static_cast<BReal>(w2) * y(b, l, k, j, i),
+                    b, l, k, j, i);
+            });
+    }
+    template<typename T>
+    static void WeightedSumFaceB(const std::string& name, MeshData<Real>* in1,
+        MeshData<Real>* in2, const Real w1, const Real w2, MeshData<Real>* out)
+    {
+        const auto x = BDouble::Pack(in1, name);
+        const auto y = BDouble::Pack(in2, name);
+        const auto z = BDouble::Pack(out, name);
+        parthenon::par_for(DEFAULT_LOOP_PATTERN, "WeightedSumFaceB", DevExecSpace(), 0,
+            x.GetDim(5) - 1, 0, x.GetDim(4) - 1, 0, x.GetDim(3) - 1, 0, x.GetDim(2) - 1,
+            0, x.GetDim(1) - 1,
+            KOKKOS_LAMBDA(const int b, const int l, const int k, const int j, const int i)
+            {
+                z.Set(static_cast<BReal>(w1) * x(b, F1, l, k, j, i) +
+                          static_cast<BReal>(w2) * y(b, F1, l, k, j, i),
+                    b, F1, l, k, j, i);
+                z.Set(static_cast<BReal>(w1) * x(b, F2, l, k, j, i) +
+                          static_cast<BReal>(w2) * y(b, F2, l, k, j, i),
+                    b, F2, l, k, j, i);
+                z.Set(static_cast<BReal>(w1) * x(b, F3, l, k, j, i) +
+                          static_cast<BReal>(w2) * y(b, F3, l, k, j, i),
+                    b, F3, l, k, j, i);
+            });
+    }
+    static bool HasLo(MeshData<Real>* md, const std::string& name)
+    {
+        return md->NumBlocks() > 0 && md->GetBlockData(0)->HasVariable(BDouble::Lo(name));
+    }
+    static void SkipB(const PackIndexMap& map, const std::vector<std::string>& names,
+        const std::vector<MeshData<Real>*>& mds, std::vector<std::string>& found, int& s0,
+        int& e0, int& s1, int& e1)
+    {
+        s0 = s1 = -1;
+        e0 = e1 = -2;
+#if SPLIT_B
+        for (const auto& name : names) {
+            const auto& idx = map[name];
+            if (idx.first < 0 || idx.second < idx.first) continue;
+            bool all_lo = true;
+            for (auto md : mds)
+                all_lo = all_lo && HasLo(md, name);
+            if (!all_lo) continue;
+            if (found.size() == 0) {
+                s0 = idx.first;
+                e0 = idx.second;
+            } else {
+                s1 = idx.first;
+                e1 = idx.second;
+            }
+            found.push_back(name);
+        }
+#endif
+    }
+
     template<typename TFlags, typename T>
     static TaskStatus WeightedSumData(const TFlags& flags, T* in1, T* in2, const Real w1,
         const Real w2, MeshData<Real>* out)
     {
         Kokkos::Profiling::pushRegion("Task_WeightedSumData");
+        PackIndexMap z_map;
         const auto& x = in1->PackVariables(flags);
         const auto& y = in2->PackVariables(flags);
-        const auto& z = out->PackVariables(flags);
+        const auto& z = out->PackVariables(flags, z_map);
         for (int i = 1; i < 6; i++) {
             if (x.GetDim(i) < 1) return TaskStatus::complete;
             if (y.GetDim(i) < 1) return TaskStatus::complete;
             if (z.GetDim(i) < 1) return TaskStatus::complete;
         }
+        std::vector<std::string> b_found;
+        int s0, e0, s1, e1;
+        SkipB(z_map, BDouble::CellNames(), {in1, in2, out}, b_found, s0, e0, s1, e1);
+        for (const auto& name : b_found)
+            WeightedSumB(name, in1, in2, w1, w2, out);
         parthenon::par_for(DEFAULT_LOOP_PATTERN, "WeightedSumData", DevExecSpace(), 0,
             x.GetDim(5) - 1, 0, x.GetDim(4) - 1, 0, x.GetDim(3) - 1, 0, x.GetDim(2) - 1,
             0, x.GetDim(1) - 1,
             KOKKOS_LAMBDA(const int b, const int l, const int k, const int j, const int i)
             {
+                if ((l >= s0 && l <= e0) || (l >= s1 && l <= e1)) return;
                 // TODO(someone) This is potentially dangerous and/or not intended
                 // behavior as we still may want to update (or populate) z if any of those
                 // vars are not allocated yet.
@@ -240,19 +323,26 @@ class KHARMADriver : public MultiStageDriver
         MeshData<Real>* out)
     {
         Kokkos::Profiling::pushRegion("Task_WeightedSumDataFace");
+        PackIndexMap z_map;
         const auto& x = in1->PackVariables(flags);
         const auto& y = in2->PackVariables(flags);
-        const auto& z = out->PackVariables(flags);
+        const auto& z = out->PackVariables(flags, z_map);
         for (int i = 1; i < 6; i++) {
             if (x.GetDim(i) < 1) return TaskStatus::complete;
             if (y.GetDim(i) < 1) return TaskStatus::complete;
             if (z.GetDim(i) < 1) return TaskStatus::complete;
         }
+        std::vector<std::string> b_found;
+        int s0, e0, s1, e1;
+        SkipB(z_map, BDouble::FaceNames(), {in1, in2, out}, b_found, s0, e0, s1, e1);
+        for (const auto& name : b_found)
+            WeightedSumFaceB<MDType>(name, in1, in2, w1, w2, out);
         parthenon::par_for(DEFAULT_LOOP_PATTERN, "WeightedSumDataFace", DevExecSpace(), 0,
             x.GetDim(5) - 1, 0, x.GetDim(4) - 1, 0, x.GetDim(3) - 1, 0, x.GetDim(2) - 1,
             0, x.GetDim(1) - 1,
             KOKKOS_LAMBDA(const int b, const int l, const int k, const int j, const int i)
             {
+                if ((l >= s0 && l <= e0) || (l >= s1 && l <= e1)) return;
                 // TOOD(someone) This is potentially dangerous and/or not intended
                 // behavior as we still may want to update (or populate) z if any of those
                 // vars are not allocated yet.
@@ -313,17 +403,27 @@ class KHARMADriver : public MultiStageDriver
         std::vector<MetadataFlag> flags = {Metadata::WithFluxes, Metadata::Cell},
         int halo = 0)
     {
-        const auto& vin = in_obj->PackVariablesAndFluxes(flags);
+        PackIndexMap vin_map;
+        const auto& vin = in_obj->PackVariablesAndFluxes(flags, vin_map);
         auto dudt = dudt_obj->PackVariables(flags);
 
         const IndexRange3 b =
             KDomain::GetRange(in_obj, IndexDomain::interior, -halo, halo);
+
+        std::vector<std::string> b_found;
+        int s0, e0, s1, e1;
+        if (halo == 0 && in_obj->GetMeshPointer()->packages.AllPackages().count("B_FluxCT"))
+            SkipB(vin_map, {"cons.B"}, {in_obj, dudt_obj}, b_found, s0, e0, s1, e1);
+        else
+            SkipB(vin_map, {}, {}, b_found, s0, e0, s1, e1);
+        if (b_found.size() > 0) B_FluxCT::FluxDivergenceB(in_obj, dudt_obj);
 
         const int ndim = vin.GetNdim();
         parthenon::par_for(DEFAULT_LOOP_PATTERN, "FluxDivergenceMesh", DevExecSpace(), 0,
             vin.GetDim(5) - 1, 0, vin.GetDim(4) - 1, b.ks, b.ke, b.js, b.je, b.is, b.ie,
             KOKKOS_LAMBDA(const int m, const int l, const int k, const int j, const int i)
             {
+                if ((l >= s0 && l <= e0) || (l >= s1 && l <= e1)) return;
                 if (dudt.IsAllocated(m, l) && vin.IsAllocated(m, l)) {
                     const auto& coords = vin.GetCoords(m);
                     const auto& v = vin(m);

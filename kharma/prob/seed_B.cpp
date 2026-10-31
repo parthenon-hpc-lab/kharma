@@ -33,6 +33,8 @@
  */
 #include "seed_B.hpp"
 
+#include "b_double.hpp"
+
 #include "b_ct.hpp"
 #include "b_flux_ct.hpp"
 
@@ -137,7 +139,7 @@ TaskStatus SeedBFieldType(MeshBlockData<Real>* rc, ParameterInput* pin,
         const Real amp2_B3 = pin->GetOrAddReal("b_field", "amp2_B3", 0.);
 
         if (pkgs.count("B_CT")) {
-            auto B_Uf = rc->PackVariables(std::vector<std::string>{"cons.fB"});
+            auto B_Uf = BDouble::Pack(rc, "cons.fB");
             // Fill at 3 different locations
             // Avoid overstepping even as we fill *every face*
             IndexRange3 b1 = KDomain::GetRange(rc, domain, F1);
@@ -152,7 +154,7 @@ TaskStatus SeedBFieldType(MeshBlockData<Real>* rc, ParameterInput* pin,
                     double B_Pf1 = B10;
                     seed_b<Seed>(Xembed, gdet, k1, k2, k3, phase, amp_B1, amp_B2, amp_B3,
                         amp2_B1, amp2_B2, amp2_B3, B_Pf1, null1, null2);
-                    B_Uf(F1, 0, k, j, i) = B_Pf1 * gdet;
+                    B_Uf.Set(B_Pf1 * gdet, F1, 0, k, j, i);
                 });
             IndexRange3 b2 = KDomain::GetRange(rc, domain, F2);
             pmb->par_for("B_field_B2", b2.ks, b2.ke, b2.js, b2.je, b2.is, b2.ie,
@@ -165,7 +167,7 @@ TaskStatus SeedBFieldType(MeshBlockData<Real>* rc, ParameterInput* pin,
                     double B_Pf2 = B20;
                     seed_b<Seed>(Xembed, gdet, k1, k2, k3, phase, amp_B1, amp_B2, amp_B3,
                         amp2_B1, amp2_B2, amp2_B3, null1, B_Pf2, null2);
-                    B_Uf(F2, 0, k, j, i) = B_Pf2 * gdet;
+                    B_Uf.Set(B_Pf2 * gdet, F2, 0, k, j, i);
                 });
             IndexRange3 b3 = KDomain::GetRange(rc, domain, F3);
             pmb->par_for("B_field_B2", b3.ks, b3.ke, b3.js, b3.je, b3.is, b3.ie,
@@ -178,24 +180,24 @@ TaskStatus SeedBFieldType(MeshBlockData<Real>* rc, ParameterInput* pin,
                     double B_Pf3 = B30;
                     seed_b<Seed>(Xembed, gdet, k1, k2, k3, phase, amp_B1, amp_B2, amp_B3,
                         amp2_B1, amp2_B2, amp2_B3, null1, null2, B_Pf3);
-                    B_Uf(F3, 0, k, j, i) = B_Pf3 * gdet;
+                    B_Uf.Set(B_Pf3 * gdet, F3, 0, k, j, i);
                 });
             // Update primitive variables
             B_CT::BlockUtoP(rc, domain);
         } else if (pkgs.count("B_FluxCT")) {
-            GridVector B_P = rc->Get("prims.B").data;
+            auto B_P = BDouble::Pack(rc, "prims.B");
             pmb->par_for("B_field_B", b.ks, b.ke, b.js, b.je, b.is, b.ie,
                          KOKKOS_LAMBDA(const int& k, const int& j, const int& i)
                 {
                     GReal Xembed[GR_DIM];
                     G.coord_embed(k, j, i, Loci::center, Xembed);
                     const GReal gdet = G.gdet(Loci::center, j, i);
-                    B_P(V1, k, j, i) = B10;
-                    B_P(V2, k, j, i) = B20;
-                    B_P(V3, k, j, i) = B30;
+                    double B_P1 = B10, B_P2 = B20, B_P3 = B30;
                     seed_b<Seed>(Xembed, gdet, k1, k2, k3, phase, amp_B1, amp_B2, amp_B3,
-                        amp2_B1, amp2_B2, amp2_B3, B_P(V1, k, j, i), B_P(V2, k, j, i),
-                        B_P(V3, k, j, i));
+                        amp2_B1, amp2_B2, amp2_B3, B_P1, B_P2, B_P3);
+                    B_P.Set(B_P1, V1, k, j, i);
+                    B_P.Set(B_P2, V2, k, j, i);
+                    B_P.Set(B_P3, V3, k, j, i);
                 });
             // We still need to update conserved flux values, but then we're done
             B_FluxCT::BlockPtoU(rc, domain);
@@ -335,7 +337,7 @@ TaskStatus SeedBFieldType(MeshBlockData<Real>* rc, ParameterInput* pin,
             });
 
         if (pkgs.count("B_CT")) {
-            auto B_Uf = rc->PackVariables(std::vector<std::string>{"cons.fB"});
+            auto B_Uf = BDouble::Pack(rc, "cons.fB");
             // This is why we make A 1 zone larger than "entire":
             // we need this stencil-2 op over the whole domain
             IndexRange3 bB = KDomain::GetRange(rc, domain, 0, 1);
@@ -355,7 +357,7 @@ TaskStatus SeedBFieldType(MeshBlockData<Real>* rc, ParameterInput* pin,
         } else if (pkgs.count("B_FluxCT")) {
             // Calculate B-field.  Curl can be run all together since
             // all directions areover all cells
-            GridVector B_U = rc->Get("cons.B").data;
+            auto B_U = BDouble::Pack(rc, "cons.B");
             IndexRange3 bl = KDomain::GetRange(rc, domain);
             if (ndim > 2) {
                 pmb->par_for("B_field_B_3D", bl.ks, bl.ke, bl.js, bl.je, bl.is, bl.ie,
@@ -388,7 +390,7 @@ TaskStatus SeedBFieldType(MeshBlockData<Real>* rc, ParameterInput* pin,
                             // do nothing. just use the initialization from SeedBField
                         } else {
                             VLOOP
-                                B_U(v, k, j, i) = B_Save(v, k, j, i);
+                                B_U.Set(B_Save(v, k, j, i), v, k, j, i);
                         }
                     });
             }

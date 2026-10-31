@@ -26,13 +26,13 @@ KOKKOS_FORCEINLINE_FUNCTION constexpr auto EPS()
 template<typename T>
 KOKKOS_FORCEINLINE_FUNCTION auto make_positive(const T val)
 {
-    return std::max(val, EPS<T>());
+    return m::max(val, EPS<T>());
 }
 
 KOKKOS_FORCEINLINE_FUNCTION
 Real make_bounded(const Real val, const Real vmin, const Real vmax)
 {
-    return std::min(std::max(val, vmin + EPS()), vmax * (1.0 - EPS()));
+    return m::min(m::max(val, vmin + EPS()), vmax * (1.0 - EPS()));
 }
 
 template<typename T>

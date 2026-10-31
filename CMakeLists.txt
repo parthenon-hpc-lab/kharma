@@ -7,6 +7,7 @@ cmake_minimum_required(VERSION 3.10)
 project(kharma LANGUAGES C CXX)
 
 option(KHARMA_BUILD_TESTS "Build unit tests" OFF)
+option(KHARMA_SINGLE_PRECISION "Evolve everything except magnetic fields in single precision" OFF)
 
 # We follow Parthenon in requiring C++17 going forward
 set(CMAKE_CXX_STANDARD 20)
@@ -29,6 +30,7 @@ set(PARTHENON_DISABLE_SPARSE OFF CACHE BOOL "KHARMA Override")
 # Set to move MPI buffers to host; slower but less crashy
 # Favor setting this per-machine in machines/
 set(PARTHENON_ENABLE_HOST_COMM_BUFFERS OFF CACHE BOOL "KHARMA Override")
+set(PARTHENON_SINGLE_PRECISION ${KHARMA_SINGLE_PRECISION} CACHE BOOL "KHARMA Override" FORCE)
 
 # Parthenon internal build options
 set(BUILD_TESTING OFF CACHE BOOL "KHARMA Override")

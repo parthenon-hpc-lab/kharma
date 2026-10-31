@@ -33,6 +33,8 @@
  */
 #include "b_ct.hpp"
 
+#include "b_double.hpp"
+
 #include "decs.hpp"
 #include "domain.hpp"
 #include "grmhd.hpp"
@@ -92,6 +94,14 @@ std::shared_ptr<KHARMAPackage> B_CT::Initialize(
     }
     params.Add("reconnection_outer_buffer", reconnection_outer_buffer);
 
+#if SPLIT_B
+    if (pin->GetOrAddBoolean("b_field", "implicit", false))
+        throw std::runtime_error(
+            "Implicit magnetic field evolution is not supported in single precision!");
+    if (pin->GetOrAddString("parthenon/mesh", "refinement", "none") != "none")
+        throw std::runtime_error("Mesh refinement is not supported in single precision!");
+#endif
+
     // FIELDS
 
     // Flags for B fields on faces.
@@ -109,6 +119,9 @@ std::shared_ptr<KHARMAPackage> B_CT::Initialize(
         m.RegisterRefinementOps<ProlongateSharedMinMod, RestrictAverage,
             ProlongateInternalAverage>();
     pkg->AddField("cons.fB", m);
+#if SPLIT_B
+    pkg->AddField(BDouble::Lo("cons.fB"), BDouble::LoMetadata(flags_cons_f));
+#endif
 
     // Cell-centered versions.  Needed for BS, not for other schemes.
     // Probably will want to keep primitives for e.g. correct PtoU of MHD vars, but cons
@@ -136,6 +149,10 @@ std::shared_ptr<KHARMAPackage> B_CT::Initialize(
     pkg->AddField("prims.B", m);
     m = Metadata(flags_cons, s_vector);
     pkg->AddField("cons.B", m);
+#if SPLIT_B
+    pkg->AddField(BDouble::Lo("prims.B"), BDouble::LoMetadata(flags_prim, s_vector));
+    pkg->AddField(BDouble::Lo("cons.B"), BDouble::LoMetadata(flags_cons, s_vector));
+#endif
 
     // EMF on edges.
     std::vector<MetadataFlag> flags_emf = {Metadata::Real, Metadata::Edge,
@@ -208,9 +225,9 @@ TaskStatus B_CT::BlockUtoP(MeshBlockData<Real>* rc, IndexDomain domain, bool coa
 {
     auto pmb = rc->GetBlockPointer();
     const int ndim = pmb->pmy_mesh->ndim;
-    auto B_Uf = rc->PackVariables(std::vector<std::string>{"cons.fB"});
-    auto B_U = rc->PackVariables(std::vector<std::string>{"cons.B"});
-    auto B_P = rc->PackVariables(std::vector<std::string>{"prims.B"});
+    auto B_Uf = BDouble::Pack(rc, "cons.fB");
+    auto B_U = BDouble::Pack(rc, "cons.B");
+    auto B_P = BDouble::Pack(rc, "prims.B");
     const auto& G = pmb->coords;
     // Return if we're not syncing U & P at all (e.g. edges)
     if (B_Uf.GetDim(4) == 0 || B_U.GetDim(4) == 0 || B_P.GetDim(4) == 0)
@@ -232,21 +249,23 @@ TaskStatus B_CT::BlockUtoP(MeshBlockData<Real>* rc, IndexDomain domain, bool coa
     pmb->par_for("UtoP_B_center", bc.ks, bc.ke, bc.js, bc.je, bc.is, bc.ie,
         KOKKOS_LAMBDA(const int& k, const int& j, const int& i)
         {
-            B_P(V1, k, j, i) =
-                (B_Uf(F1, 0, k, j, i) / G.gdet(Loci::face1, j, i) +
-                    B_Uf(F1, 0, k, j, i + 1) / G.gdet(Loci::face1, j, i + 1)) /
-                2;
-            B_P(V2, k, j, i) =
+            B_P.Set((B_Uf(F1, 0, k, j, i) / G.gdet(Loci::face1, j, i) +
+                        B_Uf(F1, 0, k, j, i + 1) / G.gdet(Loci::face1, j, i + 1)) /
+                        2,
+                V1, k, j, i);
+            B_P.Set(
                 (ndim > 1)
                     ? (B_Uf(F2, 0, k, j, i) / G.gdet(Loci::face2, j, i) +
                           B_Uf(F2, 0, k, j + 1, i) / G.gdet(Loci::face2, j + 1, i)) /
                           2
-                    : B_Uf(F2, 0, k, j, i) / G.gdet(Loci::face2, j, i);
-            B_P(V3, k, j, i) =
+                    : B_Uf(F2, 0, k, j, i) / G.gdet(Loci::face2, j, i),
+                V2, k, j, i);
+            B_P.Set(
                 (ndim > 2) ? (B_Uf(F3, 0, k, j, i) / G.gdet(Loci::face3, j, i) +
                                  B_Uf(F3, 0, k + 1, j, i) / G.gdet(Loci::face3, j, i)) /
                                  2
-                           : B_Uf(F3, 0, k, j, i) / G.gdet(Loci::face3, j, i);
+                           : B_Uf(F3, 0, k, j, i) / G.gdet(Loci::face3, j, i),
+                V3, k, j, i);
         });
 
     // We want identical U & P across averaged cells, but we fudged B3 on faces.
@@ -304,11 +323,12 @@ TaskStatus B_CT::BlockUtoP(MeshBlockData<Real>* rc, IndexDomain domain, bool coa
                         const int k_end = k_start + coarse_cell_len;
 
                         // ISMR is only used in 3D, so we don't need a gate on ndim
-                        B_P(V3, k, j, i) =
+                        B_P.Set(
                             (B_Uf(F3, 0, k_start, j_c, i) / G.gdet(Loci::face3, j_c, i) +
                                 B_Uf(F3, 0, k_end, j_c, i) /
                                     G.gdet(Loci::face3, j_c, i)) /
-                            2;
+                                2,
+                            V3, k, j, i);
                     });
             }
         }
@@ -319,7 +339,7 @@ TaskStatus B_CT::BlockUtoP(MeshBlockData<Real>* rc, IndexDomain domain, bool coa
         bc.ie,
                  KOKKOS_LAMBDA(const int& v, const int& k, const int& j, const int& i)
         {
-            B_U(v, k, j, i) = B_P(v, k, j, i) * G.gdet(Loci::center, j, i);
+            B_U.Set(B_P(v, k, j, i) * G.gdet(Loci::center, j, i), v, k, j, i);
         });
 
     return TaskStatus::complete;
@@ -327,9 +347,9 @@ TaskStatus B_CT::BlockUtoP(MeshBlockData<Real>* rc, IndexDomain domain, bool coa
 
 TaskStatus B_CT::DangerousPtoU(MeshData<Real>* md, IndexDomain domain, bool coarse)
 {
-    auto B_Uf = md->PackVariables(std::vector<std::string>{"cons.fB"});
-    auto B_U = md->PackVariables(std::vector<std::string>{"cons.B"});
-    auto B_P = md->PackVariables(std::vector<std::string>{"prims.B"});
+    auto B_Uf = BDouble::Pack(md, "cons.fB");
+    auto B_U = BDouble::Pack(md, "cons.B");
+    auto B_P = BDouble::Pack(md, "prims.B");
 
     // Figure out indices
     const auto ndim = md->GetMeshPointer()->ndim;
@@ -344,9 +364,8 @@ TaskStatus B_CT::DangerousPtoU(MeshData<Real>* md, IndexDomain domain, bool coar
         bf1.ie,
         KOKKOS_LAMBDA(const int& b, const int& k, const int& j, const int& i)
         {
-            const auto& G = B_Uf.GetCoords(b);
-            B_Uf(b, F1, 0, k, j, i) = G.gdet(Loci::face1, j, i) *
-                                      (B_P(b, V1, k, j, i - 1) + B_P(b, V1, k, j, i)) / 2;
+            const auto& G = B_Uf.hi.GetCoords(b);
+            B_Uf.Set(G.gdet(Loci::face1, j, i) * (B_P(b, V1, k, j, i - 1) + B_P(b, V1, k, j, i)) / 2, b, F1, 0, k, j, i);
         });
     const IndexRange3 bf2 = (domain == IndexDomain::entire)
                                 ? KDomain::GetRange(md, domain, F2, 1, -1, coarse)
@@ -355,11 +374,11 @@ TaskStatus B_CT::DangerousPtoU(MeshData<Real>* md, IndexDomain domain, bool coar
         bf2.ie,
         KOKKOS_LAMBDA(const int& b, const int& k, const int& j, const int& i)
         {
-            const auto& G = B_Uf.GetCoords(b);
-            const Real avg = (ndim > 1)
+            const auto& G = B_Uf.hi.GetCoords(b);
+            const double avg = (ndim > 1)
                                  ? (B_P(b, V2, k, j - 1, i) + B_P(b, V2, k, j, i)) / 2
                                  : B_P(b, V2, k, j, i);
-            B_Uf(b, F2, 0, k, j, i) = G.gdet(Loci::face2, j, i) * avg;
+            B_Uf.Set(G.gdet(Loci::face2, j, i) * avg, b, F2, 0, k, j, i);
         });
     const IndexRange3 bf3 = (domain == IndexDomain::entire)
                                 ? KDomain::GetRange(md, domain, F3, 1, -1, coarse)
@@ -368,11 +387,11 @@ TaskStatus B_CT::DangerousPtoU(MeshData<Real>* md, IndexDomain domain, bool coar
         bf3.ie,
         KOKKOS_LAMBDA(const int& b, const int& k, const int& j, const int& i)
         {
-            const auto& G = B_Uf.GetCoords(b);
-            const Real avg = (ndim > 2)
+            const auto& G = B_Uf.hi.GetCoords(b);
+            const double avg = (ndim > 2)
                                  ? (B_P(b, V3, k - 1, j, i) + B_P(b, V3, k, j, i)) / 2
                                  : B_P(b, V3, k, j, i);
-            B_Uf(b, F3, 0, k, j, i) = G.gdet(Loci::face3, j, i) * avg;
+            B_Uf.Set(G.gdet(Loci::face3, j, i) * avg, b, F3, 0, k, j, i);
         });
 
     // Make sure B on poles is still zero, even though we've interpolated
@@ -383,19 +402,19 @@ TaskStatus B_CT::DangerousPtoU(MeshData<Real>* md, IndexDomain domain, bool coar
             const IndexRange3 be = KDomain::GetRange(md, IndexDomain::entire, coarse);
             const IndexRange3 bi2 =
                 KDomain::GetRange(md, IndexDomain::interior, F2, coarse);
-            auto B_Uf_block = rc->PackVariables(std::vector<std::string>{"cons.fB"});
+            auto B_Uf_block = BDouble::Pack(&*rc, "cons.fB");
             if (KBoundaries::IsPhysicalBoundary(pmb, BoundaryFace::inner_x2)) {
                 pmb->par_for("B_Uf_boundary", be.ks, be.ke, be.is, be.ie,
                              KOKKOS_LAMBDA(const int& k, const int& i)
                     {
-                        B_Uf_block(F2, 0, k, bi2.js, i) = 0.;
+                        B_Uf_block.Set(0., F2, 0, k, bi2.js, i);
                     });
             }
             if (KBoundaries::IsPhysicalBoundary(pmb, BoundaryFace::outer_x2)) {
                 pmb->par_for("B_Uf_boundary", be.ks, be.ke, be.is, be.ie,
                              KOKKOS_LAMBDA(const int& k, const int& i)
                     {
-                        B_Uf_block(F2, 0, k, bi2.je, i) = 0.;
+                        B_Uf_block.Set(0., F2, 0, k, bi2.je, i);
                     });
             }
         }
@@ -409,8 +428,8 @@ TaskStatus B_CT::DangerousPtoU(MeshData<Real>* md, IndexDomain domain, bool coar
                   KOKKOS_LAMBDA(const int& b, const int& v, const int& k, const int& j,
                                 const int& i)
         {
-            const auto& G = B_U.GetCoords(b);
-            B_U(b, v, k, j, i) = B_P(b, v, k, j, i) * G.gdet(Loci::center, j, i);
+            const auto& G = B_U.hi.GetCoords(b);
+            B_U.Set(B_P(b, v, k, j, i) * G.gdet(Loci::center, j, i), b, v, k, j, i);
         });
 
     return TaskStatus::complete;
@@ -419,9 +438,9 @@ TaskStatus B_CT::DangerousPtoU(MeshData<Real>* md, IndexDomain domain, bool coar
 TaskStatus B_CT::BlockDangerousPtoU(
     MeshBlockData<Real>* rc, IndexDomain domain, bool coarse)
 {
-    auto B_Uf = rc->PackVariables(std::vector<std::string>{"cons.fB"});
-    auto B_U = rc->PackVariables(std::vector<std::string>{"cons.B"});
-    auto B_P = rc->PackVariables(std::vector<std::string>{"prims.B"});
+    auto B_Uf = BDouble::Pack(rc, "cons.fB");
+    auto B_U = BDouble::Pack(rc, "cons.B");
+    auto B_P = BDouble::Pack(rc, "prims.B");
 
     // Figure out indices
     const auto ndim = rc->GetMeshPointer()->ndim;
@@ -436,9 +455,8 @@ TaskStatus B_CT::BlockDangerousPtoU(
         bf1.ie,
         KOKKOS_LAMBDA(const int& b, const int& k, const int& j, const int& i)
         {
-            const auto& G = B_Uf.GetCoords(b);
-            B_Uf(b, F1, 0, k, j, i) = G.gdet(Loci::face1, j, i) *
-                                      (B_P(b, V1, k, j, i - 1) + B_P(b, V1, k, j, i)) / 2;
+            const auto& G = B_Uf.hi.GetCoords(b);
+            B_Uf.Set(G.gdet(Loci::face1, j, i) * (B_P(b, V1, k, j, i - 1) + B_P(b, V1, k, j, i)) / 2, b, F1, 0, k, j, i);
         });
     const IndexRange3 bf2 = (domain == IndexDomain::entire)
                                 ? KDomain::GetRange(rc, domain, F2, 1, -1, coarse)
@@ -447,11 +465,11 @@ TaskStatus B_CT::BlockDangerousPtoU(
         bf2.ie,
         KOKKOS_LAMBDA(const int& b, const int& k, const int& j, const int& i)
         {
-            const auto& G = B_Uf.GetCoords(b);
-            const Real avg = (ndim > 1)
+            const auto& G = B_Uf.hi.GetCoords(b);
+            const double avg = (ndim > 1)
                                  ? (B_P(b, V2, k, j - 1, i) + B_P(b, V2, k, j, i)) / 2
                                  : B_P(b, V2, k, j, i);
-            B_Uf(b, F2, 0, k, j, i) = G.gdet(Loci::face2, j, i) * avg;
+            B_Uf.Set(G.gdet(Loci::face2, j, i) * avg, b, F2, 0, k, j, i);
         });
     const IndexRange3 bf3 = (domain == IndexDomain::entire)
                                 ? KDomain::GetRange(rc, domain, F3, 1, -1, coarse)
@@ -460,11 +478,11 @@ TaskStatus B_CT::BlockDangerousPtoU(
         bf3.ie,
         KOKKOS_LAMBDA(const int& b, const int& k, const int& j, const int& i)
         {
-            const auto& G = B_Uf.GetCoords(b);
-            const Real avg = (ndim > 2)
+            const auto& G = B_Uf.hi.GetCoords(b);
+            const double avg = (ndim > 2)
                                  ? (B_P(b, V3, k - 1, j, i) + B_P(b, V3, k, j, i)) / 2
                                  : B_P(b, V3, k, j, i);
-            B_Uf(b, F3, 0, k, j, i) = G.gdet(Loci::face3, j, i) * avg;
+            B_Uf.Set(G.gdet(Loci::face3, j, i) * avg, b, F3, 0, k, j, i);
         });
 
     // Make sure B on poles is still zero, even though we've interpolated
@@ -474,19 +492,19 @@ TaskStatus B_CT::BlockDangerousPtoU(
         auto pmb = rc->GetBlockPointer();
         const IndexRange3 be = KDomain::GetRange(rc, IndexDomain::entire, coarse);
         const IndexRange3 bi2 = KDomain::GetRange(rc, IndexDomain::interior, F2, coarse);
-        auto B_Uf_block = rc->PackVariables(std::vector<std::string>{"cons.fB"});
+        auto B_Uf_block = BDouble::Pack(&*rc, "cons.fB");
         if (KBoundaries::IsPhysicalBoundary(pmb, BoundaryFace::inner_x2)) {
             pmb->par_for("B_Uf_boundary", be.ks, be.ke, be.is, be.ie,
                             KOKKOS_LAMBDA(const int& k, const int& i)
                 {
-                    B_Uf_block(F2, 0, k, bi2.js, i) = 0.;
+                    B_Uf_block.Set(0., F2, 0, k, bi2.js, i);
                 });
         }
         if (KBoundaries::IsPhysicalBoundary(pmb, BoundaryFace::outer_x2)) {
             pmb->par_for("B_Uf_boundary", be.ks, be.ke, be.is, be.ie,
                             KOKKOS_LAMBDA(const int& k, const int& i)
                 {
-                    B_Uf_block(F2, 0, k, bi2.je, i) = 0.;
+                    B_Uf_block.Set(0., F2, 0, k, bi2.je, i);
                 });
         }
         //}
@@ -500,8 +518,8 @@ TaskStatus B_CT::BlockDangerousPtoU(
                   KOKKOS_LAMBDA(const int& b, const int& v, const int& k, const int& j,
                                 const int& i)
         {
-            const auto& G = B_U.GetCoords(b);
-            B_U(b, v, k, j, i) = B_P(b, v, k, j, i) * G.gdet(Loci::center, j, i);
+            const auto& G = B_U.hi.GetCoords(b);
+            B_U.Set(B_P(b, v, k, j, i) * G.gdet(Loci::center, j, i), b, v, k, j, i);
         });
 
     return TaskStatus::complete;
@@ -728,50 +746,59 @@ TaskStatus B_CT::AddSource(MeshData<Real>* md, MeshData<Real>* mdudt, IndexDomai
     auto pmb0 = md->GetBlockData(0)->GetBlockPointer();
 
     // This is what we're replacing
-    auto& dB_Uf_dt = mdudt->PackVariables(std::vector<std::string>{"cons.fB"});
+    auto dB_Uf_dt = BDouble::Pack(mdudt, "cons.fB");
     // Circulation -> change in flux at face
     const IndexRange3 bf1 = KDomain::GetRange(md, domain, F1);
     pmb0->par_for("B_CT_Circ_1", block.s, block.e, bf1.ks, bf1.ke, bf1.js, bf1.je, bf1.is,
         bf1.ie,
         KOKKOS_LAMBDA(const int& bl, const int& k, const int& j, const int& i)
         {
-            const auto& G = dB_Uf_dt.GetCoords(bl);
-            dB_Uf_dt(bl, F1, 0, k, j, i) =
-                (-G.Volume<E3>(k, j + 1, i) * emf_pack(bl, E3, 0, k, j + 1, i) +
-                    G.Volume<E3>(k, j, i) * emf_pack(bl, E3, 0, k, j, i));
+            const auto& G = dB_Uf_dt.hi.GetCoords(bl);
+            double dB =
+                (-static_cast<double>(G.Volume<E3>(k, j + 1, i)) *
+                        emf_pack(bl, E3, 0, k, j + 1, i) +
+                    static_cast<double>(G.Volume<E3>(k, j, i)) *
+                        emf_pack(bl, E3, 0, k, j, i));
             if (ndim > 2)
-                dB_Uf_dt(bl, F1, 0, k, j, i) +=
-                    (G.Volume<E2>(k + 1, j, i) * emf_pack(bl, E2, 0, k + 1, j, i) -
-                        G.Volume<E2>(k, j, i) * emf_pack(bl, E2, 0, k, j, i));
-            dB_Uf_dt(bl, F1, 0, k, j, i) /= G.Volume<F1>(k, j, i);
+                dB += (static_cast<double>(G.Volume<E2>(k + 1, j, i)) *
+                           emf_pack(bl, E2, 0, k + 1, j, i) -
+                       static_cast<double>(G.Volume<E2>(k, j, i)) *
+                           emf_pack(bl, E2, 0, k, j, i));
+            dB_Uf_dt.Set(dB / G.Volume<F1>(k, j, i), bl, F1, 0, k, j, i);
         });
     const IndexRange3 bf2 = KDomain::GetRange(md, domain, F2);
     pmb0->par_for("B_CT_Circ_2", block.s, block.e, bf2.ks, bf2.ke, bf2.js, bf2.je, bf2.is,
         bf2.ie,
         KOKKOS_LAMBDA(const int& bl, const int& k, const int& j, const int& i)
         {
-            const auto& G = dB_Uf_dt.GetCoords(bl);
-            dB_Uf_dt(bl, F2, 0, k, j, i) =
-                (G.Volume<E3>(k, j, i + 1) * emf_pack(bl, E3, 0, k, j, i + 1) -
-                    G.Volume<E3>(k, j, i) * emf_pack(bl, E3, 0, k, j, i));
+            const auto& G = dB_Uf_dt.hi.GetCoords(bl);
+            double dB = (static_cast<double>(G.Volume<E3>(k, j, i + 1)) *
+                             emf_pack(bl, E3, 0, k, j, i + 1) -
+                         static_cast<double>(G.Volume<E3>(k, j, i)) *
+                             emf_pack(bl, E3, 0, k, j, i));
             if (ndim > 2)
-                dB_Uf_dt(bl, F2, 0, k, j, i) +=
-                    (-G.Volume<E1>(k + 1, j, i) * emf_pack(bl, E1, 0, k + 1, j, i) +
-                        G.Volume<E1>(k, j, i) * emf_pack(bl, E1, 0, k, j, i));
-            dB_Uf_dt(bl, F2, 0, k, j, i) /= G.Volume<F2>(k, j, i);
+                dB += (-static_cast<double>(G.Volume<E1>(k + 1, j, i)) *
+                           emf_pack(bl, E1, 0, k + 1, j, i) +
+                       static_cast<double>(G.Volume<E1>(k, j, i)) *
+                           emf_pack(bl, E1, 0, k, j, i));
+            dB_Uf_dt.Set(dB / G.Volume<F2>(k, j, i), bl, F2, 0, k, j, i);
         });
     const IndexRange3 bf3 = KDomain::GetRange(md, domain, F3);
     pmb0->par_for("B_CT_Circ_3", block.s, block.e, bf3.ks, bf3.ke, bf3.js, bf3.je, bf3.is,
         bf3.ie,
                   KOKKOS_LAMBDA(const int& bl, const int& k, const int& j, const int& i)
         {
-            const auto& G = dB_Uf_dt.GetCoords(bl);
-            dB_Uf_dt(bl, F3, 0, k, j, i) =
-                (-G.Volume<E2>(k, j, i + 1) * emf_pack(bl, E2, 0, k, j, i + 1) +
-                    G.Volume<E2>(k, j, i) * emf_pack(bl, E2, 0, k, j, i) +
-                    G.Volume<E1>(k, j + 1, i) * emf_pack(bl, E1, 0, k, j + 1, i) -
-                    G.Volume<E1>(k, j, i) * emf_pack(bl, E1, 0, k, j, i)) /
-                G.Volume<F3>(k, j, i);
+            const auto& G = dB_Uf_dt.hi.GetCoords(bl);
+            const double dB = (-static_cast<double>(G.Volume<E2>(k, j, i + 1)) *
+                                      emf_pack(bl, E2, 0, k, j, i + 1) +
+                                  static_cast<double>(G.Volume<E2>(k, j, i)) *
+                                      emf_pack(bl, E2, 0, k, j, i) +
+                                  static_cast<double>(G.Volume<E1>(k, j + 1, i)) *
+                                      emf_pack(bl, E1, 0, k, j + 1, i) -
+                                  static_cast<double>(G.Volume<E1>(k, j, i)) *
+                                      emf_pack(bl, E1, 0, k, j, i)) /
+                              G.Volume<F3>(k, j, i);
+            dB_Uf_dt.Set(dB, bl, F3, 0, k, j, i);
         });
 
     return TaskStatus::complete;
@@ -783,7 +810,7 @@ double B_CT::MaxDivB(MeshData<Real>* md)
     const int ndim = pmesh->ndim;
     if (ndim < 2) return 0.;
 
-    auto B_U = md->PackVariables(std::vector<std::string>{"cons.fB"});
+    auto B_U = BDouble::Pack(md, "cons.fB");
 
     // Figure out indices
     const IndexRange ib = md->GetBoundsI(IndexDomain::interior);
@@ -800,8 +827,8 @@ double B_CT::MaxDivB(MeshData<Real>* md)
         KOKKOS_LAMBDA(
             const int& b, const int& k, const int& j, const int& i, double& local_result)
         {
-            const auto& G = B_U.GetCoords(b);
-            double local_divb = m::abs(face_div(G, B_U(b), ndim, k, j, i));
+            const auto& G = B_U.hi.GetCoords(b);
+            double local_divb = m::abs(face_div(G, B_U.Block(b), ndim, k, j, i));
             if (local_divb > local_result) local_result = local_divb;
         },
         max_reducer);
@@ -812,7 +839,7 @@ double B_CT::BlockMaxDivB(MeshBlockData<Real>* rc)
 {
     const int ndim = KDomain::GetNDim(rc);
 
-    auto B_U = rc->PackVariables(std::vector<std::string>{"cons.fB"});
+    auto B_U = BDouble::Pack(rc, "cons.fB");
 
     // Figure out indices
     const IndexRange3 b = KDomain::GetRange(rc, IndexDomain::interior);
@@ -825,7 +852,7 @@ double B_CT::BlockMaxDivB(MeshBlockData<Real>* rc)
         "divB_max", b.ks, b.ke, b.js, b.je, b.is, b.ie,
         KOKKOS_LAMBDA(const int& k, const int& j, const int& i, double& local_result)
         {
-            const auto& G = B_U.GetCoords();
+            const auto& G = B_U.hi.GetCoords();
             double local_divb = m::abs(face_div(G, B_U, ndim, k, j, i));
             if (local_divb > local_result) local_result = local_divb;
         },
@@ -875,7 +902,7 @@ void B_CT::CalcDivB(MeshData<Real>* md, std::string divb_field_name)
     const int ndim = pmesh->ndim;
 
     // Packing out here avoids frequent per-mesh packs.  Do we need to?
-    auto B_U = md->PackVariables(std::vector<std::string>{"cons.fB"});
+    auto B_U = BDouble::Pack(md, "cons.fB");
     auto divB = md->PackVariables(std::vector<std::string>{divb_field_name});
 
     const IndexRange ib = md->GetBoundsI(IndexDomain::interior);
@@ -889,8 +916,8 @@ void B_CT::CalcDivB(MeshData<Real>* md, std::string divb_field_name)
     pmb0->par_for("calc_divB", block.s, block.e, kb.s, kb.e, jb.s, jb.e, ib.s, ib.e,
                   KOKKOS_LAMBDA(const int& b, const int& k, const int& j, const int& i)
         {
-            const auto& G = B_U.GetCoords(b);
-            divB(b, 0, k, j, i) = face_div(G, B_U(b), ndim, k, j, i);
+            const auto& G = B_U.hi.GetCoords(b);
+            divB(b, 0, k, j, i) = face_div(G, B_U.Block(b), ndim, k, j, i);
         });
 }
 
@@ -901,7 +928,7 @@ void B_CT::FillOutput(MeshBlock* pmb, ParameterInput* pin)
     const int ndim = pmb->pmy_mesh->ndim;
     if (ndim < 2) return;
 
-    auto B_U = rc->PackVariables(std::vector<std::string>{"cons.fB"});
+    auto B_U = BDouble::Pack(rc.get(), "cons.fB");
     auto divB = rc->PackVariables(std::vector<std::string>{"divB"});
 
     const IndexRange ib = rc->GetBoundsI(IndexDomain::interior);
@@ -912,7 +939,7 @@ void B_CT::FillOutput(MeshBlock* pmb, ParameterInput* pin)
     pmb->par_for("divB_output", kb.s, kb.e, jb.s, jb.e, ib.s, ib.e,
                  KOKKOS_LAMBDA(const int& k, const int& j, const int& i)
         {
-            const auto& G = B_U.GetCoords();
+            const auto& G = B_U.hi.GetCoords();
             divB(0, k, j, i) = face_div(G, B_U, ndim, k, j, i);
         });
 }

@@ -77,7 +77,7 @@ void InsertBlob(MeshBlockData<Real>* rc, ParameterInput* pin)
     pmb->par_for("insert_blob", kb.s, kb.e, jb.s, jb.e, ib.s, ib.e,
                  KOKKOS_LAMBDA(const int& k, const int& j, const int& i)
         {
-            Real X[GR_DIM];
+            GReal X[GR_DIM];
             G.coord_embed(k, j, i, Loci::center, X);
             Real d = m::sqrt(blob_r * blob_r + X[1] * X[1] -
                              2 * blob_r * X[1] *

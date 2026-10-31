@@ -169,9 +169,9 @@ void DestructiveBoundaryClean(MeshBlockData<Real>* rc, IndexDomain domain,
  * Take the curl over the whole domain. Defined in-header since it's templated on face and
  * NDIM
  */
-template<TE el, int NDIM>
-inline void EdgeCurl(MeshBlockData<Real>* rc, const GridVector& A,
-    const VariablePack<Real>& B_U, IndexDomain domain)
+template<TE el, int NDIM, typename APack, typename BPack>
+inline void EdgeCurl(
+    MeshBlockData<Real>* rc, const APack& A, const BPack& B_U, IndexDomain domain)
 {
     auto pmb = rc->GetBlockPointer();
     const auto& G = pmb->coords;

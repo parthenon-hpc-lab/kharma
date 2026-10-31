@@ -53,14 +53,37 @@
 // Libraries I need directly
 #include "Kokkos_Core.hpp"
 
-#if 1
+#include <type_traits>
+
 // Resolve math functions to new Kokkos versions. Faster, maybe
-namespace m = Kokkos;
-#else
-// Resolve to standard library
-namespace m = std;
-#endif
-// TODO CUDA library explicitly?
+namespace m
+{
+using namespace Kokkos;
+using Kokkos::max;
+using Kokkos::min;
+
+template<typename A, typename B>
+using narrow_float_t = std::conditional_t<(sizeof(A) < sizeof(B)), A, B>;
+
+template<typename A, typename B,
+    std::enable_if_t<std::is_floating_point_v<A> && std::is_floating_point_v<B> &&
+                         !std::is_same_v<A, B>,
+        int> = 0>
+KOKKOS_FORCEINLINE_FUNCTION narrow_float_t<A, B> max(const A& a, const B& b)
+{
+    using T = narrow_float_t<A, B>;
+    return Kokkos::max(static_cast<T>(a), static_cast<T>(b));
+}
+template<typename A, typename B,
+    std::enable_if_t<std::is_floating_point_v<A> && std::is_floating_point_v<B> &&
+                         !std::is_same_v<A, B>,
+        int> = 0>
+KOKKOS_FORCEINLINE_FUNCTION narrow_float_t<A, B> min(const A& a, const B& b)
+{
+    using T = narrow_float_t<A, B>;
+    return Kokkos::min(static_cast<T>(a), static_cast<T>(b));
+}
+}
 
 // Bare Parthenon defs
 // Anything more leads to circular deps from gr_coordinates.hpp
@@ -74,11 +97,22 @@ namespace m = std;
 // Lots of work will need to be done for Real != double
 using parthenon::Real;
 using GReal = double;
+using BReal = double;
+
+#if SINGLE_PRECISION_ENABLED
+#define SPLIT_B 1
+#else
+#define SPLIT_B 0
+#endif
 
 // A small number, compared to the grid or problem scale
 #define SMALL_NUM 1e-20
 // Even smaller.  Probably need different values for Real==float
+#if SINGLE_PRECISION_ENABLED
+#define VSMALL_NUM 1e-30
+#else
 #define VSMALL_NUM 1e-40
+#endif
 
 // GEOMETRY
 // This stuff needs to be in decs.h as it's used by functions in coordinates/,

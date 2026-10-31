@@ -33,12 +33,12 @@ class Tetrads
     KOKKOS_FUNCTION
     Tetrads(const double Ucon[NDFULL], const double Gcov[NDFULL][NDFULL])
     {
-        Real Trial[NDFULL] = {0, 1, 0, 0};
+        double Trial[NDFULL] = {0, 1, 0, 0};
         ConstructTetrads_(Ucon, Trial, Gcov);
     }
 
     KOKKOS_INLINE_FUNCTION
-    void CoordToTetradCon(const Real VCoord[NDFULL], Real VTetrad[NDFULL])
+    void CoordToTetradCon(const double VCoord[NDFULL], double VTetrad[NDFULL])
     {
         SPACETIMELOOP(mu)
         {
@@ -48,7 +48,7 @@ class Tetrads
     }
 
     KOKKOS_INLINE_FUNCTION
-    void CoordToTetradCov(const Real VCoord[NDFULL], Real VTetrad[NDFULL])
+    void CoordToTetradCov(const double VCoord[NDFULL], double VTetrad[NDFULL])
     {
         SPACETIMELOOP(mu)
         {
@@ -58,7 +58,7 @@ class Tetrads
     }
 
     KOKKOS_INLINE_FUNCTION
-    void TetradToCoordCon(const Real VTetrad[NDFULL], Real VCoord[NDFULL])
+    void TetradToCoordCon(const double VTetrad[NDFULL], double VCoord[NDFULL])
     {
         SPACETIMELOOP(mu)
         {
@@ -68,7 +68,7 @@ class Tetrads
     }
 
     KOKKOS_INLINE_FUNCTION
-    void TetradToCoordCov(const Real VTetrad[NDFULL], Real VCoord[NDFULL])
+    void TetradToCoordCov(const double VTetrad[NDFULL], double VCoord[NDFULL])
     {
         SPACETIMELOOP(mu)
         {
@@ -83,9 +83,9 @@ class Tetrads
         const double Gcov[NDFULL][NDFULL])
     {
 
-        Real X1ness = 0.;
-        Real X2ness = 0.;
-        Real X3ness = 0.;
+        double X1ness = 0.;
+        double X2ness = 0.;
+        double X3ness = 0.;
         SPACETIMELOOP(mu)
         {
             X1ness += Gcov[1][mu] * Trial[mu] / sqrt(fabs(Gcov[1][1]));
@@ -175,8 +175,8 @@ class Tetrads
         SPACETIMELOOP(mu) { Vcona[mu] -= Vconb[mu] * adotb / Vconb_sq; }
     }
 
-    Real Econ_[NDFULL][NDFULL];
-    Real Ecov_[NDFULL][NDFULL];
+    double Econ_[NDFULL][NDFULL];
+    double Ecov_[NDFULL][NDFULL];
 };
 
 } // namespace Geometry

@@ -82,7 +82,7 @@ TaskStatus InitializeExplosion(
     pmb->par_for("explosion_init", kb.s, kb.e, jb.s, jb.e, ib.s, ib.e,
                  KOKKOS_LAMBDA(const int& k, const int& j, const int& i)
         {
-            Real X[GR_DIM];
+            GReal X[GR_DIM];
             G.coord_embed(k, j, i, Loci::center, X);
             const GReal rx = X[1] - xoff;
             const GReal ry = X[2] - yoff;

@@ -36,6 +36,7 @@
 // Most includes are in the header TODO fix?
 
 #include "b_ct.hpp"
+#include "b_flux_ct.hpp"
 #include "grmhd.hpp"
 #include "kharma.hpp"
 #include <stdexcept>
@@ -345,6 +346,9 @@ TaskStatus Flux::BlockPtoUMHD(MeshBlockData<Real>* rc, IndexDomain domain, bool 
         {
             Flux::p_to_u_mhd(G, P, m_p, emhd_params, eos, k, j, i, U, m_u);
         });
+#if SPLIT_B
+    B_FluxCT::BlockPtoU(rc, domain, coarse);
+#endif
 
     return TaskStatus::complete;
 }
@@ -385,6 +389,9 @@ TaskStatus Flux::BlockPtoU(MeshBlockData<Real>* rc, IndexDomain domain, bool coa
         {
             Flux::p_to_u(G, P, m_p, emhd_params, eos, k, j, i, U, m_u);
         });
+#if SPLIT_B
+    B_FluxCT::BlockPtoU(rc, domain, coarse);
+#endif
 
     return TaskStatus::complete;
 }

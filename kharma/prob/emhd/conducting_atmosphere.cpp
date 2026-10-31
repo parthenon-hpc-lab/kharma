@@ -188,8 +188,8 @@ TaskStatus InitializeAtmosphere(
                 // We need to use this info to obtain the correct values for U1, U2 and U3
 
                 Real ucon[GR_DIM] = {0};
-                Real gcov[GR_DIM][GR_DIM] = {0};
-                Real gcon[GR_DIM][GR_DIM] = {0};
+                GReal gcov[GR_DIM][GR_DIM] = {0};
+                GReal gcon[GR_DIM][GR_DIM] = {0};
                 // Use functions because we're host-side
                 G.coords.gcov_native(Xnative, gcov);
                 G.coords.gcon_native(Xnative, gcon);

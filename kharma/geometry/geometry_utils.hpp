@@ -107,15 +107,15 @@ KOKKOS_INLINE_FUNCTION void SetGradLnAlphaByFD(
         Real X3p = X3;
         Real X3m = X3;
         if (d == 1) {
-            dx = std::max(std::abs(X1), 1.0) * EPS;
+            dx = m::max(std::abs(X1), 1.0) * EPS;
             X1p += dx;
             X1m -= dx;
         } else if (d == 2) {
-            dx = std::max(std::abs(X2), 1.0) * EPS;
+            dx = m::max(std::abs(X2), 1.0) * EPS;
             X2p += dx;
             X2m -= dx;
         } else if (d == 3) {
-            dx = std::max(std::abs(X3), 1.0) * EPS;
+            dx = m::max(std::abs(X3), 1.0) * EPS;
             X3p += dx;
             X3m -= dx;
         }
@@ -174,17 +174,17 @@ KOKKOS_INLINE_FUNCTION void SetMetricGradientByFD(const System& s, Real dx, Real
         Real X2R = X2;
         Real X3R = X3;
         if (d == 1) {
-            dx = std::max(std::abs(X1), 1.0) * EPS;
+            dx = m::max(std::abs(X1), 1.0) * EPS;
             X1L -= dx;
             X1R += dx;
         }
         if (d == 2) {
-            dx = std::max(std::abs(X2), 1.0) * EPS;
+            dx = m::max(std::abs(X2), 1.0) * EPS;
             X2L -= dx;
             X2R += dx;
         }
         if (d == 3) {
-            dx = std::max(std::abs(X3), 1.0) * EPS;
+            dx = m::max(std::abs(X3), 1.0) * EPS;
             X3L -= dx;
             X3R += dx;
         }

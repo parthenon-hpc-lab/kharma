@@ -123,8 +123,8 @@ TaskStatus InitializeFMTorus(
                 Real up = 2. * a * r * m::sqrt(1. + up1 * up1) / m::sqrt(AA * SS * DD) +
                           m::sqrt(SS / AA) * up1 / sth;
 
-                const Real ucon_tilt[GR_DIM] = {0., 0., 0., up};
-                Real ucon_bl[GR_DIM];
+                const GReal ucon_tilt[GR_DIM] = {0., 0., 0., up};
+                GReal ucon_bl[GR_DIM];
                 rotate_polar_vec(Xmidplane, ucon_tilt, -tilt, Xembed, ucon_bl);
 
                 // Then set u^t and transform the 4-vector to KS if necessary,

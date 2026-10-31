@@ -124,8 +124,8 @@ void ApplyDrivingTurbulence(MeshBlockData<Real>* rc)
 
         int Nx1 = pmb->cellbounds.ncellsi(IndexDomain::interior);
         int Nx2 = pmb->cellbounds.ncellsj(IndexDomain::interior);
-        Real* dv0 = (Real*)malloc(sizeof(Real) * Nx1 * Nx2);
-        Real* dv1 = (Real*)malloc(sizeof(Real) * Nx1 * Nx2);
+        double* dv0 = (double*)malloc(sizeof(double) * Nx1 * Nx2);
+        double* dv1 = (double*)malloc(sizeof(double) * Nx1 * Nx2);
         create_grf(Nx1, Nx2, lx1, lx2, dv0, dv1);
 
         Real mean_velocity_num0 = 0;
@@ -137,7 +137,7 @@ void ApplyDrivingTurbulence(MeshBlockData<Real>* rc)
         pmb->par_reduce(
             "forced_mhd_normal_kick_centering_mean_vel0", mykb.s, mykb.e, myjb.s, myjb.e,
             myib.s, myib.e,
-            KOKKOS_LAMBDA(const int& k, const int& j, const int& i, double& local_result)
+            KOKKOS_LAMBDA(const int& k, const int& j, const int& i, Real& local_result)
             {
                 Real cell_mass = (rho(k, j, i) * G.Dxc<3>(k) * G.Dxc<2>(j) * G.Dxc<1>(i));
                 local_result += cell_mass * dv0[(i - 4) * Nx1 + (j - 4)];
@@ -146,7 +146,7 @@ void ApplyDrivingTurbulence(MeshBlockData<Real>* rc)
         pmb->par_reduce(
             "forced_mhd_normal_kick_centering_mean_vel1", mykb.s, mykb.e, myjb.s, myjb.e,
             myib.s, myib.e,
-            KOKKOS_LAMBDA(const int& k, const int& j, const int& i, double& local_result)
+            KOKKOS_LAMBDA(const int& k, const int& j, const int& i, Real& local_result)
             {
                 Real cell_mass = (rho(k, j, i) * G.Dxc<3>(k) * G.Dxc<2>(j) * G.Dxc<1>(i));
                 local_result += cell_mass * dv1[(i - 4) * Nx1 + (j - 4)];
@@ -155,7 +155,7 @@ void ApplyDrivingTurbulence(MeshBlockData<Real>* rc)
         pmb->par_reduce(
             "forced_mhd_normal_kick_centering_tot_mass", mykb.s, mykb.e, myjb.s, myjb.e,
             myib.s, myib.e,
-            KOKKOS_LAMBDA(const int& k, const int& j, const int& i, double& local_result)
+            KOKKOS_LAMBDA(const int& k, const int& j, const int& i, Real& local_result)
             {
                 local_result += (rho(k, j, i) * G.Dxc<3>(k) * G.Dxc<2>(j) * G.Dxc<1>(i));
             },
@@ -179,7 +179,7 @@ void ApplyDrivingTurbulence(MeshBlockData<Real>* rc)
         pmb->par_reduce(
             "forced_mhd_normal_kick_normalization_Bhalf", mykb.s, mykb.e, myjb.s, myjb.e,
             myib.s, myib.e,
-            KOKKOS_LAMBDA(const int& k, const int& j, const int& i, double& local_result)
+            KOKKOS_LAMBDA(const int& k, const int& j, const int& i, Real& local_result)
             {
                 Real cell_mass = (rho(k, j, i) * G.Dxc<3>(k) * G.Dxc<2>(j) * G.Dxc<1>(i));
                 local_result +=
@@ -190,7 +190,7 @@ void ApplyDrivingTurbulence(MeshBlockData<Real>* rc)
         pmb->par_reduce(
             "forced_mhd_normal_kick_normalization_A", mykb.s, mykb.e, myjb.s, myjb.e,
             myib.s, myib.e,
-            KOKKOS_LAMBDA(const int& k, const int& j, const int& i, double& local_result)
+            KOKKOS_LAMBDA(const int& k, const int& j, const int& i, Real& local_result)
             {
                 Real cell_mass = (rho(k, j, i) * G.Dxc<3>(k) * G.Dxc<2>(j) * G.Dxc<1>(i));
                 local_result += cell_mass * (pow(dv0[(i - 4) * Nx1 + (j - 4)], 2) +
@@ -200,7 +200,7 @@ void ApplyDrivingTurbulence(MeshBlockData<Real>* rc)
         pmb->par_reduce(
             "forced_mhd_normal_kick_init_e", mykb.s, mykb.e, myjb.s, myjb.e, myib.s,
             myib.e,
-            KOKKOS_LAMBDA(const int& k, const int& j, const int& i, double& local_result)
+            KOKKOS_LAMBDA(const int& k, const int& j, const int& i, Real& local_result)
             {
                 Real cell_mass = (rho(k, j, i) * G.Dxc<3>(k) * G.Dxc<2>(j) * G.Dxc<1>(i));
                 local_result += 0.5 * cell_mass *
@@ -230,7 +230,7 @@ void ApplyDrivingTurbulence(MeshBlockData<Real>* rc)
         pmb->par_reduce(
             "forced_mhd_normal_kick_finl_e", mykb.s, mykb.e, myjb.s, myjb.e, myib.s,
             myib.e,
-            KOKKOS_LAMBDA(const int& k, const int& j, const int& i, double& local_result)
+            KOKKOS_LAMBDA(const int& k, const int& j, const int& i, Real& local_result)
             {
                 Real cell_mass = (rho(k, j, i) * G.Dxc<3>(k) * G.Dxc<2>(j) * G.Dxc<1>(i));
                 local_result += 0.5 * cell_mass *

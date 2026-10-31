@@ -33,6 +33,8 @@
  */
 #pragma once
 
+#include <algorithm>
+
 #include "decs.hpp"
 #include "types.hpp"
 
@@ -128,9 +130,22 @@ inline std::vector<std::string> GetVariableNames(
 {
     // Count dimensions (1 for scalars + vector lengths) of each package's variables
     std::vector<std::string> names;
+    std::vector<std::string> all_names;
     for (auto pkg : packages->AllPackages()) {
         std::vector<std::string> pnames = pkg.second->GetVariableNames(fc);
         names.insert(names.end(), pnames.begin(), pnames.end());
+        if (SPLIT_B) {
+            std::vector<std::string> anames = pkg.second->GetVariableNames(
+                Metadata::FlagCollection({Metadata::GetOrAddFlag("BLo")}));
+            all_names.insert(all_names.end(), anames.begin(), anames.end());
+        }
+    }
+    const int n = names.size();
+    for (int i = 0; i < n; i++) {
+        const std::string lo = "lo." + names[i];
+        if (std::find(all_names.begin(), all_names.end(), lo) != all_names.end() &&
+            std::find(names.begin(), names.end(), lo) == names.end())
+            names.push_back(lo);
     }
     return names;
 }

@@ -36,6 +36,7 @@
 
 #include "b_flux_ct.hpp"
 
+#include "b_double.hpp"
 #include "decs.hpp"
 #include "domain.hpp"
 #include "grmhd.hpp"
@@ -104,6 +105,13 @@ std::shared_ptr<KHARMAPackage> Initialize(
     // By default, solve B explicitly
     bool implicit_b = pin->GetOrAddBoolean("b_field", "implicit", false);
     params.Add("implicit", implicit_b);
+#if SPLIT_B
+    if (pin->GetOrAddBoolean("b_field", "implicit", false))
+        throw std::runtime_error(
+            "Implicit magnetic field evolution is not supported in single precision!");
+    if (pin->GetOrAddString("parthenon/mesh", "refinement", "none") != "none")
+        throw std::runtime_error("Mesh refinement is not supported in single precision!");
+#endif
 
     // FIELDS
     // Vector size: 3x[grid shape]
@@ -135,6 +143,10 @@ std::shared_ptr<KHARMAPackage> Initialize(
     pkg->AddField("prims.B", m);
     m = Metadata(flags_cons, s_vector);
     pkg->AddField("cons.B", m);
+#if SPLIT_B
+    pkg->AddField(BDouble::Lo("prims.B"), BDouble::LoMetadata(flags_prim, s_vector));
+    pkg->AddField(BDouble::Lo("cons.B"), BDouble::LoMetadata(flags_cons, s_vector));
+#endif
 
     // Declare EMF temporary variables, to avoid malloc/free during each step
     // Technically these are edge-centered but we only need the interior + 1-zone halo
@@ -204,8 +216,8 @@ TaskStatus MeshUtoP(MeshData<Real>* md, IndexDomain domain, bool coarse)
 {
     auto pmb0 = md->GetBlockData(0)->GetBlockPointer();
 
-    const auto& B_U = md->PackVariables(std::vector<std::string>{"cons.B"});
-    const auto& B_P = md->PackVariables(std::vector<std::string>{"prims.B"});
+    const auto B_U = BDouble::Pack(md, "cons.B");
+    const auto B_P = BDouble::Pack(md, "prims.B");
 
     auto bounds = coarse ? pmb0->c_cellbounds : pmb0->cellbounds;
     IndexRange ib = bounds.GetBoundsI(domain);
@@ -222,9 +234,9 @@ TaskStatus MeshUtoP(MeshData<Real>* md, IndexDomain domain, bool coarse)
                       const int& j,
                       const int& i)
         {
-            const auto& G = B_U.GetCoords(b);
+            const auto& G = B_U.hi.GetCoords(b);
             // Update the primitive B-fields
-            B_P(b, mu, k, j, i) = B_U(b, mu, k, j, i) / G.gdet(Loci::center, j, i);
+            B_P.Set(B_U(b, mu, k, j, i) / G.gdet(Loci::center, j, i), b, mu, k, j, i);
         });
     return TaskStatus::complete;
 }
@@ -232,8 +244,8 @@ TaskStatus BlockUtoP(MeshBlockData<Real>* rc, IndexDomain domain, bool coarse)
 {
     auto pmb = rc->GetBlockPointer();
 
-    auto B_U = rc->PackVariables(std::vector<std::string>{"cons.B"});
-    auto B_P = rc->PackVariables(std::vector<std::string>{"prims.B"});
+    auto B_U = BDouble::Pack(rc, "cons.B");
+    auto B_P = BDouble::Pack(rc, "prims.B");
 
     if (B_U.GetDim(4) == 0 || B_P.GetDim(4) == 0) return TaskStatus::complete;
 
@@ -249,7 +261,7 @@ TaskStatus BlockUtoP(MeshBlockData<Real>* rc, IndexDomain domain, bool coarse)
                  KOKKOS_LAMBDA(const int& mu, const int& k, const int& j, const int& i)
         {
             // Update the primitive B-fields
-            B_P(mu, k, j, i) = B_U(mu, k, j, i) / G.gdet(Loci::center, j, i);
+            B_P.Set(B_U(mu, k, j, i) / G.gdet(Loci::center, j, i), mu, k, j, i);
         });
     return TaskStatus::complete;
 }
@@ -258,8 +270,8 @@ void MeshPtoU(MeshData<Real>* md, IndexDomain domain, bool coarse)
 {
     auto pmb0 = md->GetBlockData(0)->GetBlockPointer();
 
-    const auto& B_U = md->PackVariables(std::vector<std::string>{"cons.B"});
-    const auto& B_P = md->PackVariables(std::vector<std::string>{"prims.B"});
+    const auto B_U = BDouble::Pack(md, "cons.B");
+    const auto B_P = BDouble::Pack(md, "prims.B");
 
     auto bounds = coarse ? pmb0->c_cellbounds : pmb0->cellbounds;
     IndexRange ib = bounds.GetBoundsI(domain);
@@ -276,17 +288,19 @@ void MeshPtoU(MeshData<Real>* md, IndexDomain domain, bool coarse)
                       const int& j,
                       const int& i)
         {
-            const auto& G = B_U.GetCoords(b);
+            const auto& G = B_U.hi.GetCoords(b);
             // Update the primitive B-fields
-            B_U(b, mu, k, j, i) = B_P(b, mu, k, j, i) * G.gdet(Loci::center, j, i);
+            B_U.Set(B_P(b, mu, k, j, i) * G.gdet(Loci::center, j, i), b, mu, k, j, i);
         });
 }
 void BlockPtoU(MeshBlockData<Real>* rc, IndexDomain domain, bool coarse)
 {
     auto pmb = rc->GetBlockPointer();
 
-    auto B_U = rc->PackVariables(std::vector<std::string>{"cons.B"});
-    auto B_P = rc->PackVariables(std::vector<std::string>{"prims.B"});
+    auto B_U = BDouble::Pack(rc, "cons.B");
+    auto B_P = BDouble::Pack(rc, "prims.B");
+
+    if (B_U.GetDim(4) == 0 || B_P.GetDim(4) == 0) return;
 
     const auto& G = pmb->coords;
 
@@ -300,7 +314,7 @@ void BlockPtoU(MeshBlockData<Real>* rc, IndexDomain domain, bool coarse)
                  KOKKOS_LAMBDA(const int& mu, const int& k, const int& j, const int& i)
         {
             // Update the conserved B-fields
-            B_U(mu, k, j, i) = B_P(mu, k, j, i) * G.gdet(Loci::center, j, i);
+            B_U.Set(B_P(mu, k, j, i) * G.gdet(Loci::center, j, i), mu, k, j, i);
         });
 }
 
@@ -427,6 +441,47 @@ void FluxCT(MeshData<Real>* md)
                 B_F(b).flux(X3DIR, V3, k, j, i) = 0.0;
             });
     }
+}
+
+void FluxDivergenceB(MeshData<Real>* md, MeshData<Real>* dudt_obj)
+{
+    auto pmesh = md->GetMeshPointer();
+    auto pmb0 = md->GetBlockData(0)->GetBlockPointer();
+    const int ndim = pmesh->ndim;
+    const bool use_emf =
+        (ndim > 1) && !pmb0->packages.Get("B_FluxCT")->Param<bool>("disable_flux_ct");
+
+    const auto& B_F = md->PackVariablesAndFluxes(std::vector<std::string>{"cons.B"});
+    const auto& emf_pack = md->PackVariables(std::vector<std::string>{"emf"});
+    const auto dB = BDouble::Pack(dudt_obj, "cons.B");
+
+    const IndexRange3 b = KDomain::GetRange(md, IndexDomain::interior);
+    const IndexRange block = IndexRange{0, B_F.GetDim(5) - 1};
+
+    pmb0->par_for("flux_divergence_B", block.s, block.e, 0, NVEC - 1, b.ks, b.ke, b.js,
+        b.je, b.is, b.ie,
+        KOKKOS_LAMBDA(const int& bl, const int& v, const int& k, const int& j,
+                      const int& i)
+        {
+            const auto& G = B_F.GetCoords(bl);
+            const auto& F = B_F(bl);
+            const auto& E = emf_pack(bl);
+            double du = static_cast<double>(G.FaceArea<X1DIR>(k, j, i + 1)) *
+                            ct_flux(E, F, X1DIR, v, k, j, i + 1, ndim, use_emf) -
+                        static_cast<double>(G.FaceArea<X1DIR>(k, j, i)) *
+                            ct_flux(E, F, X1DIR, v, k, j, i, ndim, use_emf);
+            if (ndim >= 2)
+                du += static_cast<double>(G.FaceArea<X2DIR>(k, j + 1, i)) *
+                          ct_flux(E, F, X2DIR, v, k, j + 1, i, ndim, use_emf) -
+                      static_cast<double>(G.FaceArea<X2DIR>(k, j, i)) *
+                          ct_flux(E, F, X2DIR, v, k, j, i, ndim, use_emf);
+            if (ndim == 3)
+                du += static_cast<double>(G.FaceArea<X3DIR>(k + 1, j, i)) *
+                          ct_flux(E, F, X3DIR, v, k + 1, j, i, ndim, use_emf) -
+                      static_cast<double>(G.FaceArea<X3DIR>(k, j, i)) *
+                          ct_flux(E, F, X3DIR, v, k, j, i, ndim, use_emf);
+            dB.Set(-du / G.CellVolume(k, j, i), bl, v, k, j, i);
+        });
 }
 
 void ZeroBoundaryFlux(MeshData<Real>* md, IndexDomain domain, bool coarse)
@@ -662,7 +717,7 @@ double MaxDivB(MeshData<Real>* md)
     if (ndim < 2) return 0.;
 
     // Packing out here avoids frequent per-mesh packs.  Do we need to?
-    auto B_U = md->PackVariables(std::vector<std::string>{"cons.B"});
+    auto B_U = BDouble::Pack(md, "cons.B");
 
     const IndexRange jbl = md->GetBoundsJ(IndexDomain::interior);
     const IndexRange kbl = md->GetBoundsK(IndexDomain::interior);
@@ -688,9 +743,9 @@ double MaxDivB(MeshData<Real>* md)
             "divB_max", kb.s, kb.e, jb.s, jb.e, ib.s, ib.e,
             KOKKOS_LAMBDA(const int& k, const int& j, const int& i, double& local_result)
             {
-                const auto& G = B_U.GetCoords(b);
+                const auto& G = B_U.hi.GetCoords(b);
                 const double local_divb =
-                    m::abs(corner_div(G, B_U(b), k, j, i, ndim > 2));
+                    m::abs(corner_div(G, B_U.Block(b), k, j, i, ndim > 2));
                 if (local_divb > local_result) local_result = local_divb;
             },
             max_reducer);
@@ -747,7 +802,7 @@ void CalcDivB(MeshData<Real>* md, std::string divb_field_name)
     if (ndim < 2) return;
 
     // Packing out here avoids frequent per-mesh packs.  Do we need to?
-    auto B_U = md->PackVariables(std::vector<std::string>{"cons.B"});
+    auto B_U = BDouble::Pack(md, "cons.B");
     auto divB = md->PackVariables(std::vector<std::string>{divb_field_name});
 
     const IndexRange jbl = md->GetBoundsJ(IndexDomain::interior);
@@ -766,8 +821,8 @@ void CalcDivB(MeshData<Real>* md, std::string divb_field_name)
         pmb->par_for("calc_divB", kb.s, kb.e, jb.s, jb.e, ib.s, ib.e,
                      KOKKOS_LAMBDA(const int& k, const int& j, const int& i)
             {
-                const auto& G = B_U.GetCoords(b);
-                divB(b, 0, k, j, i) = corner_div(G, B_U(b), k, j, i, ndim > 2);
+                const auto& G = B_U.hi.GetCoords(b);
+                divB(b, 0, k, j, i) = corner_div(G, B_U.Block(b), k, j, i, ndim > 2);
             });
     }
 }
@@ -777,7 +832,7 @@ void FillOutput(MeshBlock* pmb, ParameterInput* pin)
     const int ndim = pmb->pmy_mesh->ndim;
     if (ndim < 2) return;
 
-    auto B_U = rc->PackVariables(std::vector<std::string>{"cons.B"});
+    auto B_U = BDouble::Pack(rc, "cons.B");
     auto divB = rc->PackVariables(std::vector<std::string>{"divB"});
 
     const IndexRange jbl = rc->GetBoundsJ(IndexDomain::interior);
@@ -792,7 +847,7 @@ void FillOutput(MeshBlock* pmb, ParameterInput* pin)
     pmb->par_for("divB_output", kb.s, kb.e, jb.s, jb.e, ib.s, ib.e,
                  KOKKOS_LAMBDA(const int& k, const int& j, const int& i)
         {
-            const auto& G = B_U.GetCoords();
+            const auto& G = B_U.hi.GetCoords();
             divB(0, k, j, i) = corner_div(G, B_U, k, j, i, ndim > 2);
         });
 }

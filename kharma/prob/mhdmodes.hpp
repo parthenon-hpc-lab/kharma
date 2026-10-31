@@ -222,7 +222,7 @@ TaskStatus InitializeMHDModes(
     pmb->par_for("mhdmodes_init", kb.s, kb.e, jb.s, jb.e, ib.s, ib.e,
                  KOKKOS_LAMBDA(const int& k, const int& j, const int& i)
         {
-            Real X[GR_DIM];
+            GReal X[GR_DIM];
             G.coord_embed(k, j, i, Loci::center, X);
             Real mode = amp * m::cos(k1 * X[1] + k2 * X[2] + k3 * X[3]);
             rho(k, j, i) = rho0 + drho * mode;

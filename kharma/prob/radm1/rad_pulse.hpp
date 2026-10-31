@@ -35,7 +35,7 @@ TaskStatus InitializeRadiationPulse(
     pmb->par_for("radpulse_init", b.ks, b.ke, b.js, b.je, b.is, b.ie,
         KOKKOS_LAMBDA (const int &k, const int &j, const int &i)
         {
-            Real X[GR_DIM];
+            GReal X[GR_DIM];
             G.coord_embed(k, j, i, Loci::center, X);
 
             Real r2 = X[1] * X[1] + X[2] * X[2] + X[3] * X[3];

@@ -107,9 +107,11 @@ std::shared_ptr<KHARMAPackage> Implicit::Initialize(
     pin->SetString("parthenon/time", "integrator", "vl2");
 
     // Implicit solver parameters
-    Real jacobian_delta = pin->GetOrAddReal("implicit", "jacobian_delta", 4.e-8);
+    Real jacobian_delta = pin->GetOrAddReal(
+        "implicit", "jacobian_delta", (SINGLE_PRECISION_ENABLED) ? 3.e-4 : 4.e-8);
     params.Add("jacobian_delta", jacobian_delta);
-    Real rootfind_tol = pin->GetOrAddReal("implicit", "rootfind_tol", 1.e-12);
+    Real rootfind_tol = pin->GetOrAddReal(
+        "implicit", "rootfind_tol", (SINGLE_PRECISION_ENABLED) ? 1.e-6 : 1.e-12);
     params.Add("rootfind_tol", rootfind_tol);
     int min_nonlinear_iter = pin->GetOrAddInteger("implicit", "min_nonlinear_iter", 1);
     params.Add("min_nonlinear_iter", min_nonlinear_iter);

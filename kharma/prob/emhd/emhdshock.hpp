@@ -127,7 +127,7 @@ TaskStatus InitializeEMHDShock(
             for (int j = jb.s; j <= jb.e; j++) {
                 for (int i = ib.s; i <= ib.e; i++) {
 
-                    Real X[GR_DIM];
+                    GReal X[GR_DIM];
                     G.coord_embed(k, j, i, Loci::center, X);
 
                     // First initialize primitives that are read from .txt files
@@ -206,7 +206,7 @@ TaskStatus InitializeEMHDShock(
         pmb->par_for("emhdshock_init", kb.s, kb.e, jb.s, jb.e, ib.s, ib.e,
                      KOKKOS_LAMBDA(const int& k, const int& j, const int& i)
             {
-                Real X[GR_DIM];
+                GReal X[GR_DIM];
                 G.coord_embed(k, j, i, Loci::center, X);
 
                 bool lhs = X[1] < x1_center;

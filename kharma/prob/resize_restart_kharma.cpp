@@ -270,16 +270,16 @@ TaskStatus ReadKharmaRestart(std::shared_ptr<MeshBlockData<Real>> rc, ParameterI
     // Hyerin (09/19/2022) : new attempt to read the file
     hdf5_open(fname.c_str());
     hdf5_set_directory("/");
-    Real* rho_file = new double[block_sz];
-    Real* u_file = new double[block_sz];
-    Real* uvec_file = new double[NVEC * block_sz];
-    Real* B_file = new double[NVEC * blockB_sz];
-    Real* x1_file = new double[length[0] * length[1]];
-    Real* x2_file = new double[length[0] * length[2]];
-    Real* x3_file = new double[length[0] * length[3]];
-    Real* x1B_file = new double[lengthB[0] * (lengthB[1])];
-    Real* x2B_file = new double[lengthB[0] * (lengthB[2])];
-    Real* x3B_file = new double[lengthB[0] * (lengthB[3])];
+    double* rho_file = new double[block_sz];
+    double* u_file = new double[block_sz];
+    double* uvec_file = new double[NVEC * block_sz];
+    double* B_file = new double[NVEC * blockB_sz];
+    double* x1_file = new double[length[0] * length[1]];
+    double* x2_file = new double[length[0] * length[2]];
+    double* x3_file = new double[length[0] * length[3]];
+    double* x1B_file = new double[lengthB[0] * (lengthB[1])];
+    double* x2B_file = new double[lengthB[0] * (lengthB[2])];
+    double* x3B_file = new double[lengthB[0] * (lengthB[3])];
     // static hsize_t fdims[] = {length[0], 1, length[3], length[2], length[1],1};
     // //outdated
     static hsize_t fdims[] = {length[0], length[3], length[2], length[1]};
@@ -352,16 +352,16 @@ TaskStatus ReadKharmaRestart(std::shared_ptr<MeshBlockData<Real>> rc, ParameterI
     auto u_fill_host = u_fill_device.GetHostMirror();
     auto uvec_fill_host = uvec_fill_device.GetHostMirror();
     auto B_fill_host = B_fill_device.GetHostMirror();
-    Real* rho_filefill = new double[f_block_sz];
-    Real* u_filefill = new double[f_block_sz];
-    Real* uvec_filefill = new double[f_block_sz * NVEC];
-    Real* B_filefill = new double[f_blockB_sz * NVEC];
-    Real* x1_filefill = new double[f_length[0] * f_length[1]];
-    Real* x2_filefill = new double[f_length[0] * f_length[2]];
-    Real* x3_filefill = new double[f_length[0] * f_length[3]];
-    Real* x1B_filefill = new double[f_lengthB[0] * (f_lengthB[1])];
-    Real* x2B_filefill = new double[f_lengthB[0] * (f_lengthB[2])];
-    Real* x3B_filefill = new double[f_lengthB[0] * (f_lengthB[3])];
+    double* rho_filefill = new double[f_block_sz];
+    double* u_filefill = new double[f_block_sz];
+    double* uvec_filefill = new double[f_block_sz * NVEC];
+    double* B_filefill = new double[f_blockB_sz * NVEC];
+    double* x1_filefill = new double[f_length[0] * f_length[1]];
+    double* x2_filefill = new double[f_length[0] * f_length[2]];
+    double* x3_filefill = new double[f_length[0] * f_length[3]];
+    double* x1B_filefill = new double[f_lengthB[0] * (f_lengthB[1])];
+    double* x2B_filefill = new double[f_lengthB[0] * (f_lengthB[2])];
+    double* x3B_filefill = new double[f_lengthB[0] * (f_lengthB[3])];
     static hsize_t fill_fdims[] = {f_length[0], f_length[3], f_length[2], f_length[1]};
     static hsize_t fill_fdims_vec[] = {
         f_length[0], NVEC, f_length[3], f_length[2], f_length[1]};

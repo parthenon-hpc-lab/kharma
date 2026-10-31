@@ -1,0 +1,43 @@
+diff --git a/singularity-opac/base/robust_utils.hpp b/singularity-opac/base/robust_utils.hpp
+index 7d8889e..067a682 100644
+--- a/singularity-opac/base/robust_utils.hpp
++++ b/singularity-opac/base/robust_utils.hpp
+@@ -37,7 +37,8 @@ PORTABLE_FORCEINLINE_FUNCTION auto make_positive(const T val) {
+ 
+ PORTABLE_FORCEINLINE_FUNCTION
+ Real make_bounded(const Real val, const Real vmin, const Real vmax) {
+-  return std::min(std::max(val, vmin + EPS()), vmax * (1.0 - EPS()));
++  return std::min(std::max(val, static_cast<Real>(vmin + EPS())),
++                  static_cast<Real>(vmax * (1 - EPS())));
+ }
+ 
+ template <typename T>
+diff --git a/singularity-opac/neutrinos/spiner_opac_neutrinos.hpp b/singularity-opac/neutrinos/spiner_opac_neutrinos.hpp
+index 05f67bc..09f6015 100644
+--- a/singularity-opac/neutrinos/spiner_opac_neutrinos.hpp
++++ b/singularity-opac/neutrinos/spiner_opac_neutrinos.hpp
+@@ -415,13 +415,13 @@ class SpinerOpacity {
+ 
+     DataBox jnu_file(NE, NTYPE, NY, NT,
+                      NR); // (erg s^{-1} cm^{-3} MeV^{-1} / 4pi)
+-    status = H5LTread_dataset_double(file, "emissivities", jnu_file.data());
++    status = H5LTread_dataset(file, "emissivities", (sizeof(Real) == sizeof(float) ? H5T_NATIVE_FLOAT : H5T_NATIVE_DOUBLE), jnu_file.data());
+     if (status != H5_SUCCESS) {
+       OPAC_ERROR("An HDF5 error ocurred while reading emissivities");
+     }
+     DataBox kappa_file(NE, NTYPE, NY, NT, NR); // 1/cm
+     status =
+-        H5LTread_dataset_double(file, "absorption_opacity", jnu_file.data());
++        H5LTread_dataset(file, "absorption_opacity", (sizeof(Real) == sizeof(float) ? H5T_NATIVE_FLOAT : H5T_NATIVE_DOUBLE), jnu_file.data());
+     if (status != H5_SUCCESS) {
+       OPAC_ERROR("An HDF5 error ocurred while reading absorption opacities");
+     }
+@@ -482,7 +482,7 @@ class SpinerOpacity {
+                           int size) {
+     std::vector<Real> table(size);
+     herr_t status =
+-        H5LTread_dataset_double(file_id, name.c_str(), table.data());
++        H5LTread_dataset(file_id, name.c_str(), (sizeof(Real) == sizeof(float) ? H5T_NATIVE_FLOAT : H5T_NATIVE_DOUBLE), table.data());
+     if (status != H5_SUCCESS) {
+       OPAC_ERROR("An HDF5 error ocurred while reading bounds");
+     }

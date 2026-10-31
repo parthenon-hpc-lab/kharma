@@ -118,7 +118,7 @@ class KastaunResidual
     KOKKOS_FORCEINLINE_FUNCTION
     Real vhatsq_mu(const Real mu, const Real rbarsq)
     {
-        return std::min(mu * mu * rbarsq, v0sq_);
+        return m::min(mu * mu * rbarsq, v0sq_);
     }
     KOKKOS_FORCEINLINE_FUNCTION
     Real iWhat_mu(const Real vhatsq) { return std::sqrt(1.0 - vhatsq); }
@@ -143,8 +143,8 @@ class KastaunResidual
         const Real iWhat = iWhat_mu(vhatsq);
         const Real What = 1.0 / iWhat;
         // TODO technically we should only limit P>0, and allow returning negative u
-        const Real rhohat = std::max(rhohat_mu(iWhat), 0.);
-        const Real ehat = std::max(ehat_mu(mu, qbar, rbarsq, vhatsq, What), 0.);
+        const Real rhohat = m::max(rhohat_mu(iWhat), 0.);
+        const Real ehat = m::max(ehat_mu(mu, qbar, rbarsq, vhatsq, What), 0.);
 
         const Real Phat = eos_.PressureFromDensityInternalEnergy(rhohat, ehat, lambda_);
         // TODO_EOS: ahat general or ideal-only?
@@ -152,7 +152,7 @@ class KastaunResidual
 
         const Real nua = (1.0 + ahat) * (1.0 + ehat) * iWhat;
         const Real nub = (1.0 + ahat) * (1.0 + qbar - mu * rbarsq);
-        const Real nuhat = std::max(nua, nub);
+        const Real nuhat = m::max(nua, nub);
 
         const Real muhat = 1.0 / (nuhat + mu * rbarsq);
         return mu - muhat;
@@ -265,14 +265,14 @@ KOKKOS_INLINE_FUNCTION int u_to_p<Type::kastaun>(const GRCoordinates& G,
             bdotr += bu[ii] * rcov[ii];
         }
         SPACELOOP2(ii, jj) bsq += G.gcov(loc, j, i, ii + 1, jj + 1) * bu[ii] * bu[jj];
-        bsq = std::max(0.0, bsq);
+        bsq = m::max(0.0, bsq);
 
         rbsq = bdotr * bdotr;
         bsq_rpsq = bsq * rsq - rbsq;
     }
     // const Real zsq = rsq / h0sq_; // h0sq_ normalization set to 1 in Phoebus
     const Real zsq = rsq;
-    const Real v0sq = std::min(zsq / (1.0 + zsq), 1.0 - 1.0 / SQR(51.));
+    const Real v0sq = m::min(zsq / (1.0 + zsq), 1.0 - 1.0 / SQR(51.));
 
     // residual object. Caches most arguments/floors so calls are single-argument
     Real lambda[2];

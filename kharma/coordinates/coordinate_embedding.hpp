@@ -373,7 +373,7 @@ class CoordinateEmbedding
 
     // Note this is the one thing we need from BaseCoords
     KOKKOS_INLINE_FUNCTION void gcov_embed(
-        const GReal Xembed[GR_DIM], Real gcov[GR_DIM][GR_DIM]) const
+        const GReal Xembed[GR_DIM], GReal gcov[GR_DIM][GR_DIM]) const
     {
         PortsOfCall::visit(
             [&Xembed, &gcov](const auto& self)
@@ -383,20 +383,20 @@ class CoordinateEmbedding
             base);
     }
     // All the quantities we can derive from that
-    KOKKOS_INLINE_FUNCTION Real gcon_from_gcov(
-        const Real gcov[GR_DIM][GR_DIM], Real gcon[GR_DIM][GR_DIM]) const
+    KOKKOS_INLINE_FUNCTION GReal gcon_from_gcov(
+        const GReal gcov[GR_DIM][GR_DIM], GReal gcon[GR_DIM][GR_DIM]) const
     {
-        Real gdet = invert(&gcov[0][0], &gcon[0][0]);
+        GReal gdet = invert(&gcov[0][0], &gcon[0][0]);
         return m::sqrt(m::abs(gdet));
     }
-    KOKKOS_INLINE_FUNCTION Real gcon_embed(
-        const GReal Xembed[GR_DIM], Real gcon[GR_DIM][GR_DIM]) const
+    KOKKOS_INLINE_FUNCTION GReal gcon_embed(
+        const GReal Xembed[GR_DIM], GReal gcon[GR_DIM][GR_DIM]) const
     {
         GReal gcov[GR_DIM][GR_DIM];
         gcov_embed(Xembed, gcov);
         return gcon_from_gcov(gcov, gcon);
     }
-    KOKKOS_INLINE_FUNCTION Real gdet_embed(const GReal Xembed[GR_DIM]) const
+    KOKKOS_INLINE_FUNCTION GReal gdet_embed(const GReal Xembed[GR_DIM]) const
     {
         GReal gcon[GR_DIM][GR_DIM];
         return gcon_embed(Xembed, gcon);
@@ -424,7 +424,7 @@ class CoordinateEmbedding
             transform);
     }
     KOKKOS_INLINE_FUNCTION void dxdX(
-        const GReal Xnative[GR_DIM], Real dxdX[GR_DIM][GR_DIM]) const
+        const GReal Xnative[GR_DIM], GReal dxdX[GR_DIM][GR_DIM]) const
     {
         PortsOfCall::visit(
             [&Xnative, &dxdX](const auto& self)
@@ -434,7 +434,7 @@ class CoordinateEmbedding
             transform);
     }
     KOKKOS_INLINE_FUNCTION void dXdx(
-        const GReal Xnative[GR_DIM], Real dXdx[GR_DIM][GR_DIM]) const
+        const GReal Xnative[GR_DIM], GReal dXdx[GR_DIM][GR_DIM]) const
     {
         PortsOfCall::visit(
             [&Xnative, &dXdx](const auto& self)
@@ -570,7 +570,7 @@ class CoordinateEmbedding
     KOKKOS_INLINE_FUNCTION void con_vec_to_embed(const GReal Xnative[GR_DIM],
         const GReal vcon_native[GR_DIM], GReal vcon_embed[GR_DIM]) const
     {
-        Real dxdX_temp[GR_DIM][GR_DIM];
+        GReal dxdX_temp[GR_DIM][GR_DIM];
         dxdX(Xnative, dxdX_temp);
         DLOOP1 {
             vcon_embed[mu] = 0;
@@ -581,7 +581,7 @@ class CoordinateEmbedding
     KOKKOS_INLINE_FUNCTION void con_vec_to_native(const GReal Xnative[GR_DIM],
         const GReal vcon_embed[GR_DIM], GReal vcon_native[GR_DIM]) const
     {
-        Real dXdx_temp[GR_DIM][GR_DIM];
+        GReal dXdx_temp[GR_DIM][GR_DIM];
         dXdx(Xnative, dXdx_temp);
         DLOOP1 { // TODO is this faster, or DLOOP1/2?
             vcon_native[mu] = 0;
@@ -606,7 +606,7 @@ class CoordinateEmbedding
     KOKKOS_INLINE_FUNCTION void cov_tensor_to_embed(const GReal Xnative[GR_DIM],
         const GReal tcov_native[GR_DIM][GR_DIM], GReal tcov_embed[GR_DIM][GR_DIM]) const
     {
-        Real dXdx_temp[GR_DIM][GR_DIM];
+        GReal dXdx_temp[GR_DIM][GR_DIM];
         dXdx(Xnative, dXdx_temp);
 
         DLOOP2 {
@@ -622,7 +622,7 @@ class CoordinateEmbedding
     KOKKOS_INLINE_FUNCTION void cov_tensor_to_native(const GReal Xnative[GR_DIM],
         const GReal tcov_embed[GR_DIM][GR_DIM], GReal tcov_native[GR_DIM][GR_DIM]) const
     {
-        Real dxdX_temp[GR_DIM][GR_DIM];
+        GReal dxdX_temp[GR_DIM][GR_DIM];
         dxdX(Xnative, dxdX_temp);
 
         DLOOP2 {
@@ -649,9 +649,9 @@ class CoordinateEmbedding
 
     // And then derived metric properties
     KOKKOS_INLINE_FUNCTION void gcov_native(
-        const GReal Xnative[GR_DIM], Real gcov[GR_DIM][GR_DIM]) const
+        const GReal Xnative[GR_DIM], GReal gcov[GR_DIM][GR_DIM]) const
     {
-        Real gcov_em[GR_DIM][GR_DIM];
+        GReal gcov_em[GR_DIM][GR_DIM];
         GReal Xembed[GR_DIM];
         // Get coordinates in embedding system
         coord_to_embed(Xnative, Xembed);
@@ -662,21 +662,21 @@ class CoordinateEmbedding
         // Transform to native coordinates
         cov_tensor_to_native(Xnative, gcov_em, gcov);
     }
-    KOKKOS_INLINE_FUNCTION Real gcon_native(
-        const GReal X[GR_DIM], Real gcon[GR_DIM][GR_DIM]) const
+    KOKKOS_INLINE_FUNCTION GReal gcon_native(
+        const GReal X[GR_DIM], GReal gcon[GR_DIM][GR_DIM]) const
     {
-        Real gcov[GR_DIM][GR_DIM];
+        GReal gcov[GR_DIM][GR_DIM];
         gcov_native(X, gcov);
         return gcon_from_gcov(gcov, gcon);
     }
-    KOKKOS_INLINE_FUNCTION Real gdet_native(const GReal X[GR_DIM]) const
+    KOKKOS_INLINE_FUNCTION GReal gdet_native(const GReal X[GR_DIM]) const
     {
-        Real gcon[GR_DIM][GR_DIM];
+        GReal gcon[GR_DIM][GR_DIM];
         return gcon_native(X, gcon);
     }
 
     KOKKOS_INLINE_FUNCTION void conn_native(
-        const GReal X[GR_DIM], const GReal delta, Real conn[GR_DIM][GR_DIM][GR_DIM]) const
+        const GReal X[GR_DIM], const GReal delta, GReal conn[GR_DIM][GR_DIM][GR_DIM]) const
     {
         GReal tmp[GR_DIM][GR_DIM][GR_DIM];
         GReal gcon[GR_DIM][GR_DIM];
@@ -730,8 +730,9 @@ class CoordinateEmbedding
      * Takes a velocity in Boyer-Lindquist coordinates (optionally without time component)
      * and converts it to KS, and then to native coordinates. Not guaranteed to be fast.
      */
-    KOKKOS_INLINE_FUNCTION void bl_fourvel_to_native(const Real Xnative[GR_DIM],
-        const Real ucon_bl[GR_DIM], Real ucon_native[GR_DIM]) const
+    template<typename TU, typename TO>
+    KOKKOS_INLINE_FUNCTION void bl_fourvel_to_native(const GReal Xnative[GR_DIM],
+        const TU ucon_bl[GR_DIM], TO ucon_native[GR_DIM]) const
     {
         GReal Xembed[GR_DIM];
         coord_to_embed(Xnative, Xembed);
@@ -746,13 +747,13 @@ class CoordinateEmbedding
             SphBLExtG(get_a()).gcov_embed(Xembed, gcov_bl);
         }
 
-        Real ucon_bl_fourv[GR_DIM];
+        GReal ucon_bl_fourv[GR_DIM];
         DLOOP1
             ucon_bl_fourv[mu] = ucon_bl[mu];
         set_ut(gcov_bl, ucon_bl_fourv);
 
         // Then transform that 4-vector to KS (or not, if we're using BL base coords)
-        Real ucon_base[GR_DIM];
+        GReal ucon_base[GR_DIM];
         if (PortsOfCall::holds_alternative<SphKSCoords>(base)) {
             PortsOfCall::get<SphKSCoords>(base).vec_from_bl(
                 Xembed, ucon_bl_fourv, ucon_base);
@@ -765,6 +766,9 @@ class CoordinateEmbedding
                 ucon_base[mu] = ucon_bl_fourv[mu];
         }
         // Finally, apply any transform to native coordinates
-        con_vec_to_native(Xnative, ucon_base, ucon_native);
+        GReal ucon_native_g[GR_DIM];
+        con_vec_to_native(Xnative, ucon_base, ucon_native_g);
+        DLOOP1
+            ucon_native[mu] = ucon_native_g[mu];
     }
 };

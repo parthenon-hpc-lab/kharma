@@ -181,9 +181,10 @@ KOKKOS_INLINE_FUNCTION void rotate_polar_vec(const GReal Xin[GR_DIM],
 /**
  * Set time component for a consistent 4-velocity given a 3-velocity
  */
-KOKKOS_INLINE_FUNCTION void set_ut(const Real gcov[GR_DIM][GR_DIM], Real ucon[GR_DIM])
+template<typename TG, typename T>
+KOKKOS_INLINE_FUNCTION void set_ut(const TG gcov[GR_DIM][GR_DIM], T ucon[GR_DIM])
 {
-    Real AA, BB, CC;
+    T AA, BB, CC;
 
     AA = gcov[0][0];
     BB = 2. * (gcov[0][1] * ucon[1] + gcov[0][2] * ucon[2] + gcov[0][3] * ucon[3]);
@@ -192,7 +193,7 @@ KOKKOS_INLINE_FUNCTION void set_ut(const Real gcov[GR_DIM][GR_DIM], Real ucon[GR
          2. * (gcov[1][2] * ucon[1] * ucon[2] + gcov[1][3] * ucon[1] * ucon[3] +
                   gcov[2][3] * ucon[2] * ucon[3]);
 
-    Real discr = BB * BB - 4. * AA * CC;
+    T discr = BB * BB - 4. * AA * CC;
     ucon[0] = (-BB - m::sqrt(discr)) / (2. * AA);
 }
 
@@ -202,10 +203,11 @@ KOKKOS_INLINE_FUNCTION void set_ut(const Real gcov[GR_DIM][GR_DIM], Real ucon[GR
  * This function and set_ut together can turn any desired 3-velocity into a
  * form usable to initialize uvec in KHARMA; see bondi.hpp for usage.
  */
+template<typename TG, typename TU, typename T>
 KOKKOS_INLINE_FUNCTION void fourvel_to_prim(
-    const Real gcon[GR_DIM][GR_DIM], const Real ucon[GR_DIM], Real u_prim[NVEC])
+    const TG gcon[GR_DIM][GR_DIM], const TU ucon[GR_DIM], T u_prim[NVEC])
 {
-    Real alpha2 = -1.0 / gcon[0][0];
+    T alpha2 = -1.0 / gcon[0][0];
     // Note gamma/alpha is ucon[0]
     u_prim[0] = ucon[1] + ucon[0] * alpha2 * gcon[0][1];
     u_prim[1] = ucon[2] + ucon[0] * alpha2 * gcon[0][2];

@@ -254,8 +254,8 @@ Real MaxDivB(MeshData<Real>* md)
     const IndexRange jl = IndexRange{jb.s, jb.e - 1};
     const IndexRange kl = (ndim > 2) ? IndexRange{kb.s, kb.e - 1} : kb;
 
-    Real bsq_max;
-    Kokkos::Max<Real> bsq_max_reducer(bsq_max);
+    double bsq_max;
+    Kokkos::Max<double> bsq_max_reducer(bsq_max);
     pmb0->par_reduce(
         "B_field_bsqmax", block.s, block.e, kl.s, kl.e, jl.s, jl.e, il.s, il.e,
         KOKKOS_LAMBDA(

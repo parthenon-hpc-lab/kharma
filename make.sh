@@ -27,6 +27,8 @@ ZSH_VERSION=${ZSH_VERSION:-}
 # nocleanup:  Disable magnetic field cleaning code for resizing, avoids
 #             pulling in some unofficial Parthenon code.
 # test:       Build unit tests and register them with CTest
+# single:     Evolve all variables in single precision, except magnetic
+#             fields, which are kept in double to preserve divB=0
 # Many machine files have additional options, check machines/machinename.sh
 
 # Make processes to use
@@ -107,6 +109,11 @@ if option "split_implicit"; then
 fi
 if option "test"; then
   EXTRA_FLAGS="-DKHARMA_BUILD_TESTS=ON $EXTRA_FLAGS"
+fi
+if option "single"; then
+  EXTRA_FLAGS="-DKHARMA_SINGLE_PRECISION=ON $EXTRA_FLAGS"
+else
+  EXTRA_FLAGS="-DKHARMA_SINGLE_PRECISION=OFF $EXTRA_FLAGS"
 fi
 
 ### Enivoronment Prep ###
@@ -351,6 +358,13 @@ if option "clean"; then
     echo "make.sh note: You may see errors applying patches below. These are normal."
     git apply ../patches/parthenon-*.patch || true
   fi
+  cd -
+
+  cd external/singularity-eos
+  git apply --quiet ../patches/singularity-eos-single-precision.patch 2>/dev/null || true
+  cd -
+  cd external/singularity-opac
+  git apply --quiet ../patches/singularity-opac-single-precision.patch 2>/dev/null || true
   cd -
 
   # Patches for ports-of-call

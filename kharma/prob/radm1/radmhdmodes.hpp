@@ -110,11 +110,11 @@ TaskStatus InitializeRadMHDModes(
     Real B20 = pin->GetOrAddReal("mhdmodes", "B20", 0.10075854437197568);
     Real B30 = pin->GetOrAddReal("mhdmodes", "B30", 0.);
 
-    m::complex<Real> omega;
-    m::complex<Real> drho = 0, du = 0;
-    m::complex<Real> du1 = 0, du2 = 0, du3 = 0;
-    m::complex<Real> dB1 = 0, dB2 = 0, dB3 = 0;
-    m::complex<Real> dErad = 0, dF1rad = 0, dF2rad = 0, dF3rad = 0;
+    m::complex<double> omega;
+    m::complex<double> drho = 0, du = 0;
+    m::complex<double> du1 = 0, du2 = 0, du3 = 0;
+    m::complex<double> dB1 = 0, dB2 = 0, dB3 = 0;
+    m::complex<double> dErad = 0, dF1rad = 0, dF2rad = 0, dF3rad = 0;
 
     Real P = 0.0;
     if (regime == "thin")
@@ -268,10 +268,10 @@ TaskStatus InitializeRadMHDModes(
     pmb->par_for("radmhdmodes_init", kb.s, kb.e, jb.s, jb.e, ib.s, ib.e,
                 KOKKOS_LAMBDA(const int& k, const int& j, const int& i)
         {
-            Real X[GR_DIM];
+            GReal X[GR_DIM];
             G.coord_embed(k, j, i, Loci::center, X);
             Real phase = k1 * X[1] + k2 * X[2] + k3 * X[3];
-            m::complex<Real> emode = m::exp(m::complex<Real>(0, -phase));
+            m::complex<double> emode = m::exp(m::complex<double>(0, -phase));
 
             rho(k, j, i) = rho0 + (drho * emode).real();
             u(k, j, i) = u0 + (du * emode).real();

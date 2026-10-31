@@ -105,8 +105,8 @@ KOKKOS_INLINE_FUNCTION void print_vector(
  * https://stackoverflow.com/questions/9323903/most-efficient-elegant-way-to-clip-a-number
  * Note that in C++17+ this can likely be a straight std::clamp call
  */
-template<typename T>
-KOKKOS_INLINE_FUNCTION T clip(const T& n, const T& lower, const T& upper)
+template<typename T, typename U, typename V>
+KOKKOS_INLINE_FUNCTION T clip(const T& n, const U& lower, const V& upper)
 {
 #if TRACE
     // This isn't so useful without context
@@ -114,17 +114,17 @@ KOKKOS_INLINE_FUNCTION T clip(const T& n, const T& lower, const T& upper)
     // if (n > upper) printf("Clip %g to %g\n", n, upper);
     // if (n < lower) printf("Clip %g to %g\n", n, lower);
 #endif
-    return m::min(m::max(lower, n), upper);
+    return m::min(m::max(static_cast<T>(lower), n), static_cast<T>(upper));
 }
 // Version which "bounces" any excess over the bounds, useful for the polar coordinate
-template<typename T>
-KOKKOS_INLINE_FUNCTION T bounce(const T& n, const T& lower, const T& upper)
+template<typename T, typename U, typename V>
+KOKKOS_INLINE_FUNCTION T bounce(const T& n, const U& lower, const V& upper)
 {
     return (n < lower) ? 2 * lower - n : ((n > upper) ? 2 * upper - n : n);
 }
 // Version which "excises" anything within a range
-template<typename T>
-KOKKOS_INLINE_FUNCTION T excise(const T& n, const T& center, const T& range)
+template<typename T, typename U, typename V>
+KOKKOS_INLINE_FUNCTION T excise(const T& n, const U& center, const V& range)
 {
     return (m::abs(n - center) > range)
                ? n
@@ -134,9 +134,9 @@ KOKKOS_INLINE_FUNCTION T excise(const T& n, const T& center, const T& range)
 /**
  * Every physics code ends up with something like this
  */
-template<typename T>
+template<typename T, typename U>
 KOKKOS_INLINE_FUNCTION T close_to(
-    const T& x, const T& y, const Real& rel_tol = 1e-8, const Real& abs_tol = 1e-8)
+    const T& x, const U& y, const Real& rel_tol = 1e-8, const Real& abs_tol = 1e-8)
 {
     return ((m::abs(x - y) / y) < rel_tol) ||
            (m::abs(x) < abs_tol && m::abs(y) < abs_tol);

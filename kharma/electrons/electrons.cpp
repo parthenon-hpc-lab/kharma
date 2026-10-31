@@ -528,8 +528,8 @@ TaskStatus ApplyElectronHeating(
 
             int Nx1 = pmb->cellbounds.ncellsi(IndexDomain::interior);
             int Nx2 = pmb->cellbounds.ncellsj(IndexDomain::interior);
-            Real* dv0 = (Real*)malloc(sizeof(Real) * Nx1 * Nx2);
-            Real* dv1 = (Real*)malloc(sizeof(Real) * Nx1 * Nx2);
+            double* dv0 = (double*)malloc(sizeof(double) * Nx1 * Nx2);
+            double* dv1 = (double*)malloc(sizeof(double) * Nx1 * Nx2);
             create_grf(Nx1, Nx2, lx1, lx2, dv0, dv1);
 
             Real mean_velocity_num0 = 0;

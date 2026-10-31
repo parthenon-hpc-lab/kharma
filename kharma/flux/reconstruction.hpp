@@ -42,7 +42,7 @@ using namespace parthenon;
 
 namespace KReconstruction
 {
-constexpr Real EPS = 1.e-26;
+constexpr Real EPS = (SINGLE_PRECISION_ENABLED) ? 1.e-18 : 1.e-26;
 
 // Enum for all supported reconstruction types.
 enum class Type {
@@ -251,7 +251,7 @@ KOKKOS_FORCEINLINE_FUNCTION void reconstruct<Type::weno5_linear>(RECONSTRUCT_ONE
     constexpr Real w5alpha[3][3] = {{1.0 / 3.0, -7.0 / 6.0, 11.0 / 6.0},
         {-1.0 / 6.0, 5.0 / 6.0, 1.0 / 3.0}, {1.0 / 3.0, 5.0 / 6.0, -1.0 / 6.0}};
     constexpr Real w5gamma[3] = {0.1, 0.6, 0.3};
-    constexpr Real eps = 1e-100;
+    constexpr Real eps = (SINGLE_PRECISION_ENABLED) ? 1e-30 : 1e-100;
     constexpr Real thirteen_thirds = 13.0 / 3.0;
 
     Real a = x1 - 2 * x2 + x3;

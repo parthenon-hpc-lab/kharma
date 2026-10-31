@@ -1,0 +1,83 @@
+diff --git a/singularity-eos/eos/eos_stellar_collapse.hpp b/singularity-eos/eos/eos_stellar_collapse.hpp
+index 1ccf7925..c4b6b684 100644
+--- a/singularity-eos/eos/eos_stellar_collapse.hpp
++++ b/singularity-eos/eos/eos_stellar_collapse.hpp
+@@ -489,8 +489,9 @@ inline void StellarCollapse::Save(const std::string &filename) {
+   hid_t metadata = H5Gcreate(file, METADATA_NAME, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+   status += H5LTset_attribute_string(file, METADATA_NAME, SP5::Offsets::messageName,
+                                      SP5::Offsets::message);
++  double lEOffset_d = lEOffset_;
+   status +=
+-      H5LTset_attribute_double(file, METADATA_NAME, SP5::Offsets::sie, &lEOffset_, 1);
++      H5LTset_attribute_double(file, METADATA_NAME, SP5::Offsets::sie, &lEOffset_d, 1);
+   H5Gclose(metadata);
+ 
+   // Databoxes
+@@ -781,7 +782,9 @@ inline void StellarCollapse::LoadFromSP5File_(const std::string &filename) {
+ 
+   // Offsets
+   hid_t metadata = H5Gopen(file, METADATA_NAME, H5P_DEFAULT);
+-  status += H5LTget_attribute_double(file, METADATA_NAME, SP5::Offsets::sie, &lEOffset_);
++  double lEOffset_d;
++  status += H5LTget_attribute_double(file, METADATA_NAME, SP5::Offsets::sie, &lEOffset_d);
++  lEOffset_ = lEOffset_d;
+   status += H5Gclose(metadata);
+ 
+   // Databoxes
+@@ -841,7 +844,7 @@ inline void StellarCollapse::LoadFromStellarCollapseFile_(const std::string &fil
+   numT_ = readSCInt_(file_id, "pointstemp");
+   numYe_ = readSCInt_(file_id, "pointsye");
+ 
+-  status = H5LTread_dataset_double(file_id, "energy_shift", &lEOffset_);
++  status = H5LTread_dataset(file_id, "energy_shift", (sizeof(Real) == sizeof(float) ? H5T_NATIVE_FLOAT : H5T_NATIVE_DOUBLE), &lEOffset_);
+   if (status < 0) {
+     PORTABLE_ALWAYS_THROW_OR_ABORT("An HDF5 error ocurred while reading energy_shift\n");
+   }
+@@ -991,7 +994,7 @@ inline int StellarCollapse::readSCInt_(const hid_t &file_id, const std::string &
+ inline void StellarCollapse::readBounds_(const hid_t &file_id, const std::string &name,
+                                          int size, Real &lo, Real &hi) {
+   std::vector<Real> table(size);
+-  herr_t status = H5LTread_dataset_double(file_id, name.c_str(), table.data());
++  herr_t status = H5LTread_dataset(file_id, name.c_str(), (sizeof(Real) == sizeof(float) ? H5T_NATIVE_FLOAT : H5T_NATIVE_DOUBLE), table.data());
+   if (status != H5_SUCCESS) {
+     EOS_ERROR("An HDF5 error ocurred while reading bounds");
+   }
+diff --git a/singularity-eos/eos/eos_variant.hpp b/singularity-eos/eos/eos_variant.hpp
+index a9c58436..341dc23d 100644
+--- a/singularity-eos/eos/eos_variant.hpp
++++ b/singularity-eos/eos/eos_variant.hpp
+@@ -29,7 +29,6 @@
+ #include <singularity-eos/eos/eos_base.hpp>
+ #include <singularity-utils/variadic_utils.hpp>
+ 
+-using Real = double;
+ 
+ namespace singularity {
+ 
+diff --git a/singularity-utils/singularity-utils/bounds.hpp b/singularity-utils/singularity-utils/bounds.hpp
+index 1581ff6d..d6a583d6 100644
+--- a/singularity-utils/singularity-utils/bounds.hpp
++++ b/singularity-utils/singularity-utils/bounds.hpp
+@@ -142,7 +142,7 @@ class Bounds {
+     // at machine epsilon, which can bring us out of the interpolation
+     // range of eospac.
+     return std::min(linmax_,
+-                    std::max(linmin_, singularity::FastMath::pow10(xl) - offset));
++                    std::max(linmin_, static_cast<Real>(singularity::FastMath::pow10(xl) - offset)));
+   }
+   inline Real i2lin(const int i) const { return log2lin(grid.x(i)); }
+ 
+diff --git a/singularity-utils/singularity-utils/robust_utils.hpp b/singularity-utils/singularity-utils/robust_utils.hpp
+index 6af6ce83..d555636d 100644
+--- a/singularity-utils/singularity-utils/robust_utils.hpp
++++ b/singularity-utils/singularity-utils/robust_utils.hpp
+@@ -50,7 +50,8 @@ PORTABLE_FORCEINLINE_FUNCTION auto make_positive(const T val) {
+ 
+ PORTABLE_FORCEINLINE_FUNCTION
+ Real make_bounded(const Real val, const Real vmin, const Real vmax) {
+-  return std::min(std::max(val, vmin + EPS()), vmax * (1.0 - EPS()));
++  return std::min(std::max(val, static_cast<Real>(vmin + EPS())),
++                  static_cast<Real>(vmax * (1 - EPS())));
+ }
+ 
+ template <typename T>

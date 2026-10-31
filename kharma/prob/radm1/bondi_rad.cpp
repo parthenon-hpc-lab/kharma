@@ -158,7 +158,7 @@ TaskStatus SetBondiRadImpl(
             }
 
             const Real ur = -m::sqrt(2. / r);
-            Real ucon_bl[GR_DIM] = {0, ur, 0, 0};
+            GReal ucon_bl[GR_DIM] = {0, ur, 0, 0};
 
             GReal gcov_bl[GR_DIM][GR_DIM];
             SphBLCoords(G.coords.get_a()).gcov_embed(Xembed, gcov_bl);
@@ -168,7 +168,7 @@ TaskStatus SetBondiRadImpl(
             auto gdet_bl = G.coords.gdet_embed(Xembed);
 
             // Then transform that 4-vector to KS (or not, if we're using BL base coords)
-            Real ucon_base[GR_DIM];
+            GReal ucon_base[GR_DIM];
             PortsOfCall::get<SphKSCoords>(G.coords.base)
                 .vec_from_bl(Xembed, ucon_bl, ucon_base);
 

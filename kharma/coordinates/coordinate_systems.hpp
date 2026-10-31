@@ -83,7 +83,7 @@ class CartMinkowskiCoords
     static constexpr bool spherical = false;
     static constexpr GReal a = 0.0;
     KOKKOS_INLINE_FUNCTION void gcov_embed(
-        const GReal Xembed[GR_DIM], Real gcov[GR_DIM][GR_DIM]) const
+        const GReal Xembed[GR_DIM], GReal gcov[GR_DIM][GR_DIM]) const
     {
         DLOOP2
             gcov[mu][nu] = (mu == nu) - 2 * (mu == 0 && nu == 0);
@@ -100,7 +100,7 @@ class SphMinkowskiCoords
     static constexpr bool spherical = true;
     static constexpr GReal a = 0.0;
     KOKKOS_INLINE_FUNCTION void gcov_embed(
-        const GReal Xembed[GR_DIM], Real gcov[GR_DIM][GR_DIM]) const
+        const GReal Xembed[GR_DIM], GReal gcov[GR_DIM][GR_DIM]) const
     {
         const GReal r = m::max(Xembed[1], SMALL_NUM);
         const GReal th = excise(excise(Xembed[2], 0.0, SMALL_NUM), M_PI, SMALL_NUM);
@@ -129,7 +129,7 @@ class SphKSCoords
         : a(spin) {};
 
     KOKKOS_INLINE_FUNCTION void gcov_embed(
-        const GReal Xembed[GR_DIM], Real gcov[GR_DIM][GR_DIM]) const
+        const GReal Xembed[GR_DIM], GReal gcov[GR_DIM][GR_DIM]) const
     {
         const GReal r = Xembed[1];
         const GReal th = excise(excise(Xembed[2], 0.0, SMALL_NUM), M_PI, SMALL_NUM);
@@ -162,10 +162,10 @@ class SphKSCoords
 
     // For converting from BL
     KOKKOS_INLINE_FUNCTION void vec_from_bl(
-        const GReal Xembed[GR_DIM], const Real vcon_bl[GR_DIM], Real vcon[GR_DIM]) const
+        const GReal Xembed[GR_DIM], const GReal vcon_bl[GR_DIM], GReal vcon[GR_DIM]) const
     {
         GReal r = Xembed[1];
-        Real trans[GR_DIM][GR_DIM];
+        GReal trans[GR_DIM][GR_DIM];
         DLOOP2
             trans[mu][nu] = (mu == nu);
         trans[0][1] = 2. * r / (r * r - 2. * r + a * a);
@@ -177,7 +177,7 @@ class SphKSCoords
     }
 
     KOKKOS_INLINE_FUNCTION void vec_to_bl(
-        const GReal Xembed[GR_DIM], const Real vcon_bl[GR_DIM], Real vcon[GR_DIM]) const
+        const GReal Xembed[GR_DIM], const GReal vcon_bl[GR_DIM], GReal vcon[GR_DIM]) const
     {
         GReal r = Xembed[1];
         GReal rtrans[GR_DIM][GR_DIM], trans[GR_DIM][GR_DIM];
@@ -212,7 +212,7 @@ class SphKSExtG
         : a(spin) {};
 
     KOKKOS_INLINE_FUNCTION void gcov_embed(
-        const GReal Xembed[GR_DIM], Real gcov[GR_DIM][GR_DIM]) const
+        const GReal Xembed[GR_DIM], GReal gcov[GR_DIM][GR_DIM]) const
     {
         const GReal r = Xembed[1];
         const GReal th = excise(excise(Xembed[2], 0.0, SMALL_NUM), M_PI, SMALL_NUM);
@@ -248,10 +248,10 @@ class SphKSExtG
     // For converting from BL
     // TODO will we ever need a from_ks?
     KOKKOS_INLINE_FUNCTION void vec_from_bl(
-        const GReal Xembed[GR_DIM], const Real vcon_bl[GR_DIM], Real vcon[GR_DIM]) const
+        const GReal Xembed[GR_DIM], const GReal vcon_bl[GR_DIM], GReal vcon[GR_DIM]) const
     {
         GReal r = Xembed[1];
-        Real trans[GR_DIM][GR_DIM];
+        GReal trans[GR_DIM][GR_DIM];
         DLOOP2
             trans[mu][nu] = (mu == nu);
 
@@ -267,7 +267,7 @@ class SphKSExtG
     }
 
     KOKKOS_INLINE_FUNCTION void vec_to_bl(
-        const GReal Xembed[GR_DIM], const Real vcon_bl[GR_DIM], Real vcon[GR_DIM]) const
+        const GReal Xembed[GR_DIM], const GReal vcon_bl[GR_DIM], GReal vcon[GR_DIM]) const
     {
         GReal r = Xembed[1];
         GReal rtrans[GR_DIM][GR_DIM], trans[GR_DIM][GR_DIM];
@@ -303,7 +303,7 @@ class SphBLCoords
     {}
 
     KOKKOS_INLINE_FUNCTION void gcov_embed(
-        const GReal Xembed[GR_DIM], Real gcov[GR_DIM][GR_DIM]) const
+        const GReal Xembed[GR_DIM], GReal gcov[GR_DIM][GR_DIM]) const
     {
         const GReal r = Xembed[1];
         const GReal th = excise(excise(Xembed[2], 0.0, SMALL_NUM), M_PI, SMALL_NUM);
@@ -346,7 +346,7 @@ class SphBLExtG
     {}
 
     KOKKOS_INLINE_FUNCTION void gcov_embed(
-        const GReal Xembed[GR_DIM], Real gcov[GR_DIM][GR_DIM]) const
+        const GReal Xembed[GR_DIM], GReal gcov[GR_DIM][GR_DIM]) const
     {
         const GReal r = Xembed[1];
         const GReal th = excise(excise(Xembed[2], 0.0, SMALL_NUM), M_PI, SMALL_NUM);
@@ -409,13 +409,13 @@ class NullTransform
     }
     // Tangent space transformation matrices
     KOKKOS_INLINE_FUNCTION void dxdX(
-        const GReal X[GR_DIM], Real dxdX[GR_DIM][GR_DIM]) const
+        const GReal X[GR_DIM], GReal dxdX[GR_DIM][GR_DIM]) const
     {
         DLOOP2
             dxdX[mu][nu] = (mu == nu);
     }
     KOKKOS_INLINE_FUNCTION void dXdx(
-        const GReal X[GR_DIM], Real dXdx[GR_DIM][GR_DIM]) const
+        const GReal X[GR_DIM], GReal dXdx[GR_DIM][GR_DIM]) const
     {
         DLOOP2
             dXdx[mu][nu] = (mu == nu);
@@ -451,13 +451,13 @@ class SphNullTransform
     }
     // Tangent space transformation matrices
     KOKKOS_INLINE_FUNCTION void dxdX(
-        const GReal X[GR_DIM], Real dxdX[GR_DIM][GR_DIM]) const
+        const GReal X[GR_DIM], GReal dxdX[GR_DIM][GR_DIM]) const
     {
         DLOOP2
             dxdX[mu][nu] = (mu == nu);
     }
     KOKKOS_INLINE_FUNCTION void dXdx(
-        const GReal X[GR_DIM], Real dXdx[GR_DIM][GR_DIM]) const
+        const GReal X[GR_DIM], GReal dXdx[GR_DIM][GR_DIM]) const
     {
         DLOOP2
             dXdx[mu][nu] = (mu == nu);
@@ -505,7 +505,7 @@ class ExponentialTransform
      * to native
      */
     KOKKOS_INLINE_FUNCTION void dxdX(
-        const GReal Xnative[GR_DIM], Real dxdX[GR_DIM][GR_DIM]) const
+        const GReal Xnative[GR_DIM], GReal dxdX[GR_DIM][GR_DIM]) const
     {
         gzero2(dxdX);
         dxdX[0][0] = 1.;
@@ -518,7 +518,7 @@ class ExponentialTransform
      * embedding
      */
     KOKKOS_INLINE_FUNCTION void dXdx(
-        const GReal Xnative[GR_DIM], Real dXdx[GR_DIM][GR_DIM]) const
+        const GReal Xnative[GR_DIM], GReal dXdx[GR_DIM][GR_DIM]) const
     {
         gzero2(dXdx);
         dXdx[0][0] = 1.;
@@ -584,7 +584,7 @@ class SuperExponentialTransform
      * to native
      */
     KOKKOS_INLINE_FUNCTION void dxdX(
-        const GReal Xnative[GR_DIM], Real dxdX[GR_DIM][GR_DIM]) const
+        const GReal Xnative[GR_DIM], GReal dxdX[GR_DIM][GR_DIM]) const
     {
         gzero2(dxdX);
         dxdX[0][0] = 1.;
@@ -600,7 +600,7 @@ class SuperExponentialTransform
      * embedding
      */
     KOKKOS_INLINE_FUNCTION void dXdx(
-        const GReal Xnative[GR_DIM], Real dXdx[GR_DIM][GR_DIM]) const
+        const GReal Xnative[GR_DIM], GReal dXdx[GR_DIM][GR_DIM]) const
     {
         gzero2(dXdx);
         dXdx[0][0] = 1.;
@@ -666,7 +666,7 @@ class ModifyTransform
      * to native
      */
     KOKKOS_INLINE_FUNCTION void dxdX(
-        const GReal Xnative[GR_DIM], Real dxdX[GR_DIM][GR_DIM]) const
+        const GReal Xnative[GR_DIM], GReal dxdX[GR_DIM][GR_DIM]) const
     {
         gzero2(dxdX);
         dxdX[0][0] = 1.;
@@ -679,7 +679,7 @@ class ModifyTransform
      * embedding
      */
     KOKKOS_INLINE_FUNCTION void dXdx(
-        const GReal Xnative[GR_DIM], Real dXdx[GR_DIM][GR_DIM]) const
+        const GReal Xnative[GR_DIM], GReal dXdx[GR_DIM][GR_DIM]) const
     {
         gzero2(dXdx);
         dXdx[0][0] = 1.;
@@ -757,7 +757,7 @@ class FunkyTransform
      * to native
      */
     KOKKOS_INLINE_FUNCTION void dxdX(
-        const GReal Xnative[GR_DIM], Real dxdX[GR_DIM][GR_DIM]) const
+        const GReal Xnative[GR_DIM], GReal dxdX[GR_DIM][GR_DIM]) const
     {
         gzero2(dxdX);
         dxdX[0][0] = 1.;
@@ -786,10 +786,10 @@ class FunkyTransform
      * embedding
      */
     KOKKOS_INLINE_FUNCTION void dXdx(
-        const GReal Xnative[GR_DIM], Real dXdx[GR_DIM][GR_DIM]) const
+        const GReal Xnative[GR_DIM], GReal dXdx[GR_DIM][GR_DIM]) const
     {
         // Okay this one should probably stay numerical
-        Real dxdX_tmp[GR_DIM][GR_DIM];
+        GReal dxdX_tmp[GR_DIM][GR_DIM];
         dxdX(Xnative, dxdX_tmp);
         invert(&dxdX_tmp[0][0], &dXdx[0][0]);
     }
@@ -872,7 +872,7 @@ class WidepoleTransform
      * to native
      */
     KOKKOS_INLINE_FUNCTION void dxdX(
-        const GReal Xnative[GR_DIM], Real dxdX[GR_DIM][GR_DIM]) const
+        const GReal Xnative[GR_DIM], GReal dxdX[GR_DIM][GR_DIM]) const
     {
         gzero2(dxdX);
         dxdX[0][0] = 1.;
@@ -894,10 +894,10 @@ class WidepoleTransform
      * embedding
      */
     KOKKOS_INLINE_FUNCTION void dXdx(
-        const GReal Xnative[GR_DIM], Real dXdx[GR_DIM][GR_DIM]) const
+        const GReal Xnative[GR_DIM], GReal dXdx[GR_DIM][GR_DIM]) const
     {
         // Okay this one should probably stay numerical
-        Real dxdX_tmp[GR_DIM][GR_DIM];
+        GReal dxdX_tmp[GR_DIM][GR_DIM];
         dxdX(Xnative, dxdX_tmp);
         invert(&dxdX_tmp[0][0], &dXdx[0][0]);
     }

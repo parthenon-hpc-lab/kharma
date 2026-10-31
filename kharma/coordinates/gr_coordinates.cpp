@@ -176,7 +176,7 @@ void init_GRCoordinates(GRCoordinates& G)
                             }
                             if (loc == Loci::center) {
                                 // In the center, get the connection and gdet*connection
-                                Real conn_loc[GR_DIM][GR_DIM][GR_DIM];
+                                GReal conn_loc[GR_DIM][GR_DIM][GR_DIM];
                                 G.coords.conn_native(X, DELTA, conn_loc);
                                 DLOOP3 {
                                     conn_local(j, i, mu, nu, lam) +=

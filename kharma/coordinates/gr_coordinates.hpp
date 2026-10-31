@@ -207,7 +207,7 @@ class GRCoordinates : public parthenon::UniformCartesian
  * Function to return native coordinates on the GRCoordinates
  */
 KOKKOS_INLINE_FUNCTION void GRCoordinates::coord(
-    const int& k, const int& j, const int& i, const Loci& loc, Real X[GR_DIM]) const
+    const int& k, const int& j, const int& i, const Loci& loc, GReal X[GR_DIM]) const
 {
     X[0] = 0;
     switch (loc) {
