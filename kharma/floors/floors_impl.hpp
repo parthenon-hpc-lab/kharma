@@ -37,7 +37,6 @@
 // phoebus includes
 #include "domain.hpp"
 #include "microphysics/eos_kharma/eos_kharma.hpp"
-#include "phoebus_utils/variables.hpp"
 
 namespace Floors
 {

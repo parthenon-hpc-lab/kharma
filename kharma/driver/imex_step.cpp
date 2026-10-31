@@ -36,7 +36,6 @@
 #include "decs.hpp"
 
 // Packages
-#include "b_cd.hpp"
 #include "b_cleanup.hpp"
 #include "b_ct.hpp"
 #include "b_flux_ct.hpp"

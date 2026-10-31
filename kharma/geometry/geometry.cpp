@@ -22,12 +22,10 @@
 #include <parthenon/package.hpp>
 #include <utils/error_checking.hpp>
 
-// #include "analysis/history.hpp"
 #include "geometry/coordinate_systems.hpp"
 #include "geometry/geometry.hpp"
 #include "geometry/geometry_defaults.hpp"
 #include "geometry/geometry_utils.hpp"
-#include "phoebus_utils/variables.hpp"
 
 using namespace parthenon::package::prelude;
 using parthenon::Coordinates_t;
@@ -55,8 +53,6 @@ std::shared_ptr<StateDescriptor> Initialize(ParameterInput* pin)
     std::vector<int> cell_shape = {4};
     Metadata gcoord_cell =
         Metadata({Metadata::Cell, Metadata::Derived, Metadata::OneCopy}, cell_shape);
-    // TODO(JMM): Make this actual node-centered data when available
-    // TODO: Warning: g.n.coord output broken in Parthenon currently
     std::vector<int> node_shape = {dims.nx1 + 1, dims.nx2 + 1, dims.nx3 + 1, 4};
     Metadata gcoord_node =
         Metadata({Metadata::Derived, Metadata::OneCopy, Metadata::None}, node_shape);

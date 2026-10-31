@@ -42,7 +42,6 @@
 
 // phoebus includes
 #include "microphysics/eos_kharma/eos_kharma.hpp"
-#include "phoebus_utils/variables.hpp"
 
 // Needed for std::is_integral
 #include <type_traits>

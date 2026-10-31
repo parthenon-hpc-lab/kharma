@@ -87,55 +87,9 @@ class CoordinateEmbedding
     SomeBaseCoords base;
     SomeTransform transform;
 
-    // Common code for constructors
-#pragma hd_warning_disable
-    KOKKOS_FUNCTION void EmplaceSystems(
-        const SomeBaseCoords& base_in, const SomeTransform& transform_in)
-    {
-        // Isn't there some more elegant way to say "yeah the types are fine just copy da
-        // bits"?
-        if (PortsOfCall::holds_alternative<SphMinkowskiCoords>(base_in)) {
-            base.emplace<SphMinkowskiCoords>(
-                PortsOfCall::get<SphMinkowskiCoords>(base_in));
-        } else if (PortsOfCall::holds_alternative<CartMinkowskiCoords>(base_in)) {
-            base.emplace<CartMinkowskiCoords>(
-                PortsOfCall::get<CartMinkowskiCoords>(base_in));
-        } else if (PortsOfCall::holds_alternative<SphBLCoords>(base_in)) {
-            base.emplace<SphBLCoords>(PortsOfCall::get<SphBLCoords>(base_in));
-        } else if (PortsOfCall::holds_alternative<SphKSCoords>(base_in)) {
-            base.emplace<SphKSCoords>(PortsOfCall::get<SphKSCoords>(base_in));
-        } else if (PortsOfCall::holds_alternative<SphKSExtG>(base_in)) {
-            base.emplace<SphKSExtG>(PortsOfCall::get<SphKSExtG>(base_in));
-        } else if (PortsOfCall::holds_alternative<SphBLExtG>(base_in)) {
-            base.emplace<SphBLExtG>(PortsOfCall::get<SphBLExtG>(base_in));
-        }
-
-        if (PortsOfCall::holds_alternative<NullTransform>(transform_in)) {
-            transform.emplace<NullTransform>(
-                PortsOfCall::get<NullTransform>(transform_in));
-        } else if (PortsOfCall::holds_alternative<ExponentialTransform>(transform_in)) {
-            transform.emplace<ExponentialTransform>(
-                PortsOfCall::get<ExponentialTransform>(transform_in));
-        } else if (PortsOfCall::holds_alternative<SuperExponentialTransform>(
-                       transform_in)) {
-            transform.emplace<SuperExponentialTransform>(
-                PortsOfCall::get<SuperExponentialTransform>(transform_in));
-        } else if (PortsOfCall::holds_alternative<ModifyTransform>(transform_in)) {
-            transform.emplace<ModifyTransform>(
-                PortsOfCall::get<ModifyTransform>(transform_in));
-        } else if (PortsOfCall::holds_alternative<FunkyTransform>(transform_in)) {
-            transform.emplace<FunkyTransform>(
-                PortsOfCall::get<FunkyTransform>(transform_in));
-        } else if (PortsOfCall::holds_alternative<WidepoleTransform>(transform_in)) {
-            transform.emplace<WidepoleTransform>(
-                PortsOfCall::get<WidepoleTransform>(transform_in));
-        }
-    }
-
     // Constructors
-#pragma hd_warning_disable
     CoordinateEmbedding() = default;
-#pragma hd_warning_disable
+
     CoordinateEmbedding(parthenon::ParameterInput* pin)
     {
         const std::string base_str = pin->GetString("coordinates", "base");
@@ -239,47 +193,10 @@ class CoordinateEmbedding
             throw std::invalid_argument("Unsupported coordinate transform!");
         }
     }
-#pragma hd_warning_disable
-    KOKKOS_FUNCTION CoordinateEmbedding(
-        SomeBaseCoords& base_in, SomeTransform& transform_in)
+    CoordinateEmbedding(SomeBaseCoords& base_in, SomeTransform& transform_in)
         : base(base_in)
         , transform(transform_in)
     {}
-#pragma hd_warning_disable
-    KOKKOS_FUNCTION CoordinateEmbedding(const CoordinateEmbedding& src)
-        : base(src.base)
-        , transform(src.transform)
-    {}
-#pragma hd_warning_disable
-    KOKKOS_FUNCTION const CoordinateEmbedding& operator=(const CoordinateEmbedding& src)
-    {
-        // CoordinateEmbedding copy(src);
-        // base.swap(copy.base);
-        // transform.swap(copy.transform);
-        EmplaceSystems(src.base, src.transform);
-        return *this;
-    }
-    // Convenience functions to get common things:
-    // Names (host only)
-#pragma hd_warning_disable
-    KOKKOS_INLINE_FUNCTION std::string variant_names() const
-    {
-        std::string basename(PortsOfCall::visit(
-            [&](const auto& self)
-            {
-                return self.name;
-            },
-            base));
-
-        std::string transformname(PortsOfCall::visit(
-            [&](const auto& self)
-            {
-                return self.name;
-            },
-            transform));
-
-        return basename + " " + transformname;
-    }
 
     // Properties (host or device)
     KOKKOS_INLINE_FUNCTION bool is_spherical() const

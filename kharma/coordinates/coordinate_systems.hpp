@@ -122,7 +122,7 @@ class SphKSCoords
   public:
     static constexpr char name[] = "SphKSCoords";
     // BH Spin is a property of KS
-    const GReal a;
+    GReal a;
     static constexpr bool spherical = true;
 
     KOKKOS_FUNCTION SphKSCoords(GReal spin)
@@ -202,7 +202,7 @@ class SphKSExtG
   public:
     static constexpr char name[] = "SphKSExtG";
     // BH Spin is a property of KS
-    const GReal a;
+    GReal a;
     static constexpr bool spherical = true;
 
     static constexpr GReal A = 4.24621057e-9; // 1.46797639e-8;
@@ -295,12 +295,16 @@ class SphBLCoords
   public:
     static constexpr char name[] = "SphBLCoords";
     // BH Spin is a property of BL
-    const GReal a;
+    GReal a;
     static constexpr bool spherical = true;
 
     KOKKOS_FUNCTION SphBLCoords(GReal spin)
         : a(spin)
     {}
+
+    // static constexpr std::string name() {
+    //     return "SphBLCoords";
+    // }
 
     KOKKOS_INLINE_FUNCTION void gcov_embed(
         const GReal Xembed[GR_DIM], Real gcov[GR_DIM][GR_DIM]) const
@@ -335,7 +339,7 @@ class SphBLExtG
   public:
     static constexpr char name[] = "SphBLExtG";
     // BH Spin is a property of BL
-    const GReal a;
+    GReal a;
     static constexpr bool spherical = true;
 
     static constexpr GReal A = 4.24621057e-9; // 1.46797639e-8;
@@ -543,8 +547,8 @@ class SuperExponentialTransform
     static constexpr GReal stopx2 = M_PI;
     static constexpr GReal stopx3 = 2. * M_PI;
 
-    const GReal xe1br, xn1br;
-    const double npow2, cpow2;
+    GReal xe1br, xn1br;
+    double npow2, cpow2;
 
     // Constructor
     KOKKOS_FUNCTION SuperExponentialTransform(
@@ -629,7 +633,7 @@ class ModifyTransform
     static constexpr GReal stopx2 = 1.;
     static constexpr GReal stopx3 = 2. * M_PI;
 
-    const GReal hslope;
+    GReal hslope;
 
     // Constructor
     KOKKOS_FUNCTION ModifyTransform(GReal hslope_in)
@@ -704,10 +708,10 @@ class FunkyTransform
     static constexpr GReal stopx2 = 1.;
     static constexpr GReal stopx3 = 2. * M_PI;
 
-    const GReal startx1_grid;
-    const GReal hslope, poly_xt, poly_alpha, mks_smooth;
+    GReal startx1_grid;
+    GReal hslope, poly_xt, poly_alpha, mks_smooth;
     // Must be *defined* afterward to use constructor below
-    const GReal poly_norm;
+    GReal poly_norm;
 
     // Constructor
     KOKKOS_FUNCTION FunkyTransform(GReal startx1_in, GReal hslope_in, GReal mks_smooth_in,
@@ -810,7 +814,7 @@ class WidepoleTransform
     static constexpr GReal stopx2 = 1.;
     static constexpr GReal stopx3 = 2. * M_PI;
 
-    const GReal lin_frac, n2, n3;
+    GReal lin_frac, n2, n3;
     GReal smoothness;
 
     // Constructor

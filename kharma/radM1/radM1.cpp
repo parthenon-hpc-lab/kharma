@@ -280,7 +280,7 @@ void RadM1::ApplyRadM1Floors(MeshBlockData<Real>* rc, IndexDomain domain)
 
     // We need to check if we actually have B fields enabled to avoid segfaults
     const bool has_b_field = pmb->packages.AllPackages().count("B_FluxCT") ||
-                             pmb->packages.AllPackages().count("B_CD");
+                             pmb->packages.AllPackages().count("B_CT");
 
     auto bounds = pmb->cellbounds;
     const IndexRange ib = bounds.GetBoundsI(domain);

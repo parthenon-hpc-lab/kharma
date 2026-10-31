@@ -37,7 +37,6 @@
 
 // phoebus includes
 #include "microphysics/eos_kharma/eos_kharma.hpp"
-#include "phoebus_utils/variables.hpp"
 
 #include "emhd.hpp"
 #include "gr_coordinates.hpp"
@@ -134,20 +133,6 @@ KOKKOS_FORCEINLINE_FUNCTION void prim_to_flux(const GRCoordinates& G, const Glob
                 flux[m_u.B1 + v] =
                     (D.bcon[v + 1] * D.ucon[dir] - D.bcon[dir] * D.ucon[v + 1]) * gdet;
         }
-        // Extra scalar psi for constraint damping, see B_CD
-        if (m_u.PSI >= 0) {
-            if (dir == 0) {
-                flux[m_u.PSI] = P(m_p.PSI, k, j, i) * gdet;
-            } else {
-                // Psi field update as in Mosta et al (IllinoisGRMHD), alternate
-                // explanation Jesse et al (2020)
-                // Real alpha = 1. / m::sqrt(-G.gcon(Loci::center, j, i, 0, 0));
-                // Real beta_dir = G.gcon(Loci::center, j, i, 0, dir) * alpha * alpha;
-                flux[m_u.PSI] = (D.bcon[dir] - G.gcon(Loci::center, j, i, 0, dir) *
-                                                   P(m_p.PSI, k, j, i)) *
-                                gdet;
-            }
-        }
     }
 
     // Ye
@@ -219,21 +204,6 @@ KOKKOS_FORCEINLINE_FUNCTION void prim_to_flux(const GRCoordinates& G, const Glob
             VLOOP
                 flux(m_u.B1 + v, k, j, i) =
                     (D.bcon[v + 1] * D.ucon[dir] - D.bcon[dir] * D.ucon[v + 1]) * gdet;
-        }
-        // Extra scalar psi for constraint damping, see B_CD
-        if (m_u.PSI >= 0) {
-            if (dir == 0) {
-                flux(m_u.PSI, k, j, i) = P(m_p.PSI, k, j, i) * gdet;
-            } else {
-                // Psi field update as in Mosta et al (IllinoisGRMHD), alternate
-                // explanation Jesse et al (2020)
-                // Real alpha = 1. / sqrt(-G.gcon(Loci::center, j, i, 0, 0));
-                // Real beta_dir = G.gcon(Loci::center, j, i, 0, dir) * alpha * alpha;
-                flux(m_u.PSI, k, j, i) =
-                    (D.bcon[dir] -
-                        G.gcon(Loci::center, j, i, 0, dir) * P(m_p.PSI, k, j, i)) *
-                    gdet;
-            }
         }
     }
 

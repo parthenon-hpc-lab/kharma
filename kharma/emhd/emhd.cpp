@@ -43,7 +43,6 @@
 
 // phoebus includes
 #include "microphysics/eos_kharma/eos_kharma.hpp"
-#include "phoebus_utils/variables.hpp"
 
 #include <parthenon/parthenon.hpp>
 

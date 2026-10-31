@@ -69,7 +69,6 @@
 
 // phoebus includes
 #include "microphysics/eos_kharma/eos_kharma.hpp"
-#include "phoebus_utils/variables.hpp"
 
 // This isn't a vecloop, also it takes an argument.
 // Left it in since it's useful and all over Phoebus, maybe we'll adopt it
