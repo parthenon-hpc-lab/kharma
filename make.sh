@@ -379,6 +379,15 @@ if option "clean"; then
   fi
 
   # Patches for ports-of-call
+  if option "sycl"; then
+    cd external/singularity-eos
+    git apply --quiet ../patches/singularity-eos-sycl.patch 2>/dev/null || true
+    cd -
+    cd external/singularity-eos/utils/ports-of-call
+    git apply --quiet ../../../patches/ports-of-call-sycl.patch 2>/dev/null || true
+    cd -
+  fi
+  
   #cd external/singularity-eos/utils/ports-of-call
   #if [[ $(( $(git --version | cut -d '.' -f 2) > 35 )) == "1" ]]; then
   #  git apply --quiet ../../../patches/ports-of-call-*.patch

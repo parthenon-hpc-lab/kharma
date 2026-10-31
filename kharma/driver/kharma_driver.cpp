@@ -453,8 +453,9 @@ TaskID KHARMADriver::AddFOFC(TaskID& t_start, TaskList& tl, MeshData<Real>* md,
         KHARMADriver::AddBoundarySync(t_derefine | t_start_recv_bound, tl, guess_sync);
 
     // Recover primitive variables of the guess From faces
+    // Must wait for the guess sync: it shares comm buffers with the later EMF/state syncs
     auto t_guess_Bp =
-        tl.AddTask(t_derefine, B_CT::MeshUtoP, guess, IndexDomain::entire, false);
+        tl.AddTask(t_guess_sync, B_CT::MeshUtoP, guess, IndexDomain::entire, false);
     auto t_guess_prims =
         tl.AddTask(t_guess_Bp, Inverter::MeshUtoP, guess, IndexDomain::entire, false);
 
