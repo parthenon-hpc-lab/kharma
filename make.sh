@@ -360,6 +360,9 @@ if option "clean"; then
   fi
   cd -
 
+  cd external/parthenon
+  git apply --quiet ../patches/parthenon-single-precision.patch 2>/dev/null || true
+  cd -
   cd external/singularity-eos
   git apply --quiet ../patches/singularity-eos-single-precision.patch 2>/dev/null || true
   cd -

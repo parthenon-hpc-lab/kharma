@@ -169,10 +169,10 @@ KOKKOS_FORCEINLINE_FUNCTION void reconstruct<Type::weno5>(RECONSTRUCT_ONE_ARGS)
     den[1] *= den[1];
     den[2] *= den[2];
 
-    Real wtr[3] = {(1. / 16.) / den[0], (5. / 8.) / den[1], (5. / 16.) / den[2]};
+    Real wtr[3] = {static_cast<Real>(1. / 16.) / den[0], static_cast<Real>(5. / 8.) / den[1], static_cast<Real>(5. / 16.) / den[2]};
     Real Wr = wtr[0] + wtr[1] + wtr[2];
 
-    Real wtl[3] = {(1. / 16.) / den[2], (5. / 8.) / den[1], (5. / 16.) / den[0]};
+    Real wtl[3] = {static_cast<Real>(1. / 16.) / den[2], static_cast<Real>(5. / 8.) / den[1], static_cast<Real>(5. / 16.) / den[0]};
     Real Wl = wtl[0] + wtl[1] + wtl[2];
 
     // S11 1, 2, 3
@@ -204,7 +204,7 @@ KOKKOS_FORCEINLINE_FUNCTION void reconstruct_left<Type::weno5>(RECONSTRUCT_ONE_L
     den[1] *= den[1];
     den[2] *= den[2];
 
-    Real wtl[3] = {(1. / 16.) / den[2], (5. / 8.) / den[1], (5. / 16.) / den[0]};
+    Real wtl[3] = {static_cast<Real>(1. / 16.) / den[2], static_cast<Real>(5. / 8.) / den[1], static_cast<Real>(5. / 16.) / den[0]};
     Real Wl = wtl[0] + wtl[1] + wtl[2];
 
     // S11 1, 2, 3
@@ -234,7 +234,7 @@ KOKKOS_FORCEINLINE_FUNCTION void reconstruct_right<Type::weno5>(
     den[1] *= den[1];
     den[2] *= den[2];
 
-    Real wtr[3] = {(1. / 16.) / den[0], (5. / 8.) / den[1], (5. / 16.) / den[2]};
+    Real wtr[3] = {static_cast<Real>(1. / 16.) / den[0], static_cast<Real>(5. / 8.) / den[1], static_cast<Real>(5. / 16.) / den[2]};
     Real Wr = wtr[0] + wtr[1] + wtr[2];
 
     rout = ((3. / 8.) * x1 - (5. / 4.) * x2 + (15. / 8.) * x3) * (wtr[0] / Wr) +

@@ -955,9 +955,10 @@ KOKKOS_INLINE_FUNCTION int solve_4d_pmhd_ff(const GRCoordinates& G,
     const Real U_rad_0[4] = {U_entry[4], U_entry[5], U_entry[6], U_entry[7]};
 
     // Minimum velocity magnitude for the rootfinder, in covariant notation.
-    const Real vel_min[3] = {1.e-8 / m::sqrt(G.gcov(Loci::center, j, i, 1, 1)),
-        1.e-8 / m::sqrt(G.gcov(Loci::center, j, i, 2, 2)),
-        1.e-8 / m::sqrt(G.gcov(Loci::center, j, i, 3, 3))};
+    const Real vel_min[3] = {
+        static_cast<Real>(1.e-8 / m::sqrt(G.gcov(Loci::center, j, i, 1, 1))),
+        static_cast<Real>(1.e-8 / m::sqrt(G.gcov(Loci::center, j, i, 2, 2))),
+        static_cast<Real>(1.e-8 / m::sqrt(G.gcov(Loci::center, j, i, 3, 3)))};
 
     // We are constructing a lambda evaluation function within this function. That will
     // basically get rid of redundant code and since this will not be called from any
@@ -1068,7 +1069,8 @@ KOKKOS_INLINE_FUNCTION int solve_4d_pmhd_ff(const GRCoordinates& G,
     // part keeps its Newton value.
     Real u_lo = (f[0] < 0.) ? x[0] : 0., u_hi = (f[0] >= 0.) ? x[0] : 0.;
     for (int nb = 0; nb < 30 && !converged && !(u_lo > 0. && u_hi > 0.); nb++) {
-        Real xb[4] = {(u_hi > 0.) ? 0.1 * u_hi : 10. * u_lo, x[1], x[2], x[3]};
+        Real xb[4] = {
+            static_cast<Real>((u_hi > 0.) ? 0.1 * u_hi : 10. * u_lo), x[1], x[2], x[3]};
         Real fb[4], eb, emb, rb, Pb[4], dSb[4], Gb;
         if (!eval(xb, fb, eb, emb, rb, Pb, dSb, Gb)) {
             if (why_out != nullptr) *why_out = 3;
@@ -1150,7 +1152,8 @@ KOKKOS_INLINE_FUNCTION int solve_4d_pmhd_ff(const GRCoordinates& G,
             if (stale) {
                 Real lo = (f[0] < 0.) ? x[0] : 0., hi = (f[0] >= 0.) ? x[0] : 0.;
                 for (int nb = 0; nb < 30 && !(lo > 0. && hi > 0.); nb++) {
-                    Real xb[4] = {(hi > 0.) ? 0.1 * hi : 10. * lo, x[1], x[2], x[3]};
+                    Real xb[4] = {
+                        static_cast<Real>((hi > 0.) ? 0.1 * hi : 10. * lo), x[1], x[2], x[3]};
                     if (!eval(xb, fb, eb, emb, rb, Pb, dSb, Gb)) break;
                     if (fb[0] >= 0.)
                         hi = xb[0];

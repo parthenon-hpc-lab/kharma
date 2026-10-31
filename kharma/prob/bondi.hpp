@@ -215,7 +215,7 @@ KOKKOS_INLINE_FUNCTION void get_prim_bondi(const GRCoordinates& G, const bool di
     Real ur = ur_tmp; // Bondi radial velocity solution
 
     // Get the native-coordinate 4-vector corresponding to ur
-    const Real ucon_bl[GR_DIM] = {0, ur * ur_frac, 0, uphi * m::pow(r, -3. / 2.)};
+    const GReal ucon_bl[GR_DIM] = {0, ur * ur_frac, 0, uphi * m::pow(r, -3. / 2.)};
     Real ucon_native[GR_DIM];
     G.coords.bl_fourvel_to_native(Xnative, ucon_bl, ucon_native);
 

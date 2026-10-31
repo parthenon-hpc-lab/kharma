@@ -283,13 +283,15 @@ TaskStatus InitializeRadMHDModes(
                 // This is in fluid frame, not in the frame used for our primitives (M1
                 // rest frame). So, we need to change it
                 Real E_hat = Erad0 + (dErad * emode).real();
-                Real F_hat[GR_DIM] = {0., (dF1rad * emode).real(),
-                    (dF2rad * emode).real(), (dF3rad * emode).real()};
+                Real F_hat[GR_DIM] = {0., static_cast<Real>((dF1rad * emode).real()),
+                    static_cast<Real>((dF2rad * emode).real()),
+                    static_cast<Real>((dF3rad * emode).real())};
 
                 // I think this fails if non cartesian metric. Be careful! In cartesian
                 // minkowski coordinate basis IS the orthonormal tetrad.
-                Real uvec_gas[NVEC] = {u10 + (du1 * emode).real(),
-                    u20 + (du2 * emode).real(), u30 + (du3 * emode).real()};
+                Real uvec_gas[NVEC] = {static_cast<Real>(u10 + (du1 * emode).real()),
+                    static_cast<Real>(u20 + (du2 * emode).real()),
+                    static_cast<Real>(u30 + (du3 * emode).real())};
                 Real ucon_gas[GR_DIM];
                 GRMHD::calc_ucon(G, uvec_gas, k, j, i, Loci::center, ucon_gas);
 
