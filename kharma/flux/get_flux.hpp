@@ -396,7 +396,7 @@ inline TaskStatus GetFlux(MeshData<Real>* md)
             if (use_rad) {
                 Real cmaxL_rad, cminL_rad;
                 const Real kap_l = RadM1::calc_kappa_tot(
-+                    G, Pl_all(bl), m_p, Dtmp, eos, rad_opac, k, j, i, loc);
+                    G, Pl_all(bl), m_p, Dtmp, eos, rad_opac, k, j, i, loc);
                 Flux::vchar_rad(
                     G, Pl_all(bl), m_p, kap_l, k, j, i, loc, dir, cmaxL_rad, cminL_rad);
                 cmax_rad(bl, dir - 1, k, j, i) = m::max(0., cmaxL_rad);
@@ -437,7 +437,7 @@ inline TaskStatus GetFlux(MeshData<Real>* md)
             if (use_rad) {
                 Real cmaxR_rad, cminR_rad;
                 const Real kap_r = RadM1::calc_kappa_tot(
-+                    G, Pr_all(bl), m_p, Dtmp, eos, rad_opac, k, j, i, loc);
+                    G, Pr_all(bl), m_p, Dtmp, eos, rad_opac, k, j, i, loc);
                 Flux::vchar_rad(
                     G, Pr_all(bl), m_p, kap_r, k, j, i, loc, dir, cmaxR_rad, cminR_rad);
                 cmax_rad(bl, dir - 1, k, j, i) =

@@ -802,6 +802,9 @@ void UpdateAveragedCtop(MeshData<Real>* md)
     auto& params = pmesh->packages.Get<KHARMAPackage>("Boundaries")->AllParams();
     const auto& eos_params = pmesh->packages.Get("eos")->AllParams();
     auto eos = eos_params.Get<Microphysics::EOS::EOS>("d.EOS");
+    const bool use_rad = pmesh->packages.AllPackages().count("RadM1");
+    const RadM1::RadOpac rad_opac =
+        (use_rad) ? RadM1::GetRadOpac(pmesh->packages) : RadM1::RadOpac();
     for (auto& pmb : pmesh->block_list) {
         auto& rc = pmb->meshblock_data.Get(md->StageName());
         for (int i = 0; i < BOUNDARY_NFACES; i++) {
@@ -831,6 +834,12 @@ void UpdateAveragedCtop(MeshData<Real>* md)
                         rc->PackVariables(std::vector<std::string>{"Flux.cmax"});
                     const auto& cmin =
                         rc->PackVariables(std::vector<std::string>{"Flux.cmin"});
+                    const auto& cmax_rad =
+                        (use_rad) ? rc->PackVariables(std::vector<std::string>{"Flux.cmax_rad"})
+                                  : cmax;
+                    const auto& cmin_rad =
+                        (use_rad) ? rc->PackVariables(std::vector<std::string>{"Flux.cmin_rad"})
+                                  : cmin;
 
                     const auto& G = pmb->coords;
                     const Floors::Prescription floors =
@@ -865,6 +874,15 @@ void UpdateAveragedCtop(MeshData<Real>* md)
                             Flux::vchar(G, P, m_p, Dtmp, eos, emhd_params, k, jf, i,
                                 Loci::center, X3DIR, cmax(V3, k, jf, i), cmin_minus);
                             cmin(V3, k, jf, i) = -cmin_minus;
+                            if (use_rad) {
+                                const Real kap = RadM1::calc_kappa_tot(
+                                    G, P, m_p, Dtmp, eos, rad_opac, k, jf, i, Loci::center);
+                                for (int dir = X1DIR; dir <= X3DIR; dir++) {
+                                    Flux::vchar_rad(G, P, m_p, kap, k, jf, i, Loci::center,
+                                        dir, cmax_rad(dir - 1, k, jf, i), cmin_minus);
+                                    cmin_rad(dir - 1, k, jf, i) = -cmin_minus;
+                                }
+                            }
                         });
                 }
             }
