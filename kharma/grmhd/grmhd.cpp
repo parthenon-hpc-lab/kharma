@@ -835,11 +835,13 @@ void UpdateAveragedCtop(MeshData<Real>* md)
                     const auto& cmin =
                         rc->PackVariables(std::vector<std::string>{"Flux.cmin"});
                     const auto& cmax_rad =
-                        (use_rad) ? rc->PackVariables(std::vector<std::string>{"Flux.cmax_rad"})
-                                  : cmax;
+                        (use_rad)
+                            ? rc->PackVariables(std::vector<std::string>{"Flux.cmax_rad"})
+                            : cmax;
                     const auto& cmin_rad =
-                        (use_rad) ? rc->PackVariables(std::vector<std::string>{"Flux.cmin_rad"})
-                                  : cmin;
+                        (use_rad)
+                            ? rc->PackVariables(std::vector<std::string>{"Flux.cmin_rad"})
+                            : cmin;
 
                     const auto& G = pmb->coords;
                     const Floors::Prescription floors =
@@ -875,11 +877,12 @@ void UpdateAveragedCtop(MeshData<Real>* md)
                                 Loci::center, X3DIR, cmax(V3, k, jf, i), cmin_minus);
                             cmin(V3, k, jf, i) = -cmin_minus;
                             if (use_rad) {
-                                const Real kap = RadM1::calc_kappa_tot(
-                                    G, P, m_p, Dtmp, eos, rad_opac, k, jf, i, Loci::center);
+                                const Real kap = RadM1::calc_kappa_tot(G, P, m_p, Dtmp,
+                                    eos, rad_opac, k, jf, i, Loci::center);
                                 for (int dir = X1DIR; dir <= X3DIR; dir++) {
-                                    Flux::vchar_rad(G, P, m_p, kap, k, jf, i, Loci::center,
-                                        dir, cmax_rad(dir - 1, k, jf, i), cmin_minus);
+                                    Flux::vchar_rad(G, P, m_p, kap, k, jf, i,
+                                        Loci::center, dir, cmax_rad(dir - 1, k, jf, i),
+                                        cmin_minus);
                                     cmin_rad(dir - 1, k, jf, i) = -cmin_minus;
                                 }
                             }

@@ -133,9 +133,9 @@ std::shared_ptr<KHARMAPackage> RadM1::Initialize(
     // Explicit star state averaged over each ISMR coarse cell: 9 gas+rad, 3 B, Ktot
     if (pin->DoesParameterExist("ismr", "nlevels") ||
         (pin->DoesParameterExist("ismr", "on") && pin->GetBoolean("ismr", "on")))
-        pkg->AddField("rad_ustar",
-            Metadata({Metadata::Real, Metadata::Cell, Metadata::Derived, Metadata::OneCopy},
-                std::vector<int>{13}));
+        pkg->AddField("rad_ustar", Metadata({Metadata::Real, Metadata::Cell,
+                                                Metadata::Derived, Metadata::OneCopy},
+                                       std::vector<int>{13}));
     Real u_rad_floor = pin->GetOrAddReal("radM1", "u_rad_floor", 1.e-40);
     pkg->AllParams().Add("u_rad_floor", u_rad_floor);
 
@@ -427,9 +427,9 @@ TaskStatus RadM1::FixRadiation(MeshBlockData<Real>* rc)
     pmb->par_for("fix_radiation", b.ks, b.ke, b.js, b.je, b.is, b.ie,
         KOKKOS_LAMBDA (const int &k, const int &j, const int &i)
         {
-            const bool bad = rad_inversion_failed(rinvflag(0, k, j, i)) ||
-                             rimplflag(0, k, j, i) ==
-                                 static_cast<int>(StatusImplicitStep::failure);
+            const bool bad =
+                rad_inversion_failed(rinvflag(0, k, j, i)) ||
+                rimplflag(0, k, j, i) == static_cast<int>(StatusImplicitStep::failure);
             if (bad) {
                 double wsum = 0.;
                 double sum[4] = {0.};
@@ -602,7 +602,8 @@ void RadM1::AddSourceImplicitly(
         // How many iterations it took for each cell to exit the solver.
         auto solver_count =
             pmb_data->PackVariables(std::vector<std::string>{"solver_count"});
-        // ISMR: polar rows solve the coupling on the coarse-cell average of the star state
+        // ISMR: polar rows solve the coupling on the coarse-cell average of the star
+        // state
         auto ustar = pmb_data->PackVariables(std::vector<std::string>{"rad_ustar"});
         const int nlevels =
             (pmb->packages.AllPackages().count("ISMR") && ustar.GetDim(4) > 0)
@@ -747,10 +748,11 @@ void RadM1::AddSourceImplicitly(
             for (int v = 0; v < 3; v++) s[9 + v] = 0.;
             if (m_u.B1 >= 0 && m_p.B1 >= 0) {
                 for (int v = 0; v < 3; v++)
-                    s[9 + v] = gam0 * U_init_substep(m_u.B1 + v, k, j, i) +
-                               gam1 * U_base(m_ub.B1 + v, k, j, i) +
-                               dt * dU_substep(m_u.B1 + v, k, j, i) +
-                               ((ars_d1 != 0.0) ? ars_d1 * dU1(m_d1.B1 + v, k, j, i) : 0.0);
+                    s[9 + v] =
+                        gam0 * U_init_substep(m_u.B1 + v, k, j, i) +
+                        gam1 * U_base(m_ub.B1 + v, k, j, i) +
+                        dt * dU_substep(m_u.B1 + v, k, j, i) +
+                        ((ars_d1 != 0.0) ? ars_d1 * dU1(m_d1.B1 + v, k, j, i) : 0.0);
 
                 // Now if we are doing face-centered B, we need to reconstruct it as well.
                 if (face_b) {

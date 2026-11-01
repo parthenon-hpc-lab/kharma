@@ -227,7 +227,6 @@ KOKKOS_INLINE_FUNCTION void calc_ucon_rad(const GRCoordinates& G, const Global& 
             P(m.U1_RAD + v, k, j, i) - gamma * alpha * G.gcon(loc, j, i, 0, v + 1);
 }
 
-
 KOKKOS_INLINE_FUNCTION bool inside_horizon(
     const GRCoordinates& G, const int& k, const int& j, const int& i, const Loci loc)
 {
