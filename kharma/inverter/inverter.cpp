@@ -124,11 +124,11 @@ std::shared_ptr<KHARMAPackage> Inverter::Initialize(
     params.Add("kill_on_any_max_iter", kill_on_any_max_iter);
 
     // Flag denoting UtoP inversion failures
-    // Needs boundary sync if the fixup code will use neighbors, and if
-    // we're syncing prims and fixing up after
+    // Needs boundary sync if we're syncing prims and fixing up after: the fixups also run
+    // on the ghost zones
     bool sync_prims = packages->Get("Driver")->Param<bool>("sync_prims");
     Metadata m;
-    if (sync_prims && fix_average_neighbors) {
+    if (sync_prims) {
         m = Metadata({Metadata::Real, Metadata::Cell, Metadata::Derived,
             Metadata::OneCopy, Metadata::FillGhost});
     } else {

@@ -205,6 +205,16 @@ inline TaskStatus GetFlux(MeshData<Real>* md)
                     Pr_all(bl, p, k, j, i), Pl_all(bl, p, k, j + 1, i));
             });
     } else if (dir == 3 && use_ismr) {
+        // ISMR rows exist only next to a physical X2 boundary (bit 0 inner, bit 1 outer)
+        Kokkos::View<int*> ismr_pole("ismr_pole", block.e + 1);
+        auto ismr_pole_h = Kokkos::create_mirror_view(ismr_pole);
+        for (int bl = block.s; bl <= block.e; bl++) {
+            auto pmb = md->GetBlockData(bl)->GetBlockPointer();
+            ismr_pole_h(bl) =
+                (KBoundaries::IsPhysicalBoundary(pmb, BoundaryFace::inner_x2) ? 1 : 0) +
+                (KBoundaries::IsPhysicalBoundary(pmb, BoundaryFace::outer_x2) ? 2 : 0);
+        }
+        Kokkos::deep_copy(ismr_pole, ismr_pole_h);
         pmb0->par_for("calc_flux_recon", block.s, block.e, 0, P_all.GetDim(4) - 1, bc.ks,
             bc.ke, bc.js, bc.je, bc.is, bc.ie,
             KOKKOS_LAMBDA(const int& bl,
@@ -214,7 +224,8 @@ inline TaskStatus GetFlux(MeshData<Real>* md)
                         const int& i)
             {
                 const auto& G = U_all.GetCoords(bl);
-                if (j < ng_plus_nlevels || j > P_all.GetDim(2) - 1 - ng_plus_nlevels) {
+                if (((ismr_pole(bl) & 1) && j < ng_plus_nlevels) ||
+                    ((ismr_pole(bl) & 2) && j > P_all.GetDim(2) - 1 - ng_plus_nlevels)) {
                     KReconstruction::reconstruct<RType::linear_mc>(
                         P_all(bl, p, k - 2, j, i), P_all(bl, p, k - 1, j, i),
                         P_all(bl, p, k, j, i), P_all(bl, p, k + 1, j, i),

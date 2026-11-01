@@ -116,8 +116,8 @@ std::shared_ptr<KHARMAPackage> RadM1::Initialize(
     pkg->AddField("cons.uvec_rad", m_cons_vector);
 
     // Flag denoting RadM1 implicit solver failures
-    Metadata m =
-        Metadata({Metadata::Real, Metadata::Cell, Metadata::Derived, Metadata::OneCopy});
+    Metadata m = Metadata({Metadata::Real, Metadata::Cell, Metadata::Derived,
+        Metadata::OneCopy, Metadata::FillGhost});
     pkg->AddField("rimplflag", m);
     pkg->AddField("rinvflag", m);
     pkg->AddField("rad_imex_src",
@@ -419,37 +419,18 @@ TaskStatus RadM1::FixRadiation(MeshBlockData<Real>* rc)
 
     GridScalar rinvflag = rc->Get("rinvflag").data;
     GridScalar rimplflag = rc->Get("rimplflag").data;
-    GridScalar pflag = rc->Get("pflag").data;
-    PackIndexMap mhd_prims_map, mhd_cons_map;
-    auto Pg = GRMHD::PackMHDPrims(rc, mhd_prims_map);
-    auto Ug = GRMHD::PackMHDCons(rc, mhd_cons_map);
-    const VarMap m_pg(mhd_prims_map, false), m_ug(mhd_cons_map, true);
-    auto eos = pmb->packages.Get("eos")->AllParams().Get<Microphysics::EOS::EOS>("d.EOS");
-    const int impl_fail = static_cast<int>(StatusImplicitStep::failure);
 
     const Real erad_floor = pmb->packages.Get("RadM1")->Param<Real>("u_rad_floor");
-    const GReal r_hor = G.coords.get_horizon();
 
     const IndexRange3 b = KDomain::GetPhysicalRange(rc);
 
     pmb->par_for("fix_radiation", b.ks, b.ke, b.js, b.je, b.is, b.ie,
         KOKKOS_LAMBDA (const int &k, const int &j, const int &i)
         {
-            GReal Xembed[GR_DIM];
-            G.coord_embed(k, j, i, Loci::center, Xembed);
-            const bool inside_horizon = r_hor > 0.0 && Xembed[1] < r_hor;
-
-            const bool bad =
-                !inside_horizon && (rad_inversion_failed(rinvflag(0, k, j, i)) ||
-                                       rimplflag(0, k, j, i) ==
-                                           static_cast<int>(StatusImplicitStep::failure));
+            const bool bad = rad_inversion_failed(rinvflag(0, k, j, i)) ||
+                             rimplflag(0, k, j, i) ==
+                                 static_cast<int>(StatusImplicitStep::failure);
             if (bad) {
-                // Implicit failures also average u, u^i (not rho, B). I took this from
-                // Koral Lite, previously I was just avg rad variables.
-                const bool gas_bad =
-                    !inside_horizon && rimplflag(0, k, j, i) == impl_fail;
-                double gsum = 0.;
-                double gas[4] = {0.};
                 double wsum = 0.;
                 double sum[4] = {0.};
                 for (int n = -1; n <= 1; n++) {
@@ -457,27 +438,10 @@ TaskStatus RadM1::FixRadiation(MeshBlockData<Real>* rc)
                         for (int l = -1; l <= 1; l++) {
                             int ii = i + l, jj = j + m, kk = k + n;
                             if (KDomain::inside(kk, jj, ii, b)) {
-                                GReal Xembed_n[GR_DIM];
-                                G.coord_embed(kk, jj, ii, Loci::center, Xembed_n);
-                                const bool n_inside_horizon =
-                                    r_hor > 0.0 && Xembed_n[1] < r_hor;
                                 const bool nbad =
-                                    n_inside_horizon ||
                                     rad_inversion_failed(rinvflag(0, kk, jj, ii)) ||
                                     rimplflag(0, kk, jj, ii) ==
                                         static_cast<int>(StatusImplicitStep::failure);
-                                if (gas_bad && rimplflag(0, kk, jj, ii) != impl_fail &&
-                                    !Inverter::failed(pflag(kk, jj, ii))) {
-                                    const double w =
-                                        1. / (m::abs(l) + m::abs(m) + m::abs(n) + 1);
-                                    gsum += w;
-                                    // u/rho, so a low-density cell gets its neighbors'
-                                    // temperature rather than their energy density
-                                    const Real rho_n = Pg(m_pg.RHO, kk, jj, ii);
-                                    gas[0] += w * Pg(m_pg.UU, kk, jj, ii) / rho_n;
-                                    for (int v = 0; v < NVEC; v++)
-                                        gas[1 + v] += w * Pg(m_pg.U1 + v, kk, jj, ii);
-                                }
                                 if (!nbad) {
                                     double w =
                                         1. / (m::abs(l) + m::abs(m) + m::abs(n) + 1);
@@ -516,12 +480,6 @@ TaskStatus RadM1::FixRadiation(MeshBlockData<Real>* rc)
                     Prad(m_prad.U1_RAD, k, j, i) = P_avg[1];
                     Prad(m_prad.U2_RAD, k, j, i) = P_avg[2];
                     Prad(m_prad.U3_RAD, k, j, i) = P_avg[3];
-                }
-                if (gas_bad && gsum > 1.e-10) {
-                    Pg(m_pg.UU, k, j, i) = Pg(m_pg.RHO, k, j, i) * gas[0] / gsum;
-                    for (int v = 0; v < NVEC; v++)
-                        Pg(m_pg.U1 + v, k, j, i) = gas[1 + v] / gsum;
-                    GRMHD::p_to_u(G, Pg, m_pg, eos, k, j, i, Ug, m_ug);
                 }
             }
         });
