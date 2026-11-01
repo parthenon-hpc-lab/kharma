@@ -422,6 +422,23 @@ TaskID KHARMADriver::AddFOFC(TaskID& t_start, TaskList& tl, MeshData<Real>* md,
     auto t_guess_update = KHARMADriver::AddStateUpdate(t_guess_sources, tl,
         md_full_step_init, md_sub_step_init, guess_src, guess,
         std::vector<MetadataFlag>{Metadata::Independent}, true, stage);
+    if (pkgs.count("RadM1") && stage == 2) {
+        const Real ars_g = 1.0 - 1.0 / std::sqrt(2.0);
+        const Real ars_d = 1.0 - 1.0 / (2.0 * ars_g);
+        auto& md_dU1 = pmesh->mesh_data.GetOrAdd("dUdt_s1", md->partition);
+        auto t_ars_c = tl.AddTask(t_guess_update,
+            Update::WeightedSumData<std::vector<MetadataFlag>, MeshData<Real>>,
+            std::vector<MetadataFlag>{
+                Metadata::GetUserFlag("Explicit"), Metadata::Independent, Metadata::Cell},
+            guess, md_dU1.get(), 1.0, ars_d * integrator->dt, guess);
+        auto t_ars_f = t_ars_c;
+        if (use_b_ct)
+            t_ars_f = tl.AddTask(t_guess_update, WeightedSumDataFace<MetadataFlag>,
+                std::vector<MetadataFlag>{Metadata::GetUserFlag("Explicit"),
+                    Metadata::Independent, Metadata::Face},
+                guess, md_dU1.get(), 1.0, ars_d * integrator->dt, guess);
+        t_guess_update = t_ars_c | t_ars_f;
+    }
 
     // Reconnect then derefine, the "local" operations on U
     auto t_reconnect = t_guess_update;
@@ -454,7 +471,7 @@ TaskID KHARMADriver::AddFOFC(TaskID& t_start, TaskList& tl, MeshData<Real>* md,
 
     // Recover primitive variables of the guess From faces
     auto t_guess_Bp =
-        tl.AddTask(t_derefine, B_CT::MeshUtoP, guess, IndexDomain::entire, false);
+        tl.AddTask(t_guess_sync, B_CT::MeshUtoP, guess, IndexDomain::entire, false);
     auto t_guess_prims =
         tl.AddTask(t_guess_Bp, Inverter::MeshUtoP, guess, IndexDomain::entire, false);
 
