@@ -130,6 +130,12 @@ std::shared_ptr<KHARMAPackage> RadM1::Initialize(
     pkg->AddField("solver_count",
         Metadata({Metadata::Real, Metadata::Cell, Metadata::Derived, Metadata::OneCopy},
             std::vector<int>{3}));
+    // Explicit star state averaged over each ISMR coarse cell: 9 gas+rad, 3 B, Ktot
+    if (pin->DoesParameterExist("ismr", "nlevels") ||
+        (pin->DoesParameterExist("ismr", "on") && pin->GetBoolean("ismr", "on")))
+        pkg->AddField("rad_ustar",
+            Metadata({Metadata::Real, Metadata::Cell, Metadata::Derived, Metadata::OneCopy},
+                std::vector<int>{13}));
     Real u_rad_floor = pin->GetOrAddReal("radM1", "u_rad_floor", 1.e-40);
     pkg->AllParams().Add("u_rad_floor", u_rad_floor);
 
@@ -638,6 +644,16 @@ void RadM1::AddSourceImplicitly(
         // How many iterations it took for each cell to exit the solver.
         auto solver_count =
             pmb_data->PackVariables(std::vector<std::string>{"solver_count"});
+        // ISMR: polar rows solve the coupling on the coarse-cell average of the star state
+        auto ustar = pmb_data->PackVariables(std::vector<std::string>{"rad_ustar"});
+        const int nlevels =
+            (pmb->packages.AllPackages().count("ISMR") && ustar.GetDim(4) > 0)
+                ? pmb->packages.Get("ISMR")->Param<int>("nlevels")
+                : 0;
+        const bool ismr_in =
+            nlevels > 0 && KBoundaries::IsPhysicalBoundary(pmb, BoundaryFace::inner_x2);
+        const bool ismr_out =
+            nlevels > 0 && KBoundaries::IsPhysicalBoundary(pmb, BoundaryFace::outer_x2);
         const bool use_floors = pmb->packages.AllPackages().count("Floors");
         const Floors::Prescription floors =
             use_floors
@@ -749,65 +765,34 @@ void RadM1::AddSourceImplicitly(
             }
         };
 
-        // When doing U->P conversion, maybe the state does not exist, so we fix it,
-        // generate a new primitive state, and then continue with the implicit solver, but
-        // with the OG U. If it ends up fail at the end, send it to fallbacks.
-        auto build_star = KOKKOS_LAMBDA(const int k, const int j, const int i,
-            Real U_save[9], Real P_save[9], Real B_save[3], Real PB_save[3]) -> bool
+        // Explicit star state of one cell, read-only: s[0-8] gas+rad conserved (with the
+        // stage 2 history terms), s[9-11] cell-centered conserved B, s[12] Ktot
+        auto explicit_star =
+            KOKKOS_LAMBDA(const int k, const int j, const int i, Real s[13])
         {
-            const int iug[4] = {m_u.UU, m_u.U1, m_u.U2, m_u.U3};
-            const int iur[4] = {m_u.UU_RAD, m_u.U1_RAD, m_u.U2_RAD, m_u.U3_RAD};
-            const int ifx[5] = {m_u.RHO, m_u.UU, m_u.U1, m_u.U2, m_u.U3};
             const int iu[9] = {m_u.RHO, m_u.UU, m_u.U1, m_u.U2, m_u.U3, m_u.UU_RAD,
                 m_u.U1_RAD, m_u.U2_RAD, m_u.U3_RAD};
             const int iub[9] = {m_ub.RHO, m_ub.UU, m_ub.U1, m_ub.U2, m_ub.U3, m_ub.UU_RAD,
                 m_ub.U1_RAD, m_ub.U2_RAD, m_ub.U3_RAD};
-            const int ip[9] = {m_p.RHO, m_p.UU, m_p.U1, m_p.U2, m_p.U3, m_p.UU_RAD,
-                m_p.U1_RAD, m_p.U2_RAD, m_p.U3_RAD};
             const int iud1[9] = {m_d1.RHO, m_d1.UU, m_d1.U1, m_d1.U2, m_d1.U3,
                 m_d1.UU_RAD, m_d1.U1_RAD, m_d1.U2_RAD, m_d1.U3_RAD};
-            Real G2[5];
-            for (int n = 0; n < 5; n++) G2[n] = (stage == 2) ? imex_src(n, k, j, i) : 0.0;
-
-            // Save the original state, in case we need to restore it.
-            for (int n = 0; n < 9; n++) {
-                U_save[n] = U_init_substep(iu[n], k, j, i);
-                P_save[n] = P_init_substep(ip[n], k, j, i);
-            }
-
-            // Conserved state update, with the stage 1 explicit source term added back in
-            // for stage 2.
             for (int n = 0; n < 9; n++)
-                U_init_substep(iu[n], k, j, i) =
-                    gam0 * U_save[n] + gam1 * U_base(iub[n], k, j, i) +
-                    dt * dU_substep(iu[n], k, j, i) +
-                    ((ars_d1 != 0.0) ? ars_d1 * dU1(iud1[n], k, j, i) : 0.0);
-
-            // Add the stage 1 implicit source term
+                s[n] = gam0 * U_init_substep(iu[n], k, j, i) +
+                       gam1 * U_base(iub[n], k, j, i) + dt * dU_substep(iu[n], k, j, i) +
+                       ((ars_d1 != 0.0) ? ars_d1 * dU1(iud1[n], k, j, i) : 0.0);
             for (int n = 0; n < 4; n++) {
-                U_init_substep(iug[n], k, j, i) -= w_hist * dt * G2[n];
-                U_init_substep(iur[n], k, j, i) += w_hist * dt * G2[n];
+                const Real g2 = (stage == 2) ? imex_src(n, k, j, i) : 0.0;
+                s[1 + n] -= w_hist * dt * g2;
+                s[5 + n] += w_hist * dt * g2;
             }
 
-            // Now we have to do the same thing with B, reconstruct the explicit update of
-            // this stage + previous stage stuff.
-            for (int v = 0; v < 3; v++) B_save[v] = PB_save[v] = 0.;
+            for (int v = 0; v < 3; v++) s[9 + v] = 0.;
             if (m_u.B1 >= 0 && m_p.B1 >= 0) {
-                const Real gdet_c = G.gdet(Loci::center, j, i);
-                for (int v = 0; v < 3; v++) {
-                    // Save the original state, in case we need to restore it.
-                    B_save[v] = U_init_substep(m_u.B1 + v, k, j, i);
-                    PB_save[v] = P_init_substep(m_p.B1 + v, k, j, i);
-
-                    // Reconstruct the updated state, with the stage 1 explicit source
-                    // term added back in for stage 2.
-                    U_init_substep(m_u.B1 + v, k, j, i) =
-                        gam0 * B_save[v] + gam1 * U_base(m_ub.B1 + v, k, j, i) +
-                        dt * dU_substep(m_u.B1 + v, k, j, i) +
-                        ((ars_d1 != 0.0) ? ars_d1 * dU1(m_d1.B1 + v, k, j, i) : 0.0);
-                    P_init_substep(m_p.B1 + v, k, j, i) =
-                        U_init_substep(m_u.B1 + v, k, j, i) / gdet_c;
-                }
+                for (int v = 0; v < 3; v++)
+                    s[9 + v] = gam0 * U_init_substep(m_u.B1 + v, k, j, i) +
+                               gam1 * U_base(m_ub.B1 + v, k, j, i) +
+                               dt * dU_substep(m_u.B1 + v, k, j, i) +
+                               ((ars_d1 != 0.0) ? ars_d1 * dU1(m_d1.B1 + v, k, j, i) : 0.0);
 
                 // Now if we are doing face-centered B, we need to reconstruct it as well.
                 if (face_b) {
@@ -856,10 +841,61 @@ void RadM1::AddSourceImplicitly(
                     } else {
                         Bc[2] = b3l / G.gdet(Loci::face3, j, i);
                     }
-                    for (int v = 0; v < 3; v++) {
-                        P_init_substep(m_p.B1 + v, k, j, i) = Bc[v];
-                        U_init_substep(m_u.B1 + v, k, j, i) = Bc[v] * gdet_c;
-                    }
+                    for (int v = 0; v < 3; v++)
+                        s[9 + v] = Bc[v] * G.gdet(Loci::center, j, i);
+                }
+            }
+
+            s[12] = (m_u.KTOT >= 0)
+                        ? gam0 * U_init_substep(m_u.KTOT, k, j, i) +
+                              gam1 * U_base(m_ub.KTOT, k, j, i) +
+                              dt * dU_substep(m_u.KTOT, k, j, i) +
+                              ((ars_d1 != 0.0) ? ars_d1 * dU1(m_d1.KTOT, k, j, i) : 0.0)
+                        : 0.;
+        };
+
+        // Number of fine cells in this row's ISMR coarse cell (1 outside the polar rows)
+        auto group_len = KOKKOS_LAMBDA(const int j) -> int
+        {
+            if (ismr_in && j < jb.s + nlevels) return 1 << (nlevels - (j - jb.s));
+            if (ismr_out && j > jb.e - nlevels) return 1 << (nlevels - (jb.e - j));
+            return 1;
+        };
+
+        // When doing U->P conversion, maybe the state does not exist, so we fix it,
+        // generate a new primitive state, and then continue with the implicit solver, but
+        // with the OG U. If it ends up fail at the end, send it to fallbacks.
+        auto build_star = KOKKOS_LAMBDA(const int k, const int j, const int i,
+            Real U_save[9], Real P_save[9], Real B_save[3], Real PB_save[3]) -> bool
+        {
+            const int ifx[5] = {m_u.RHO, m_u.UU, m_u.U1, m_u.U2, m_u.U3};
+            const int iu[9] = {m_u.RHO, m_u.UU, m_u.U1, m_u.U2, m_u.U3, m_u.UU_RAD,
+                m_u.U1_RAD, m_u.U2_RAD, m_u.U3_RAD};
+            const int ip[9] = {m_p.RHO, m_p.UU, m_p.U1, m_p.U2, m_p.U3, m_p.UU_RAD,
+                m_p.U1_RAD, m_p.U2_RAD, m_p.U3_RAD};
+
+            // Star state: own cell, or the ISMR coarse-cell average in the polar rows
+            Real s[13];
+            if (group_len(j) > 1) {
+                for (int n = 0; n < 13; n++) s[n] = ustar(n, k, j, i);
+            } else {
+                explicit_star(k, j, i, s);
+            }
+
+            // Save the original state, in case we need to restore it.
+            for (int n = 0; n < 9; n++) {
+                U_save[n] = U_init_substep(iu[n], k, j, i);
+                P_save[n] = P_init_substep(ip[n], k, j, i);
+                U_init_substep(iu[n], k, j, i) = s[n];
+            }
+            for (int v = 0; v < 3; v++) B_save[v] = PB_save[v] = 0.;
+            if (m_u.B1 >= 0 && m_p.B1 >= 0) {
+                const Real gdet_c = G.gdet(Loci::center, j, i);
+                for (int v = 0; v < 3; v++) {
+                    B_save[v] = U_init_substep(m_u.B1 + v, k, j, i);
+                    PB_save[v] = P_init_substep(m_p.B1 + v, k, j, i);
+                    U_init_substep(m_u.B1 + v, k, j, i) = s[9 + v];
+                    P_init_substep(m_p.B1 + v, k, j, i) = s[9 + v] / gdet_c;
                 }
             }
 
@@ -886,11 +922,7 @@ void RadM1::AddSourceImplicitly(
                                 ? gm1 * P_save[1] * m::pow(P_save[0], -gam)
                                 : -1.;
                 if (m_u.KTOT >= 0) {
-                    const Real Kc =
-                        gam0 * U_init_substep(m_u.KTOT, k, j, i) +
-                        gam1 * U_base(m_ub.KTOT, k, j, i) +
-                        dt * dU_substep(m_u.KTOT, k, j, i) +
-                        ((ars_d1 != 0.0) ? ars_d1 * dU1(m_d1.KTOT, k, j, i) : 0.0);
+                    const Real Kc = s[12];
                     if (Kc > 0. && Ustar[0] > 0.) Kent = Kc / Ustar[0];
                 }
                 Real Bcons[NVEC] = {0., 0., 0.};
@@ -959,6 +991,26 @@ void RadM1::AddSourceImplicitly(
         const int nj = jb.e - jb.s + 1, ni = ib.e - ib.s + 1;
         const int ncells = (kb.e - kb.s + 1) * nj * ni;
         using DynPolicy = Kokkos::RangePolicy<Kokkos::Schedule<Kokkos::Dynamic>>;
+
+        // ISMR polar rows: average the star state over each coarse cell before any solve
+        // modifies U_init/dU, so every fine cell solves the coarse cell's state
+        for (int side = 0; side < 2; side++) {
+            if (!((side == 0) ? ismr_in : ismr_out)) continue;
+            const int js = (side == 0) ? jb.s : jb.e - nlevels + 1;
+            const int je = (side == 0) ? jb.s + nlevels - 1 : jb.e;
+            pmb->par_for("RadM1_ISMR_Star", kb.s, kb.e, js, je, ib.s, ib.e,
+                KOKKOS_LAMBDA (const int &k, const int &j, const int &i)
+                {
+                    const int len = group_len(j);
+                    const int k0 = k - (k - kb.s) % len;
+                    Real avg[13] = {0.}, s[13];
+                    for (int kk = k0; kk < k0 + len; kk++) {
+                        explicit_star(kk, j, i, s);
+                        for (int n = 0; n < 13; n++) avg[n] += s[n] / len;
+                    }
+                    for (int n = 0; n < 13; n++) ustar(n, k, j, i) = avg[n];
+                });
+        }
 
         // one-time per-cell work, skipped cells, mark the rest
         pmb->par_for("RadM1_Implicit_Setup", kb.s, kb.e, jb.s, jb.e, ib.s, ib.e,
