@@ -290,7 +290,6 @@ void RadM1::ApplyRadM1Floors(MeshBlockData<Real>* rc, IndexDomain domain)
     pmb->par_for("ApplyRadM1Floors", kb.s, kb.e, jb.s, jb.e, ib.s, ib.e,
         KOKKOS_LAMBDA (const int &k, const int &j, const int &i)
         {
-            // Inside the horizon too, only the floor (no reset to it)
             if (P(m_p.UU_RAD, k, j, i) < erad_floor) {
                 P(m_p.UU_RAD, k, j, i) = erad_floor;
                 P(m_p.U1_RAD, k, j, i) = 0.0;
@@ -968,15 +967,6 @@ void RadM1::AddSourceImplicitly(
                 for (int n = 0; n < 3; n++) solver_count(n, k, j, i) = 0.;
                 for (int n = 0; n < 5; n++)
                     if (stage == 1) imex_src(n, k, j, i) = 0.0;
-
-                // Inside the horizon: no interaction. If there is no horizon, r_hor = 0.
-                GReal Xembed[GR_DIM];
-                G.coord_embed(k, j, i, Loci::center, Xembed);
-                const GReal r_hor = G.coords.get_horizon();
-                if (r_hor > 0.0 && Xembed[1] < r_hor) {
-                    rimplflag(0, k, j, i) = static_cast<int>(SIS::success);
-                    return;
-                }
 
                 // Cells that fell on backstop, stage 1 term only
                 if ((P_init_substep(m_p.U1_RAD, k, j, i) == 0.0 &&
