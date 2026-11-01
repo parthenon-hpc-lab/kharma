@@ -102,7 +102,7 @@ TaskStatus SetBeamOfLightImpl(
         uvec_rad = rc->Get("prims.uvec_rad").data;
     }
 
-    const Real gam = pmb->packages.Get("GRMHD")->Param<Real>("gamma");
+    const Real gam = pmb->packages.Get("eos")->Param<Real>("gm1") + 1.0;
     const Real rho_ambient = pmb->packages.Get("GRMHD")->Param<Real>("beam_rho_ambient");
     const Real T_ambient = pmb->packages.Get("GRMHD")->Param<Real>("beam_T_ambient");
     const Real E_ambient = pmb->packages.Get("GRMHD")->Param<Real>("beam_E_ambient");

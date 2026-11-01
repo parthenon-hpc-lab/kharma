@@ -23,7 +23,7 @@ TaskStatus InitializeRadiationPulse(
     GridScalar u_rad = rc->Get("prims.u_rad").data;
     GridVector uvec_rad = rc->Get("prims.uvec_rad").data;
 
-    Real gam = pmb->packages.Get("GRMHD")->Param<Real>("gamma");
+    Real gam = pmb->packages.Get("eos")->Param<Real>("gm1") + 1.0;
 
     if (!pmb->packages.AllPackages().count("RadM1"))
         PARTHENON_FAIL("RadM1 package not loaded.");
