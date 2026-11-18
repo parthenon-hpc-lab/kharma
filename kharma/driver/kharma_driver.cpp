@@ -454,7 +454,7 @@ TaskID KHARMADriver::AddFOFC(TaskID& t_start, TaskList& tl, MeshData<Real>* md,
 
     // Recover primitive variables of the guess From faces
     auto t_guess_Bp =
-        tl.AddTask(t_derefine, B_CT::MeshUtoP, guess, IndexDomain::entire, false);
+        tl.AddTask(t_guess_sync, B_CT::MeshUtoP, guess, IndexDomain::entire, false);
     auto t_guess_prims =
         tl.AddTask(t_guess_Bp, Inverter::MeshUtoP, guess, IndexDomain::entire, false);
 
