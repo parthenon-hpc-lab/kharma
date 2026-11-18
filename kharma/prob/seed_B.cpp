@@ -268,8 +268,8 @@ TaskStatus SeedBFieldType(MeshBlockData<Real>* rc, ParameterInput* pin,
                     // Chakrabarti equilibrium quantities the kernel needs
                     ChakrabartiTorus::cn_calc(a, rin, rmax, &cc, &nn);
                     lnh_in = ChakrabartiTorus::lnh_calc(bl, rin, rin, M_PI_2, cc, nn);
-                    lnh_peak =
-                        ChakrabartiTorus::lnh_calc(bl, rin, rmax, M_PI_2, cc, nn) - lnh_in;
+                    lnh_peak = ChakrabartiTorus::lnh_calc(bl, rin, rmax, M_PI_2, cc, nn) -
+                               lnh_in;
                     pgas_over_rho_peak = gm1 / gamma1 * (m::exp(lnh_peak) - 1.0);
                     rho_peak = m::pow(pgas_over_rho_peak, 1.0 / gm1) / rho_max;
                 }
