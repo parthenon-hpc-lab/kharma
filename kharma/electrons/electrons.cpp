@@ -480,7 +480,8 @@ TaskStatus ApplyElectronHeating(
                 const Real sigma = bsq / (P(m_p.RHO, k, j, i) + P(m_p.UU, k, j, i) + pg);
                 const Real betamax = 0.25 / sigma;
                 const Real xr = clip(beta / betamax, 0., 1.);
-                const Real fel = 0.5 * m::exp(-m::pow(1. - xr, 3.3) / (1 + 1.2 * m::pow(sigma, 0.7)));
+                const Real fel =
+                    0.5 * m::exp(-m::pow(1. - xr, 3.3) / (1 + 1.2 * m::pow(sigma, 0.7)));
 
                 P_new(m_p.K_ROWAN, k, j, i) =
                     clip(P_new(m_p.K_ROWAN, k, j, i) + fel * diss, kel_min, kel_max);
