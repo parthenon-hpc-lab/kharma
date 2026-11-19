@@ -46,7 +46,7 @@ std::shared_ptr<KHARMAPackage> ISMR::Initialize(
 
     // Parameters
     // TODO add "poles" specifically if we ever support other areas
-    int nlevels = pin->GetOrAddInteger("ismr", "nlevels", 1);
+    int nlevels = pin->GetOrAddInteger("ismr", "nlevels", 3);
     params.Add("nlevels", nlevels);
     if (nlevels < 1)
         throw std::runtime_error("Internal SMR requires a positive number of levels!");
