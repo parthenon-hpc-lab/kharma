@@ -38,6 +38,7 @@
 #include "entropy.hpp"
 #include "inverter.hpp"
 #include "kharma_constants.hpp"
+#include "roots.hpp"
 
 #define RAD_LARGE (0.1 * std::numeric_limits<Real>::max())
 #define RAD_SMALL (10.0 * std::numeric_limits<Real>::min())
@@ -566,16 +567,16 @@ KOKKOS_INLINE_FUNCTION bool u_to_p_entropy(const GRCoordinates& G, const Real Ur
         const Real eps = Kent * m::pow(D * iW, gam - 1.) / (gam - 1.);
         return mu - 1. / ((1. + gam * eps) * iW + mu * rbarsq);
     };
-    // f(0) < 0 <= f(1) for any h >= 1, so bisect on [0, 1]
-    Real lo = 0., hi = 1., x, iW;
-    for (int it = 0; it < 60; it++) {
-        const Real mid = 0.5 * (lo + hi);
-        if (resid(mid, x, iW) < 0.)
-            lo = mid;
-        else
-            hi = mid;
-    }
-    const Real mu = 0.5 * (lo + hi);
+    // f(0) < 0 <= f(1) for any h >= 1, so bisect on [0, 1]. If round-off makes f(1) < 0,
+    // mu stays at 1, where the bisection would have converged
+    Real mu = 1., x, iW;
+    Roots::bisect<Roots::RootEval::Any>(
+        mu,
+        [&](const Real z)
+        {
+            return resid(z, x, iW);
+        },
+        (Real)0., (Real)1., (Real)0., (Real)0., 60);
     resid(mu, x, iW);
     rho = D * iW;
     u = Kent * m::pow(rho, gam) / (gam - 1.);
