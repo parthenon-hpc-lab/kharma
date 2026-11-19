@@ -36,12 +36,12 @@
 #include <iostream>
 
 #include <parthenon/parthenon.hpp>
+#include <stdexcept>
 
 #include "decs.hpp"
 #include "version.hpp"
 
 // Packages
-#include "b_cd.hpp"
 #include "b_cleanup.hpp"
 #include "b_ct.hpp"
 #include "b_flux_ct.hpp"
@@ -470,9 +470,8 @@ Packages_t KHARMA::ProcessPackages(std::unique_ptr<ParameterInput>& pin)
         face_centered_b = true;
     } else if (b_field_solver == "constraint_damping" || b_field_solver == "cd") {
         // Constraint damping. NON-WORKING
-        t_b_field = tl.AddTask(
-            t_grmhd, KHARMA::AddPackage, packages, B_CD::Initialize, pin.get());
-        have_b_transport = true;
+        throw std::runtime_error("Constraint Damping is not supported! This has never "
+                                 "worked well, please use another transport.");
     } else if (b_field_solver == "flux_ct") {
         t_b_field = tl.AddTask(
             t_grmhd, KHARMA::AddPackage, packages, B_FluxCT::Initialize, pin.get());

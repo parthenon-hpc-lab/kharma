@@ -37,7 +37,6 @@
 
 // phoebus includes
 #include "microphysics/eos_kharma/eos_kharma.hpp"
-#include "phoebus_utils/variables.hpp"
 
 #include "gr_coordinates.hpp"
 #include "kharma_utils.hpp"

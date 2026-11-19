@@ -35,7 +35,6 @@
 
 #include "decs.hpp"
 
-#include "b_cd.hpp"
 #include "b_flux_ct.hpp"
 
 namespace KHARMA

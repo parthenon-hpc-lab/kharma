@@ -43,7 +43,6 @@
 
 // phoebus includes
 #include "microphysics/eos_kharma/eos_kharma.hpp"
-#include "phoebus_utils/variables.hpp"
 
 // And an odd but useful loop for ex-iharm3d code
 // This requires nvar to be defined in caller!
