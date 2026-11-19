@@ -34,6 +34,7 @@
 
 // KHARMA Headers
 #include "decs.hpp"
+#include "geometry/kgeometry.hpp"
 
 #include "boundaries.hpp"
 #include "emhd/conducting_atmosphere.hpp"
@@ -100,6 +101,8 @@ int main(int argc, char* argv[])
     // A couple of callbacks are KHARMA-wide single functions
     pman.app_input->ProcessPackages = KHARMA::ProcessPackages;
     pman.app_input->ProblemGenerator = KHARMA::ProblemGenerator;
+    // Fill geometry fields whenever blocks are created: init, restart, remesh
+    pman.app_input->InitMeshBlockUserData = KGeometry::SetGeometryBlock;
     // Most are passed on to be implemented by packages as they see fit
     pman.app_input->MeshBlockUserWorkBeforeOutput = Packages::UserWorkBeforeOutput;
     pman.app_input->PreStepMeshUserWorkInLoop = Packages::PreStepWork;

@@ -41,6 +41,7 @@
 #include "version.hpp"
 
 // Packages
+#include "geometry/kgeometry.hpp"
 #include "b_cd.hpp"
 #include "b_cleanup.hpp"
 #include "b_ct.hpp"
@@ -416,6 +417,9 @@ Packages_t KHARMA::ProcessPackages(std::unique_ptr<ParameterInput>& pin)
     auto t_driver = tl.AddTask(
         t_none, KHARMA::AddPackage, packages, KHARMADriver::Initialize, pin.get());
 
+    // KGeometry package, which replaces the GRCoordinates caches with a package
+    auto t_geom = tl.AddTask(t_globals, KHARMA::AddPackage, packages, KGeometry::Initialize, pin.get());
+
     // Enable eos package
     auto t_eos = tl.AddTask(
         t_driver, KHARMA::AddPackage, packages, Microphysics::EOS::Initialize, pin.get());
@@ -435,7 +439,7 @@ Packages_t KHARMA::ProcessPackages(std::unique_ptr<ParameterInput>& pin)
 
     // GRMHD needs globals to mark packages
     auto t_grmhd = tl.AddTask(
-        t_globals | t_eos, KHARMA::AddPackage, packages, GRMHD::Initialize, pin.get());
+        t_globals | t_eos | t_geom, KHARMA::AddPackage, packages, GRMHD::Initialize, pin.get());
     // Only load the inverter if GRMHD/EMHD isn't being evolved implicitly
     // Unless we want to use the explicitly-evolved ideal MHD variables as a guess for the
     // solver Or we want first-order flux corrections, which rely on a UtoP guess Note we
