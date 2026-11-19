@@ -175,9 +175,18 @@ TaskStatus Packages::AddSource(
         }
     }
     for (auto kpackage : kpackages) {
-        if (kpackage.second->AddSource != nullptr && kpackage.first != "Boundaries") {
+        if (kpackage.second->AddSource != nullptr && kpackage.first != "Boundaries" &&
+            kpackage.first != "RadM1") {
             Flag("AddSource_" + kpackage.first);
             kpackage.second->AddSource(md, mdudt, domain);
+            EndFlag();
+        }
+    }
+    if (kpackages.count("RadM1")) {
+        KHARMAPackage* pkpackage = pmesh->packages.Get<KHARMAPackage>("RadM1");
+        if (pkpackage->AddSource != nullptr) {
+            Flag("AddSource_RadM1");
+            pkpackage->AddSource(md, mdudt, domain);
             EndFlag();
         }
     }

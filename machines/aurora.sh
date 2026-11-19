@@ -4,6 +4,9 @@
 if [[ $HOST == *".aurora.alcf.anl.gov" ]]
 then
 
+  # KHARMA is currently built & run against the previous production MPICH.
+  # Running a binary built with this one under the default (87e2045) segfaults on the GPU.
+  module load mpich/opt/5.0.0.aurora_test.3c70a61
   module load cmake
 
   if [[ ! "$*" == *"hdf5"* ]]; then
@@ -28,6 +31,16 @@ then
 
     # I think this is faster on Intel like on AMD?
     EXTRA_FLAGS="-DKHARMA_SPLIT_IMPLICIT_SOLVE=ON $EXTRA_FLAGS"
+
+    # Aurora jobs export OMP_NUM_THREADS=208, i.e. a thread per core in *every* rank.
+    # Override with ./run.sh -nt N
+    export OMP_NUM_THREADS=1
+
+    # GPU-aware MPI (default, but to be safe)
+    export MPIR_CVAR_ENABLE_GPU=1
+    # Since the 2026-09 system update MPICH doesn't cache GPU IPC handles by default,
+    # making intra-node halo exchanges ~30x slower. Takes unlimited|limited|disabled, not a number.
+    export MPIR_CVAR_CH4_IPC_GPU_CACHE_SIZE=${MPIR_CVAR_CH4_IPC_GPU_CACHE_SIZE:-unlimited}
 
     # Runtime: WTF Intel, this is so complicated
     export CPU_BIND_SCHEME="--cpu-bind=list:1-8:9-16:17-24:25-32:33-40:41-48:53-60:61-68:69-76:77-84:85-92:93-100"

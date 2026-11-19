@@ -12,6 +12,7 @@
 #include <singularity-opac/photons/mean_s_opacity_photons.hpp>
 #include <singularity-opac/photons/opac_photons.hpp>
 #include <singularity-opac/photons/s_opac_photons.hpp>
+#include <spiner/databox.hpp>
 
 // phoebus includes
 #include "microphysics/eos_kharma/eos_kharma.hpp"
@@ -25,6 +26,24 @@ namespace Microphysics
 {
 namespace Opacity
 {
+TableBounds TopsTableBounds(
+    const std::string& file, const std::string& material, const std::string& dataset)
+{
+    hid_t h5file = H5Fopen(file.c_str(), H5F_ACC_RDONLY, H5P_DEFAULT);
+    PARTHENON_REQUIRE(h5file >= 0, "Could not open opac/tops_table_file!");
+    Spiner::DataBox<Real> table;
+    table.loadHDF(h5file, material + "/" + dataset);
+    // Axis 1 is log10(T), axis 2 is log10(rho), as in singularity-opac's MeanOpacity
+    TableBounds bounds;
+    bounds.T_min = std::pow(10.0, table.range(1).min());
+    bounds.T_max = std::pow(10.0, table.range(1).max());
+    bounds.rho_min = std::pow(10.0, table.range(2).min());
+    bounds.rho_max = std::pow(10.0, table.range(2).max());
+    table.finalize();
+    H5Fclose(h5file);
+    return bounds;
+}
+
 std::shared_ptr<KHARMAPackage> Initialize(
     ParameterInput* pin, std::shared_ptr<Packages_t>& packages)
 {
@@ -45,22 +64,6 @@ std::shared_ptr<KHARMAPackage> Initialize(
 
     auto& rad_params = packages->Get("RadM1")->AllParams();
     auto opacity_type = rad_params.Get<int>("opacity_type");
-    // if we are not using singularity opac, just default the constructor and proceed.
-    if (opacity_type != (int)RadM1::OpacityType::Default) {
-        std::string opacity_kind = pin->GetOrAddString(block_name, "opac_kind", "none");
-        if (opacity_kind != "none") {
-            std::stringstream msg;
-            msg << "Opacity kind \"" << opacity_kind
-                << "\" is set but opacity type is not default! If you want "
-                   "singularity-opac "
-                   "opacities, set opac/type to default in the input file.";
-            PARTHENON_FAIL(msg);
-        }
-        params.Add("opacities", Opacities());
-        return pkg;
-    }
-
-    const bool scale_free = pin->GetOrAddBoolean("units", "scale_free", true);
 
     auto unit_conv = Units::UnitConversions(pin);
     double time_unit = unit_conv.GetTimeCodeToCGS();
@@ -71,13 +74,8 @@ std::shared_ptr<KHARMAPackage> Initialize(
     std::string opacity_kind = pin->GetOrAddString(block_name, "opac_kind", "none");
 
     // Currently bremsstrahlung only, as we add more stuff, we complete here.
-    std::set<std::string> known_opacity_kinds = {"none", "bremsstrahlung"};
-
-    if (!known_opacity_kinds.count(opacity_kind)) {
-        std::stringstream msg;
-        msg << "Opacity model \"" << opacity_kind << "\" not recognized!";
-        PARTHENON_FAIL(msg);
-    }
+    std::set<std::string> known_opacity_kinds = {
+        "none", "bremsstrahlung", "synchrotron", "tops_table", "all"};
 
     // Currently if type is set to default but kind = "none", the user will get 0
     // opacities without any warning. Let's try to mediate that:
@@ -88,9 +86,57 @@ std::shared_ptr<KHARMAPackage> Initialize(
         PARTHENON_FAIL(msg);
     }
 
-    params.Add("opac_kind", opacity_kind);
+    std::set<std::string> requested_kinds;
+    {
+        std::stringstream ss(opacity_kind);
 
-    if (opacity_kind == "bremsstrahlung") {
+        // token will hold one opacity at a time here.
+        std::string token;
+        while (std::getline(ss, token, ',')) {
+            size_t start = token.find_first_not_of(" \t");
+            size_t end = token.find_last_not_of(" \t");
+            if (start == std::string::npos) continue; // if token is empty, just continue!
+            token = token.substr(start, end - start + 1);
+            if (!known_opacity_kinds.count(token)) {
+                std::stringstream msg;
+                msg << "Opacity model \"" << token << "\" not recognized!";
+                PARTHENON_FAIL(msg);
+            }
+            requested_kinds.insert(token);
+        }
+    }
+
+    printf("Requested opacity kinds: ");
+    for (const auto& kind : requested_kinds) {
+        printf("%s ", kind.c_str());
+    }
+    printf("\n");
+
+    const bool request_all = requested_kinds.count("all") > 0;
+    const bool use_bremsstrahlung =
+        request_all || requested_kinds.count("bremsstrahlung") > 0;
+    const bool use_synchrotron = request_all || requested_kinds.count("synchrotron") > 0;
+    const bool use_tops_table = request_all || requested_kinds.count("tops_table") > 0;
+    const bool scale_free = pin->GetOrAddBoolean("units", "scale_free", true);
+
+    params.Add("use_bremsstrahlung", use_bremsstrahlung);
+    params.Add("use_synchrotron", use_synchrotron);
+    params.Add("use_tops_table", use_tops_table);
+
+    std::string regime_str = "AGN";
+    if (pin->DoesParameterExist(block_name, "regime")) {
+        regime_str = pin->GetString(block_name, "regime");
+    } else if (!scale_free) {
+        const Real m_bh_msun =
+            length_unit * pc::c * pc::c / (pc::g_newt * Units::solar_mass);
+        if (m_bh_msun < 1.e3) regime_str = "XRB";
+    }
+    pin->SetString(block_name, "regime", regime_str);
+    printf("Opacity fit regime: %s\n", regime_str.c_str());
+    params.Add("regime", (regime_str == "XRB") ? RadM1::RadOpac::FitType::XRB
+                                               : RadM1::RadOpac::FitType::AGN);
+
+    if (use_bremsstrahlung) {
         PARTHENON_REQUIRE(
             !scale_free, "Must have CGS scaling for bremsstrahlung opacities!");
 
@@ -103,9 +149,39 @@ std::shared_ptr<KHARMAPackage> Initialize(
         params.Add("h.opacity_baseunits", opacity_host_baseunits);
         params.Add("h.opacity", opacity_host);
         params.Add("d.opacity", opacity_device);
+    } else if (!scale_free) {
+        singularity::photons::Opacity opacity_host =
+            NonCGSUnits<EPBremss>(EPBremss(PlanckDistribution<>()), time_unit, mass_unit,
+                length_unit, temp_unit);
+        params.Add("h.opacity", opacity_host);
+        params.Add("d.opacity", opacity_host.GetOnDevice());
+    } else {
+        params.Add("h.opacity", singularity::photons::Opacity());
+        params.Add("d.opacity", singularity::photons::Opacity());
     }
 
-    {
+    const std::string tops_table_file =
+        pin->GetOrAddString(block_name, "tops_table_file", "");
+    const std::string tops_table_material =
+        pin->GetOrAddString(block_name, "tops_table_material", "");
+    TableBounds tops_abs_bounds;
+    if (use_tops_table) {
+        PARTHENON_REQUIRE(!tops_table_file.empty(),
+            "opac/tops_table_file must be set when opac_kind includes tops_table!");
+        PARTHENON_REQUIRE(!scale_free, "Must have CGS scaling for tabulated opacities!");
+
+        auto mean_opac_tops_cgs = MeanOpacityBase(tops_table_file, tops_table_material);
+        auto mean_opac_tops_host = MeanNonCGSUnits<MeanOpacityBase>(
+            std::forward<MeanOpacityBase>(mean_opac_tops_cgs), time_unit, mass_unit,
+            length_unit, temp_unit);
+        MeanOpacity mean_opac_tops_device = mean_opac_tops_host.GetOnDevice();
+        params.Add("h.mean_opacity_tops", mean_opac_tops_host);
+        params.Add("d.mean_opacity_tops", mean_opac_tops_device);
+        tops_abs_bounds =
+            TopsTableBounds(tops_table_file, tops_table_material, "Planck group opacity");
+    }
+
+    if (use_bremsstrahlung) {
         auto opacity_host =
             params.Get<singularity::photons::Opacity>("h.opacity_baseunits");
         // Gray (ngroups=1) mean opacity spanning the full spectrum: [0, +inf).
@@ -149,18 +225,23 @@ std::shared_ptr<KHARMAPackage> Initialize(
             params.Add("h.mean_opacity", mean_opac_host);
             params.Add("d.mean_opacity", mean_opac_device);
         }
+    } else {
+        params.Add("h.mean_opacity", MeanOpacity());
+        params.Add("d.mean_opacity", MeanOpacity());
     }
 
     const Real avg_particle_mass = pc::mp;
     // Pick which scattering opacity the user wants
     const std::string s_block_name = "opac";
     std::string s_opacity_kind = pin->GetOrAddString(s_block_name, "s_opac_kind", "none");
-    std::set<std::string> known_s_opacity_kinds = {"thomson"};
+    std::set<std::string> known_s_opacity_kinds = {"thomson", "tops_table"};
 
     // Currently just thompson.
-    if (!known_s_opacity_kinds.count(s_opacity_kind)) {
+    if ((RadM1::OpacityType)opacity_type == RadM1::OpacityType::Default &&
+        s_opacity_kind == "none") {
         std::stringstream msg;
-        msg << "Scattering opacity model \"" << s_opacity_kind << "\" not recognized!";
+        msg << "Scattering opacity kind is set to \"none\" but opacity type is set to "
+               "default!";
         PARTHENON_FAIL(msg);
     }
 
@@ -178,7 +259,7 @@ std::shared_ptr<KHARMAPackage> Initialize(
     }
 
     // Declaring mean opacities..
-    {
+    if (s_opacity_kind == "thomson") {
         auto opacity_host = params.Get<SOpacity>("h.s_opacity_baseunits");
         const std::vector<Real> group_bounds = {
             0., std::numeric_limits<Real>::infinity()};
@@ -220,14 +301,39 @@ std::shared_ptr<KHARMAPackage> Initialize(
             params.Add("h.mean_s_opacity", mean_opac_host);
             params.Add("d.mean_s_opacity", mean_opac_device);
         }
+    } else if (s_opacity_kind == "tops_table") {
+        PARTHENON_REQUIRE(!tops_table_file.empty(),
+            "opac/tops_table_file must be set when s_opac_kind is tops_table!");
+        PARTHENON_REQUIRE(!scale_free, "Must have CGS scaling for tabulated opacities!");
+        MeanSOpacity mean_opac_host = MeanNonCGSUnitsS<MeanSOpacityBase>(
+            MeanSOpacityBase(tops_table_file, tops_table_material), time_unit, mass_unit,
+            length_unit, temp_unit);
+        auto mean_opac_device = mean_opac_host.GetOnDevice();
+        params.Add("h.mean_s_opacity", mean_opac_host);
+        params.Add("d.mean_s_opacity", mean_opac_device);
+    } else {
+        params.Add("h.mean_s_opacity", MeanSOpacityBase());
+        params.Add("d.mean_s_opacity", MeanSOpacity());
     }
+
+    const bool use_tops_scattering = s_opacity_kind == "tops_table";
+    const TableBounds tops_sca_bounds =
+        use_tops_scattering ? TopsTableBounds(tops_table_file, tops_table_material,
+                                  "Rosseland group scattering opacity")
+                            : TableBounds();
+    const Real X = pin->GetOrAddReal(block_name, "X", 0.7);
+    const Real Z = pin->GetOrAddReal(block_name, "Z", 0.02);
 
     auto opacity_device = params.Get<singularity::photons::Opacity>("d.opacity");
     auto& mean_opac_device = params.Get<MeanOpacity>("d.mean_opacity");
-    auto& s_opacity_device = params.Get<SOpacity>("d.s_opacity");
+    auto s_opacity_device =
+        (s_opacity_kind == "thomson") ? params.Get<SOpacity>("d.s_opacity") : SOpacity();
     auto& mean_s_opac_device = params.Get<MeanSOpacity>("d.mean_s_opacity");
-    Opacities opacities(
-        opacity_device, mean_opac_device, s_opacity_device, mean_s_opac_device);
+    auto mean_opac_tops_device =
+        use_tops_table ? params.Get<MeanOpacity>("d.mean_opacity_tops") : MeanOpacity();
+    Opacities opacities(opacity_device, mean_opac_device, s_opacity_device,
+        mean_s_opac_device, mean_opac_tops_device, use_tops_scattering, tops_abs_bounds,
+        tops_sca_bounds, X, Z);
     params.Add("opacities", opacities);
 
     return pkg;

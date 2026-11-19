@@ -6,13 +6,13 @@ problem_id = torus
 archive_parameters = timestamp
 
 <parthenon/mesh>
-nx1 = 128
-nx2 = 128
+nx1 = 256
+nx2 = 256
 nx3 = 1
 
 <parthenon/meshblock>
-nx1 = 128
-nx2 = 128
+nx1 = 256
+nx2 = 256
 nx3 = 1
 
 <coordinates>
@@ -60,6 +60,10 @@ type = imex
 # Can skip this with the robust inverter & face_ct B fields
 two_sync = false
 
+<fofc>
+on = true
+pcp = false
+
 <boundaries>
 inner_x2 = reflecting
 outer_x2 = reflecting
@@ -68,9 +72,6 @@ outer_x2 = reflecting
 # Minimal floors, applied in the default Normal Observer frame
 rho_min_geom = 1e-6
 u_min_geom   = 1e-8
-
-<fofc>
-on = false
 
 
 <entropy>
@@ -85,8 +86,8 @@ src_rootfind_eps = 1e-8
 #This is the tolerance of the solver
 src_rootfind_tol = 1e-8
 #Max number of iterations the solver can take.
-src_rootfind_maxiter = 15
-u_rad_floor = 1e-12
+src_rootfind_maxiter = 20
+u_rad_floor = 1e-20
 
 <units>
 on = true
@@ -98,8 +99,10 @@ fluid_density_cgs = 1.e-2
 # type here sets if you wanna handle the opacities yourself or give it to singularity opac
 # default, you handle it, other types can be seen in radM1.hpp: OpacityType.
 type = default
-opac_kind = bremsstrahlung
-s_opac_kind = thomson
+opac_kind = synchrotron, tops_table
+s_opac_kind = tops_table
+tops_table_file = opac_table/solar_opac.sp5
+tops_table_material = solar
 
 <debug>
 verbose = 1
@@ -108,14 +111,14 @@ flag_verbose = 2
 
 <parthenon/output0>
 file_type = hdf5
-dt = 1.0
+dt = 10.0
 single_precision_output = true
 variables = prims, divB, jcon, fflag, pflag, rimplflag, rinvflag, fofcflag
 
 <parthenon/output1>
 file_type = rst
-dt = 1.0
+dt = 10.0
 
 <parthenon/output2>
 file_type = hst
-dt = 0.1
+dt = 5.0

@@ -25,7 +25,7 @@ do
         do
             $KHARMADIR/run.sh -i $KHARMADIR/pars/radM1/radmhdmodes/radmhdmodes.par \
                                 mhdmodes/wavetype=$wavetype mhdmodes/regime=$regime \
-                                parthenon/mesh/nx1=$res parthenon/meshblock/nx1=$((res / 2)) \
+                                parthenon/mesh/nx1=$res parthenon/meshblock/nx1=$((res / 4)) \
                                 >${outdir}/log_${res}.txt 2>&1
 
             cp dumps_kharma/radmhdmodes.out0.final.phdf ${outdir}/mhd_modes_${res}_${rlabel}_${wavetype}.phdf

@@ -35,11 +35,10 @@ two_sync = false
 <GRMHD>
 cfl = 0.5
 gamma = 1.6666666666666667
-reconstruction = ppm
+reconstruction = donor_cell
 
 <eos>
 type = IdealGas
-Cv = 1.0
 
 <beam_of_light>
 r_beam = 16.0

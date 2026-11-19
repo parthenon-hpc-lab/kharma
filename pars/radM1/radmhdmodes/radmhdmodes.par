@@ -55,7 +55,7 @@ implicit = false
 <radM1>
 on = true
 src_rootfind_eps = 1e-8
-src_rootfind_tol = 1e-14
+src_rootfind_tol = 1e-12
 src_rootfind_maxiter = 100
 kappa_a = 0.1
 kappa_sc = 0.0
@@ -64,7 +64,6 @@ kappa_sc = 0.0
 
 <eos>
 gamma = 1.6666667;
-Cv = 1.0;
 
 <flux>
 type = llf

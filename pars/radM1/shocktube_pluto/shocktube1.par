@@ -46,7 +46,6 @@ reconstruction = weno5
 
 <eos>
 type = IdealGas
-Cv = 1.0
 
 <b_field>
 solver = none

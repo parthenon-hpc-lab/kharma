@@ -59,6 +59,7 @@ void SeedAndNormalizeB(ParameterInput* pin, std::shared_ptr<MeshData<Real>> md);
  * 4. On restarts, reset any per-run parameters
  * 5. Clean up B field divergence if resizing the grid
  */
-void PostInitialize(ParameterInput* pin, Mesh* pmesh, bool is_restart);
+void PostInitialize(
+    ParameterInput* pin, ApplicationInput* papp, Mesh* pmesh, bool is_restart);
 
 }

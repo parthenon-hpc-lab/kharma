@@ -40,7 +40,7 @@ two_sync = false
 <GRMHD>
 cfl = 0.5
 gamma = 1.666667
-reconstruction = ppm
+reconstruction = weno5
 
 <b_field>
 solver = none

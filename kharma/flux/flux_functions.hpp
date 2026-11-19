@@ -337,22 +337,11 @@ KOKKOS_FORCEINLINE_FUNCTION void p_to_u_mhd(const GRCoordinates& G, const Global
  */
 template<typename Global>
 KOKKOS_FORCEINLINE_FUNCTION void vchar_rad(const GRCoordinates& G, const Global& P,
-    const VarMap& m, const FourVectors& D, const Microphysics::EOS::EOS& eos,
-    const EMHD::EMHD_parameters& emhd_params, const RadM1::RadOpac& rad_opac,
-    const int& k, const int& j, const int& i, const Loci& loc, const int& dir, Real& cmax,
-    Real& cmin)
+    const VarMap& m, const Real& kappa_tot, const int& k, const int& j, const int& i,
+    const Loci& loc, const int& dir, Real& cmax, Real& cmin)
 {
-    GReal Tgas = eos.TemperatureFromDensityInternalEnergy(
-        P(m.RHO, k, j, i), P(m.UU, k, j, i) / P(m.RHO, k, j, i));
-
-    // Out of the package modification RADM1.
-    const Real bsq = dot(D.bcon, D.bcov);
-    // TODO PNM: This is an approximation, we should be using Tgas and T_rad. I guess it's
-    // fine for now
-    GReal kappa_abs = RadM1::calc_kabs(P(m.RHO, k, j, i), Tgas, Tgas, bsq, rad_opac);
-    GReal kappa_s = RadM1::calc_kscattering(P(m.RHO, k, j, i), Tgas, bsq, rad_opac);
-
-    GReal kappa_tot = kappa_abs + kappa_s;
+    Real ucon_rad[GR_DIM];
+    RadM1::calc_ucon_rad(G, P, m, k, j, i, loc, ucon_rad);
 
     GReal dx;
     if (dir == 0) {
@@ -375,8 +364,6 @@ KOKKOS_FORCEINLINE_FUNCTION void vchar_rad(const GRCoordinates& G, const Global&
 
     GReal cms2 = cs2;
 
-    Real ucon_rad[GR_DIM];
-    RadM1::calc_ucon_rad(G, P, m, k, j, i, loc, ucon_rad);
     // Require that speed of wave measured by observer q.ucon is cms2
     Real A, B, C;
     {

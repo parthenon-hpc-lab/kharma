@@ -34,6 +34,7 @@
 #include "radM1.hpp"
 
 #include "domain.hpp"
+#include "floors_functions.hpp"
 #include "inverter.hpp"
 #include "kharma.hpp"
 #include "kharma_driver.hpp"
@@ -119,6 +120,16 @@ std::shared_ptr<KHARMAPackage> RadM1::Initialize(
         Metadata({Metadata::Real, Metadata::Cell, Metadata::Derived, Metadata::OneCopy});
     pkg->AddField("rimplflag", m);
     pkg->AddField("rinvflag", m);
+    pkg->AddField("rad_imex_src",
+        Metadata({Metadata::Real, Metadata::Cell, Metadata::Derived, Metadata::OneCopy},
+            std::vector<int>{5}));
+    // Cell-centered total opacity, for the radiation signal speeds in the fluxes
+    pkg->AddField("rad_kappa",
+        Metadata({Metadata::Real, Metadata::Cell, Metadata::Derived, Metadata::OneCopy}));
+    // Newton iterations per cell in the last implicit call: pmhd, prad, ff (diagnostic)
+    pkg->AddField("solver_count",
+        Metadata({Metadata::Real, Metadata::Cell, Metadata::Derived, Metadata::OneCopy},
+            std::vector<int>{3}));
     Real u_rad_floor = pin->GetOrAddReal("radM1", "u_rad_floor", 1.e-40);
     pkg->AllParams().Add("u_rad_floor", u_rad_floor);
 
@@ -129,7 +140,50 @@ std::shared_ptr<KHARMAPackage> RadM1::Initialize(
     pkg->AllParams().Add("src_rootfind_tol", src_rootfind_tol);
     pkg->AllParams().Add("src_rootfind_maxiter", src_rootfind_maxiter);
 
+    // Separate iteration limits for the PMHD and fluid-frame solvers. It defaults to
+    // src_rootfind_maxiter. P_rad still keeps src_rootfind_maxiter. The names are pretty
+    // much self explanatory.
+    int pmhd_maxiter =
+        pin->GetOrAddInteger("radM1", "pmhd_maxiter", src_rootfind_maxiter);
+    pkg->AllParams().Add("pmhd_maxiter", pmhd_maxiter);
+
+    int ff_maxiter = pin->GetOrAddInteger("radM1", "ff_maxiter", src_rootfind_maxiter);
+    pkg->AllParams().Add("ff_maxiter", ff_maxiter);
+
+    // Start the fluid-frame solver from the gas-radiation equilibrium temperature when
+    // that guess has a smaller residual than the star state.
+    // PNM: I found that this is useful for optically thick flows, but I'm not sure how
+    // much this small test impacts performance in optically thin flows. I think it's not
+    // that important though, so maybe just keep it on.
+    bool ff_eq_guess = pin->GetOrAddBoolean("radM1", "ff_eq_guess", false);
+    pkg->AllParams().Add("ff_eq_guess", ff_eq_guess);
+
+    // When every solver fails, accept the last solver's best state if its error reached
+    // this (relaxed_success). 0 turns it off
+    Real accept_tol = pin->GetOrAddReal("radM1", "accept_tol", 1.e-4);
+    pkg->AllParams().Add("accept_tol", accept_tol);
+
+    // PMHD iterations for cells the fluid frame solver took in the last implicit call.
+    // They still try PMHD every call, just with this budget.
+    // If it failed last stage/step, it will maybe fail this one too, so instead of giving
+    // it the full budget, just give it a smaller budget to save time.
+    int pmhd_maxiter_after_ff =
+        pin->GetOrAddInteger("radM1", "pmhd_maxiter_after_ff", src_rootfind_maxiter);
+    pkg->AllParams().Add("pmhd_maxiter_after_ff", pmhd_maxiter_after_ff);
+
+    // Try P_rad on cells the fluid-frame solver fails. If false, they are failures
+    // P_rad is very slow due to multiple kaustaun calls, so this is off by default, but I
+    // leave the choice up to the user.
+    bool prad_fallback = pin->GetOrAddBoolean("radM1", "prad_fallback", false);
+
+    pkg->AllParams().Add("prad_fallback", prad_fallback);
+
+    // Second order stuff, we update these every step.
     pkg->AllParams().Add("current_stage_dt", 0.0, true);
+    pkg->AllParams().Add("current_stage_gam0", 0.0, true);
+    pkg->AllParams().Add("current_stage_gam1", 1.0, true);
+    pkg->AllParams().Add("current_stage", 1, true);
+    pkg->AllParams().Add("current_dt_full", 0.0, true);
 
     // Opacity model selector (see rad_opacities.hpp).
     // Determine the problem ID
@@ -191,11 +245,6 @@ std::shared_ptr<KHARMAPackage> RadM1::Initialize(
     pkg->AllParams().Add("const_kappa_a", const_kappa_a, true);
     pkg->AllParams().Add("const_kappa_sc", const_kappa_sc, true);
 
-    std::string regime_str = pin->GetOrAddString("opac", "regime", "AGN");
-    RadOpac::FitType regime = RadOpac::FitType::AGN;
-    if (regime_str == "XRB") regime = RadOpac::FitType::XRB;
-    pkg->AllParams().Add("regime", regime);
-
     // TODO (PNM): Currently attached to the floors package. Make this a separate option
     // only for radiation package.
     bool floors_on_default = true;
@@ -241,13 +290,8 @@ void RadM1::ApplyRadM1Floors(MeshBlockData<Real>* rc, IndexDomain domain)
     pmb->par_for("ApplyRadM1Floors", kb.s, kb.e, jb.s, jb.e, ib.s, ib.e,
         KOKKOS_LAMBDA (const int &k, const int &j, const int &i)
         {
-            GReal Xembed_fix[GR_DIM];
-            G.coord_embed(k, j, i, Loci::center, Xembed_fix);
-            const GReal r_hor_fix = G.coords.get_horizon();
-            const bool inside_horizon = (r_hor_fix > 0.0) && (Xembed_fix[1] < r_hor_fix);
-            // const bool inside_horizon = false;
-
-            if (P(m_p.UU_RAD, k, j, i) < erad_floor || inside_horizon) {
+            // Inside the horizon too, only the floor (no reset to it)
+            if (P(m_p.UU_RAD, k, j, i) < erad_floor) {
                 P(m_p.UU_RAD, k, j, i) = erad_floor;
                 P(m_p.U1_RAD, k, j, i) = 0.0;
                 P(m_p.U2_RAD, k, j, i) = 0.0;
@@ -272,22 +316,18 @@ TaskStatus RadM1::BlockPtoU(MeshBlockData<Real>* rc, IndexDomain domain, bool co
     auto pmb = rc->GetBlockPointer();
     const auto& G = pmb->coords;
 
-    // Pack Conserved Variables (Destination)
     PackIndexMap cons_map;
     auto& U = rc->PackVariables(
         std::vector<std::string>{"cons.u_rad", "cons.uvec_rad"}, cons_map);
     VarMap m_u(cons_map, true);
 
-    // Pack Primitive Variables (Source)
     PackIndexMap prim_map;
     auto P = rc->PackVariables(
         std::vector<MetadataFlag>{Metadata::GetUserFlag("Primitive")}, prim_map);
     const VarMap m_p(prim_map, false);
 
-    // Get Loop Bounds
     IndexRange3 b = KDomain::GetRange(rc, domain, coarse);
 
-    // Parallel Loop
     pmb->par_for("RadM1_PtoU", b.ks, b.ke, b.js, b.je, b.is, b.ie,
         KOKKOS_LAMBDA (const int &k, const int &j, const int &i)
         {
@@ -342,7 +382,7 @@ TaskStatus RadM1::BlockUtoP(MeshBlockData<Real>* rc, IndexDomain domain, bool co
 
     // Get Loop Bounds
     IndexRange3 b = KDomain::GetRange(rc, domain, coarse);
-
+    auto rinvflag = rc->PackVariables(std::vector<std::string>{"rinvflag"});
     // Parallel Loop
     pmb->par_for("RadM1_UtoP", b.ks, b.ke, b.js, b.je, b.is, b.ie,
         KOKKOS_LAMBDA (const int &k, const int &j, const int &i)
@@ -350,8 +390,9 @@ TaskStatus RadM1::BlockUtoP(MeshBlockData<Real>* rc, IndexDomain domain, bool co
             Real Prad[4];
             Real Urad[4] = {U(m_u.UU_RAD, k, j, i), U(m_u.U1_RAD, k, j, i),
                 U(m_u.U2_RAD, k, j, i), U(m_u.U3_RAD, k, j, i)};
-            RadM1::u_to_p_rad(G, Urad, Prad, k, j, i, nullptr, RadLimiterType::BASIC);
-
+            const auto status =
+                RadM1::u_to_p_rad(G, Urad, Prad, k, j, i, nullptr, RadLimiterType::BASIC);
+            rinvflag(0, k, j, i) = static_cast<int>(status);
             P(m_p.UU_RAD, k, j, i) = Prad[0];
             P(m_p.U1_RAD, k, j, i) = Prad[1];
             P(m_p.U2_RAD, k, j, i) = Prad[2];
@@ -360,36 +401,212 @@ TaskStatus RadM1::BlockUtoP(MeshBlockData<Real>* rc, IndexDomain domain, bool co
     return TaskStatus::complete;
 }
 
+TaskStatus RadM1::FixRadiation(MeshBlockData<Real>* rc)
+{
+    Flag("RadM1::FixRadiation");
+    auto pmb = rc->GetBlockPointer();
+    const auto& G = pmb->coords;
+
+    PackIndexMap rad_prims_map;
+    auto Prad = rc->PackVariables(
+        std::vector<std::string>{"prims.u_rad", "prims.uvec_rad"}, rad_prims_map);
+    const VarMap m_prad(rad_prims_map, false);
+
+    GridScalar rinvflag = rc->Get("rinvflag").data;
+    GridScalar rimplflag = rc->Get("rimplflag").data;
+    GridScalar pflag = rc->Get("pflag").data;
+    PackIndexMap mhd_prims_map, mhd_cons_map;
+    auto Pg = GRMHD::PackMHDPrims(rc, mhd_prims_map);
+    auto Ug = GRMHD::PackMHDCons(rc, mhd_cons_map);
+    const VarMap m_pg(mhd_prims_map, false), m_ug(mhd_cons_map, true);
+    auto eos = pmb->packages.Get("eos")->AllParams().Get<Microphysics::EOS::EOS>("d.EOS");
+    const int impl_fail = static_cast<int>(StatusImplicitStep::failure);
+
+    const Real erad_floor = pmb->packages.Get("RadM1")->Param<Real>("u_rad_floor");
+    const GReal r_hor = G.coords.get_horizon();
+
+    const IndexRange3 b = KDomain::GetPhysicalRange(rc);
+
+    pmb->par_for("fix_radiation", b.ks, b.ke, b.js, b.je, b.is, b.ie,
+        KOKKOS_LAMBDA (const int &k, const int &j, const int &i)
+        {
+            GReal Xembed[GR_DIM];
+            G.coord_embed(k, j, i, Loci::center, Xembed);
+            const bool inside_horizon = r_hor > 0.0 && Xembed[1] < r_hor;
+
+            const bool bad =
+                !inside_horizon && (rad_inversion_failed(rinvflag(0, k, j, i)) ||
+                                       rimplflag(0, k, j, i) ==
+                                           static_cast<int>(StatusImplicitStep::failure));
+            if (bad) {
+                // Implicit failures also average u, u^i (not rho, B). I took this from
+                // Koral Lite, previously I was just avg rad variables.
+                const bool gas_bad =
+                    !inside_horizon && rimplflag(0, k, j, i) == impl_fail;
+                double gsum = 0.;
+                double gas[4] = {0.};
+                double wsum = 0.;
+                double sum[4] = {0.};
+                for (int n = -1; n <= 1; n++) {
+                    for (int m = -1; m <= 1; m++) {
+                        for (int l = -1; l <= 1; l++) {
+                            int ii = i + l, jj = j + m, kk = k + n;
+                            if (KDomain::inside(kk, jj, ii, b)) {
+                                GReal Xembed_n[GR_DIM];
+                                G.coord_embed(kk, jj, ii, Loci::center, Xembed_n);
+                                const bool n_inside_horizon =
+                                    r_hor > 0.0 && Xembed_n[1] < r_hor;
+                                const bool nbad =
+                                    n_inside_horizon ||
+                                    rad_inversion_failed(rinvflag(0, kk, jj, ii)) ||
+                                    rimplflag(0, kk, jj, ii) ==
+                                        static_cast<int>(StatusImplicitStep::failure);
+                                if (gas_bad && rimplflag(0, kk, jj, ii) != impl_fail &&
+                                    !Inverter::failed(pflag(kk, jj, ii))) {
+                                    const double w =
+                                        1. / (m::abs(l) + m::abs(m) + m::abs(n) + 1);
+                                    gsum += w;
+                                    // u/rho, so a low-density cell gets its neighbors'
+                                    // temperature rather than their energy density
+                                    const Real rho_n = Pg(m_pg.RHO, kk, jj, ii);
+                                    gas[0] += w * Pg(m_pg.UU, kk, jj, ii) / rho_n;
+                                    for (int v = 0; v < NVEC; v++)
+                                        gas[1 + v] += w * Pg(m_pg.U1 + v, kk, jj, ii);
+                                }
+                                if (!nbad) {
+                                    double w =
+                                        1. / (m::abs(l) + m::abs(m) + m::abs(n) + 1);
+                                    wsum += w;
+                                    // Average T^t_mu, not E_rf and u^i
+                                    const Real Pn[4] = {Prad(m_prad.UU_RAD, kk, jj, ii),
+                                        Prad(m_prad.U1_RAD, kk, jj, ii),
+                                        Prad(m_prad.U2_RAD, kk, jj, ii),
+                                        Prad(m_prad.U3_RAD, kk, jj, ii)};
+                                    Real Tn[GR_DIM];
+                                    RadM1::calc_tensor(G, Pn, 0, jj, ii, Tn);
+                                    for (int mu = 0; mu < GR_DIM; mu++)
+                                        sum[mu] += w * Tn[mu];
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if (wsum < 1.e-10) {
+                    Prad(m_prad.UU_RAD, k, j, i) = erad_floor;
+                    Prad(m_prad.U1_RAD, k, j, i) = 0.;
+                    Prad(m_prad.U2_RAD, k, j, i) = 0.;
+                    Prad(m_prad.U3_RAD, k, j, i) = 0.;
+                } else {
+                    const Real gdet = G.gdet(Loci::center, j, i);
+                    Real U_avg[4], P_avg[4];
+                    for (int mu = 0; mu < GR_DIM; mu++) U_avg[mu] = sum[mu] / wsum * gdet;
+                    const auto st = RadM1::u_to_p_rad(
+                        G, U_avg, P_avg, k, j, i, nullptr, RadLimiterType::BASIC);
+                    if (rad_inversion_failed(static_cast<int>(st))) {
+                        P_avg[0] = erad_floor;
+                        P_avg[1] = P_avg[2] = P_avg[3] = 0.;
+                    }
+                    Prad(m_prad.UU_RAD, k, j, i) = P_avg[0];
+                    Prad(m_prad.U1_RAD, k, j, i) = P_avg[1];
+                    Prad(m_prad.U2_RAD, k, j, i) = P_avg[2];
+                    Prad(m_prad.U3_RAD, k, j, i) = P_avg[3];
+                }
+                if (gas_bad && gsum > 1.e-10) {
+                    Pg(m_pg.UU, k, j, i) = Pg(m_pg.RHO, k, j, i) * gas[0] / gsum;
+                    for (int v = 0; v < NVEC; v++)
+                        Pg(m_pg.U1 + v, k, j, i) = gas[1 + v] / gsum;
+                    GRMHD::p_to_u(G, Pg, m_pg, eos, k, j, i, Ug, m_ug);
+                }
+            }
+        });
+
+    RadM1::BlockPtoU(rc, IndexDomain::entire);
+
+    EndFlag();
+    return TaskStatus::complete;
+}
+
+RadM1::RadOpac RadM1::GetRadOpac(Packages_t& packages)
+{
+    const auto& params = packages.Get("RadM1")->AllParams();
+    const auto& opac_pars = packages.Get("opacity")->AllParams();
+    RadOpac rad_opac;
+    rad_opac.opacity_type = params.Get<int>("opacity_type");
+    rad_opac.const_sigma = params.Get<Real>("const_sigma");
+    rad_opac.const_kappa_a = params.Get<Real>("const_kappa_a");
+    rad_opac.const_kappa_sc = params.Get<Real>("const_kappa_sc");
+    rad_opac.mean_molecular_weight = params.Get<Real>("mean_molecular_weight");
+    rad_opac.regime = opac_pars.Get<RadOpac::FitType>("regime");
+    rad_opac.use_bremsstrahlung = opac_pars.Get<bool>("use_bremsstrahlung");
+    rad_opac.use_synchrotron = opac_pars.Get<bool>("use_synchrotron");
+    rad_opac.use_tops_table = opac_pars.Get<bool>("use_tops_table");
+    rad_opac.units_cgs =
+        packages.Get("Units")->AllParams().Get<Units::UnitConversions>("unit_conv");
+    rad_opac.sing_opac = opac_pars.Get<Microphysics::Opacities>("opacities");
+    return rad_opac;
+}
+
+TaskStatus RadM1::CalcKappa(MeshData<Real>* md)
+{
+    auto pmb0 = md->GetBlockData(0)->GetBlockPointer();
+    const RadOpac rad_opac = GetRadOpac(pmb0->packages);
+    const auto& eos_params = pmb0->packages.Get("eos")->AllParams();
+    auto eos = eos_params.Get<Microphysics::EOS::EOS>("d.EOS");
+    PackIndexMap prims_map;
+    const auto& P = md->PackVariables(
+        std::vector<MetadataFlag>{Metadata::GetUserFlag("Primitive")}, prims_map);
+    const VarMap m_p(prims_map, false);
+    const auto& kappa = md->PackVariables(std::vector<std::string>{"rad_kappa"});
+    const IndexRange3 b = KDomain::GetRange(md, IndexDomain::entire);
+    pmb0->par_for("rad_kappa", 0, P.GetDim(5) - 1, b.ks, b.ke, b.js, b.je, b.is, b.ie,
+        KOKKOS_LAMBDA(const int& bl, const int& k, const int& j, const int& i)
+        {
+            const auto& G = P.GetCoords(bl);
+            FourVectors D;
+            GRMHD::calc_4vecs(G, P(bl), m_p, k, j, i, Loci::center, D);
+            kappa(bl, 0, k, j, i) = inside_horizon(G, k, j, i, Loci::center)
+                                        ? 0.
+                                        : calc_kappa_tot(G, P(bl), m_p, D, eos, rad_opac,
+                                              k, j, i, Loci::center);
+        });
+    return TaskStatus::complete;
+}
+
 void RadM1::AddSourceImplicitly(
     MeshData<Real>* md_sub_init, MeshData<Real>* md_flux_src, IndexDomain domain)
 {
+    using SIS = StatusImplicitStep;
     for (int b = 0; b < md_sub_init->NumBlocks(); ++b) {
         auto pmb_data = md_sub_init->GetBlockData(b);
         auto pmb = pmb_data->GetBlockPointer();
         auto& params = pmb->packages.Get("RadM1")->AllParams();
 
         // Fetch parameters
+        // 2nd order parameters
         const Real dt = pmb->packages.Get("RadM1")->Param<Real>("current_stage_dt");
+        const Real gam0 = pmb->packages.Get("RadM1")->Param<Real>("current_stage_gam0");
+        const Real gam1 = pmb->packages.Get("RadM1")->Param<Real>("current_stage_gam1");
+        const int stage = pmb->packages.Get("RadM1")->Param<int>("current_stage");
+        const Real dt_full = pmb->packages.Get("RadM1")->Param<Real>("current_dt_full");
+        const Real dt_impl = (1.0 - 1.0 / std::sqrt(2.0)) * dt_full;
+        const Real w_solve = dt_impl / dt;
+        const Real w_hist = (stage == 2) ? std::sqrt(2.0) * dt_full / dt : 0.0;
+
+        // Solver parameters, such as iteration limits, tolerances, FD stepsize, etc...
         const Real src_rootfind_eps = params.Get<Real>("src_rootfind_eps");
         const Real src_rootfind_tol = params.Get<Real>("src_rootfind_tol");
         const int src_rootfind_maxiter = params.Get<int>("src_rootfind_maxiter");
+        const int pmhd_maxiter = params.Get<int>("pmhd_maxiter");
+        const int ff_maxiter = params.Get<int>("ff_maxiter");
+        // Try to start the fluid-frame solver from the gas-radiation equilibrium
+        const bool ff_eq_guess = params.Get<bool>("ff_eq_guess");
+        const Real accept_tol = params.Get<Real>("accept_tol");
+        const int pmhd_maxiter_after_ff = params.Get<int>("pmhd_maxiter_after_ff");
+        const bool prad_fallback = params.Get<bool>("prad_fallback");
         const auto& eos_params = pmb->packages.Get("eos")->AllParams();
         auto eos = eos_params.Get<Microphysics::EOS::EOS>("d.EOS");
-        RadOpac rad_opac;
-        rad_opac.opacity_type = params.Get<int>("opacity_type");
-        rad_opac.const_sigma = params.Get<Real>("const_sigma");
-        rad_opac.const_kappa_a = params.Get<Real>("const_kappa_a");
-        rad_opac.const_kappa_sc = params.Get<Real>("const_kappa_sc");
-        rad_opac.mean_molecular_weight = params.Get<Real>("mean_molecular_weight");
-        rad_opac.regime = params.Get<RadOpac::FitType>("regime");
-        rad_opac.units_cgs =
-            pmb->packages.Get("Units")->AllParams().Get<Units::UnitConversions>(
-                "unit_conv");
-        if (pmb->packages.AllPackages().count("opacity")) {
-            rad_opac.sing_opac =
-                pmb->packages.Get("opacity")->AllParams().Get<Microphysics::Opacities>(
-                    "opacities");
-        }
+        const RadOpac rad_opac = GetRadOpac(pmb->packages);
 
         const auto& G = pmb->coords;
 
@@ -399,102 +616,520 @@ void RadM1::AddSourceImplicitly(
         auto U_init_substep =
             pmb_data->PackVariables({Metadata::WithFluxes, Metadata::Cell}, cons_map);
 
-        // Is this declaration correct? ASK CORA
         auto dU_substep = md_flux_src->GetBlockData(b)->PackVariables(
             {Metadata::WithFluxes, Metadata::Cell}, cons_map);
         const VarMap m_p(prims_map, false);
         const VarMap m_u(cons_map, true);
+        PackIndexMap cons_map_base;
+        auto U_base = pmb->meshblock_data.Get()->PackVariables(
+            {Metadata::WithFluxes, Metadata::Cell}, cons_map_base);
+        const VarMap m_ub(cons_map_base, true);
 
+        // Assinging flags, this is defined in radm1.hpp, but basically rimplflag are the
+        // implicit solver flags, rinvflag are the inversion flags, and pflag are the
+        // primitive variable flags.
         auto rimplflag = pmb_data->PackVariables(std::vector<std::string>{"rimplflag"});
         auto pflag = pmb_data->PackVariables(std::vector<std::string>{"pflag"});
-
         auto rinvflag = pmb_data->PackVariables(std::vector<std::string>{"rinvflag"});
 
+        // rad_imex_src stores the stage-1 implicit source of the two-stage IMEX scheme,
+        // cause we want 2nd order accuracy.
+        auto imex_src = pmb_data->PackVariables(std::vector<std::string>{"rad_imex_src"});
+
+        // How many iterations it took for each cell to exit the solver.
+        auto solver_count =
+            pmb_data->PackVariables(std::vector<std::string>{"solver_count"});
+        const bool use_floors = pmb->packages.AllPackages().count("Floors");
+        const Floors::Prescription floors =
+            use_floors
+                ? pmb->packages.Get("Floors")->Param<Floors::Prescription>("prescription")
+                : Floors::Prescription();
+
+        // In this solver, cells can be ill conditioned, since we are considering
+        // post-flux update states. Sometimes, we need to fix it, before calculating the
+        // implicit solver and later actually going to floors + fixup.
+
+        // the face-centred magnetic field cons.fB (gdet·B^i on faces), taken from the
+        // current stage's start. It's weighted by gam0.
+        auto Bf_sub = pmb_data->PackVariables(std::vector<std::string>{"cons.fB"});
+        // Same field as Bf_sub, but taken from the start of the full timestep. It's
+        // weighted by gam1.
+        auto Bf_base =
+            pmb->meshblock_data.Get()->PackVariables(std::vector<std::string>{"cons.fB"});
+
+        // This is this stage's dB/dt of the face field, multiplied by dt.
+        auto dBf = md_flux_src->GetBlockData(b)->PackVariables(
+            std::vector<std::string>{"cons.fB"});
+        // Just a boolean to check if we have a face field or not.
+        const bool face_b = Bf_sub.GetDim(4) > 0;
+
+        // the coefficient that adds the stage-1 explicit tendency again at stage 2. It's
+        // the delta of the ARS(2,2,2) IMEX scheme
+        const Real ars_d1 =
+            (stage == 2) ? (1.0 - 1.0 / (2.0 * (1.0 - 1.0 / std::sqrt(2.0)))) * dt_full
+                         : 0.0;
+        PackIndexMap cons_map_d1;
+        // the stage-1 explicit flux divergence plus explicit sources for the cell
+        // variables, and its index map.
+        auto dU1 = pmb->meshblock_data.Get("dUdt_s1")->PackVariables(
+            {Metadata::WithFluxes, Metadata::Cell}, cons_map_d1);
+        const VarMap m_d1(cons_map_d1, true);
+        // Same stage 1 explicit for the face field.
+        auto dBf1 = pmb->meshblock_data.Get("dUdt_s1")->PackVariables(
+            std::vector<std::string>{"cons.fB"});
+        const int ndim = pmb->pmy_mesh->ndim;
+
+        // eos adiabatic index
         const Real gm1 = eos_params.Get<Real>("gm1");
+        const Real gam = gm1 + 1.0;
         auto bounds = pmb->cellbounds;
         const IndexRange ib = bounds.GetBoundsI(IndexDomain::interior);
         const IndexRange jb = bounds.GetBoundsJ(IndexDomain::interior);
         const IndexRange kb = bounds.GetBoundsK(IndexDomain::interior);
 
-        // TODO (PNM): Split it, Cora thinks this is too large to be good. Probably too
-        // slow.
-        pmb->par_for("RadM1_Implicit_Solver4D", kb.s, kb.e, jb.s, jb.e, ib.s, ib.e,
+        // KOKKOS function to add the stage 1 term first, in order to make it second
+        // order. This is applied for failed cells, they only get the first stage's source
+        // term.
+        auto apply_history = KOKKOS_LAMBDA(const int k, const int j, const int i)
+        {
+            const int iug[4] = {m_u.UU, m_u.U1, m_u.U2, m_u.U3};
+            const int iur[4] = {m_u.UU_RAD, m_u.U1_RAD, m_u.U2_RAD, m_u.U3_RAD};
+            Real G2[5];
+            for (int n = 0; n < 5; n++) G2[n] = (stage == 2) ? imex_src(n, k, j, i) : 0.0;
+            for (int n = 0; n < 4; n++) {
+                dU_substep(iug[n], k, j, i) -= w_hist * G2[n];
+                dU_substep(iur[n], k, j, i) += w_hist * G2[n];
+            }
+            if (m_u.KTOT_ADV >= 0)
+                dU_substep(m_u.KTOT_ADV, k, j, i) +=
+                    (gm1) / m::pow(P_init_substep(m_p.RHO, k, j, i), gm1) * w_hist *
+                    G2[4];
+        };
+
+        // For cells that actually succeed, we combine both stages update.
+        auto apply_source = KOKKOS_LAMBDA(
+            const int k, const int j, const int i, Real dS[5], const int flag)
+        {
+            for (int n = 0; n < 5; n++) {
+                const Real g2 = (stage == 2) ? imex_src(n, k, j, i) : 0.0;
+                if (stage == 1) imex_src(n, k, j, i) = dS[n];
+                dS[n] = w_solve * dS[n] + w_hist * g2;
+            }
+            dU_substep(m_u.UU, k, j, i) -= dS[0];
+            dU_substep(m_u.U1, k, j, i) -= dS[1];
+            dU_substep(m_u.U2, k, j, i) -= dS[2];
+            dU_substep(m_u.U3, k, j, i) -= dS[3];
+            dU_substep(m_u.UU_RAD, k, j, i) += dS[0];
+            dU_substep(m_u.U1_RAD, k, j, i) += dS[1];
+            dU_substep(m_u.U2_RAD, k, j, i) += dS[2];
+            dU_substep(m_u.U3_RAD, k, j, i) += dS[3];
+            if (m_u.KTOT_ADV >= 0)
+                dU_substep(m_u.KTOT_ADV, k, j, i) +=
+                    (gm1) / m::pow(P_init_substep(m_p.RHO, k, j, i), gm1) * dS[4];
+            rimplflag(0, k, j, i) = flag;
+        };
+
+        // If failed, restore the original state.
+        auto restore =
+            KOKKOS_LAMBDA(const int k, const int j, const int i, const Real U_save[9],
+                const Real P_save[9], const Real B_save[3], const Real PB_save[3])
+        {
+            const int iu[9] = {m_u.RHO, m_u.UU, m_u.U1, m_u.U2, m_u.U3, m_u.UU_RAD,
+                m_u.U1_RAD, m_u.U2_RAD, m_u.U3_RAD};
+            const int ip[9] = {m_p.RHO, m_p.UU, m_p.U1, m_p.U2, m_p.U3, m_p.UU_RAD,
+                m_p.U1_RAD, m_p.U2_RAD, m_p.U3_RAD};
+            for (int n = 0; n < 9; n++) {
+                U_init_substep(iu[n], k, j, i) = U_save[n];
+                P_init_substep(ip[n], k, j, i) = P_save[n];
+            }
+            if (m_u.B1 >= 0 && m_p.B1 >= 0) {
+                for (int v = 0; v < 3; v++) {
+                    U_init_substep(m_u.B1 + v, k, j, i) = B_save[v];
+                    P_init_substep(m_p.B1 + v, k, j, i) = PB_save[v];
+                }
+            }
+        };
+
+        // When doing U->P conversion, maybe the state does not exist, so we fix it,
+        // generate a new primitive state, and then continue with the implicit solver, but
+        // with the OG U. If it ends up fail at the end, send it to fallbacks.
+        auto build_star = KOKKOS_LAMBDA(const int k, const int j, const int i,
+            Real U_save[9], Real P_save[9], Real B_save[3], Real PB_save[3]) -> bool
+        {
+            const int iug[4] = {m_u.UU, m_u.U1, m_u.U2, m_u.U3};
+            const int iur[4] = {m_u.UU_RAD, m_u.U1_RAD, m_u.U2_RAD, m_u.U3_RAD};
+            const int ifx[5] = {m_u.RHO, m_u.UU, m_u.U1, m_u.U2, m_u.U3};
+            const int iu[9] = {m_u.RHO, m_u.UU, m_u.U1, m_u.U2, m_u.U3, m_u.UU_RAD,
+                m_u.U1_RAD, m_u.U2_RAD, m_u.U3_RAD};
+            const int iub[9] = {m_ub.RHO, m_ub.UU, m_ub.U1, m_ub.U2, m_ub.U3, m_ub.UU_RAD,
+                m_ub.U1_RAD, m_ub.U2_RAD, m_ub.U3_RAD};
+            const int ip[9] = {m_p.RHO, m_p.UU, m_p.U1, m_p.U2, m_p.U3, m_p.UU_RAD,
+                m_p.U1_RAD, m_p.U2_RAD, m_p.U3_RAD};
+            const int iud1[9] = {m_d1.RHO, m_d1.UU, m_d1.U1, m_d1.U2, m_d1.U3,
+                m_d1.UU_RAD, m_d1.U1_RAD, m_d1.U2_RAD, m_d1.U3_RAD};
+            Real G2[5];
+            for (int n = 0; n < 5; n++) G2[n] = (stage == 2) ? imex_src(n, k, j, i) : 0.0;
+
+            // Save the original state, in case we need to restore it.
+            for (int n = 0; n < 9; n++) {
+                U_save[n] = U_init_substep(iu[n], k, j, i);
+                P_save[n] = P_init_substep(ip[n], k, j, i);
+            }
+
+            // Conserved state update, with the stage 1 explicit source term added back in
+            // for stage 2.
+            for (int n = 0; n < 9; n++)
+                U_init_substep(iu[n], k, j, i) =
+                    gam0 * U_save[n] + gam1 * U_base(iub[n], k, j, i) +
+                    dt * dU_substep(iu[n], k, j, i) +
+                    ((ars_d1 != 0.0) ? ars_d1 * dU1(iud1[n], k, j, i) : 0.0);
+
+            // Add the stage 1 implicit source term
+            for (int n = 0; n < 4; n++) {
+                U_init_substep(iug[n], k, j, i) -= w_hist * dt * G2[n];
+                U_init_substep(iur[n], k, j, i) += w_hist * dt * G2[n];
+            }
+
+            // Now we have to do the same thing with B, reconstruct the explicit update of
+            // this stage + previous stage stuff.
+            for (int v = 0; v < 3; v++) B_save[v] = PB_save[v] = 0.;
+            if (m_u.B1 >= 0 && m_p.B1 >= 0) {
+                const Real gdet_c = G.gdet(Loci::center, j, i);
+                for (int v = 0; v < 3; v++) {
+                    // Save the original state, in case we need to restore it.
+                    B_save[v] = U_init_substep(m_u.B1 + v, k, j, i);
+                    PB_save[v] = P_init_substep(m_p.B1 + v, k, j, i);
+
+                    // Reconstruct the updated state, with the stage 1 explicit source
+                    // term added back in for stage 2.
+                    U_init_substep(m_u.B1 + v, k, j, i) =
+                        gam0 * B_save[v] + gam1 * U_base(m_ub.B1 + v, k, j, i) +
+                        dt * dU_substep(m_u.B1 + v, k, j, i) +
+                        ((ars_d1 != 0.0) ? ars_d1 * dU1(m_d1.B1 + v, k, j, i) : 0.0);
+                    P_init_substep(m_p.B1 + v, k, j, i) =
+                        U_init_substep(m_u.B1 + v, k, j, i) / gdet_c;
+                }
+
+                // Now if we are doing face-centered B, we need to reconstruct it as well.
+                if (face_b) {
+                    const Real b1l =
+                        gam0 * Bf_sub(F1, 0, k, j, i) + gam1 * Bf_base(F1, 0, k, j, i) +
+                        dt * dBf(F1, 0, k, j, i) +
+                        ((ars_d1 != 0.0) ? ars_d1 * dBf1(F1, 0, k, j, i) : 0.0);
+                    const Real b1r =
+                        gam0 * Bf_sub(F1, 0, k, j, i + 1) +
+                        gam1 * Bf_base(F1, 0, k, j, i + 1) +
+                        dt * dBf(F1, 0, k, j, i + 1) +
+                        ((ars_d1 != 0.0) ? ars_d1 * dBf1(F1, 0, k, j, i + 1) : 0.0);
+                    const Real b2l =
+                        gam0 * Bf_sub(F2, 0, k, j, i) + gam1 * Bf_base(F2, 0, k, j, i) +
+                        dt * dBf(F2, 0, k, j, i) +
+                        ((ars_d1 != 0.0) ? ars_d1 * dBf1(F2, 0, k, j, i) : 0.0);
+                    const Real b3l =
+                        gam0 * Bf_sub(F3, 0, k, j, i) + gam1 * Bf_base(F3, 0, k, j, i) +
+                        dt * dBf(F3, 0, k, j, i) +
+                        ((ars_d1 != 0.0) ? ars_d1 * dBf1(F3, 0, k, j, i) : 0.0);
+                    Real Bc[3];
+                    Bc[0] = (b1l / G.gdet(Loci::face1, j, i) +
+                                b1r / G.gdet(Loci::face1, j, i + 1)) /
+                            2;
+                    if (ndim > 1) {
+                        const Real b2r =
+                            gam0 * Bf_sub(F2, 0, k, j + 1, i) +
+                            gam1 * Bf_base(F2, 0, k, j + 1, i) +
+                            dt * dBf(F2, 0, k, j + 1, i) +
+                            ((ars_d1 != 0.0) ? ars_d1 * dBf1(F2, 0, k, j + 1, i) : 0.0);
+                        Bc[1] = (b2l / G.gdet(Loci::face2, j, i) +
+                                    b2r / G.gdet(Loci::face2, j + 1, i)) /
+                                2;
+                    } else {
+                        Bc[1] = b2l / G.gdet(Loci::face2, j, i);
+                    }
+                    if (ndim > 2) {
+                        const Real b3r =
+                            gam0 * Bf_sub(F3, 0, k + 1, j, i) +
+                            gam1 * Bf_base(F3, 0, k + 1, j, i) +
+                            dt * dBf(F3, 0, k + 1, j, i) +
+                            ((ars_d1 != 0.0) ? ars_d1 * dBf1(F3, 0, k + 1, j, i) : 0.0);
+                        Bc[2] = (b3l / G.gdet(Loci::face3, j, i) +
+                                    b3r / G.gdet(Loci::face3, j, i)) /
+                                2;
+                    } else {
+                        Bc[2] = b3l / G.gdet(Loci::face3, j, i);
+                    }
+                    for (int v = 0; v < 3; v++) {
+                        P_init_substep(m_p.B1 + v, k, j, i) = Bc[v];
+                        U_init_substep(m_u.B1 + v, k, j, i) = Bc[v] * gdet_c;
+                    }
+                }
+            }
+
+            // Then now that we have the updated Umhd and Urad, we can try to invert them.
+            const int status_star =
+                Inverter::u_to_p<Inverter::Type::kastaun>(G, U_init_substep, m_u, eos, k,
+                    j, i, P_init_substep, m_p, Loci::center, 25, 1e-12);
+            const Real Urad_star[4] = {U_init_substep(m_u.UU_RAD, k, j, i),
+                U_init_substep(m_u.U1_RAD, k, j, i), U_init_substep(m_u.U2_RAD, k, j, i),
+                U_init_substep(m_u.U3_RAD, k, j, i)};
+            Real Prad_star[4];
+            const auto rad_status_star = u_to_p_rad(G, Urad_star, Prad_star, k, j, i);
+            // If gas is not invertible, we do the entropy inversion + geo floors, as the
+            // Newton guess only. The star U is kept, so the exchange stays conservative
+            const bool star_fixed =
+                !(status_star == static_cast<int>(Inverter::Status::success) &&
+                    P_init_substep(m_p.UU, k, j, i) > 0.0);
+
+            // it failed >:(
+            if (star_fixed) {
+                Real Ustar[5];
+                for (int n = 0; n < 5; n++) Ustar[n] = U_init_substep(ifx[n], k, j, i);
+                Real Kent = (P_save[0] > 0. && P_save[1] > 0.)
+                                ? gm1 * P_save[1] * m::pow(P_save[0], -gam)
+                                : -1.;
+                if (m_u.KTOT >= 0) {
+                    const Real Kc =
+                        gam0 * U_init_substep(m_u.KTOT, k, j, i) +
+                        gam1 * U_base(m_ub.KTOT, k, j, i) +
+                        dt * dU_substep(m_u.KTOT, k, j, i) +
+                        ((ars_d1 != 0.0) ? ars_d1 * dU1(m_d1.KTOT, k, j, i) : 0.0);
+                    if (Kc > 0. && Ustar[0] > 0.) Kent = Kc / Ustar[0];
+                }
+                Real Bcons[NVEC] = {0., 0., 0.};
+                if (m_u.B1 >= 0)
+                    for (int v = 0; v < NVEC; v++)
+                        Bcons[v] = U_init_substep(m_u.B1 + v, k, j, i);
+                const Real Ucov[NVEC] = {Ustar[2], Ustar[3], Ustar[4]};
+                Real rho_f, u_f, uvec_f[NVEC];
+                if (!u_to_p_entropy(G, Ustar[0], Ucov, Bcons, Kent, gam, k, j, i, rho_f,
+                        u_f, uvec_f)) {
+                    for (int v = 0; v < NVEC; v++) uvec_f[v] = P_save[2 + v];
+                    rho_f = rho_from_D(
+                        G, Ustar[0] / G.gdet(Loci::center, j, i), uvec_f, k, j, i);
+                    if (!(rho_f > 0.)) rho_f = P_save[0];
+                    u_f = (Kent > 0.) ? Kent * m::pow(rho_f, gam) / gm1 : P_save[1];
+                }
+                if (use_floors) {
+                    Real rhoflr, uflr;
+                    Floors::determine_geo_floors(
+                        G, P_init_substep, m_p, k, j, i, floors, rhoflr, uflr);
+                    rho_f = m::max(rho_f, rhoflr);
+                    u_f = m::max(u_f, uflr);
+                }
+                P_init_substep(m_p.RHO, k, j, i) = rho_f;
+                P_init_substep(m_p.UU, k, j, i) = u_f;
+                for (int v = 0; v < NVEC; v++)
+                    P_init_substep(m_p.U1 + v, k, j, i) = uvec_f[v];
+            }
+
+            // If the radiation inversion failed, we restore the original radiation state.
+            if (rad_status_star == StatusRadiationInversion::success) {
+                P_init_substep(m_p.UU_RAD, k, j, i) = Prad_star[0];
+                P_init_substep(m_p.U1_RAD, k, j, i) = Prad_star[1];
+                P_init_substep(m_p.U2_RAD, k, j, i) = Prad_star[2];
+                P_init_substep(m_p.U3_RAD, k, j, i) = Prad_star[3];
+            } else {
+                for (int n = 5; n < 9; n++) P_init_substep(ip[n], k, j, i) = P_save[n];
+            }
+
+            {
+                Real uvec_s[NVEC] = {P_init_substep(m_p.U1, k, j, i),
+                    P_init_substep(m_p.U2, k, j, i), P_init_substep(m_p.U3, k, j, i)};
+                Real ucon_s[GR_DIM];
+                GRMHD::calc_ucon(G, uvec_s, k, j, i, Loci::center, ucon_s);
+                P_init_substep(m_p.RHO, k, j, i) =
+                    U_init_substep(m_u.RHO, k, j, i) /
+                    (G.gdet(Loci::center, j, i) * ucon_s[0]);
+            }
+            return star_fixed;
+        };
+
+        // Solver state the star build left in U_init/P_init
+        auto get_entry = KOKKOS_LAMBDA(
+            const int k, const int j, const int i, Real U_entry[8], Real P_entry[9])
+        {
+            const int iu8[8] = {m_u.UU, m_u.U1, m_u.U2, m_u.U3, m_u.UU_RAD, m_u.U1_RAD,
+                m_u.U2_RAD, m_u.U3_RAD};
+            const int ip[9] = {m_p.RHO, m_p.UU, m_p.U1, m_p.U2, m_p.U3, m_p.UU_RAD,
+                m_p.U1_RAD, m_p.U2_RAD, m_p.U3_RAD};
+            for (int n = 0; n < 8; n++) U_entry[n] = U_init_substep(iu8[n], k, j, i);
+            for (int n = 0; n < 9; n++) P_entry[n] = P_init_substep(ip[n], k, j, i);
+        };
+
+        // Now we start the kernels for the different implicit solvers.
+        // Dynamic schedule (CPU): the solve cost per cell varies a lot
+        const int nj = jb.e - jb.s + 1, ni = ib.e - ib.s + 1;
+        const int ncells = (kb.e - kb.s + 1) * nj * ni;
+        using DynPolicy = Kokkos::RangePolicy<Kokkos::Schedule<Kokkos::Dynamic>>;
+
+        // one-time per-cell work, skipped cells, mark the rest
+        pmb->par_for("RadM1_Implicit_Setup", kb.s, kb.e, jb.s, jb.e, ib.s, ib.e,
             KOKKOS_LAMBDA (const int &k, const int &j, const int &i)
             {
-                // Check if it's within the horizon, if it is, just assume no interaction
-                // and dU_subinit = 0; PNM: I've been having some trouble getting it to
-                // stay controled within the horizon.
+                for (int n = 0; n < 3; n++) solver_count(n, k, j, i) = 0.;
+                for (int n = 0; n < 5; n++)
+                    if (stage == 1) imex_src(n, k, j, i) = 0.0;
+
+                // Inside the horizon: no interaction. If there is no horizon, r_hor = 0.
                 GReal Xembed[GR_DIM];
                 G.coord_embed(k, j, i, Loci::center, Xembed);
-                const GReal r = Xembed[1];
                 const GReal r_hor = G.coords.get_horizon();
-                // If there is no horizon, r_hor = 0.0. For some of the tests, we don't
-                // have a horizon, and infact, we have negative values so we don't want
-                // this check.
-                if (r_hor > 0.0 && r < r_hor) {
-                    rimplflag(0, k, j, i) = static_cast<int>(StatusImplicitStep::success);
+                if (r_hor > 0.0 && Xembed[1] < r_hor) {
+                    rimplflag(0, k, j, i) = static_cast<int>(SIS::success);
                     return;
                 }
 
-                // if U1_rad == 0 or U1 == 0 it means that it fell badly on floors
-                // we shouldn't bother to try to solve this
-                if (P_init_substep(m_p.U1_RAD, k, j, i) == 0.0 ||
-                    P_init_substep(m_p.U1, k, j, i) == 0.0) {
-                    rimplflag(0, k, j, i) = static_cast<int>(StatusImplicitStep::success);
+                // Cells that fell on backstop, stage 1 term only
+                if ((P_init_substep(m_p.U1_RAD, k, j, i) == 0.0 &&
+                        P_init_substep(m_p.U3_RAD, k, j, i) == 0.0) ||
+                    (P_init_substep(m_p.U1, k, j, i) == 0.0 &&
+                        P_init_substep(m_p.U3, k, j, i) == 0.0)) {
+                    apply_history(k, j, i);
+                    rimplflag(0, k, j, i) = static_cast<int>(SIS::success);
                     return;
                 }
+                // rimplflag still holds the last call's outcome here
+                const bool was_ff = static_cast<int>(rimplflag(0, k, j, i)) ==
+                                    static_cast<int>(SIS::ufluid_success);
+                rimplflag(0, k, j, i) = static_cast<int>(
+                    was_ff ? SIS::pending_pmhd_short : SIS::pending_pmhd);
+            });
 
-                const Real U_entry[8] = {U_init_substep(m_u.UU, k, j, i),
-                    U_init_substep(m_u.U1, k, j, i), U_init_substep(m_u.U2, k, j, i),
-                    U_init_substep(m_u.U3, k, j, i), U_init_substep(m_u.UU_RAD, k, j, i),
-                    U_init_substep(m_u.U1_RAD, k, j, i),
-                    U_init_substep(m_u.U2_RAD, k, j, i),
-                    U_init_substep(m_u.U3_RAD, k, j, i)};
+        // 4D Newton on the MHD primitives
+        Kokkos::parallel_for("RadM1_Implicit_PMHD", DynPolicy(pmb->exec_space, 0, ncells),
+            KOKKOS_LAMBDA (const int idx)
+            {
+                const int k = kb.s + idx / (nj * ni), j = jb.s + (idx / ni) % nj,
+                          i = ib.s + idx % ni;
+                const int flag = static_cast<int>(rimplflag(0, k, j, i));
+                const bool short_try =
+                    (flag == static_cast<int>(SIS::pending_pmhd_short));
+                if (flag != static_cast<int>(SIS::pending_pmhd) && !short_try) return;
+                Real U_save[9], P_save[9], B_save[3], PB_save[3];
+                const bool star_fixed =
+                    build_star(k, j, i, U_save, P_save, B_save, PB_save);
+                Real U_entry[8], P_entry[9];
+                get_entry(k, j, i, U_entry, P_entry);
 
-                const Real P_entry[9] = {P_init_substep(m_p.RHO, k, j, i),
-                    P_init_substep(m_p.UU, k, j, i), P_init_substep(m_p.U1, k, j, i),
-                    P_init_substep(m_p.U2, k, j, i), P_init_substep(m_p.U3, k, j, i),
-                    P_init_substep(m_p.UU_RAD, k, j, i),
-                    P_init_substep(m_p.U1_RAD, k, j, i),
-                    P_init_substep(m_p.U2_RAD, k, j, i),
-                    P_init_substep(m_p.U3_RAD, k, j, i)};
+                Real dS[5] = {0., 0., 0., 0., 0.};
+                int nit = 0;
+                const int rflagl = solve_4d_pmhd(G, P_init_substep, m_p, m_u, k, j, i,
+                    dt_impl, eos, src_rootfind_eps, src_rootfind_tol,
+                    short_try ? pmhd_maxiter_after_ff : pmhd_maxiter, rad_opac, pflag,
+                    rinvflag, U_entry, dS, &nit, star_fixed);
+                solver_count(0, k, j, i) = nit;
 
-                Real dS_subinit[5] = {0., 0., 0., 0., 0.};
-                int rflagl;
-
-                rflagl = solve_4d_pmhd(G, P_init_substep, m_p, m_u, k, j, i, dt, eos,
-                    src_rootfind_eps, src_rootfind_tol, src_rootfind_maxiter, rad_opac,
-                    pflag, rinvflag, U_entry, dS_subinit);
-
-                // If the solver converged, but the final U_to_p for the fluid failed, we
-                // should not be dealing with this, just accept this as it worked and send
-                // straight to fixup.
-                if (rflagl == static_cast<int>(StatusImplicitStep::success)) {
-                    dU_substep(m_u.UU, k, j, i) -= dS_subinit[0];
-                    dU_substep(m_u.U1, k, j, i) -= dS_subinit[1];
-                    dU_substep(m_u.U2, k, j, i) -= dS_subinit[2];
-                    dU_substep(m_u.U3, k, j, i) -= dS_subinit[3];
-                    dU_substep(m_u.UU_RAD, k, j, i) += dS_subinit[0];
-                    dU_substep(m_u.U1_RAD, k, j, i) += dS_subinit[1];
-                    dU_substep(m_u.U2_RAD, k, j, i) += dS_subinit[2];
-                    dU_substep(m_u.U3_RAD, k, j, i) += dS_subinit[3];
-                    // s_gas = ln(P^n/rho^(n+1)) (with n = 1/(gamma-1)), or s_gas =
-                    // ln(K)/(gamma-1) where K = P * rho^{-gamma}. Consider that S = rho *
-                    // s_gas; so K = exp(( gamma - 1) * S/rho) dK/dt = dK/dS * dS/dt dS/dt
-                    // is exactly what I calculated dK/dS = (gamma - 1) * K / rho; so
-                    // dK/dt = (gamma - 1) * K/rho * 1/T G^u u_u = (gamma - 1)/rho^(gam -
-                    // 1) * G^u u_u (PNM) I should ask cora if use KTOT_ADV here;
-                    if (m_u.KTOT_ADV >= 0)
-                        dU_substep(m_u.KTOT_ADV, k, j, i) +=
-                            (gm1) / m::pow(P_init_substep(m_p.RHO, k, j, i), gm1) *
-                            dS_subinit[4];
-                    rimplflag(0, k, j, i) = rflagl;
-                    return;
+                if (rflagl == static_cast<int>(SIS::success)) {
+                    apply_source(k, j, i, dS,
+                        star_fixed ? static_cast<int>(SIS::starfix_success) : rflagl);
+                } else {
+                    rimplflag(0, k, j, i) = static_cast<int>(
+                        star_fixed ? SIS::pending_prad_starfix : SIS::pending_prad);
                 }
+                restore(k, j, i, U_save, P_save, B_save, PB_save);
+            });
 
-                rflagl = solve_4d_prad(G, U_init_substep, P_init_substep, m_p, m_u, k, j,
-                    i, dt, eos, src_rootfind_eps, src_rootfind_tol, src_rootfind_maxiter,
-                    rad_opac, pflag, rinvflag, U_entry, dS_subinit);
+        // fallbacks -> fluid-frame solver, then P_rad Newton (I disabled it cause I think
+        // it's not necessary in current version), then failure handling
+        Kokkos::View<int*> todo(
+            Kokkos::view_alloc(Kokkos::WithoutInitializing, "RadM1_fallback_cells"),
+            ncells);
+        int nfall = 0;
+        Kokkos::parallel_scan(
+            "RadM1_Implicit_Compact", Kokkos::RangePolicy<>(pmb->exec_space, 0, ncells),
+            KOKKOS_LAMBDA(const int idx, int& n, const bool final)
+            {
+                const int k = kb.s + idx / (nj * ni), j = jb.s + (idx / ni) % nj,
+                          i = ib.s + idx % ni;
+                const int flag = static_cast<int>(rimplflag(0, k, j, i));
+                if (flag == static_cast<int>(SIS::pending_prad) ||
+                    flag == static_cast<int>(SIS::pending_prad_starfix)) {
+                    if (final) todo(n) = idx;
+                    n++;
+                }
+            },
+            nfall);
+        if (nfall == 0) continue;
+
+        // Fluid-frame solver first!  It end up rescuing most cells the PMHD solve leaves,
+        // and costs far less than P_rad, which inverts the gas at every residual
+        // evaluation
+        Kokkos::parallel_for("RadM1_Implicit_FluidFrame",
+            DynPolicy(pmb->exec_space, 0, nfall),
+            KOKKOS_LAMBDA (const int t)
+            {
+                const int idx = todo(t);
+                const int k = kb.s + idx / (nj * ni), j = jb.s + (idx / ni) % nj,
+                          i = ib.s + idx % ni;
+                Real U_save[9], P_save[9], B_save[3], PB_save[3];
+                build_star(k, j, i, U_save, P_save, B_save, PB_save);
+                Real U_entry[8], P_entry[9];
+                get_entry(k, j, i, U_entry, P_entry);
+
+                Real dS[5] = {0., 0., 0., 0., 0.};
+                int nit = 0;
+                int why = 0;
+                const int rflagl = solve_4d_pmhd_ff(G, P_init_substep, m_p, k, j, i,
+                    dt_impl, eos, src_rootfind_tol, ff_maxiter, rad_opac, U_entry, dS,
+                    &nit, &why, ff_eq_guess, prad_fallback ? 0. : accept_tol);
+                solver_count(2, k, j, i) = (why > 0) ? -why : nit;
+
+                // On failure the flag stays pending_prad(_starfix) for the P_rad kernel,
+                // unless that fallback is off. Then FF is the last solver, and a failed
+                // solve whose best state reached accept_tol is accepted
+                if (rflagl == static_cast<int>(SIS::success)) {
+                    apply_source(k, j, i, dS, static_cast<int>(SIS::ufluid_success));
+                } else if (rflagl == static_cast<int>(SIS::relaxed_success)) {
+                    apply_source(k, j, i, dS, rflagl);
+                } else if (!prad_fallback) {
+                    apply_history(k, j, i);
+                    rimplflag(0, k, j, i) = static_cast<int>(SIS::failure);
+                }
+                restore(k, j, i, U_save, P_save, B_save, PB_save);
+            });
+        if (!prad_fallback) continue;
+
+        Kokkos::View<int*> todo_prad(
+            Kokkos::view_alloc(Kokkos::WithoutInitializing, "RadM1_prad_cells"), nfall);
+        int nprad = 0;
+        Kokkos::parallel_scan(
+            "RadM1_Implicit_Compact_Prad",
+            Kokkos::RangePolicy<>(pmb->exec_space, 0, nfall),
+            KOKKOS_LAMBDA(const int t, int& n, const bool final)
+            {
+                const int idx = todo(t);
+                const int k = kb.s + idx / (nj * ni), j = jb.s + (idx / ni) % nj,
+                          i = ib.s + idx % ni;
+                const int flag = static_cast<int>(rimplflag(0, k, j, i));
+                if (flag == static_cast<int>(SIS::pending_prad) ||
+                    flag == static_cast<int>(SIS::pending_prad_starfix)) {
+                    if (final) todo_prad(n) = idx;
+                    n++;
+                }
+            },
+            nprad);
+        if (nprad == 0) continue;
+
+        Kokkos::parallel_for("RadM1_Implicit_Fallback",
+            DynPolicy(pmb->exec_space, 0, nprad),
+            KOKKOS_LAMBDA (const int t)
+            {
+                const int idx = todo_prad(t);
+                const int k = kb.s + idx / (nj * ni), j = jb.s + (idx / ni) % nj,
+                          i = ib.s + idx % ni;
+                const int flag = static_cast<int>(rimplflag(0, k, j, i));
+                const bool star_fixed =
+                    (flag == static_cast<int>(SIS::pending_prad_starfix));
+                Real U_save[9], P_save[9], B_save[3], PB_save[3];
+                build_star(k, j, i, U_save, P_save, B_save, PB_save);
+                Real U_entry[8], P_entry[9];
+                get_entry(k, j, i, U_entry, P_entry);
+
+                Real dS[5] = {0., 0., 0., 0., 0.};
+                int nit = 0;
+                int rflagl = solve_4d_prad(G, U_init_substep, P_init_substep, m_p, m_u, k,
+                    j, i, dt_impl, eos, src_rootfind_eps, src_rootfind_tol,
+                    src_rootfind_maxiter, rad_opac, pflag, rinvflag, U_entry, dS, &nit);
+                solver_count(1, k, j, i) = nit;
 
                 // Prad alters the P_init. So we gotta revert it back.
                 U_init_substep(m_u.UU, k, j, i) = U_entry[0];
@@ -507,56 +1142,15 @@ void RadM1::AddSourceImplicitly(
                 P_init_substep(m_p.U2, k, j, i) = P_entry[3];
                 P_init_substep(m_p.U3, k, j, i) = P_entry[4];
 
-                if (rflagl == static_cast<int>(StatusImplicitStep::success)) {
-                    dU_substep(m_u.UU, k, j, i) -= dS_subinit[0];
-                    dU_substep(m_u.U1, k, j, i) -= dS_subinit[1];
-                    dU_substep(m_u.U2, k, j, i) -= dS_subinit[2];
-                    dU_substep(m_u.U3, k, j, i) -= dS_subinit[3];
-                    dU_substep(m_u.UU_RAD, k, j, i) += dS_subinit[0];
-                    dU_substep(m_u.U1_RAD, k, j, i) += dS_subinit[1];
-                    dU_substep(m_u.U2_RAD, k, j, i) += dS_subinit[2];
-                    dU_substep(m_u.U3_RAD, k, j, i) += dS_subinit[3];
-                    if (m_u.KTOT_ADV >= 0)
-                        dU_substep(m_u.KTOT_ADV, k, j, i) +=
-                            (gm1) / m::pow(P_init_substep(m_p.RHO, k, j, i), gm1) *
-                            dS_subinit[4];
-
-                    rimplflag(0, k, j, i) =
-                        static_cast<int>(StatusImplicitStep::pradfallback_success);
-                    return;
+                if (rflagl == static_cast<int>(SIS::success)) {
+                    apply_source(k, j, i, dS,
+                        static_cast<int>(star_fixed ? SIS::starfix_success
+                                                    : SIS::pradfallback_success));
+                } else {
+                    apply_history(k, j, i);
+                    rimplflag(0, k, j, i) = static_cast<int>(SIS::failure);
                 }
-
-                // auto status_1d = solve_radiation_1d(G, P_init_substep, m_p, m_u, eos,
-                //     rad_opac, k, j, i, dt, src_rootfind_tol, src_rootfind_maxiter,
-                //     pflag, rinvflag, U_entry, dS_subinit);
-
-                // if (status_1d == StatusImplicitStep::success) {
-                //     dU_substep(m_u.UU, k, j, i) -= dS_subinit[0];
-                //     dU_substep(m_u.U1, k, j, i) -= dS_subinit[1];
-                //     dU_substep(m_u.U2, k, j, i) -= dS_subinit[2];
-                //     dU_substep(m_u.U3, k, j, i) -= dS_subinit[3];
-                //     dU_substep(m_u.UU_RAD, k, j, i) += dS_subinit[0];
-                //     dU_substep(m_u.U1_RAD, k, j, i) += dS_subinit[1];
-                //     dU_substep(m_u.U2_RAD, k, j, i) += dS_subinit[2];
-                //     dU_substep(m_u.U3_RAD, k, j, i) += dS_subinit[3];
-
-                //     rimplflag(0, k, j, i) =
-                //         static_cast<int>(StatusImplicitStep::onedfallback_success);
-                //     return;
-                // }
-
-                // printf("This cell in: %d, %d, %d, with UU: %.15e, U1: %.15e, U2: %.15e,
-                // U3: %.15e, RHO = %.15e, and UU_RAD = %.15e, U1_RAD = %.15e, U2_RAD =
-                // %.15e, U3_RAD = %.15e, left with rflagl = %d\n", k, j, i,
-                // P_init_substep(m_p.UU, k, j, i), P_init_substep(m_p.U1, k, j, i),
-                // P_init_substep(m_p.U2, k, j, i), P_init_substep(m_p.U3, k, j, i),
-                // P_init_substep(m_p.RHO, k, j, i), P_init_substep(m_p.UU_RAD, k, j, i),
-                // P_init_substep(m_p.U1_RAD, k, j, i), P_init_substep(m_p.U2_RAD, k, j,
-                // i), P_init_substep(m_p.U3_RAD, k, j, i), rflagl);
-                // if(P_init_substep(m_p.U1, k, j, i) != 0.0) {
-                //     exit(666);
-                // }
-                rimplflag(0, k, j, i) = static_cast<int>(StatusImplicitStep::failure);
+                restore(k, j, i, U_save, P_save, B_save, PB_save);
             });
     }
 }

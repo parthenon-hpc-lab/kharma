@@ -72,12 +72,16 @@ enum BSeedType {
     split_monopole,
     split_monopole_const,
     vertical,
+    vertical_chakrabarti,
+    white2020,
     r1s2
 };
 
 #define SEEDA_ARGS                                                                       \
     GReal *x, const GReal *dxc, double rho, double rin, double min_A, double A0,         \
-        double arg1, double rb
+        double arg1, double rb, bool in_torus, double rho_max, double potential_rho_pow, \
+        double potential_falloff, double potential_r_pow, double pgas, double pgas_min,  \
+        int Nr, int Nth, double rmin, double rmax, double thmin, double thmax
 
 // This will also act as the default implementation for unspecified types,
 // which should all be filled as B field by seed_b below.
@@ -185,6 +189,91 @@ template<>
 KOKKOS_INLINE_FUNCTION Real seed_a<BSeedType::orszag_tang_a>(SEEDA_ARGS)
 {
     return A0 * (-0.5 * std::cos(2 * x[1] + arg1) + std::cos(x[2] + arg1));
+}
+
+template<>
+KOKKOS_INLINE_FUNCTION Real seed_a<BSeedType::vertical_chakrabarti>(SEEDA_ARGS)
+{
+    Real r = x[1];
+    Real th = x[2];
+    Real sth = sin(x[2]);
+    Real svarth = std::fabs(sin(th));
+
+    Real cyl_radius = r * svarth;
+    Real rcyl_in = rin;
+    Real rcyl_falloff = potential_falloff;
+
+    Real Aphi = m::pow(cyl_radius / rcyl_in, potential_r_pow);
+    Real Aphi_offset = 0.0;
+    if (potential_falloff != 0) {
+        Aphi *= m::exp(-cyl_radius / rcyl_falloff);
+        Aphi_offset = exp(-rcyl_in / rcyl_falloff);
+    }
+    if (cyl_radius < rcyl_in) {
+        Aphi = 0.0;
+    } else {
+        Aphi -= Aphi_offset;
+    }
+    if (potential_rho_pow != 0.0) {
+        if (in_torus) {
+            Aphi *= m::pow(rho / rho_max, potential_rho_pow);
+        } else {
+            Aphi = 0.0;
+        }
+    }
+
+    return Aphi;
+}
+
+template<>
+KOKKOS_INLINE_FUNCTION Real seed_a<BSeedType::white2020>(SEEDA_ARGS)
+{
+    // White et al. 2020 (ApJ 891, 141) equations 2-3:
+    // A_φ ∝ sqrt(max(p_gas - p_gas,min, 0)) * r * sin(θ) *
+    //       sin(π N_r L(r; r_min, r_max)) * sin(π N_θ L(θ; θ_min, θ_max))
+    //
+    // L(x; x_min, x_max) = 0                          if x <= x_min
+    //                    = (x - x_min)/(x_max - x_min) if x_min < x < x_max
+    //                    = 1                          if x >= x_max
+
+    Real r = x[1];
+    Real th = x[2];
+    Real sth = sin(th);
+
+    // Pressure term: sqrt(max(p_gas - p_gas_min, 0))
+    Real pgas_term = m::sqrt(m::max(pgas - pgas_min, 0.0));
+
+    // Cylindrical radius
+    Real R = r * sth;
+
+    // Linear ramp function L(r)
+    Real Lr;
+    if (r <= rmin) {
+        Lr = 0.0;
+    } else if (r >= rmax) {
+        Lr = 1.0;
+    } else {
+        Lr = (r - rmin) / (rmax - rmin);
+    }
+
+    // Linear ramp function L(θ)
+    Real Lth;
+    if (th <= thmin) {
+        Lth = 0.0;
+    } else if (th >= thmax) {
+        Lth = 1.0;
+    } else {
+        Lth = (th - thmin) / (thmax - thmin);
+    }
+
+    // Angular functions
+    Real sin_r = m::sin(M_PI * Nr * Lr);
+    Real sin_th = m::sin(M_PI * Nth * Lth);
+
+    // Full vector potential
+    Real Aphi = pgas_term * R * sin_r * sin_th;
+
+    return Aphi;
 }
 
 #undef SEEDA_ARGS

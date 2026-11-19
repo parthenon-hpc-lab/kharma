@@ -12,7 +12,7 @@ import pyharm
 WAVETYPES = ['sonic', 'slow', 'fast']
 REGIMES = ['puremhd', 'thin', 'thick']
 REGIME_LABEL = {'puremhd': 'pure', 'thin': 'thin', 'thick': 'thick'}
-EXPECTED_SLOPE = {'puremhd': -2.0, 'thin': -2.0, 'thick': -1.0}
+EXPECTED_SLOPE = {'puremhd': -2.0, 'thin': -2.0, 'thick': -2.0}
 SLOPE_TOL = 0.3
 
 
@@ -130,7 +130,7 @@ if __name__ == '__main__':
         ax.grid(True, which='both', alpha=0.3)
 
     handles, _ = axes[0].get_legend_handles_labels()
-    fig.legend(handles[:3], ['sonic', 'fast', 'slow'],
+    fig.legend(handles[:3], WAVETYPES,
                loc='lower center', ncol=3, bbox_to_anchor=(0.5, -0.01))
 
     axes[0].set_ylabel(r'L$_1$ norm', fontsize=12)
