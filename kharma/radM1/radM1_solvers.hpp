@@ -556,7 +556,8 @@ KOKKOS_INLINE_FUNCTION bool u_to_p_entropy(const GRCoordinates& G, const Real Ur
             bsq += G.gcov(Loci::center, j, i, a + 1, b + 1) * bu[a] * bu[b];
     bsq = m::max(bsq, 0.);
     const Real rbsq = bdotr * bdotr;
-    const Real v0sq = m::min(rsq / (1. + rsq), 1. - 1. / (51. * 51.));
+    // Cap the velocity just past LFAC_CAP, as in the Kastaun inverter
+    const Real v0sq = m::min(rsq / (1. + rsq), 1. - 1. / SQR(Floors::LFAC_CAP + 1.));
     auto resid = [&](const Real mu, Real& x, Real& iW)
     {
         x = 1. / (1. + mu * bsq);
@@ -613,7 +614,7 @@ KOKKOS_INLINE_FUNCTION int solve_4d_pmhd(const GRCoordinates& G,
         P_init(m_p.U1, k, j, i), P_init(m_p.U2, k, j, i), P_init(m_p.U3, k, j, i)};
     const Real D_rho = rho_init / rho_from_D(G, 1.0, uvec, k, j, i);
     const Real gdet = G.gdet(Loci::center, j, i);
-    // Check if radiation inversion reached maximum gamma.
+    // Check if radiation inversion reached the maximum Lorentz factor.
     const bool beam_ok = static_cast<int>(rinvflag(0, k, j, i)) ==
                          static_cast<int>(StatusRadiationInversion::maximum_lfac);
 
@@ -905,10 +906,10 @@ KOKKOS_INLINE_FUNCTION Real u_equilibrium(const GRCoordinates& G, const Real P_m
     GRMHD::calc_ucon(G, uvec, k, j, i, Loci::center, ucon);
     G.lower(ucon, ucov, k, j, i, Loci::center);
     RadM1::calc_ucon_rad(G, P_rad, j, i, ucon_rad);
-    Real gamma_rel = 0.;
-    for (int mu = 0; mu < GR_DIM; mu++) gamma_rel -= ucon_rad[mu] * ucov[mu];
-    gamma_rel = m::max(gamma_rel, 1.0);
-    const Real E_hat = P_rad[0] * ((4.0 / 3.0) * gamma_rel * gamma_rel - (1.0 / 3.0));
+    Real lfac_rel = 0.;
+    for (int mu = 0; mu < GR_DIM; mu++) lfac_rel -= ucon_rad[mu] * ucov[mu];
+    lfac_rel = m::max(lfac_rel, 1.0);
+    const Real E_hat = P_rad[0] * ((4.0 / 3.0) * lfac_rel * lfac_rel - (1.0 / 3.0));
     const Real E_tot = P_mhd[0] + E_hat;
     // bsq only enters opacities, not Trad or JBB
     Real T = m::max(eos.TemperatureFromDensityInternalEnergy(rho, P_mhd[0] / rho),
@@ -1233,8 +1234,9 @@ KOKKOS_INLINE_FUNCTION int prad_comoving_energy_residual(const GRCoordinates& G,
         U_init(m_u.U1, k, j, i) = U_mhd_0[1] - (U_rad[1] - U_rad_0[1]);
         U_init(m_u.U2, k, j, i) = U_mhd_0[2] - (U_rad[2] - U_rad_0[2]);
         U_init(m_u.U3, k, j, i) = U_mhd_0[3] - (U_rad[3] - U_rad_0[3]);
-        const int status = Inverter::u_to_p<Inverter::Type::kastaun>(
-            G, U_init, m_u, eos, k, j, i, P_init, m_p, Loci::center, 25, 1e-12);
+        const int status = Inverter::u_to_p<Inverter::Type::kastaun>(G, U_init, m_u, eos,
+            k, j, i, P_init, m_p, Loci::center, Inverter::KASTAUN_ITER_MAX,
+            IMPLICIT_KASTAUN_ERR_TOL);
         if (status != static_cast<int>(Inverter::Status::success)) return status;
         const Real rho_g = P_init(m_p.RHO, k, j, i);
         Real P_mhd[4] = {P_init(m_p.UU, k, j, i), P_init(m_p.U1, k, j, i),
@@ -1290,8 +1292,9 @@ KOKKOS_INLINE_FUNCTION int prad_residual_at(const GRCoordinates& G,
     U_init(m_u.U1, k, j, i) = U_mhd_0[1] - (U_rad[1] - U_rad_0[1]);
     U_init(m_u.U2, k, j, i) = U_mhd_0[2] - (U_rad[2] - U_rad_0[2]);
     U_init(m_u.U3, k, j, i) = U_mhd_0[3] - (U_rad[3] - U_rad_0[3]);
-    const int status = Inverter::u_to_p<Inverter::Type::kastaun>(
-        G, U_init, m_u, eos, k, j, i, P_init, m_p, Loci::center, 25, 1e-12);
+    const int status =
+        Inverter::u_to_p<Inverter::Type::kastaun>(G, U_init, m_u, eos, k, j, i, P_init,
+            m_p, Loci::center, Inverter::KASTAUN_ITER_MAX, IMPLICIT_KASTAUN_ERR_TOL);
     if (status != static_cast<int>(Inverter::Status::success)) return status;
     P_mhd[0] = P_init(m_p.UU, k, j, i);
     P_mhd[1] = P_init(m_p.U1, k, j, i);
@@ -1323,7 +1326,8 @@ KOKKOS_INLINE_FUNCTION bool prad_fd_point(const GRCoordinates& G,
     U_init(m_u.U2, k, j, i) = U_mhd_0[2] - (U_rad[2] - U_rad_0[2]);
     U_init(m_u.U3, k, j, i) = U_mhd_0[3] - (U_rad[3] - U_rad_0[3]);
     if (Inverter::u_to_p<Inverter::Type::kastaun>(G, U_init, m_u, eos, k, j, i, P_init,
-            m_p, Loci::center, 25, 1e-12) != static_cast<int>(Inverter::Status::success))
+            m_p, Loci::center, Inverter::KASTAUN_ITER_MAX,
+            IMPLICIT_KASTAUN_ERR_TOL) != static_cast<int>(Inverter::Status::success))
         return false;
     const Real P_mhd[4] = {P_init(m_p.UU, k, j, i), P_init(m_p.U1, k, j, i),
         P_init(m_p.U2, k, j, i), P_init(m_p.U3, k, j, i)};
@@ -1406,12 +1410,11 @@ KOKKOS_INLINE_FUNCTION int solve_4d_prad(const GRCoordinates& G,
             Real ucon_com[GR_DIM], ucov_com[GR_DIM];
             GRMHD::calc_ucon(G, uvec_com, k, j, i, Loci::center, ucon_com);
             G.lower(ucon_com, ucov_com, k, j, i, Loci::center);
-            Real gamma_rel_com = 0.0;
+            Real lfac_rel_com = 0.0;
             for (int mu = 0; mu < GR_DIM; mu++)
-                gamma_rel_com -= ucon_rad_in[mu] * ucov_com[mu];
+                lfac_rel_com -= ucon_rad_in[mu] * ucov_com[mu];
             const Real Erf_com =
-                P_rad_guess[0] *
-                ((4.0 / 3.0) * gamma_rel_com * gamma_rel_com - 1.0 / 3.0);
+                P_rad_guess[0] * ((4.0 / 3.0) * lfac_rel_com * lfac_rel_com - 1.0 / 3.0);
             const Real Erf_gas =
                 U_rad_0[0] / gdet / ((4.0 / 3.0) * ucon_gas[0] * ucov_gas[0] + 1.0 / 3.0);
             const Real candidates[3][4] = {
@@ -1438,8 +1441,9 @@ KOKKOS_INLINE_FUNCTION int solve_4d_prad(const GRCoordinates& G,
                 U_init(m_u.U1, k, j, i) = U_mhd_c[1];
                 U_init(m_u.U2, k, j, i) = U_mhd_c[2];
                 U_init(m_u.U3, k, j, i) = U_mhd_c[3];
-                auto status_c = Inverter::u_to_p<Inverter::Type::kastaun>(
-                    G, U_init, m_u, eos, k, j, i, P_init, m_p, Loci::center, 25, 1e-12);
+                auto status_c = Inverter::u_to_p<Inverter::Type::kastaun>(G, U_init, m_u,
+                    eos, k, j, i, P_init, m_p, Loci::center, Inverter::KASTAUN_ITER_MAX,
+                    IMPLICIT_KASTAUN_ERR_TOL);
                 if (status_c == static_cast<int>(Inverter::Status::success)) {
                     for (int n = 0; n < 4; n++) {
                         P_rad_guess[n] = P_rad_c[n];
@@ -1599,7 +1603,8 @@ KOKKOS_INLINE_FUNCTION int solve_4d_prad(const GRCoordinates& G,
                     U_init(m_u.U2, k, j, i) = U_mhd_c[2];
                     U_init(m_u.U3, k, j, i) = U_mhd_c[3];
                     const int st_c = Inverter::u_to_p<Inverter::Type::kastaun>(G, U_init,
-                        m_u, eos, k, j, i, P_init, m_p, Loci::center, 25, 1e-12);
+                        m_u, eos, k, j, i, P_init, m_p, Loci::center,
+                        Inverter::KASTAUN_ITER_MAX, IMPLICIT_KASTAUN_ERR_TOL);
                     if (st_c == ok) {
                         Real P_mhd_c[4] = {P_init(m_p.UU, k, j, i),
                             P_init(m_p.U1, k, j, i), P_init(m_p.U2, k, j, i),

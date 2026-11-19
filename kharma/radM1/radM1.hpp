@@ -128,7 +128,7 @@ static const std::map<int, std::string> status_names_inversion = {
 
 };
 
-// maximum_gamma leaves a usable state, so only these count as failures
+// maximum_lfac leaves a usable state, so only these count as failures
 KOKKOS_INLINE_FUNCTION bool rad_inversion_failed(const Real flag)
 {
     const int f = static_cast<int>(flag);
@@ -252,9 +252,9 @@ KOKKOS_INLINE_FUNCTION Real calc_kappa_tot(const GRCoordinates& G, const Global&
     const Real bsq = dot(D.bcon, D.bcov);
     Real ucon_rad[GR_DIM];
     calc_ucon_rad(G, P, m_p, k, j, i, loc, ucon_rad);
-    const Real gamma_rel = m::max(-dot(ucon_rad, D.ucov), 1.0);
+    const Real lfac_rel = m::max(-dot(ucon_rad, D.ucov), 1.0);
     const Real E_hat =
-        P(m_p.UU_RAD, k, j, i) * ((4.0 / 3.0) * gamma_rel * gamma_rel - (1.0 / 3.0));
+        P(m_p.UU_RAD, k, j, i) * ((4.0 / 3.0) * lfac_rel * lfac_rel - (1.0 / 3.0));
     const Real Trad = rad_opac.Trad(E_hat, rho, bsq);
     return calc_kabs(rho, Tg, Trad, bsq, rad_opac) +
            calc_kscattering(rho, Tg, Trad, bsq, rad_opac);
