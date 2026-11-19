@@ -292,16 +292,21 @@ TaskStatus B_CT::BlockUtoP(MeshBlockData<Real>* rc, IndexDomain domain, bool coa
                         // the current level of derefinement at given j
                         const int current_lv = ((binner) ? jps - j : j - jps);
                         // half of the coarse cell's length
-                        const int c_half = m::pow(2, current_lv);
+                        const int c_half = 1 << current_lv;
                         const int coarse_cell_len = 2 * c_half;
                         // cell center
                         const int j_c = j + ((binner) ? 0 : -1);
                         // this fine cell's k-index within the coarse cell
                         const int k_fine = (k - ng) % coarse_cell_len;
                         // starting k-index of the coarse cell
-                        const int k_start = k - k_fine;
+                        int k_start = k - k_fine;
                         // end k-index of the coarse cell
-                        const int k_end = k_start + coarse_cell_len;
+                        int k_end = k_start + coarse_cell_len;
+                        if (k_end > bF3.ke) {
+                            const int nx3_phy = (bF3.ke - bF3.ks + 1);
+                            k_start -= nx3_phy;
+                            k_end -= nx3_phy;
+                        }
 
                         // ISMR is only used in 3D, so we don't need a gate on ndim
                         B_P(V3, k, j, i) =

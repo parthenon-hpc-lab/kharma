@@ -255,7 +255,7 @@ TaskStatus SeedBFieldType(MeshBlockData<Real>* rc, ParameterInput* pin,
                 break;
             case BSeedType::vertical_chakrabarti:
                 // A separate case for the vertical field initialized for the Chakrabarti
-                // torus Fluid parameters
+                // Torus fluid parameters
                 gm1 = pmb->packages.Get("eos")->Param<Real>("gm1");
                 gamma1 = gm1 + 1.0;
                 // Field init parameters
@@ -281,6 +281,21 @@ TaskStatus SeedBFieldType(MeshBlockData<Real>* rc, ParameterInput* pin,
                 // Fluid parameters
                 gm1 = pmb->packages.Get("eos")->Param<Real>("gm1");
                 gamma1 = gm1 + 1.0;
+                // Torus parameters, needed by the analytic torus evaluation below
+                if (is_torus) {
+                    rin = pin->GetReal("torus", "rin");
+                    rmax = pin->GetReal("torus", "rmax");
+                    tilt = pin->GetOrAddReal("torus", "tilt", 0.0) / 180. * M_PI;
+                }
+                if (is_chakrabarti) {
+                    // Chakrabarti equilibrium quantities the kernel needs
+                    ChakrabartiTorus::cn_calc(a, rin, rmax, &cc, &nn);
+                    lnh_in = ChakrabartiTorus::lnh_calc(bl, rin, rin, M_PI_2, cc, nn);
+                    lnh_peak = ChakrabartiTorus::lnh_calc(bl, rin, rmax, M_PI_2, cc, nn) -
+                               lnh_in;
+                    pgas_over_rho_peak = gm1 / gamma1 * (m::exp(lnh_peak) - 1.0);
+                    rho_peak = m::pow(pgas_over_rho_peak, 1.0 / gm1) / rho_max;
+                }
                 // Field init parameters (from paper: pgas_min=1e-8, rmin=30, rmax=1000,
                 // thmin=pi/6, thmax=5pi/6, Nr=6, Nth=4)
                 pgas_min = pin->GetOrAddReal("b_field", "pgas_min", 1e-8);
@@ -338,8 +353,8 @@ TaskStatus SeedBFieldType(MeshBlockData<Real>* rc, ParameterInput* pin,
                 // This is written under the assumption re-computed rho is more accurate
                 // than a bunch of averaging in a meaningful way.  Just use the average if
                 // not.
-                Real rho_av;
-                Real u_av;
+                Real rho_av = 0.;
+                Real u_av = 0.;
                 bool in_torus = false;
                 if (is_torus) {
                     if (is_fm) {
@@ -351,7 +366,7 @@ TaskStatus SeedBFieldType(MeshBlockData<Real>* rc, ParameterInput* pin,
                     } else if (is_chakrabarti) {
                         // Find rho
                         const Real lnh =
-                            ChakrabartiTorus::lnh_calc(bl, rin, r, sth, cc, nn);
+                            ChakrabartiTorus::lnh_calc(bl, rin, r, th, cc, nn);
                         if (lnh >= 0.0) {
                             in_torus = true;
                             Real pg_over_rho = gm1 / gamma1 * (m::exp(lnh) - 1.0);

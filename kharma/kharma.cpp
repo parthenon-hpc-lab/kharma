@@ -586,23 +586,29 @@ Packages_t KHARMA::ProcessPackages(std::unique_ptr<ParameterInput>& pin)
         KHARMA::AddPackage(packages, Implicit::Initialize, pin.get());
     }
 
-    // There are some packages which must be loaded after all physics
+    // There are some packages which must be loaded after all physics,
+    // as they need to know how many variables are used.
     // Easier to load them separately than list dependencies
 
     // Now we always load floors package -- "floors/on=false" and
     // "floors/disable_floors=true" now map to "disable_call"!
     KHARMA::AddPackage(packages, Floors::Initialize, pin.get());
 
-    // Flux temporaries must be full size
+    // Flux temporaries must be large enough for all independent variables
     KHARMA::AddPackage(packages, Flux::Initialize, pin.get());
 
-    // ISMR temporaries must be full size
-    // TODO(CEP) check nlevels > 0 -- better yet provenance, guarantee specific
-    // ismr/on=false ALWAYS disables
-    if (pin->GetOrAddBoolean("ismr", "on", false) ||
-        pin->DoesParameterExist("ismr", "nlevels")) {
-        pin->SetBoolean("ismr", "on", true);
+    // ISMR temporaries must be large enough for all independent variables
+    // Enable ISMR if we only specified a number of levels (without "on")
+    int nlevels_par = 0;
+    if (pin->DoesParameterExist("ismr", "nlevels")) {
+        nlevels_par = pin->GetInteger("ismr", "nlevels");
+    }
+    // If we just specified "on", ISMR package will set default number of levels
+    if (pin->GetOrAddBoolean("ismr", "on", nlevels_par > 0)) {
         KHARMA::AddPackage(packages, ISMR::Initialize, pin.get());
+    } else if (nlevels_par > 0) {
+        PARTHENON_WARN("ISMR levels are specified but package is EXPLICITLY DISABLED: "
+                       "ISMR will NOT be used!");
     }
 
     // And any dirichlet/constant boundaries

@@ -465,7 +465,7 @@ TaskStatus B_CT::DerefinePoles(MeshData<Real>* md)
                              KOKKOS_LAMBDA(const int& k, const int& j, const int& i)
                     {
                         const int coarse_cell_len =
-                            m::pow(2, ((binner) ? jps - j : j - jps) + 1);
+                            1 << (((binner) ? jps - j : j - jps) + 1);
                         const int j_c = j + ((binner) ? 0 : -1); // cell center
                         const int k_fine =
                             (k - ng) % coarse_cell_len; // this fine cell's k-index within
@@ -489,7 +489,7 @@ TaskStatus B_CT::DerefinePoles(MeshData<Real>* md)
                              KOKKOS_LAMBDA(const int& k, const int& j, const int& i)
                     {
                         const int coarse_cell_len =
-                            m::pow(2, ((binner) ? jps - j : j - jps) + 1);
+                            1 << (((binner) ? jps - j : j - jps) + 1);
                         // fine cell's k index within the coarse cell
                         const int k_fine = (k - ng) % coarse_cell_len;
                         // starting k-index of the coarse cell
@@ -517,17 +517,23 @@ TaskStatus B_CT::DerefinePoles(MeshData<Real>* md)
                         // the current level of derefinement at given j
                         const int current_lv = ((binner) ? jps - j : j - jps);
                         // half of the coarse cell's length
-                        const int c_half = m::pow(2, current_lv);
+                        const int c_half = 1 << current_lv;
                         const int coarse_cell_len = 2 * c_half;
                         // cell center
                         const int j_c = j + ((binner) ? 0 : -1);
                         // this fine cell's k-index within the coarse cell
                         const int k_fine = (k - ng) % coarse_cell_len;
                         // starting k-index of the coarse cell
-                        const int k_start = k - k_fine;
-                        const int k_half = k_start + c_half;
+                        int k_start = k - k_fine;
+                        int k_half = k_start + c_half;
                         // end k-index of the coarse cell
-                        const int k_end = k_start + coarse_cell_len;
+                        int k_end = k_start + coarse_cell_len;
+                        if (k_end > bF3.ke) {
+                            const int nx3_phy = (bF3.ke - bF3.ks + 1);
+                            k_start -= nx3_phy;
+                            k_half -= nx3_phy;
+                            k_end -= nx3_phy;
+                        }
 
                         if ((k - ng) % coarse_cell_len == 0) {
                             // Don't modify faces of the coarse cells
