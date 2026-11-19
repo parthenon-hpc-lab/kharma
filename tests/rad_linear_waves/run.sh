@@ -8,15 +8,16 @@ exit_code=0
 WAVETYPES="sonic slow fast"
 REGIMES="puremhd thin thick"
 RESOLUTIONS="64 128 256 512"
-
-declare -A REGIME_LABEL
-REGIME_LABEL[puremhd]=pure
-REGIME_LABEL[thin]=thin
-REGIME_LABEL[thick]=thick
+#Bash doesn't support associative arrays in versions < 4.0, which is the default on macOS. If you have bash 4.0 or higher, you can uncomment the following lines and make the appropriate change below.
+#declare -A REGIME_LABEL
+#REGIME_LABEL[puremhd]=pure
+#REGIME_LABEL[thin]=thin
+#REGIME_LABEL[thick]=thick
 
 for regime in $REGIMES
 do
-    rlabel=${REGIME_LABEL[$regime]}
+    #rlabel=${REGIME_LABEL[$regime]}
+    rlabel=${regime/puremhd/pure}
     for wavetype in $WAVETYPES
     do
         outdir=${rlabel}_${wavetype}
