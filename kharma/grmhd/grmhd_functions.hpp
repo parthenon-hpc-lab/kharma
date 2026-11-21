@@ -79,7 +79,7 @@ namespace GRMHD
 {
 
 /**
- * Find gamma-factor of the fluid w.r.t. normal observer
+ * Find the Lorentz factor of the fluid w.r.t. normal observer
  */
 KOKKOS_INLINE_FUNCTION Real lorentz_calc(const GRCoordinates& G, const GridVector uvec,
     const int& k, const int& j, const int& i, const Loci loc)
@@ -156,12 +156,12 @@ KOKKOS_INLINE_FUNCTION void calc_4vecs(const GRCoordinates& G, const Real uvec[N
     const Real B_P[NVEC], const int& k, const int& j, const int& i, const Loci loc,
     FourVectors& D)
 {
-    const Real gamma = lorentz_calc(G, uvec, k, j, i, loc);
+    const Real lfac = lorentz_calc(G, uvec, k, j, i, loc);
     const Real alpha = 1. / m::sqrt(-G.gcon(loc, j, i, 0, 0));
 
-    D.ucon[0] = gamma / alpha;
+    D.ucon[0] = lfac / alpha;
     VLOOP
-        D.ucon[v + 1] = uvec[v] - gamma * alpha * G.gcon(loc, j, i, 0, v + 1);
+        D.ucon[v + 1] = uvec[v] - lfac * alpha * G.gcon(loc, j, i, 0, v + 1);
 
     G.lower(D.ucon, D.ucov, k, j, i, loc);
 
@@ -178,12 +178,12 @@ KOKKOS_INLINE_FUNCTION void calc_4vecs(const GRCoordinates& G, const GridVector 
     const GridVector B_P, const int& k, const int& j, const int& i, const Loci loc,
     FourVectors& D)
 {
-    const Real gamma = lorentz_calc(G, uvec, k, j, i, loc);
+    const Real lfac = lorentz_calc(G, uvec, k, j, i, loc);
     const Real alpha = 1. / m::sqrt(-G.gcon(loc, j, i, 0, 0));
 
-    D.ucon[0] = gamma / alpha;
+    D.ucon[0] = lfac / alpha;
     VLOOP
-        D.ucon[v + 1] = uvec(v, k, j, i) - gamma * alpha * G.gcon(loc, j, i, 0, v + 1);
+        D.ucon[v + 1] = uvec(v, k, j, i) - lfac * alpha * G.gcon(loc, j, i, 0, v + 1);
 
     G.lower(D.ucon, D.ucov, k, j, i, loc);
 
@@ -201,13 +201,12 @@ KOKKOS_INLINE_FUNCTION void calc_4vecs(const GRCoordinates& G,
     const VariablePack<Real>& P, const VarMap& m, const int& k, const int& j,
     const int& i, const Loci loc, FourVectors& D)
 {
-    const Real gamma = lorentz_calc(G, P, m, k, j, i, loc);
+    const Real lfac = lorentz_calc(G, P, m, k, j, i, loc);
     const Real alpha = 1. / m::sqrt(-G.gcon(loc, j, i, 0, 0));
 
-    D.ucon[0] = gamma / alpha;
+    D.ucon[0] = lfac / alpha;
     VLOOP
-        D.ucon[v + 1] =
-            P(m.U1 + v, k, j, i) - gamma * alpha * G.gcon(loc, j, i, 0, v + 1);
+        D.ucon[v + 1] = P(m.U1 + v, k, j, i) - lfac * alpha * G.gcon(loc, j, i, 0, v + 1);
 
     G.lower(D.ucon, D.ucov, k, j, i, loc);
 
@@ -233,34 +232,34 @@ KOKKOS_INLINE_FUNCTION void calc_4vecs(const GRCoordinates& G,
 KOKKOS_INLINE_FUNCTION void calc_ucon(const GRCoordinates& G, const GridVector uvec,
     const int& k, const int& j, const int& i, const Loci loc, Real ucon[GR_DIM])
 {
-    const Real gamma = lorentz_calc(G, uvec, k, j, i, loc);
+    const Real lfac = lorentz_calc(G, uvec, k, j, i, loc);
     const Real alpha = 1. / m::sqrt(-G.gcon(loc, j, i, 0, 0));
 
-    ucon[0] = gamma / alpha;
+    ucon[0] = lfac / alpha;
     VLOOP
-        ucon[v + 1] = uvec(v, k, j, i) - gamma * alpha * G.gcon(loc, j, i, 0, v + 1);
+        ucon[v + 1] = uvec(v, k, j, i) - lfac * alpha * G.gcon(loc, j, i, 0, v + 1);
 }
 KOKKOS_INLINE_FUNCTION void calc_ucon(const GRCoordinates& G, const Real uvec[NVEC],
     const int& k, const int& j, const int& i, const Loci loc, Real ucon[GR_DIM])
 {
-    const Real gamma = lorentz_calc(G, uvec, k, j, i, loc);
+    const Real lfac = lorentz_calc(G, uvec, k, j, i, loc);
     const Real alpha = 1. / m::sqrt(-G.gcon(loc, j, i, 0, 0));
 
-    ucon[0] = gamma / alpha;
+    ucon[0] = lfac / alpha;
     VLOOP
-        ucon[v + 1] = uvec[v] - gamma * alpha * G.gcon(loc, j, i, 0, v + 1);
+        ucon[v + 1] = uvec[v] - lfac * alpha * G.gcon(loc, j, i, 0, v + 1);
 }
 template<typename Global>
 KOKKOS_INLINE_FUNCTION void calc_ucon(const GRCoordinates& G, const Global& P,
     const VarMap& m, const int& k, const int& j, const int& i, const Loci loc,
     Real ucon[GR_DIM])
 {
-    const Real gamma = lorentz_calc(G, P, m, k, j, i, loc);
+    const Real lfac = lorentz_calc(G, P, m, k, j, i, loc);
     const Real alpha = 1. / m::sqrt(-G.gcon(loc, j, i, 0, 0));
 
-    ucon[0] = gamma / alpha;
+    ucon[0] = lfac / alpha;
     VLOOP
-        ucon[v + 1] = P(m.U1 + v, k, j, i) - gamma * alpha * G.gcon(loc, j, i, 0, v + 1);
+        ucon[v + 1] = P(m.U1 + v, k, j, i) - lfac * alpha * G.gcon(loc, j, i, 0, v + 1);
 }
 
 /**

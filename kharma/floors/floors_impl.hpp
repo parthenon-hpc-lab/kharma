@@ -34,6 +34,7 @@
 #pragma once
 
 #include "floors.hpp"
+#include "floors_functions.hpp"
 // phoebus includes
 #include "domain.hpp"
 #include "microphysics/eos_kharma/eos_kharma.hpp"
@@ -79,6 +80,13 @@ TaskStatus ApplyFloorsInFrame(MeshData<Real>* md, IndexDomain domain)
     // Still needed for ceilings and determining floors
     const Floors::Prescription floors =
         pmb0->packages.Get("Floors")->Param<Floors::Prescription>("prescription");
+    // Iterations & tolerances for the inversions and velocity solve inside the floors
+    const Inverter::SolverSettings kastaun_solve =
+        Inverter::GetSolverSettings(pmb0->packages, Inverter::Type::kastaun);
+    const Inverter::SolverSettings frame_solve =
+        (frame == InjectionFrame::normal_onedw)
+            ? Inverter::GetSolverSettings(pmb0->packages, Inverter::Type::onedw)
+            : kastaun_solve;
 
     const IndexRange3 b = KDomain::GetRange(md, domain);
     const IndexRange block = IndexRange{0, P.GetDim(5) - 1};
@@ -90,7 +98,8 @@ TaskStatus ApplyFloorsInFrame(MeshData<Real>* md, IndexDomain domain)
                 const auto& G = P.GetCoords(b);
 
                 // Apply ceilings *before* floors, they are less important
-                // Generally we only use the gamma ceiling, which can help raise rho/u
+                // Generally we only use the Lorentz factor ceiling, which can help
+                // raise rho/u
                 apply_ceilings(G, P(b), m_p, k, j, i, floors, U(b), m_u);
 
                 // apply_floors can involve another U_to_P call, capture that flag
@@ -102,7 +111,7 @@ TaskStatus ApplyFloorsInFrame(MeshData<Real>* md, IndexDomain domain)
                     if (G.r(k, j, i) > switch_r) {
                         pflag_l = apply_floors<InjectionFrame::fluid>(G, P(b), m_p, eos,
                             floors.gamma1, k, j, i, floor_vals(b, rhofi, k, j, i),
-                            floor_vals(b, ufi, k, j, i), U(b), m_u);
+                            floor_vals(b, ufi, k, j, i), U(b), m_u, kastaun_solve);
                     } else {
                         // TODO should mixed frames respect Kastaun vs 1Dw?
                         // Since no prior simulations use mixed frames thus requiring
@@ -110,7 +119,7 @@ TaskStatus ApplyFloorsInFrame(MeshData<Real>* md, IndexDomain domain)
                         pflag_l = apply_floors<InjectionFrame::normal_kastaun>(G, P(b),
                             m_p, eos, floors.gamma1, k, j, i,
                             floor_vals(b, rhofi, k, j, i), floor_vals(b, ufi, k, j, i),
-                            U(b), m_u);
+                            U(b), m_u, kastaun_solve);
                     }
                 } else if (frame == InjectionFrame::mixed_normal_drift) {
                     FourVectors Dtmp;
@@ -121,17 +130,17 @@ TaskStatus ApplyFloorsInFrame(MeshData<Real>* md, IndexDomain domain)
                     if (mag_switch < switch_beta) {
                         pflag_l = apply_floors<InjectionFrame::drift>(G, P(b), m_p, eos,
                             floors.gamma1, k, j, i, floor_vals(b, rhofi, k, j, i),
-                            floor_vals(b, ufi, k, j, i), U(b), m_u);
+                            floor_vals(b, ufi, k, j, i), U(b), m_u, kastaun_solve);
                     } else {
                         pflag_l = apply_floors<InjectionFrame::normal_kastaun>(G, P(b),
                             m_p, eos, floors.gamma1, k, j, i,
                             floor_vals(b, rhofi, k, j, i), floor_vals(b, ufi, k, j, i),
-                            U(b), m_u);
+                            U(b), m_u, kastaun_solve);
                     }
                 } else {
                     pflag_l = apply_floors<frame>(G, P(b), m_p, eos, floors.gamma1, k, j,
                         i, floor_vals(b, rhofi, k, j, i), floor_vals(b, ufi, k, j, i),
-                        U(b), m_u);
+                        U(b), m_u, frame_solve);
                 }
 
                 // Record the pflag if we applied normal floors -- successful or not

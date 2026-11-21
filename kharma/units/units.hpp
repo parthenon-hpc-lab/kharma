@@ -144,7 +144,12 @@ class CodeConstants
     }
 };
 
-constexpr Real solar_mass = 1.989e33; // g
+constexpr Real solar_mass = 1.989e33;                // g
+constexpr Real sigma_sb_cgs = 5.670374419e-5;        // erg cm^-2 s^-1 K^-4
+constexpr Real sigma_thomson_cgs = 6.6524587158e-25; // cm^2
+constexpr Real kappa_es_cgs = 0.4;      // cm^2/g, electron scattering of ionized hydrogen
+constexpr Real me_cgs = 9.1093826e-28;  // g
+constexpr Real mp_cgs = 1.67262171e-24; // g
 
 std::shared_ptr<KHARMAPackage> Initialize(
     ParameterInput* pin, std::shared_ptr<Packages_t>& packages);

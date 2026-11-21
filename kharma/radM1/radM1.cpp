@@ -334,7 +334,7 @@ TaskStatus RadM1::BlockPtoU(MeshBlockData<Real>* rc, IndexDomain domain, bool co
             Real Erf = P(m_p.UU_RAD, k, j, i);
             Real uvec_radframe[4] = {0, P(m_p.U1_RAD, k, j, i), P(m_p.U2_RAD, k, j, i),
                 P(m_p.U3_RAD, k, j, i)};
-            const Real gamma =
+            const Real lfac =
                 GRMHD::lorentz_calc(G, uvec_radframe, k, j, i, Loci::center);
             Real ucon_rad[GR_DIM];
             // GRMHD::calc_ucon(G, uvec_radframe, k, j, i, Loci::center, ucon_rad);
@@ -492,7 +492,7 @@ TaskStatus RadM1::FixRadiation(MeshBlockData<Real>* rc)
                     }
                 }
 
-                if (wsum < 1.e-10) {
+                if (wsum < Inverter::NEIGHBOR_WSUM_MIN) {
                     Prad(m_prad.UU_RAD, k, j, i) = erad_floor;
                     Prad(m_prad.U1_RAD, k, j, i) = 0.;
                     Prad(m_prad.U2_RAD, k, j, i) = 0.;
@@ -512,7 +512,7 @@ TaskStatus RadM1::FixRadiation(MeshBlockData<Real>* rc)
                     Prad(m_prad.U2_RAD, k, j, i) = P_avg[2];
                     Prad(m_prad.U3_RAD, k, j, i) = P_avg[3];
                 }
-                if (gas_bad && gsum > 1.e-10) {
+                if (gas_bad && gsum > Inverter::NEIGHBOR_WSUM_MIN) {
                     Pg(m_pg.UU, k, j, i) = Pg(m_pg.RHO, k, j, i) * gas[0] / gsum;
                     for (int v = 0; v < NVEC; v++)
                         Pg(m_pg.U1 + v, k, j, i) = gas[1 + v] / gsum;
@@ -865,9 +865,9 @@ void RadM1::AddSourceImplicitly(
             }
 
             // Then now that we have the updated Umhd and Urad, we can try to invert them.
-            const int status_star =
-                Inverter::u_to_p<Inverter::Type::kastaun>(G, U_init_substep, m_u, eos, k,
-                    j, i, P_init_substep, m_p, Loci::center, 25, 1e-12);
+            const int status_star = Inverter::u_to_p<Inverter::Type::kastaun>(G,
+                U_init_substep, m_u, eos, k, j, i, P_init_substep, m_p, Loci::center,
+                Inverter::KASTAUN_ITER_MAX, IMPLICIT_KASTAUN_ERR_TOL);
             const Real Urad_star[4] = {U_init_substep(m_u.UU_RAD, k, j, i),
                 U_init_substep(m_u.U1_RAD, k, j, i), U_init_substep(m_u.U2_RAD, k, j, i),
                 U_init_substep(m_u.U3_RAD, k, j, i)};

@@ -42,6 +42,7 @@
 #include "types.hpp"
 
 #include "floors.hpp"
+#include "kharma_constants.hpp"
 
 namespace Inverter
 {
@@ -56,7 +57,7 @@ enum class Status {
     neg_input,
     max_iter,
     bad_ut,
-    bad_gamma,
+    bad_lfac,
     neg_rho,
     neg_u,
     neg_rhou,
@@ -66,7 +67,8 @@ enum class Status {
 
 static const std::map<int, std::string> status_names = {
     {(int)Status::neg_input, "Negative input"}, {(int)Status::max_iter, "Hit max iter"},
-    {(int)Status::bad_ut, "Velocity invalid"}, {(int)Status::bad_gamma, "Gamma invalid"},
+    {(int)Status::bad_ut, "Velocity invalid"},
+    {(int)Status::bad_lfac, "Lorentz factor invalid"},
     {(int)Status::neg_rho, "Negative rho"}, {(int)Status::neg_u, "Negative U"},
     {(int)Status::neg_rhou, "Negative rho & U"},
     {(int)Status::floor, "Floor during inversion"},
@@ -107,5 +109,51 @@ template<Type inverter>
 KOKKOS_INLINE_FUNCTION int u_to_p(const GRCoordinates& G, const VariablePack<Real>& U,
     const VarMap& m_u, const Microphysics::EOS::EOS& eos, const int& k, const int& j,
     const int& i, const VariablePack<Real>& P, const VarMap& m_p, const Loci& loc,
-    const int& max_iterations, const Real& tol);
+    const int max_iterations, const Real tol);
+
+/**
+ * Iterations & tolerances for inversions called from outside the
+ * Inverter package's own U->P step (e.g. the re-inversions in the floors),
+ * and for the velocity solve in the floors.
+ * These follow the inverter's settings when it is loaded and of the
+ * same type, and keep the defaults otherwise
+ * (no Inverter package, or Kastaun inversions under 1Dw)
+ */
+struct SolverSettings
+{
+    Real err_tol;
+    Real backstop_tol;
+    int iter_max;
+    int backstop_iter_max;
+};
+
+inline SolverSettings GetSolverSettings(const Packages_t& packages, const Type type)
+{
+    SolverSettings s{.backstop_iter_max = BACKSTOP_ITER_MAX};
+    switch (type) {
+        case Type::kastaun:
+            s.err_tol = KASTAUN_ERR_TOL;
+            s.backstop_tol = KASTAUN_ERR_TOL;
+            s.iter_max = KASTAUN_ITER_MAX;
+            break;
+        case Type::onedw:
+            s.err_tol = ONEDW_ERR_TOL;
+            s.backstop_tol = ONEDW_ERR_TOL;
+            s.iter_max = ONEDW_ITER_MAX;
+            break;
+        default:
+            break;
+    }
+
+    if (packages.AllPackages().count("Inverter")) {
+        auto& pars = packages.Get("Inverter")->AllParams();
+        if (pars.Get<Type>("inverter_type") == type) {
+            s.err_tol = pars.Get<Real>("err_tol");
+            s.backstop_tol = pars.Get<Real>("backstop_tol");
+            s.iter_max = pars.Get<int>("iter_max");
+            s.backstop_iter_max = pars.Get<int>("backstop_iter_max");
+        }
+    }
+    return s;
+}
 } // namespace Inverter

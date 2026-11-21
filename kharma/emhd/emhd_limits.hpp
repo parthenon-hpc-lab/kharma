@@ -34,6 +34,7 @@
 #pragma once
 
 #include "emhd.hpp"
+#include "kharma_constants.hpp"
 // phoebus includes
 #include "microphysics/eos_kharma/eos_kharma.hpp"
 #include "phoebus_utils/variables.hpp"
@@ -107,7 +108,7 @@ KOKKOS_INLINE_FUNCTION int apply_instability_limits(const GRCoordinates& G,
     // }
 
     if (m_p.Q >= 0) {
-        Real qmax = 1.07 * rho * cs * cs * cs;
+        Real qmax = LIMIT_MARGIN * rho * cs * cs * cs;
         Real max_frac = m::max(m::abs(q) / qmax, 1.);
         if (m::abs(q) / qmax > 1.) eflag |= HIT_Q_LIMIT;
 
@@ -118,8 +119,9 @@ KOKKOS_INLINE_FUNCTION int apply_instability_limits(const GRCoordinates& G,
 
         Real dP_comp_ratio =
             m::max(pg - 2. / 3. * dP, SMALL_NUM) / m::max(pg + 1. / 3. * dP, SMALL_NUM);
-        Real dP_plus = m::min(1.07 * 0.5 * bsq * dP_comp_ratio, 1.49 * pg);
-        Real dP_minus = m::max(-1.07 * bsq, -2.99 * pg);
+        Real dP_plus =
+            m::min(LIMIT_MARGIN * 0.5 * bsq * dP_comp_ratio, DP_MAX_OVER_P * pg);
+        Real dP_minus = m::max(-LIMIT_MARGIN * bsq, DP_MIN_OVER_P * pg);
 
         if (dP > 0. && (dP / dP_plus > 1.))
             eflag |= HIT_DP_MAX_LIMIT;
